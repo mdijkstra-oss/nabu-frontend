@@ -6,6 +6,7 @@ interface ToolDef<TSchema extends z.ZodType, TOutput> {
   name: string
   description: string
   schema: TSchema
+  jsonSchema?: unknown
   handler: (files: RawFiles, args: z.infer<TSchema>) => Promise<HandlerResult<TOutput>>
   requiresGuidance?: (files: RawFiles, args: z.infer<TSchema>) => string[]
 }

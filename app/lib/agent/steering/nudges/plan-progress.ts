@@ -1,5 +1,5 @@
 import { afterToolResult, systemNudge, type Nudger } from "../nudge-tools"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { derive, lastPlan, hasActivePlan, actionsSinceStepChange } from "../../derived"
 import { formatStepProgress } from "./step-state"
 

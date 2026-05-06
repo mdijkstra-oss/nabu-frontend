@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { expandRangeRefs, type FileReader } from "./range-expand"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { j } from "../test-helpers"
 
 const NOTES = [

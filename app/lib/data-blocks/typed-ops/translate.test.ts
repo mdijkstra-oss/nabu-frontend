@@ -17,6 +17,7 @@ const annotationsSpec: TypedOpsSpec = {
       partialItemSchema: {},
     },
   ],
+  multilineFields: [],
   immutableFields: [],
   fuzzyFields: ["annotations.*.text"],
 }
@@ -30,6 +31,7 @@ const calloutSpec: TypedOpsSpec = {
     properties: { color: { type: "string" }, title: { type: "string" } },
   },
   arrayOps: [],
+  multilineFields: [],
   immutableFields: ["id"],
   fuzzyFields: [],
 }
@@ -55,6 +57,7 @@ const settingsSpec: TypedOpsSpec = {
       partialItemSchema: {},
     },
   ],
+  multilineFields: [],
   immutableFields: [],
   fuzzyFields: [],
 }
@@ -64,7 +67,7 @@ describe("translateOps", () => {
     name: string
     spec: TypedOpsSpec
     ops: Record<string, unknown>[]
-    expected: JsonPatchOp[]
+    expected: JsonPatchOp[] | "error"
   }
 
   const cases: Case[] = [

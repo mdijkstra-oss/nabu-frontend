@@ -1,6 +1,6 @@
-import type { Block, ToolCall } from "~/lib/agent/client"
-import type { FileStore } from "~/lib/files"
-import { derive, findCall, type DerivedPlan } from "~/lib/agent"
+import type { Block, ToolCall } from "~/lib/agent/client/blocks"
+import type { FileStore } from "~/lib/files/store"
+import { derive, findCall, type DerivedPlan } from "~/lib/agent/derived"
 import { isPlanMarker } from "~/lib/agent/derived/plan"
 import { AskArgs, type AskScope } from "~/lib/agent/tools/ask/def"
 import { ScoutArgs } from "~/lib/agent/tools/scout/def"
@@ -287,4 +287,4 @@ const extractSingleScout = (
 export const extractScoutMessages = (history: Block[]): Indexed<ScoutMessage>[] =>
   findScoutLikeCalls(history).flatMap(({ index, call }) => extractSingleScout(index, call, history))
 
-export { isWaitingForAsk } from "~/lib/agent/client"
+export { isWaitingForAsk } from "~/lib/agent/client/status"

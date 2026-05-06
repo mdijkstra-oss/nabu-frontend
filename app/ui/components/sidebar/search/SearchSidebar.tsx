@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Bookmark, Trash2 } from "lucide-react"
-import type { SearchEntry } from "~/domain/search"
+import type { SearchEntry } from "~/domain/search/types"
 import { IconButton } from "~/ui/components/IconButton"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
 import { matchesAny } from "~/lib/utils/filter"

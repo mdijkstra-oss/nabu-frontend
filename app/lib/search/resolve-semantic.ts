@@ -1,7 +1,7 @@
 import type { Result } from "~/lib/fp/result"
 import type { Database } from "~/lib/db/types"
 import type { HydeQuery, HybridSearchPlan } from "./semantic"
-import type { HydesCache } from "~/domain/search"
+import type { HydesCache } from "~/domain/search/types"
 import type { CorpusDescription } from "~/domain/corpus/types"
 import { ok, err } from "~/lib/fp/result"
 import { fetchEmbeddingBatch } from "~/lib/embeddings/client"

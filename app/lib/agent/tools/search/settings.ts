@@ -1,9 +1,10 @@
-import { getFileRaw, updateFileRaw, finalizeContent } from "~/lib/files"
+import { getFileRaw, updateFileRaw } from "~/lib/files/store"
+import { finalizeContent } from "~/lib/patch/apply"
 import { replaceSingletonBlock } from "~/lib/data-blocks/parse"
 import type { Settings } from "~/domain/data-blocks/settings/schema"
 import { getSettings } from "~/domain/data-blocks/settings/selectors"
 import { SETTINGS_FILE } from "~/lib/files/filename"
-import type { SearchEntry, HydesCache } from "~/domain/search"
+import type { SearchEntry, HydesCache } from "~/domain/search/types"
 
 export interface NewSearchData {
   title: string

@@ -1,5 +1,6 @@
 import { z } from "zod"
-import { callLlm, extractText, toResponseFormat } from "~/lib/agent/client"
+import { callLlm } from "~/lib/agent/client/fetch"
+import { extractText, toResponseFormat } from "~/lib/agent/client/convert"
 
 const ENDPOINT = "/topic-assigner"
 

@@ -1,4 +1,4 @@
-import type { Block } from "./client"
+import type { Block } from "./client/blocks"
 import type { StepDef, StepDefObject } from "./derived"
 import { serializePlanBlock } from "./derived"
 import type { AskScope } from "./tools/ask/def"

@@ -1,7 +1,7 @@
 import { getSettings } from "../selectors"
 import { SETTINGS_FILE } from "~/lib/files/filename"
-import type { FileStore } from "~/lib/files"
-import type { SearchEntry } from "~/domain/search"
+import type { FileStore } from "~/lib/files/store"
+import type { SearchEntry } from "~/domain/search/types"
 
 export const getSearchEntries = (files: FileStore): SearchEntry[] =>
   getSettings(files[SETTINGS_FILE] ?? "")?.searches ?? []

@@ -11,8 +11,8 @@ import {
 } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { BarChart3, Book, Files, Search } from "lucide-react"
-import { MainSidebar } from "~/ui/components/sidebar/main"
-import type { NavItem } from "~/ui/components/sidebar/main"
+import { MainSidebar } from "~/ui/components/sidebar/main/MainSidebar"
+import type { NavItem } from "~/ui/components/sidebar/main/MainSidebar"
 import { useResizable } from "~/ui/hooks/useResizable"
 import { cn } from "~/ui/utils"
 

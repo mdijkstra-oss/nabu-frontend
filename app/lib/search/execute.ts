@@ -1,5 +1,5 @@
 import type { Database, DbError } from "~/lib/db/types"
-import type { SearchHit } from "~/domain/search"
+import type { SearchHit } from "~/domain/search/types"
 import type { Result } from "~/lib/fp/result"
 import type { HybridSearchPlan } from "./semantic"
 import type { ScoredChunk } from "./fusion"

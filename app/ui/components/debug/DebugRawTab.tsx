@@ -3,8 +3,7 @@
 import { useState, useEffect, useSyncExternalStore } from "react"
 import { ChevronRight, ChevronDown, Copy, Check, ListX } from "lucide-react"
 import { AutoScroll } from "~/ui/components/AutoScroll"
-import { getRawCalls, subscribeRawCalls } from "~/lib/agent/client"
-import type { RawLlmCall } from "~/lib/agent/client"
+import { getRawCalls, subscribeRawCalls, type RawLlmCall } from "~/lib/agent/client/raw-store"
 
 const formatDuration = (ms: number): string =>
   ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`

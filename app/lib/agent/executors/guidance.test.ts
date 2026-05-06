@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { collectApproachKeys, evaluateGuidance, type GuidanceCheck } from "./guidance"
 import { toMarkerBlock } from "../client/markers"
-import type { Block } from "../client"
+import type { Block } from "../client/blocks"
 import { systemBlock, textBlock, userBlock } from "../test-helpers"
 
 const compactedResult = (): Block => ({

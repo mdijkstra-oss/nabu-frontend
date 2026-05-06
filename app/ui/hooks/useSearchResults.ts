@@ -3,19 +3,15 @@ import { useSyncExternalStore } from "react"
 import { getFiles, subscribe } from "~/lib/files/store"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import { getDatabase } from "~/domain/db/database"
-import {
-  executeSearch,
-  executeHybridLocal,
-  resolveSemanticSql,
-  sanitizeSemanticError,
-  sqlQueriesFilesTable,
-} from "~/lib/search"
+import { executeSearch, executeHybridLocal } from "~/lib/search/execute"
+import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
+import { sanitizeSemanticError, sqlQueriesFilesTable } from "~/lib/search/semantic"
 import { filterAndGrow, FILTER_BATCH_SIZE } from "~/lib/search/filter-hits"
 import { growHits } from "~/lib/search/slices"
 import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import { updateSearchHydes } from "~/lib/agent/tools/search/settings"
-import type { SearchEntry, SearchHit } from "~/domain/search"
+import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery } from "~/lib/search/semantic"
 
 export type SearchPhase = "idle" | "searching" | "filtering" | "done"

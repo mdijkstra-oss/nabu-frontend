@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { getAnnotationGlobalCountsByCode } from "./selectors"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 
 interface Ann {
   id: string

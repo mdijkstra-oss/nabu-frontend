@@ -1,6 +1,12 @@
-import type { ToolDeps } from "~/lib/agent"
-import { createToolExecutor } from "~/lib/agent"
-import { setDraft, getDraft, clearStreaming, pushBlocks, setLoading } from "~/lib/agent/client"
+import type { ToolDeps } from "~/lib/agent/types"
+import { createToolExecutor } from "~/lib/agent/executors"
+import {
+  setDraft,
+  getDraft,
+  clearStreaming,
+  pushBlocks,
+  setLoading,
+} from "~/lib/agent/client/store"
 import { agentLoop } from "~/lib/agent/agent-loop"
 import { waitForUser } from "~/lib/agent/executors/delegation"
 import { modeSystemBlocks, DEFAULT_MODE } from "~/lib/agent/executors/modes"

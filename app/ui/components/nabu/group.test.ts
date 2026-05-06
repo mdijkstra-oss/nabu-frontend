@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest"
-import type { Block } from "~/lib/agent/client"
-import { derive } from "~/lib/agent"
+import type { Block } from "~/lib/agent/client/blocks"
+import { derive } from "~/lib/agent/derived"
 import {
   toGroupedMessages,
   type GroupedMessage,

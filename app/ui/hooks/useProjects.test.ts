@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { findProjectById, shouldAutoSelect, getFirstProjectId, resolveState } from "./useProjects"
-import type { ProjectSummary } from "~/lib/server/api"
+import type { ProjectSummary } from "~/lib/server/api/queries"
 
 const createProject = (id: string, name: string): ProjectSummary => ({
   id,

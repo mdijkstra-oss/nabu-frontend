@@ -1,12 +1,12 @@
-import type { Block } from "../../client"
+import type { Block } from "../../client/blocks"
 import type { HandlerResult } from "../../types"
 import type { ScoutFileEntry } from "./def"
 import { scoutTool, ScoutArgs } from "./def"
 import { registerTool, tool } from "../../executors/tool"
 import { scoutFile, formatScoutEntry } from "./api"
 import { getFileView } from "../file-view"
-import { getFile } from "~/lib/files"
-import { pushBlocks } from "../../client"
+import { getFile } from "~/lib/files/store"
+import { pushBlocks } from "../../client/store"
 import { processPool } from "~/lib/utils/pool"
 
 const toSystemBlock = (content: string): Block => ({ type: "system", content })

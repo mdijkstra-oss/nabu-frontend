@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { executeSearch } from "./execute"
 import type { Database, QueryResult, DbError } from "~/lib/db/types"
-import type { SearchHit } from "~/domain/search"
+import type { SearchHit } from "~/domain/search/types"
 import type { Result } from "~/lib/fp/result"
 import { ok, err } from "~/lib/fp/result"
 

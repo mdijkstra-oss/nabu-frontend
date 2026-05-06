@@ -1,5 +1,5 @@
 import { findMatchOffset } from "~/lib/text/find"
-import { serializeSpotlight } from "~/lib/editor/spotlight"
+import { serializeSpotlight } from "~/lib/editor/spotlight/serialize"
 
 const QUOTE_PATTERN =
   /\[([^\]]*)\]\([^)]*\)|[\u201C\u201D""]([^"\u201C\u201D""]+?)[\u201C\u201D""]/g

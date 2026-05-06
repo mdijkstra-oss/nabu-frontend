@@ -1,6 +1,6 @@
 import { CalloutSchema, type CalloutBlock } from "./schema"
 import { getBlocks } from "~/lib/data-blocks/query"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { findIn, findFileFor } from "~/lib/files/collect"
 
 export const getCallouts = (raw: string): CalloutBlock[] =>

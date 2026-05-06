@@ -1,4 +1,4 @@
-import { parseSpotlightText } from "~/lib/editor/spotlight"
+import { parseSpotlightText } from "~/lib/editor/spotlight/parse"
 import type { EntityKind, EntityRef } from "./types"
 import { getEntityPrefixes } from "~/lib/data-blocks/registry"
 

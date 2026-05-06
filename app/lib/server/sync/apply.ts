@@ -3,10 +3,10 @@ import {
   deleteFile,
   renameFile,
   getFileRaw,
-  applyFilePatch,
   withoutPersist,
   schedulePersist,
-} from "~/lib/files"
+} from "~/lib/files/store"
+import { applyFilePatch } from "~/lib/patch/apply"
 import { migrateFile } from "~/lib/data-blocks/migrate"
 import { migrations } from "~/domain/data-blocks/migrations"
 import type { Command } from "./types"

@@ -4,7 +4,7 @@ import type { Components } from "react-markdown"
 import { createElement } from "react"
 import { FileText, MapPin, Search } from "lucide-react"
 import { resolveEntityLink, type EntityIcons, type ResolvedLink } from "~/lib/markdown/resolve"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { EntityLink } from "./EntityLink"
 
 interface EntityLinkContext {

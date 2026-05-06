@@ -4,7 +4,7 @@ import React from "react"
 import { Button } from "~/ui/components/Button"
 import { Loader2, X } from "lucide-react"
 import { FileImportItem } from "./FileImportItem"
-import type { ImportFile, ImportProgress } from "~/lib/import"
+import type { ImportFile, ImportProgress } from "~/lib/import/types"
 
 interface FileImportListProps {
   files: ImportFile[]

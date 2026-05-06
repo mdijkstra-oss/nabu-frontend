@@ -3,7 +3,7 @@
 import React from "react"
 import { IconWithBackground } from "~/ui/components/IconWithBackground"
 import { Check, Clock, FileText, Loader2, AlertCircle, FileX } from "lucide-react"
-import type { ImportFile, ImportStatus } from "~/lib/import"
+import type { ImportFile, ImportStatus } from "~/lib/import/types"
 
 interface StatusConfig {
   iconVariant: "success" | "brand" | "neutral" | "error" | "warning"

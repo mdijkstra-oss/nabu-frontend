@@ -3,19 +3,15 @@ import { SearchArgs } from "./def"
 import { registerSpecialHandler } from "../../executors/delegation"
 import { getDatabase } from "~/domain/db/database"
 import { getLlmHost } from "~/lib/agent/env"
-import {
-  executeSearch,
-  executeHybridLocal,
-  resolveSemanticSql,
-  sanitizeSemanticError,
-  stripPaging,
-  SEMANTIC_ABSENCE_HINT,
-} from "~/lib/search"
+import { executeSearch, executeHybridLocal } from "~/lib/search/execute"
+import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
+import { sanitizeSemanticError, SEMANTIC_ABSENCE_HINT } from "~/lib/search/semantic"
+import { stripPaging } from "~/lib/search/paging"
 import { saveNewSearch } from "./settings"
 import { getFiles } from "~/lib/files/store"
 import { getSearchEntries } from "~/domain/data-blocks/settings/searches/selectors"
 import { buildSemanticContext } from "~/domain/corpus/init"
-import type { SearchHit } from "~/domain/search"
+import type { SearchHit } from "~/domain/search/types"
 
 const MAX_SEARCH_ROWS = 50
 

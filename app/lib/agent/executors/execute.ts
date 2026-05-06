@@ -1,26 +1,20 @@
-import type { ToolCall } from "../client"
+import type { ToolCall } from "../client/blocks"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import type { ToolResult, Operation, Handler } from "../types"
-import {
-  getFileRaw,
-  updateFileRaw,
-  deleteFile,
-  renameFile,
-  applyFilePatch,
-  finalizeContent,
-  formatGeneratedIds,
-} from "~/lib/files"
+import { getFileRaw, updateFileRaw, deleteFile, renameFile } from "~/lib/files/store"
+import { applyFilePatch, finalizeContent } from "~/lib/patch/apply"
+import { formatGeneratedIds } from "~/lib/data-blocks/uuid"
 import { isHiddenFile, SETTINGS_FILE } from "~/lib/files/filename"
 import { replaceUuidPlaceholders } from "~/lib/data-blocks/uuid"
 import { validateBlocksAsync, formatValidationErrors } from "~/lib/data-blocks/validate"
 import type { ToolExecutor } from "../turn"
+import { pushEntries } from "~/lib/mutation-history/store"
 import {
-  pushEntries,
   diffFileContent,
   fileCreatedEntry,
   fileDeletedEntry,
   fileRenamedEntry,
-} from "~/lib/mutation-history"
+} from "~/lib/mutation-history/diff"
 import { getViewableFiles } from "../tools/file-view"
 
 interface ResolvedOp {

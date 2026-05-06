@@ -1,5 +1,5 @@
-import type { Block, ToolCall, ToolCallBlock } from "../client"
-import type { FileStore } from "~/lib/files"
+import type { Block, ToolCall, ToolCallBlock } from "../client/blocks"
+import type { FileStore } from "~/lib/files/store"
 import {
   type DerivedPlan,
   isPlanMarker,

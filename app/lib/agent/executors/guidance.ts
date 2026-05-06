@@ -1,6 +1,6 @@
-import type { Block } from "../client"
+import type { Block } from "../client/blocks"
 import type { HandlerResult } from "../types"
-import { getAllBlocks, pushBlocks } from "../client"
+import { getAllBlocks, pushBlocks } from "../client/store"
 import { fromMarkerBlock, toMarkerBlock } from "../client/markers"
 import { postCompactionFloor } from "../compact"
 import { getApproachMeta } from "~/lib/modes/approaches"

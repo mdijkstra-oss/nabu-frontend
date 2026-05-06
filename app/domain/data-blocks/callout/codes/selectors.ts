@@ -1,7 +1,7 @@
 import type { CalloutBlock } from "../schema"
 import { getCallouts } from "../selectors"
 import { toDisplayName } from "~/lib/files/filename"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { collectAll, findIn } from "~/lib/files/collect"
 
 export interface Code {

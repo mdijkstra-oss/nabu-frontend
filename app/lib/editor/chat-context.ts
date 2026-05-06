@@ -1,4 +1,4 @@
-import type { Block, SystemBlock } from "~/lib/agent"
+import type { Block, SystemBlock } from "~/lib/agent/client/blocks"
 
 export type GetContextFn = () => string | null
 

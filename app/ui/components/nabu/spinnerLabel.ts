@@ -1,4 +1,4 @@
-import type { Block } from "~/lib/agent/client"
+import type { Block } from "~/lib/agent/client/blocks"
 
 export const LABEL_ADVANCE_MS = 4000
 

@@ -1,6 +1,6 @@
 import type { Settings } from "../schema"
 import type { ValidationError } from "~/lib/data-blocks/validate"
-import type { SearchEntry } from "~/domain/search"
+import type { SearchEntry } from "~/domain/search/types"
 import { validateSql } from "~/lib/search/semantic"
 import { validateSqlEntityReferences } from "~/lib/data-blocks/ids"
 import { getEntityPrefixes } from "~/lib/data-blocks/registry"

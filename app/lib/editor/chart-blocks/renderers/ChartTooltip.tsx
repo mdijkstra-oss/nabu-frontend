@@ -4,7 +4,7 @@ import type { ReactElement } from "react"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { createEntityLinkComponents } from "~/ui/components/markdown/createEntityLinkComponents"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { resolveTemplateToMarkdown } from "~/lib/chart/template"
 import type { ChartEntityMap, TemplateNode } from "~/lib/chart/types"
 

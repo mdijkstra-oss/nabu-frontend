@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest"
-import type { Block } from "../client"
+import type { Block } from "../client/blocks"
 import {
   derive,
   lastPlan,

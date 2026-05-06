@@ -9,7 +9,8 @@ import {
   type CodeBlock,
 } from "~/lib/data-blocks/parse"
 import { isKnownBlockType, isSingleton, getFuzzyFields } from "~/lib/data-blocks/registry"
-import { getFile, updateFileRaw, finalizeContent } from "~/lib/files"
+import { getFile, updateFileRaw } from "~/lib/files/store"
+import { finalizeContent } from "~/lib/patch/apply"
 
 export type PatchResult = { ok: true; content: string } | { ok: false; error: string }
 

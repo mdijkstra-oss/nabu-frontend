@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Block } from "../client"
+import type { Block } from "../client/blocks"
 import { rejectUnavailableTools } from "./modes"
 
 const toolCall = (names: string[]): Block => ({

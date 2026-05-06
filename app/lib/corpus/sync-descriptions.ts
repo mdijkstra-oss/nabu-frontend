@@ -5,10 +5,10 @@ import {
   getDocumentType,
   getDocumentSubject,
 } from "~/domain/data-blocks/attributes/topics/selectors"
-import { getFileRaw, updateFileRaw } from "~/lib/files"
+import { getFileRaw, updateFileRaw } from "~/lib/files/store"
 import { getSettings } from "~/domain/data-blocks/settings/selectors"
 import { replaceSingletonBlock } from "~/lib/data-blocks/parse"
-import { finalizeContent } from "~/lib/files"
+import { finalizeContent } from "~/lib/patch/apply"
 import { SETTINGS_FILE } from "~/lib/files/filename"
 import { toCorpusKey, type CorpusDescription } from "~/domain/corpus/types"
 import { processPool } from "~/lib/utils/pool"

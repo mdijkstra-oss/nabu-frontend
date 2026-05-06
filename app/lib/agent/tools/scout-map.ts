@@ -1,5 +1,6 @@
 import { z } from "zod"
-import { callLlm, toResponseFormat, extractText } from "../client"
+import { callLlm } from "../client/fetch"
+import { toResponseFormat, extractText } from "../client/convert"
 
 export const ScoutSection = z.object({
   label: z.string().describe("Short name for this section, 2-5 words"),

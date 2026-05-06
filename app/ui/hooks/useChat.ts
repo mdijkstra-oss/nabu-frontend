@@ -1,5 +1,5 @@
 import { useSyncExternalStore, useCallback } from "react"
-import type { Block, SystemBlock } from "~/lib/agent/client"
+import type { Block, SystemBlock } from "~/lib/agent/client/blocks"
 import {
   getAllBlocksWithDraft,
   getDraft,
@@ -7,7 +7,7 @@ import {
   pushBlocks,
   subscribeLoading,
   getLoading,
-} from "~/lib/agent/client"
+} from "~/lib/agent/client/store"
 import { run, cancel as cancelRunner, type RunnerDeps } from "~/lib/agent/runner"
 import { getPageContext, findLastContextMessage } from "~/lib/editor/chat-context"
 

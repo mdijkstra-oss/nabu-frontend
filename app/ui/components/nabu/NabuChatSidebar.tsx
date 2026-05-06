@@ -34,8 +34,8 @@ import { AnimatePresence } from "framer-motion"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { AnimatedListItem } from "~/ui/components/AnimatedListItem"
 import { useChat } from "~/ui/hooks/useChat"
-import { derive, hasActivePlan } from "~/lib/agent"
-import { pushBlocks } from "~/lib/agent/client"
+import { derive, hasActivePlan } from "~/lib/agent/derived"
+import { pushBlocks } from "~/lib/agent/client/store"
 import {
   toGroupedMessages,
   type GroupedMessage,
@@ -66,8 +66,9 @@ import { normalizeBacktickQuotes } from "~/lib/markdown/sanitize/normalize-backt
 import { fixMarkdownUrls } from "~/lib/markdown/sanitize/fix-urls"
 import { findTagDefinitionByLabel } from "~/domain/data-blocks/settings/tags/selectors"
 import { resolveEntityName } from "~/lib/files/selectors"
-import { truncateLabel, useMutationHistory, presentEntry } from "~/lib/mutation-history"
-import type { HistoryEntry } from "~/lib/mutation-history"
+import { truncateLabel, presentEntry } from "~/lib/mutation-history/presentation"
+import { useMutationHistory } from "~/lib/mutation-history/useMutationHistory"
+import type { HistoryEntry } from "~/lib/mutation-history/types"
 import { boldMissingFile } from "~/lib/files/filename"
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
 import { dispatchTask } from "~/lib/agent/dispatch"

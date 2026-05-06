@@ -1,4 +1,5 @@
-import { callLlm, extractText } from "~/lib/agent/client"
+import { callLlm } from "~/lib/agent/client/fetch"
+import { extractText } from "~/lib/agent/client/convert"
 import type { CorpusDescription } from "~/domain/corpus/types"
 
 const HYDE_GENERATOR_ENDPOINT = "/hyde-generator"

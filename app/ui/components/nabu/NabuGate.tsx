@@ -6,9 +6,8 @@ import {
   getAllBlocksWithDraft,
   subscribeLoading,
   subscribeBlocks,
-  getNabuStatus,
-  type NabuStatus,
-} from "~/lib/agent/client"
+} from "~/lib/agent/client/store"
+import { getNabuStatus, type NabuStatus } from "~/lib/agent/client/status"
 import { derive, hasActivePlan } from "~/lib/agent/derived"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
 

@@ -1,4 +1,4 @@
-import { getAllBlocks } from "../../client"
+import { getAllBlocks } from "../../client/store"
 import { derive } from "../../derived"
 import { tool, registerTool } from "../../executors/tool"
 import { completeStep as def } from "./def"

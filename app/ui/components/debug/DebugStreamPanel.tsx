@@ -16,11 +16,10 @@ import {
   isDraft,
   clearPauseBlocks,
   getSource,
-  formatBlockSchemasContent,
-  formatDatabaseSchemaContent,
-} from "~/lib/agent/client"
-import { isErrorResult, isDebugPauseBlock } from "~/lib/agent"
-import type { Block, ToolCall } from "~/lib/agent/client"
+} from "~/lib/agent/client/store"
+import { formatBlockSchemasContent, formatDatabaseSchemaContent } from "~/lib/agent/client/fetch"
+import { isErrorResult, isDebugPauseBlock } from "~/lib/agent/derived"
+import type { Block, ToolCall } from "~/lib/agent/client/blocks"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import { isCompactedResult, stepCompactedIndices } from "~/lib/agent/compact"
 import { DebugRawTab } from "./DebugRawTab"

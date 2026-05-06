@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "fs"
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
 import { shellHandler, type ShellCommandOutput } from "../../run-local-shell/handler"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import type { Operation } from "../../../types"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

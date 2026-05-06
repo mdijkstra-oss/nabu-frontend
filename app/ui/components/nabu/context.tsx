@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from "react"
 import { setPageContext, CONTEXT_PREFIX } from "~/lib/editor/chat-context"
-import { getCurrentFile } from "~/lib/files"
+import { getCurrentFile } from "~/lib/files/store"
 import { isHiddenFile } from "~/lib/files/filename"
 
 interface NabuProviderProps {

@@ -3,7 +3,7 @@ import type { PostAction, SourceFile } from "./def"
 import { ApplyDeepAnalysisArgs, applyDeepAnalysisTool } from "./def"
 import { registerTool, tool } from "../../executors/tool"
 import { getFileView, getViewableFiles } from "../file-view"
-import { getFile } from "~/lib/files"
+import { getFile } from "~/lib/files/store"
 import { getToolHandlers } from "../../executors/tool"
 import { CONTEXT_OVERLAP_CHARS } from "~/lib/data-blocks/chunk-lines"
 import {

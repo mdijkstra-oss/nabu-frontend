@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync, existsSync } from "fs"
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
-import type { Block } from "../../../client"
+import type { Block } from "../../../client/blocks"
 import type { Nudger } from "../../nudge-tools"
 import { collect } from "../../nudge-tools"
 import { buildToolNudges } from "../index"
@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const orchestratorToolNames = ["run_local_shell"]
 
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, "utf-8")) as T
 

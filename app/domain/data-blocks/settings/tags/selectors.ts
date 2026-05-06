@@ -1,7 +1,7 @@
 import type { TagDefinition } from "../schema"
 import { getSettings } from "../selectors"
 import { SETTINGS_FILE } from "~/lib/files/filename"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 
 export const getTagDefinitions = (files: FileStore): TagDefinition[] =>
   getSettings(files[SETTINGS_FILE] ?? "")?.tags ?? []

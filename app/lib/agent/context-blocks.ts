@@ -1,5 +1,5 @@
-import type { SystemBlock } from "./client"
-import type { FileStore } from "~/lib/files"
+import type { SystemBlock } from "./client/blocks"
+import type { FileStore } from "~/lib/files/store"
 import { SETTINGS_FILE, PREFERENCES_FILE } from "~/lib/files/filename"
 
 export const SETTINGS_READ_MARKER = "## READ SETTINGS"

@@ -1,5 +1,5 @@
 import type { SearchHit, SearchEntry } from "./types"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import type { Annotation } from "~/domain/data-blocks/attributes/schema"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { toDisplayName } from "~/lib/files/filename"

@@ -1,6 +1,6 @@
 import { isDebugPauseBlock, isErrorResult } from "./derived"
-import type { Block } from "./client"
-import { truncateLabel } from "~/lib/mutation-history"
+import type { Block } from "./client/blocks"
+import { truncateLabel } from "~/lib/mutation-history/presentation"
 
 export interface NotificationEvent {
   title: string

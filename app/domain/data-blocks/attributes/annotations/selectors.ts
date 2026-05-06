@@ -2,7 +2,7 @@ import type { Annotation as StoredAnnotation } from "../schema"
 import { findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
 import { getBlock } from "~/lib/data-blocks/query"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { findIn, findFileFor } from "~/lib/files/collect"
 
 export type Annotation = Omit<StoredAnnotation, "color"> & { color: string }

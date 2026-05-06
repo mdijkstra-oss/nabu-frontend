@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { compactHistory, stepCompactHistory, stepCompactedIndices } from "./compact"
-import type { Block } from "./client"
+import type { Block } from "./client/blocks"
 import { serializePlanBlock } from "./derived"
 import { userBlock, textBlock, systemBlock, reasoningBlock } from "./test-helpers"
 

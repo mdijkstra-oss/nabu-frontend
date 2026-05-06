@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { slug, radixColor } from "~/domain/data-blocks/attributes/schema"
 import { ICON_NAMES } from "~/ui/theme/icons"
-import { SearchEntrySchema } from "~/domain/search"
+import { SearchEntrySchema } from "~/domain/search/types"
 import { CorpusDescriptionSchema } from "~/domain/corpus/types"
 
 export const TagDefinition = z.object({

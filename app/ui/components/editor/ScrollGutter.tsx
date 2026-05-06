@@ -3,7 +3,7 @@
 import { memo, useEffect, useState, type RefObject } from "react"
 import type { GutterMark } from "~/lib/editor/gutter/types"
 import { calculateGutterMarks } from "~/lib/editor/gutter/calculate"
-import { measureAnnotationSpans } from "~/lib/editor/gutter"
+import { measureAnnotationSpans } from "~/lib/editor/gutter/measure"
 import { solidBackground } from "~/ui/theme/radix"
 
 interface ScrollGutterProps {

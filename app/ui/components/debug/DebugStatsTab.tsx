@@ -6,7 +6,7 @@ import { getDatabase } from "~/domain/db/database"
 import { getFiles, subscribe } from "~/lib/files/store"
 import { getCorpusDescriptions } from "~/domain/corpus/selectors"
 import { toCorpusKey } from "~/domain/corpus/types"
-import { fetchLanguageStats, type LanguageStatsRow } from "~/lib/search"
+import { fetchLanguageStats, type LanguageStatsRow } from "~/lib/search/resolve-semantic"
 import {
   collectClassifications,
   groupByCorpus,

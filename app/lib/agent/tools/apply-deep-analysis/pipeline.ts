@@ -1,5 +1,6 @@
 import { z } from "zod"
-import { callLlm, extractText, toResponseFormat } from "../../client"
+import { callLlm } from "../../client/fetch"
+import { extractText, toResponseFormat } from "../../client/convert"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import {

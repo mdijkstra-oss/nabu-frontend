@@ -8,9 +8,10 @@ import {
   DocumentsSidebar,
   type DocSortMode,
 } from "~/ui/components/sidebar/documents/DocumentsSidebar"
-import { CodesSidebar, type Code } from "~/ui/components/sidebar/codes"
-import { ExhibitsSidebar } from "~/ui/components/sidebar/exhibits"
-import { SearchSidebar } from "~/ui/components/sidebar/search"
+import { CodesSidebar } from "~/ui/components/sidebar/codes/CodesSidebar"
+import type { Code } from "~/ui/components/sidebar/codes/types"
+import { ExhibitsSidebar } from "~/ui/components/sidebar/exhibits/ExhibitsSidebar"
+import { SearchSidebar } from "~/ui/components/sidebar/search/SearchSidebar"
 import {
   getSearchEntries,
   getRecentSearches,
@@ -19,21 +20,24 @@ import {
   removeSearch,
 } from "~/domain/data-blocks/settings/searches/selectors"
 import { updateSearchEntries, saveNewSearch } from "~/lib/agent/tools/search/settings"
-import { NabuProvider, NabuChatSidebar } from "~/ui/components/nabu"
-import { DebugMenuButton, DebugStreamPanel } from "~/ui/components/debug"
-import { FileDropOverlay } from "~/ui/components/import"
+import { NabuProvider } from "~/ui/components/nabu/context"
+import { NabuChatSidebar } from "~/ui/components/nabu/NabuChatSidebar"
+import { DebugMenuButton } from "~/ui/components/debug/DebugMenuButton"
+import { DebugStreamPanel } from "~/ui/components/debug/DebugStreamPanel"
+import { FileDropOverlay } from "~/ui/components/import/FileDropOverlay"
 import { useNotifications } from "~/ui/hooks/useNotifications"
 import { DEFAULT_DEBUG_OPTIONS, type DebugOptions } from "~/ui/components/editor/debug-config"
 import { setCacheSkipped } from "~/lib/utils/storage-cache"
 
-import { createWebSocket, applyCommand } from "~/lib/server/sync"
+import { createWebSocket } from "~/lib/server/sync/websocket"
+import { applyCommand } from "~/lib/server/sync/apply"
 import type { Command } from "~/lib/server/sync/types"
 import {
   setProjectId,
   setPersistEnabled,
   setPendingRefsSuppressed,
   resolvePendingRefsInBulk,
-} from "~/lib/files"
+} from "~/lib/files/store"
 import {
   startDatabase,
   waitForDatabase,
@@ -54,13 +58,13 @@ import { toDisplayName, isHiddenFile } from "~/lib/files/filename"
 import { HIDDEN_TAG_ID, HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hidden"
 import { buildIdentifierResolver } from "~/lib/files/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
-import type { SearchEntry } from "~/domain/search"
+import type { SearchEntry } from "~/domain/search/types"
 import { collectExhibits } from "~/domain/exhibits/selectors"
 import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
 import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
-import { getLoading, subscribeLoading } from "~/lib/agent/client"
+import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
 

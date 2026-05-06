@@ -1,4 +1,4 @@
-import type { ToolCall, ToolResultBlock } from "./client"
+import type { ToolCall, ToolResultBlock } from "./client/blocks"
 import type { ToolResult } from "./types"
 import { isAbortError } from "~/lib/utils/error"
 

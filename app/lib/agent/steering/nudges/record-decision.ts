@@ -1,4 +1,4 @@
-import type { Block } from "../../client"
+import type { Block } from "../../client/blocks"
 import {
   isToolResult,
   systemNudge,

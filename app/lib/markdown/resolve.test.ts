@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest"
 import { resolveEntityLink, type ResolvedLink, type EntityIcons } from "./resolve"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 
 const StubIcon = () => null
 

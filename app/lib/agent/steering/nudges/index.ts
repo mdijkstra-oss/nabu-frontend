@@ -1,4 +1,4 @@
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import type { Nudger } from "../nudge-tools"
 import { shellNudge } from "./shell"
 import { recordDecisionNudge } from "./record-decision"

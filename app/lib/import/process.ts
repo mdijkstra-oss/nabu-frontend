@@ -1,4 +1,4 @@
-import { updateFileRaw, getFiles } from "~/lib/files"
+import { updateFileRaw, getFiles } from "~/lib/files/store"
 import { deduplicateName } from "./dedupe"
 import { readFileContent, isMarkdownFile } from "./read"
 import { normalizeFilename } from "~/lib/files/filename"

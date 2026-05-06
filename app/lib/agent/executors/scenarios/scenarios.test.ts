@@ -3,9 +3,9 @@ import { readdirSync, readFileSync } from "fs"
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
 import { setFiles } from "~/lib/files/store"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { createToolExecutor } from "../index"
-import type { ToolCall } from "../../client"
+import type { ToolCall } from "../../client/blocks"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 

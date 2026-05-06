@@ -1,6 +1,6 @@
 import { ChartSchema, type ChartBlock } from "./schema"
 import { getBlocks } from "~/lib/data-blocks/query"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { findIn, findFileFor } from "~/lib/files/collect"
 
 export const getCharts = (raw: string): ChartBlock[] => getBlocks(raw, "json-chart", ChartSchema)

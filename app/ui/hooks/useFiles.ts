@@ -6,11 +6,11 @@ import {
   getCodebook,
   setCurrentFile,
   subscribe,
-  getTags,
-  getFileDate,
-  getAnnotations,
-  getTagDefinitions,
-} from "~/lib/files"
+} from "~/lib/files/store"
+import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
+import { getFileDate } from "~/domain/data-blocks/attributes/date/selectors"
+import { getAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
+import { getTagDefinitions } from "~/domain/data-blocks/settings/tags/selectors"
 import { buildIdentifierResolver } from "~/lib/files/selectors"
 
 export const useFiles = () => {

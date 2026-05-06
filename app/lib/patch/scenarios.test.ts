@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, existsSync } from "fs"
 import { join } from "path"
 import { applyFilePatch } from "./apply"
 import { setFiles } from "~/lib/files/store"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { j } from "./test-helpers"
 
 const scenariosDir = join(__dirname, "scenarios")

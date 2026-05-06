@@ -5,8 +5,8 @@ import { fileURLToPath } from "url"
 import { createExecutor } from "../../../executors/execute"
 import { getToolHandlers } from "../../../executors/tool"
 import "../register"
-import { setFiles, getFile } from "~/lib/files"
-import { clearEntries } from "~/lib/mutation-history"
+import { setFiles, getFile } from "~/lib/files/store"
+import { clearEntries } from "~/lib/mutation-history/store"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FIXTURES_DIR = join(__dirname, "fixtures")

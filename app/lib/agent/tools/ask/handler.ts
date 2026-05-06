@@ -1,7 +1,7 @@
 import type { ToolResult } from "../../types"
 import { AskArgs } from "./def"
 import { registerSpecialHandler } from "../../executors/delegation"
-import { getAllBlocks, setLoading } from "../../client"
+import { getAllBlocks, setLoading } from "../../client/store"
 import { findLastUserContent } from "../../derived"
 
 const executeAsk = async (call: { args: unknown }): Promise<ToolResult<unknown>> => {

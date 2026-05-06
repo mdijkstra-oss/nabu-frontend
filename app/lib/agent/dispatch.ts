@@ -1,5 +1,5 @@
-import type { Block, SystemBlock } from "./client"
-import { pushBlocks, getLoading, getAllBlocksWithDraft } from "./client"
+import type { Block, SystemBlock } from "./client/blocks"
+import { pushBlocks, getLoading, getAllBlocksWithDraft } from "./client/store"
 import { toMarkerBlock } from "./client/markers"
 import { isCompactedResult } from "./compact"
 import { run, type RunnerDeps } from "./runner"

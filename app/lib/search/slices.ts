@@ -1,4 +1,4 @@
-import type { SearchHit } from "~/domain/search"
+import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
 import type { Annotation } from "~/domain/data-blocks/attributes/schema"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"

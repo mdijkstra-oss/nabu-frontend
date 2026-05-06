@@ -1,4 +1,4 @@
-import type { Block } from "../../client"
+import type { Block } from "../../client/blocks"
 import { afterToolResult, isLastToolResult, systemNudge, type Nudger } from "../nudge-tools"
 
 const extractScoutContext = (history: Block[]): string => {

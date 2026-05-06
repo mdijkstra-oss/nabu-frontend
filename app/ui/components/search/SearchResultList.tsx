@@ -4,14 +4,14 @@ import { IconButton } from "~/ui/components/IconButton"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { TagBadge } from "~/ui/components/TagBadge"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
-import type { SearchHit } from "~/domain/search"
-import type { FileStore } from "~/lib/files"
-import { refreshHits } from "~/lib/search"
+import type { SearchHit } from "~/domain/search/types"
+import type { FileStore } from "~/lib/files/store"
+import { refreshHits } from "~/lib/search/slices"
 import { useThrottledValue } from "~/ui/hooks/useThrottledValue"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
 import { findTagDefinitionById } from "~/domain/data-blocks/settings/tags/selectors"
-import { spotlightFromText, serializeSpotlight } from "~/lib/editor/spotlight"
+import { spotlightFromText, serializeSpotlight } from "~/lib/editor/spotlight/serialize"
 
 export interface SearchResultListProps {
   hits: SearchHit[]

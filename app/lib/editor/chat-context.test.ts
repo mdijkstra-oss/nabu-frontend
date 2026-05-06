@@ -6,7 +6,7 @@ import {
   findLastContextMessage,
   CONTEXT_PREFIX,
 } from "./chat-context"
-import type { Block } from "~/lib/agent"
+import type { Block } from "~/lib/agent/client/blocks"
 
 const resetSlots = () => {
   setPageContext(undefined)

@@ -5,7 +5,7 @@ import { Button } from "~/ui/components/Button"
 import { DropZone } from "./DropZone"
 import { FileImportList } from "./FileImportList"
 import { X } from "lucide-react"
-import type { ImportFile, ImportProgress } from "~/lib/import"
+import type { ImportFile, ImportProgress } from "~/lib/import/types"
 
 interface FileDropOverlayProps {
   isVisible: boolean

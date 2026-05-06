@@ -3,17 +3,14 @@ import { QueryArgs } from "./def"
 import { registerSpecialHandler } from "../../executors/delegation"
 import { getDatabase } from "~/domain/db/database"
 import { getLlmHost } from "~/lib/agent/env"
+import { executeHybridLocal } from "~/lib/search/execute"
+import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
 import {
-  executeHybridLocal,
-  resolveSemanticSql,
   sanitizeSemanticError,
-  capLimit,
-  hasOffset,
-  dropOffset,
   SEMANTIC_ABSENCE_HINT,
-  type LimitRewrite,
   type HybridSearchPlan,
-} from "~/lib/search"
+} from "~/lib/search/semantic"
+import { capLimit, hasOffset, dropOffset, type LimitRewrite } from "~/lib/search/paging"
 import { buildSemanticContext } from "~/domain/corpus/init"
 
 const MAX_QUERY_ROWS = 50

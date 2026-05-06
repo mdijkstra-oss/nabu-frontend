@@ -17,7 +17,7 @@ import {
   isSingleton,
   getLabelKey,
 } from "~/lib/data-blocks/registry"
-import { getFile } from "~/lib/files"
+import { getFile } from "~/lib/files/store"
 
 export interface ResolvedFile {
   content: string

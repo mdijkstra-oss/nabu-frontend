@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { processLine, initialParseState, blocksToMessages } from "."
+import { processLine, initialParseState } from "./parse"
+import { blocksToMessages } from "./convert"
 import type { Block } from "./blocks"
 
 interface ParseCallbacks {

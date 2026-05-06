@@ -1,7 +1,7 @@
 import type { AnyTool } from "./tool"
 import type { Nudger } from "../steering/nudge-tools"
-import type { Block } from "../client"
-import { pushBlocks } from "../client"
+import type { Block } from "../client/blocks"
+import { pushBlocks } from "../client/store"
 import type { StepDef } from "../derived"
 import { serializePlanBlock } from "../derived"
 import {
@@ -9,23 +9,23 @@ import {
   blockDeleteTools,
   blockAddTools,
   blockMoveTools,
-  applyLocalPatch,
-  copyFile,
-  renameFile,
-  removeFile,
-  runLocalShell,
-  cancel,
-  // scoutTool, // temporary — re-enable later
-  planDeepAnalysisTool,
-  applyDeepAnalysisTool,
-  startPlanTool,
-  completeStep,
-  askTool,
-  recordDecisionTool,
-  submitPlanTool,
-  queryTool,
-  searchTool,
-} from "../tools"
+} from "../tools/block-tools/register"
+import { applyLocalPatch } from "../tools/apply-local-patch/def"
+import { copyFile } from "../tools/copy-file/def"
+import { renameFile } from "../tools/rename-file/def"
+import { removeFile } from "../tools/remove-file/def"
+import { runLocalShell } from "../tools/run-local-shell/def"
+import { cancel } from "../tools/cancel/def"
+// scoutTool — temporary, re-enable later
+import { planDeepAnalysisTool } from "../tools/plan-deep-analysis/def"
+import { applyDeepAnalysisTool } from "../tools/apply-deep-analysis/def"
+import { startPlanTool } from "../tools/start-planning/def"
+import { completeStep } from "../tools/complete-step/def"
+import { askTool } from "../tools/ask/def"
+import { recordDecisionTool } from "../tools/record-decision/def"
+import { submitPlanTool } from "../tools/submit-plan/def"
+import { queryTool } from "../tools/query/def"
+import { searchTool } from "../tools/search/def"
 import { baselineNudge } from "../steering/nudges/baseline"
 import { buildToolNudges } from "../steering/nudges"
 import { createMemoryNudge } from "../steering/nudges/memory"

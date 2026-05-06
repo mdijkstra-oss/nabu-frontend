@@ -1,5 +1,5 @@
 import { afterToolResult, alreadyFired, systemNudge, type Nudger } from "../nudge-tools"
-import type { FileStore } from "~/lib/files"
+import type { FileStore } from "~/lib/files/store"
 import { SETTINGS_FILE } from "~/lib/files/filename"
 import { SETTINGS_READ_MARKER, formatFileContext } from "../../context-blocks"
 
