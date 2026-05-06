@@ -195,8 +195,15 @@ const resolveSearchRef = (
 
 const hasSpotlight = (ref: Extract<EntityRef, { kind: "text" }>): boolean => ref.spotlight !== null
 
-const spotlightText = (ref: Extract<EntityRef, { kind: "text" }>): string | null =>
-  ref.spotlight?.type === "single" ? ref.spotlight.text : null
+const spotlightText = (ref: Extract<EntityRef, { kind: "text" }>): string | null => {
+  if (!ref.spotlight) return null
+  switch (ref.spotlight.type) {
+    case "single":
+      return ref.spotlight.text
+    case "range":
+      return ref.spotlight.from
+  }
+}
 
 const hasMinWords = (text: string): boolean => text.trim().split(/\s+/).length >= 2
 

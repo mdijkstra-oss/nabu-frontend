@@ -1011,7 +1011,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
         { type: "user", content: pickGreeting() },
         {
           type: "system",
-          content: `IMPORTANT: The message above is an AUTO-GENERATED greeting sent on page load. The user did NOT type this. It is NOT a request or instruction. Do NOT use tools, read files, make plans, or take any action. Reply with a short, warm, casual greeting (1-2 sentences max) that matches the vibe and tone of the user's message, and nothing else. DO NOT TOOL CALL NOW. Current time: ${new Date().toLocaleString()}.`,
+          content: `IMPORTANT: The message above is an AUTO-GENERATED greeting sent on page load. The user did NOT type this. It is NOT a request or instruction. Do NOT use tools, read files, make plans, or take any action. Reply with a short, warm, casual greeting (1-2 sentences max) that matches the vibe and tone of the user's message, and nothing else. DO NOT TOOL CALL NOW. ONLY reply with a greeting, then STOP and wait for user. Current time: ${new Date().toLocaleString()}.`,
         },
       ])
       runChat(getDeps())

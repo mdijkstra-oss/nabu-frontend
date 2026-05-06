@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from "react"
 import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
 import { useFiles } from "~/ui/hooks/useFiles"
@@ -60,6 +60,7 @@ import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
 import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
+import { getLoading, subscribeLoading } from "~/lib/agent/client"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
 
@@ -190,6 +191,7 @@ export default function ProjectLayout() {
   const [docSortMode, setDocSortMode] = useState<DocSortMode>(() => getSettings().docSortMode)
   const [debugOptions, setDebugOptions] = useState<DebugOptions>(loadDebugOptions)
   const [loading, setLoading] = useState(true)
+  const chatLoading = useSyncExternalStore(subscribeLoading, getLoading, getLoading)
   const [statusLabel, setStatusLabel] = useState("Connecting...")
   const [fileCount, setFileCount] = useState(0)
   const [totalFiles, setTotalFiles] = useState(0)
@@ -446,6 +448,14 @@ export default function ProjectLayout() {
     navigate(`/project/${params.projectId}/search/${id}`)
   }
 
+  const handleRefineCode = (code: Code) => {
+    dispatchTask({
+      approaches: ["qual-coding/codebook/refine"],
+      context: `Review the definition for code "${code.name}" (id: ${code.id}). Check if it's well-structured and if the coded data matches what the definition describes.`,
+      userMessage: `Can you see if ${code.id} needs some refinement?`,
+    })
+  }
+
   const handleCodeFile = (code: Code) => {
     const codeFile = `${code.id}.hidden.md`
     dispatchTask({
@@ -495,8 +505,10 @@ export default function ProjectLayout() {
               codebook={codebook}
               annotationCounts={annotationCounts}
               globalAnnotationCounts={globalAnnotationCounts}
+              busy={chatLoading}
               onEditCode={handleEditCode}
               onCodeFile={handleCodeFile}
+              onRefineCode={handleRefineCode}
               onFileSelect={handleDocumentSelect}
               onSearchCode={handleSearchCode}
             />

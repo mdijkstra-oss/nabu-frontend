@@ -54,8 +54,8 @@ export const buildTaskBlocks = (config: TaskConfig, currentHistory: Block[]): Bl
     }
   }
 
-  blocks.push({ type: "user", content: config.userMessage })
   blocks.push({ type: "system", content: config.context } satisfies SystemBlock)
+  blocks.push({ type: "user", content: config.userMessage })
 
   const existing = collectRecentSystemContents(currentHistory)
   return blocks.filter(isNewBlock(existing))

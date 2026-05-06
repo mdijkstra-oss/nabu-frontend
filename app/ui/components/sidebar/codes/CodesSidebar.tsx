@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Play, Search } from "lucide-react"
+import { PenLine, Play, Search } from "lucide-react"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { matchesAny } from "~/lib/utils/filter"
@@ -19,6 +19,7 @@ interface CodesSidebarProps {
   busy?: boolean
   onEditCode?: (code: Code) => void
   onCodeFile?: (code: Code) => void
+  onRefineCode?: (code: Code) => void
   onFileSelect?: (fileId: string) => void
   onSearchCode?: (code: Code) => void
 }
@@ -74,6 +75,36 @@ const SearchCodeButton = ({
   )
 }
 
+const RefineCodeButton = ({
+  code,
+  disabled,
+  onClick,
+}: {
+  code: Code
+  disabled: boolean
+  onClick: () => void
+}) => {
+  const [isHovered, setIsHovered] = useState(false)
+  return (
+    <TooltipWrap text="Refine this code definition">
+      <button
+        disabled={disabled}
+        className="flex items-center gap-1 rounded-full border-2 border-solid py-0.5 px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 enabled:cursor-pointer"
+        style={{
+          color: solidBackground(code.color),
+          borderColor: isHovered ? hoveredElementBorder(code.color) : "transparent",
+        }}
+        onClick={onClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <PenLine className="h-3.5 w-3.5" />
+        <span className="text-[11px] font-bold leading-none">Refine</span>
+      </button>
+    </TooltipWrap>
+  )
+}
+
 interface CodeFileButtonProps {
   code: Code
   disabled: boolean
@@ -103,6 +134,7 @@ export const CodesSidebar = ({
   busy = false,
   onEditCode,
   onCodeFile,
+  onRefineCode,
   onFileSelect,
   onSearchCode,
 }: CodesSidebarProps) => {
@@ -177,6 +209,11 @@ export const CodesSidebar = ({
               <span className="text-heading-3 font-heading-3 text-default-font">
                 {hoveredCode.name}
               </span>
+              <RefineCodeButton
+                code={hoveredCode}
+                disabled={busy}
+                onClick={() => onRefineCode?.(hoveredCode)}
+              />
               <SearchCodeButton
                 code={hoveredCode}
                 globalCount={globalAnnotationCounts[hoveredCode.id]}
