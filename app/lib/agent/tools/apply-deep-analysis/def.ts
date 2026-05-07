@@ -33,6 +33,15 @@ export const ApplyDeepAnalysisArgs = z.object({
 
 export type ApplyDeepAnalysisArgs = z.infer<typeof ApplyDeepAnalysisArgs>
 
+export const FIND_ENDPOINT = "/deep-analysis-find"
+export const REASON_ENDPOINT = "/deep-analysis-reason"
+export const FILTER_ENDPOINT = "/deep-analysis-filter"
+export const FIND_RUNS = 3
+export const FIND_THRESHOLD = 2
+export const FILTER_RUNS = 3
+export const FILTER_THRESHOLD = 2
+export const SPAN_STEP_CONTEXT_SENTENCES = 6
+
 export const applyDeepAnalysisTool: AnyTool = {
   name: "apply_deep_analysis",
   description:

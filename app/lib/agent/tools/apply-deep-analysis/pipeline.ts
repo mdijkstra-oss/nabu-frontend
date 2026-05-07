@@ -25,6 +25,16 @@ import {
 } from "./consensus"
 import { spanKey } from "./format"
 import { formatCodedSection, type CodedItem } from "./present"
+import {
+  FIND_ENDPOINT,
+  REASON_ENDPOINT,
+  FILTER_ENDPOINT,
+  FIND_RUNS,
+  FIND_THRESHOLD,
+  FILTER_RUNS,
+  FILTER_THRESHOLD,
+  SPAN_STEP_CONTEXT_SENTENCES,
+} from "./def"
 
 export type CallResult<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -40,13 +50,6 @@ const countUniqueSentences = (spans: FindResult[]): number => {
   }
   return seen.size
 }
-
-const FIND_ENDPOINT = "/deep-analysis-find"
-const REASON_ENDPOINT = "/deep-analysis-reason"
-const FILTER_ENDPOINT = "/deep-analysis-filter"
-const FIND_RUNS = 3
-const FIND_THRESHOLD = 2
-const SPAN_STEP_CONTEXT_SENTENCES = 6
 
 const tryParseJson = (text: string): unknown | undefined => {
   try {
@@ -203,9 +206,6 @@ export interface FilterResult {
   surviving: FindResult[]
   dropped: FindResult[]
 }
-
-const FILTER_RUNS = 3
-const FILTER_THRESHOLD = 2
 
 const mapFilterResults = (
   results: { id: number; code: string }[],
