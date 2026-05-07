@@ -118,6 +118,7 @@ export const setCurrentFile = (filename: string | null): void => {
 
 export const updateFileRaw = (filename: string, raw: string): void => {
   const normalized = normalizeFile(raw)
+  if (normalized === files[filename]) return
   const isNew = !(filename in files)
   console.debug(
     `[store] updateFileRaw: ${isNew ? "create" : "update"} "${filename}" (${normalized.length} chars)`
