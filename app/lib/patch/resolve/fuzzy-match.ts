@@ -1,6 +1,6 @@
 import { findMatchOffset } from "~/lib/text/find"
 
-const FUZZY_PATTERN = /FUZZY\[\[([^\]]+)\]\]/g
+const FUZZY_PATTERN = /FUZZY\[\[([\s\S]+?)\]\]/g
 
 interface FuzzyMatch {
   placeholder: string
@@ -58,7 +58,6 @@ export const resolveFuzzyPatterns = (patch: string, targetContent: string): Fuzz
   return { patch: result, resolved, unresolved }
 }
 
-export const hasFuzzyPatterns = (content: string): boolean => {
-  FUZZY_PATTERN.lastIndex = 0
-  return FUZZY_PATTERN.test(content)
-}
+const FUZZY_PREFIX = "FUZZY[["
+
+export const hasFuzzyPatterns = (content: string): boolean => content.includes(FUZZY_PREFIX)

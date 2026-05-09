@@ -143,6 +143,16 @@ describe("resolveFuzzyPatterns", () => {
       expectedResolved: 1,
       expectedUnresolved: [],
     },
+    {
+      name: "needle containing square brackets resolves",
+      patch:
+        '{ "text": "FUZZY[[We gaan in die week daarvoor [onverstaanbaar, red] kijken: hoe zit het?]]" }',
+      target: "We gaan in die week daarvoor [onverstaanbaar, red] kijken: hoe zit het?",
+      expectedPatch:
+        '{ "text": "We gaan in die week daarvoor [onverstaanbaar, red] kijken: hoe zit het?" }',
+      expectedResolved: 1,
+      expectedUnresolved: [],
+    },
   ]
 
   it.each(cases)(
@@ -167,6 +177,8 @@ describe("hasFuzzyPatterns", () => {
     { name: "with pattern", content: "FUZZY[[text]]", expected: true },
     { name: "without pattern", content: "regular text", expected: false },
     { name: "similar but not pattern", content: "FUZZY text", expected: false },
+    { name: "with brackets in text", content: "FUZZY[[text [ed] here]]", expected: true },
+    { name: "unclosed prefix", content: "FUZZY[[broken", expected: true },
   ]
 
   it.each(cases)("$name", ({ content, expected }) => {

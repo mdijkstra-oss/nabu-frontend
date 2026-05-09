@@ -96,12 +96,23 @@ const wrapDirectField = (op: ValueOp, pattern: FuzzyFieldPattern): ValueOp | nul
 
 type FuzzyOpResult = { ok: true; op: JsonPatchOp } | { ok: false; error: string }
 
+const containsUnresolvedFuzzy = (value: unknown): boolean => {
+  if (typeof value === "string") return hasFuzzyPatterns(value)
+  if (typeof value === "object" && value !== null)
+    return Object.values(value).some((v) => typeof v === "string" && hasFuzzyPatterns(v))
+  return false
+}
+
 const resolveOpFuzzyValue = (op: JsonPatchOp, content: string): FuzzyOpResult => {
   if (!isValueOp(op)) return { ok: true, op }
 
   if (typeof op.value === "string" && hasFuzzyPatterns(op.value)) {
     const { patch: resolved, unresolved } = resolveFuzzyPatterns(op.value, content)
     if (unresolved.length > 0) return { ok: false, error: `${op.path}: Text not found in document` }
+    if (hasFuzzyPatterns(resolved)) {
+      console.warn(`[fuzzy] unresolved FUZZY pattern leaked through at ${op.path}`)
+      return { ok: false, error: `${op.path}: Text not found in document` }
+    }
     return { ok: true, op: { ...op, value: resolved } as ValueOp as JsonPatchOp }
   }
 
@@ -119,6 +130,10 @@ const resolveOpFuzzyValue = (op: JsonPatchOp, content: string): FuzzyOpResult =>
       } else {
         updated[key] = val
       }
+    }
+    if (changed && containsUnresolvedFuzzy(updated)) {
+      console.warn(`[fuzzy] unresolved FUZZY pattern leaked through at ${op.path}`)
+      return { ok: false, error: `${op.path}: Text not found in document` }
     }
     return { ok: true, op: changed ? ({ ...op, value: updated } as ValueOp as JsonPatchOp) : op }
   }
