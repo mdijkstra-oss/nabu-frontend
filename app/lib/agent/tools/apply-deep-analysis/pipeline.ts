@@ -20,6 +20,7 @@ import {
   countKeys,
   filterByTally,
   groupBySpan,
+  buildFindVoteMap,
   type FindResult,
   type CodedSpan,
 } from "./consensus"
@@ -40,6 +41,7 @@ export type CallResult<T> = { ok: true; data: T } | { ok: false; error: string }
 
 export interface DimensionResult {
   spans: FindResult[]
+  findVotes: Map<string, boolean[]>
   errors: string[]
 }
 
@@ -205,15 +207,24 @@ export const runReasonStep = async (
 export interface FilterResult {
   surviving: FindResult[]
   dropped: FindResult[]
+  filterVotes: Map<string, boolean[]>
+  filterJustifications: Map<string, string>
+}
+
+interface FilterHit {
+  key: string
+  justification: string
 }
 
 const mapFilterResults = (
-  results: { id: number; code: string }[],
+  results: { id: number; code: string; removalJustification: string }[],
   mapping: { index: number; start: number; end: number }[]
-): string[] =>
+): FilterHit[] =>
   results.flatMap((r) => {
     const m = mapping.find((entry) => entry.index === r.id)
-    return m ? [spanKey(m.start, m.end, r.code)] : []
+    return m
+      ? [{ key: spanKey(m.start, m.end, r.code), justification: r.removalJustification }]
+      : []
   })
 
 export const runFilter = async (
@@ -224,8 +235,16 @@ export const runFilter = async (
   trailingCtx: string,
   resolve: ContentResolver
 ): Promise<FilterResult> => {
+  const emptyVotes = new Map<string, boolean[]>()
+  const emptyJustifications = new Map<string, string>()
   const grouped = groupBySpan(allSpans)
-  if (grouped.length === 0) return { surviving: [], dropped: [] }
+  if (grouped.length === 0)
+    return {
+      surviving: [],
+      dropped: [],
+      filterVotes: emptyVotes,
+      filterJustifications: emptyJustifications,
+    }
 
   const codeIds = collectCodeIds(grouped)
   const codedItems = toCodedItems(grouped)
@@ -249,7 +268,7 @@ export const runFilter = async (
   const schema = buildFilterSchema(validCodes)
   const errors: string[] = []
   const slots = Array.from({ length: FILTER_RUNS }, (_, i) => i)
-  const { results: runs } = await processPool<number, string[]>(
+  const { results: rawRuns } = await processPool<number, FilterHit[]>(
     slots,
     async () => {
       const result = await callAndParse(FILTER_ENDPOINT, messages, schema)
@@ -263,12 +282,18 @@ export const runFilter = async (
     { concurrency: 3, warmup: 1 }
   )
 
-  if (runs.length < FILTER_RUNS) {
-    console.debug(`[deep-filter] ${runs.length}/${FILTER_RUNS} runs (insufficient, keeping all)`)
-    return { surviving: allSpans, dropped: [] }
+  if (rawRuns.length < FILTER_RUNS) {
+    console.debug(`[deep-filter] ${rawRuns.length}/${FILTER_RUNS} runs (insufficient, keeping all)`)
+    return {
+      surviving: allSpans,
+      dropped: [],
+      filterVotes: emptyVotes,
+      filterJustifications: emptyJustifications,
+    }
   }
 
-  const votes = countKeys(runs)
+  const keyRuns = rawRuns.map((hits) => hits.map((h) => h.key))
+  const votes = countKeys(keyRuns)
   const rejected = new Set(
     [...votes.entries()].filter(([, v]) => v >= FILTER_THRESHOLD).map(([k]) => k)
   )
@@ -276,6 +301,22 @@ export const runFilter = async (
   for (const [key, count] of votes) {
     const verdict = rejected.has(key) ? "reject" : "keep"
     console.debug(`[deep-filter] ${key} ${count}/${FILTER_RUNS} → ${verdict}`)
+  }
+
+  const allSpanKeys = new Set(allSpans.map((s) => spanKey(s.start, s.end, s.analysis_source_id)))
+  const filterVotes = new Map<string, boolean[]>()
+  for (const key of allSpanKeys) {
+    const perVoter = rawRuns.map((hits) => !hits.some((h) => h.key === key))
+    filterVotes.set(key, perVoter)
+  }
+
+  const filterJustifications = new Map<string, string>()
+  for (const key of allSpanKeys) {
+    if (rejected.has(key)) continue
+    const dissent = rawRuns.flatMap((hits) => hits.filter((h) => h.key === key))
+    if (dissent.length > 0) {
+      filterJustifications.set(key, dissent[0].justification)
+    }
   }
 
   const surviving: FindResult[] = []
@@ -289,7 +330,7 @@ export const runFilter = async (
     }
   }
 
-  return { surviving, dropped }
+  return { surviving, dropped, filterVotes, filterJustifications }
 }
 
 export const runDimensionPipeline = async (
@@ -314,7 +355,7 @@ export const runDimensionPipeline = async (
 
   if (findRuns.length < FIND_RUNS) {
     console.debug(`[deep-analysis] consensus: ${findRuns.length}/${FIND_RUNS} runs (insufficient)`)
-    return { spans: [], errors }
+    return { spans: [], findVotes: new Map(), errors }
   }
 
   const tally = tallyVotes(findRuns, sentences.length)
@@ -331,24 +372,28 @@ export const runDimensionPipeline = async (
     `[deep-analysis] consensus (${FIND_THRESHOLD}/${FIND_RUNS}): ${perCode.join(", ") || "no votes"}`
   )
 
-  if (spans.length === 0) return { spans: [], errors }
+  if (spans.length === 0) return { spans: [], findVotes: new Map(), errors }
+
+  const findVotes = buildFindVoteMap(tally, spans, spanKey)
 
   const codedSpans = groupBySpan(spans)
   for (const cs of codedSpans) {
     console.debug(`[deep-analysis]   [${cs.start}-${cs.end}] ${cs.codings.join(", ")}`)
   }
 
-  return { spans, errors }
+  return { spans, findVotes, errors }
 }
 
 export const mergeDimensionResults = (results: DimensionResult[]) => {
   const allSpans: FindResult[] = []
+  const allFindVotes = new Map<string, boolean[]>()
   const errors: string[] = []
 
   for (const dr of results) {
     allSpans.push(...dr.spans)
+    for (const [k, v] of dr.findVotes) allFindVotes.set(k, v)
     errors.push(...dr.errors)
   }
 
-  return { allSpans, errors }
+  return { allSpans, allFindVotes, errors }
 }

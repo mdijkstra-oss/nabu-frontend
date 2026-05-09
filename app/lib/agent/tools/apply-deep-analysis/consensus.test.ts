@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { tallyVotes, groupConsecutive, groupBySpan, consensus, type FindResult } from "./consensus"
+import {
+  tallyVotes,
+  groupConsecutive,
+  groupBySpan,
+  buildFindVoteMap,
+  consensus,
+  type FindResult,
+} from "./consensus"
 
 const r = (start: number, end: number, analysis_source_id: string): FindResult => ({
   start,
@@ -7,49 +14,65 @@ const r = (start: number, end: number, analysis_source_id: string): FindResult =
   analysis_source_id,
 })
 
+const countTrue = (votes: boolean[]): number => votes.filter(Boolean).length
+
+const getVotes = (
+  tally: Map<string, Map<number, boolean[]>>,
+  code: string,
+  sentence: number
+): boolean[] => {
+  const codeMap = tally.get(code)
+  if (!codeMap) throw new Error(`code ${code} not in tally`)
+  const votes = codeMap.get(sentence)
+  if (!votes) throw new Error(`sentence ${sentence} not in tally for ${code}`)
+  return votes
+}
+
 describe("tallyVotes", () => {
-  it("counts per (sentence, code) pair across runs", () => {
+  it("tracks per-voter identity across runs", () => {
     const runs: FindResult[][] = [[r(1, 3, "X")], [r(2, 4, "X")], [r(1, 2, "X")]]
     const tally = tallyVotes(runs, 5)
-    const x = tally.get("X") as Map<number, number>
-    expect(x.get(1)).toBe(2)
-    expect(x.get(2)).toBe(3)
-    expect(x.get(3)).toBe(2)
-    expect(x.get(4)).toBe(1)
-    expect(x.has(5)).toBe(false)
+    expect(countTrue(getVotes(tally, "X", 1))).toBe(2)
+    expect(countTrue(getVotes(tally, "X", 2))).toBe(3)
+    expect(countTrue(getVotes(tally, "X", 3))).toBe(2)
+    expect(countTrue(getVotes(tally, "X", 4))).toBe(1)
+    expect(tally.get("X")?.has(5)).toBe(false)
+  })
+
+  it("preserves voter index identity", () => {
+    const runs: FindResult[][] = [[r(1, 1, "X")], [], [r(1, 1, "X")]]
+    const tally = tallyVotes(runs, 1)
+    expect(getVotes(tally, "X", 1)).toEqual([true, false, true])
   })
 
   it("handles multiple codes", () => {
     const runs: FindResult[][] = [[r(1, 1, "A"), r(2, 2, "B")]]
     const tally = tallyVotes(runs, 3)
-    expect((tally.get("A") as Map<number, number>).get(1)).toBe(1)
-    expect((tally.get("B") as Map<number, number>).get(2)).toBe(1)
+    expect(countTrue(getVotes(tally, "A", 1))).toBe(1)
+    expect(countTrue(getVotes(tally, "B", 2))).toBe(1)
   })
 
   it("deduplicates overlapping spans within a single run", () => {
     const runs: FindResult[][] = [[r(1, 4, "X"), r(3, 6, "X")]]
     const tally = tallyVotes(runs, 6)
-    const x = tally.get("X") as Map<number, number>
     for (let s = 1; s <= 6; s++) {
-      expect(x.get(s)).toBe(1)
+      expect(countTrue(getVotes(tally, "X", s))).toBe(1)
     }
   })
 
   it("deduplicates same code but not across codes", () => {
     const runs: FindResult[][] = [[r(1, 3, "A"), r(2, 4, "A"), r(2, 4, "B")]]
     const tally = tallyVotes(runs, 4)
-    const a = tally.get("A") as Map<number, number>
-    const b = tally.get("B") as Map<number, number>
-    expect(a.get(2)).toBe(1)
-    expect(a.get(3)).toBe(1)
-    expect(b.get(2)).toBe(1)
-    expect(b.get(3)).toBe(1)
+    expect(countTrue(getVotes(tally, "A", 2))).toBe(1)
+    expect(countTrue(getVotes(tally, "A", 3))).toBe(1)
+    expect(countTrue(getVotes(tally, "B", 2))).toBe(1)
+    expect(countTrue(getVotes(tally, "B", 3))).toBe(1)
   })
 
   it("clamps to sentenceCount", () => {
     const runs: FindResult[][] = [[r(1, 10, "X")]]
     const tally = tallyVotes(runs, 3)
-    expect((tally.get("X") as Map<number, number>).has(4)).toBe(false)
+    expect(tally.get("X")?.has(4)).toBe(false)
   })
 })
 
@@ -212,5 +235,75 @@ describe("groupBySpan", () => {
 
   cases.forEach(({ name, spans, expected }) => {
     it(name, () => expect(groupBySpan(spans)).toEqual(expected))
+  })
+})
+
+const keyFn = (start: number, end: number, code: string) => `${start}-${end}-${code}`
+
+describe("buildFindVoteMap", () => {
+  const cases: {
+    name: string
+    runs: FindResult[][]
+    sentenceCount: number
+    threshold: number
+    expectedKeys: string[]
+    expectedVotes: Record<string, boolean[]>
+  }[] = [
+    {
+      name: "3/3 agreement → all true, length 3",
+      runs: [[r(1, 2, "X")], [r(1, 2, "X")], [r(1, 2, "X")]],
+      sentenceCount: 3,
+      threshold: 2,
+      expectedKeys: ["1-2-X"],
+      expectedVotes: { "1-2-X": [true, true, true] },
+    },
+    {
+      name: "2/3 agreement → two true one false, length 3",
+      runs: [[r(1, 2, "X")], [r(1, 2, "X")], []],
+      sentenceCount: 3,
+      threshold: 2,
+      expectedKeys: ["1-2-X"],
+      expectedVotes: { "1-2-X": [true, true, false] },
+    },
+    {
+      name: "span ORs across sentences — voter found any sentence in span",
+      runs: [[r(1, 1, "X")], [r(2, 2, "X")], [r(1, 2, "X")]],
+      sentenceCount: 2,
+      threshold: 2,
+      expectedKeys: ["1-2-X"],
+      expectedVotes: { "1-2-X": [true, true, true] },
+    },
+    {
+      name: "no spans survive threshold → empty map",
+      runs: [[r(1, 1, "X")], [], []],
+      sentenceCount: 1,
+      threshold: 2,
+      expectedKeys: [],
+      expectedVotes: {},
+    },
+    {
+      name: "multiple codes each get length-3 arrays",
+      runs: [[r(1, 1, "A"), r(2, 2, "B")], [r(1, 1, "A"), r(2, 2, "B")], [r(1, 1, "A")]],
+      sentenceCount: 3,
+      threshold: 2,
+      expectedKeys: ["1-1-A", "2-2-B"],
+      expectedVotes: {
+        "1-1-A": [true, true, true],
+        "2-2-B": [true, true, false],
+      },
+    },
+  ]
+
+  cases.forEach(({ name, runs, sentenceCount, threshold, expectedKeys, expectedVotes }) => {
+    it(name, () => {
+      const tally = tallyVotes(runs, sentenceCount)
+      const spans = consensus(runs, sentenceCount, threshold)
+      const result = buildFindVoteMap(tally, spans, keyFn)
+      expect([...result.keys()].sort()).toEqual(expectedKeys.sort())
+      for (const [key, votes] of result) {
+        expect(votes).toHaveLength(runs.length)
+        expect(votes).toEqual(expectedVotes[key])
+      }
+    })
   })
 })

@@ -6,17 +6,25 @@ import { findMatches } from "~/lib/patch/diff/search"
 import type { PostAction } from "./def"
 import type { FindResult } from "./consensus"
 
+export interface VoteRecord {
+  find: { found: number; missed: number }
+  filter: { keep: number; remove: number }
+  removalJustification: string | null
+}
+
 export interface AnalysisResult {
   start: number
   end: number
   analysis_source_id: string
   reason: string
+  vote?: VoteRecord
 }
 
 export interface MappedResult {
   text: string
   analysis_source_id: string
   reason: string
+  vote?: VoteRecord
 }
 
 export interface AnnotationRef {
@@ -92,6 +100,7 @@ export const mapResults = (sentences: string[], results: AnalysisResult[]): Mapp
         text: spans.join(" "),
         analysis_source_id: r.analysis_source_id,
         reason: r.reason,
+        vote: r.vote,
       },
     ]
   })
@@ -103,6 +112,7 @@ interface AddAnnotationOp {
     reason: string
     code?: string
     color?: string
+    vote?: VoteRecord
   }
 }
 
@@ -114,6 +124,7 @@ const toCodeAnnotation = (result: MappedResult): AddAnnotationOp => ({
     text: result.text,
     reason: result.reason,
     code: result.analysis_source_id,
+    vote: result.vote,
   },
 })
 
@@ -123,6 +134,7 @@ const toCommentAnnotation = (result: MappedResult): AddAnnotationOp => ({
     text: result.text,
     reason: `[${result.analysis_source_id}] ${result.reason}`,
     color: DEFAULT_COMMENT_COLOR,
+    vote: result.vote,
   },
 })
 
@@ -202,11 +214,16 @@ export const spanKey = (start: number, end: number, code: string): string =>
 
 export const toAnalysisResults = (
   spans: FindResult[],
-  reasons: Map<string, string>
+  reasons: Map<string, string>,
+  votes?: Map<string, VoteRecord>
 ): AnalysisResult[] =>
-  spans.map((s) => ({
-    start: s.start,
-    end: s.end,
-    analysis_source_id: s.analysis_source_id,
-    reason: reasons.get(spanKey(s.start, s.end, s.analysis_source_id)) ?? "",
-  }))
+  spans.map((s) => {
+    const key = spanKey(s.start, s.end, s.analysis_source_id)
+    return {
+      start: s.start,
+      end: s.end,
+      analysis_source_id: s.analysis_source_id,
+      reason: reasons.get(key) ?? "",
+      vote: votes?.get(key),
+    }
+  })

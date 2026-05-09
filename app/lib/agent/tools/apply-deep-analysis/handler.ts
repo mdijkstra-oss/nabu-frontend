@@ -18,7 +18,9 @@ import {
   formatReturnOutput,
   formatAnnotateOutput,
   toAnalysisResults,
+  spanKey,
   type MappedResult,
+  type VoteRecord,
 } from "./format"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { type ContentResolver, partitionSources, buildCallList } from "./messages"
@@ -193,12 +195,12 @@ registerTool(
         )
       )
 
-      const { allSpans, errors: findErrors } = mergeDimensionResults(dimensionResults)
+      const { allSpans, allFindVotes, errors: findErrors } = mergeDimensionResults(dimensionResults)
 
       if (allSpans.length === 0 && calls.length > 0 && findErrors.length > 0)
         return { status: "error", output: findErrors.join("; "), mutations: [] }
 
-      const { surviving, dropped } = await runFilter(
+      const { surviving, dropped, filterVotes, filterJustifications } = await runFilter(
         allSpans,
         sentences,
         scoped,
@@ -223,7 +225,28 @@ registerTool(
         resolve
       )
 
-      const analysisResults = toAnalysisResults(surviving, reasonResult.values)
+      const countVotes = (votes: boolean[]) => {
+        const found = votes.filter(Boolean).length
+        return { found, missed: votes.length - found }
+      }
+      const countFilter = (votes: boolean[]) => {
+        const keep = votes.filter(Boolean).length
+        return { keep, remove: votes.length - keep }
+      }
+
+      const voteRecords = new Map<string, VoteRecord>()
+      for (const s of surviving) {
+        const key = spanKey(s.start, s.end, s.analysis_source_id)
+        const findVotes = allFindVotes.get(key) ?? []
+        const fVotes = filterVotes.get(key) ?? []
+        voteRecords.set(key, {
+          find: countVotes(findVotes),
+          filter: countFilter(fVotes),
+          removalJustification: filterJustifications.get(key) ?? null,
+        })
+      }
+
+      const analysisResults = toAnalysisResults(surviving, reasonResult.values, voteRecords)
       const mapped = mapResults(sentences, analysisResults)
 
       return postActions[post_action]({

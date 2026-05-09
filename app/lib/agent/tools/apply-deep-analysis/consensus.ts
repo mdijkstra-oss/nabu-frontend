@@ -7,18 +7,24 @@ export interface FindResult {
 export const tallyVotes = (
   runs: FindResult[][],
   sentenceCount: number
-): Map<string, Map<number, number>> => {
-  const tally = new Map<string, Map<number, number>>()
-  for (const run of runs) {
+): Map<string, Map<number, boolean[]>> => {
+  const tally = new Map<string, Map<number, boolean[]>>()
+  for (let voterIdx = 0; voterIdx < runs.length; voterIdx++) {
     const seen = new Set<string>()
-    for (const r of run) {
+    for (const r of runs[voterIdx]) {
       for (let s = r.start; s <= Math.min(r.end, sentenceCount); s++) {
         const key = `${r.analysis_source_id}:${s}`
         if (seen.has(key)) continue
         seen.add(key)
         if (!tally.has(r.analysis_source_id)) tally.set(r.analysis_source_id, new Map())
-        const codeMap = tally.get(r.analysis_source_id) as Map<number, number>
-        codeMap.set(s, (codeMap.get(s) ?? 0) + 1)
+        const codeMap = tally.get(r.analysis_source_id) ?? new Map()
+        if (!codeMap.has(s))
+          codeMap.set(
+            s,
+            Array.from({ length: runs.length }, () => false)
+          )
+        const slot = codeMap.get(s) ?? []
+        slot[voterIdx] = true
       }
     }
   }
@@ -45,13 +51,17 @@ export const groupConsecutive = (sentences: number[], code: string): FindResult[
   return spans
 }
 
+const countTrue = (votes: boolean[]): number => votes.filter(Boolean).length
+
 export const filterByTally = (
-  tally: Map<string, Map<number, number>>,
+  tally: Map<string, Map<number, boolean[]>>,
   threshold: number
 ): FindResult[] => {
   const spans: FindResult[] = []
   for (const [code, votesMap] of tally) {
-    const matched = [...votesMap.entries()].filter(([, v]) => v >= threshold).map(([s]) => s)
+    const matched = [...votesMap.entries()]
+      .filter(([, v]) => countTrue(v) >= threshold)
+      .map(([s]) => s)
     spans.push(...groupConsecutive(matched, code))
   }
   return spans
@@ -77,6 +87,31 @@ export const groupBySpan = (spans: FindResult[]): CodedSpan[] => {
     }
   }
   return [...map.values()]
+}
+
+export const buildFindVoteMap = (
+  tally: Map<string, Map<number, boolean[]>>,
+  spans: FindResult[],
+  keyFn: (start: number, end: number, code: string) => string
+): Map<string, boolean[]> => {
+  const result = new Map<string, boolean[]>()
+  for (const span of spans) {
+    const codeMap = tally.get(span.analysis_source_id)
+    if (!codeMap) continue
+    let merged: boolean[] | undefined
+    for (let s = span.start; s <= span.end; s++) {
+      const votes = codeMap.get(s)
+      if (!votes) continue
+      if (!merged) {
+        merged = votes.map(() => false)
+      }
+      for (let i = 0; i < votes.length; i++) {
+        if (votes[i]) merged[i] = true
+      }
+    }
+    if (merged) result.set(keyFn(span.start, span.end, span.analysis_source_id), merged)
+  }
+  return result
 }
 
 export const consensus = (

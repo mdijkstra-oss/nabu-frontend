@@ -30,6 +30,13 @@ const BaseAnnotationSchema = z.object({
   code: emptyToUndefined(z.string()).describe("Code ID from codebook (if no color)"),
   id: z.string().optional(),
   actor: z.enum(["ai", "user"]).optional(),
+  vote: z
+    .object({
+      find: z.object({ found: z.number().int(), missed: z.number().int() }),
+      filter: z.object({ keep: z.number().int(), remove: z.number().int() }),
+      removalJustification: z.string().nullable(),
+    })
+    .optional(),
 })
 
 export const annotationSchema = (ctx?: ValidationContext) => {

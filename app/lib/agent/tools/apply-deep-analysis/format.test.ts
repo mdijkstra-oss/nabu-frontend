@@ -6,6 +6,7 @@ import {
   numberSection,
   mapResults,
   toAnnotationOps,
+  toAnalysisResults,
   buildRemovalOps,
   formatReturnOutput,
   formatAnnotateOutput,
@@ -13,6 +14,7 @@ import {
   ABSENCE_HINT,
   type MappedResult,
   type AnnotationRef,
+  type VoteRecord,
 } from "./format"
 
 describe("extractSection", () => {
@@ -437,5 +439,80 @@ describe("buildRemovalOps", () => {
     it(name, () =>
       expect(buildRemovalOps(annotations, content, codes, startLine, endLine)).toEqual(expected)
     )
+  })
+})
+
+const vote3of3: VoteRecord = {
+  find: { found: 3, missed: 0 },
+  filter: { keep: 3, remove: 0 },
+  removalJustification: null,
+}
+const vote2of3: VoteRecord = {
+  find: { found: 2, missed: 1 },
+  filter: { keep: 2, remove: 1 },
+  removalJustification: "dissenting reason",
+}
+
+describe("vote pass-through", () => {
+  const sentences = ["First.", "Second.", "Third."]
+
+  const voteCases = [
+    {
+      name: "toAnalysisResults attaches vote from map",
+      fn: () => {
+        const spans = [{ start: 1, end: 2, analysis_source_id: "X" }]
+        const reasons = new Map([["1-2-X", "reason"]])
+        const votes = new Map([["1-2-X", vote2of3]])
+        const results = toAnalysisResults(spans, reasons, votes)
+        return results[0].vote
+      },
+      expected: vote2of3,
+    },
+    {
+      name: "toAnalysisResults omits vote when map not provided",
+      fn: () => {
+        const spans = [{ start: 1, end: 2, analysis_source_id: "X" }]
+        const reasons = new Map([["1-2-X", "reason"]])
+        const results = toAnalysisResults(spans, reasons)
+        return results[0].vote
+      },
+      expected: undefined,
+    },
+    {
+      name: "mapResults passes vote through",
+      fn: () => {
+        const results = [{ start: 1, end: 1, analysis_source_id: "X", reason: "r", vote: vote3of3 }]
+        return mapResults(sentences, results)[0].vote
+      },
+      expected: vote3of3,
+    },
+    {
+      name: "mapResults omits vote when undefined",
+      fn: () => {
+        const results = [{ start: 1, end: 1, analysis_source_id: "X", reason: "r" }]
+        return mapResults(sentences, results)[0].vote
+      },
+      expected: undefined,
+    },
+    {
+      name: "toAnnotationOps (code) passes vote through",
+      fn: () => {
+        const mapped = [{ text: "t", analysis_source_id: "X", reason: "r", vote: vote2of3 }]
+        return toAnnotationOps(mapped, "annotate_as_code")[0].item.vote
+      },
+      expected: vote2of3,
+    },
+    {
+      name: "toAnnotationOps (comment) passes vote through",
+      fn: () => {
+        const mapped = [{ text: "t", analysis_source_id: "X", reason: "r", vote: vote3of3 }]
+        return toAnnotationOps(mapped, "annotate_as_comment")[0].item.vote
+      },
+      expected: vote3of3,
+    },
+  ]
+
+  voteCases.forEach(({ name, fn, expected }) => {
+    it(name, () => expect(fn()).toEqual(expected))
   })
 })
