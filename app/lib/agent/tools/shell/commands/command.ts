@@ -1,6 +1,7 @@
 import { minimatch } from "minimatch"
 import mri from "mri"
 import type { Files } from "../types"
+import { resolveHiddenFile } from "~/lib/files/hidden-blocks"
 
 export type Operation =
   | { type: "create"; path: string; content: string }
@@ -44,6 +45,12 @@ export const resolveFiles = (files: Map<string, string>, rawPattern: string): st
   if (files.has(pattern)) return [pattern]
   return []
 }
+
+export const resolveFileContent = (files: Files, filename: string): string | undefined =>
+  files.get(filename) ?? resolveHiddenFile(filename)
+
+export const hasFile = (files: Files, filename: string): boolean =>
+  files.has(filename) || resolveHiddenFile(filename) !== undefined
 
 interface FlagDef {
   alias?: string

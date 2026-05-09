@@ -1,4 +1,4 @@
-import { command, ok, err, normalizePath, isGlob } from "./command"
+import { command, ok, err, normalizePath, isGlob, resolveFileContent, hasFile } from "./command"
 
 export const cat = command({
   description: "Print file contents",
@@ -16,11 +16,11 @@ export const cat = command({
     if (filename && isGlob(filename)) {
       return err(`cat: globs not supported, use a specific file path`)
     }
-    if (filename && !files.has(filename)) {
+    if (filename && !hasFile(files, filename)) {
       return err(`cat: ${filename}: No such file`)
     }
 
-    const content = filename ? (files.get(filename) ?? "") : stdin
+    const content = filename ? (resolveFileContent(files, filename) ?? "") : stdin
 
     let lines = content.split("\n")
     lines = lines.slice(offset - 1)

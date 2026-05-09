@@ -4,7 +4,9 @@ import type { ToolResult, Operation, Handler } from "../types"
 import { getFileRaw, updateFileRaw, deleteFile, renameFile } from "~/lib/files/store"
 import { applyFilePatch, finalizeContent } from "~/lib/patch/apply"
 import { formatGeneratedIds } from "~/lib/data-blocks/uuid"
-import { isHiddenFile, SETTINGS_FILE } from "~/lib/files/filename"
+import { isHiddenFile, isGeneratedHiddenFile, SETTINGS_FILE } from "~/lib/files/filename"
+import { resolveGeneratedWrite } from "~/lib/files/hidden-blocks"
+import { parseCodeBlocks } from "~/lib/data-blocks/parse"
 import { replaceUuidPlaceholders } from "~/lib/data-blocks/uuid"
 import { validateBlocksAsync, formatValidationErrors } from "~/lib/data-blocks/validate"
 import type { ToolExecutor } from "../turn"
@@ -78,75 +80,98 @@ const checkHiddenFileGuard = (op: Operation): MutationErr | null => {
   return blocked ? { error: `${blocked}: hidden file, cannot be modified by the assistant` } : null
 }
 
+const redirectGeneratedOp = (op: Operation): Operation | MutationErr => {
+  const targetPath = op.type === "rename_file" ? op.path : op.path
+  if (!isGeneratedHiddenFile(targetPath)) return op
+
+  if (op.type !== "write_file")
+    return { error: `${op.path}: generated file — use write_file to modify` }
+
+  const blocks = parseCodeBlocks(op.content)
+  if (blocks.length === 0) return { error: `${op.path}: no code block found in content` }
+
+  const result = resolveGeneratedWrite(op.path, blocks[0].content)
+  if (!result) return { error: `${op.path}: could not resolve generated file to source` }
+
+  return { ...op, path: result.realPath, content: result.realContent }
+}
+
 const applyMutation = async (
   op: Operation,
   placeholderIds: Record<string, string>
 ): Promise<MutationResult> => {
-  const hiddenErr = checkHiddenFileGuard(op)
+  const redirected = redirectGeneratedOp(op)
+  if ("error" in redirected) return redirected as MutationErr
+  const hiddenErr = checkHiddenFileGuard(redirected)
   if (hiddenErr) return hiddenErr
   const ts = Date.now()
-  switch (op.type) {
+  switch (redirected.type) {
     case "create_file": {
-      if (getFileRaw(op.path))
-        return { error: `${op.path}: already exists. Use update_file to modify it` }
-      const result = await applyPatchAndStore(op.path, "", op.diff, { placeholderIds })
+      if (getFileRaw(redirected.path))
+        return { error: `${redirected.path}: already exists. Use update_file to modify it` }
+      const result = await applyPatchAndStore(redirected.path, "", redirected.diff, {
+        placeholderIds,
+      })
       if (!isMutationError(result)) {
-        const newContent = getFileRaw(op.path) ?? ""
+        const newContent = getFileRaw(redirected.path) ?? ""
         pushEntries([
-          fileCreatedEntry(op.path, ts),
-          ...diffFileContent("", newContent, op.path, ts),
+          fileCreatedEntry(redirected.path, ts),
+          ...diffFileContent("", newContent, redirected.path, ts),
         ])
       }
       return result
     }
     case "update_file": {
-      const oldContent = getFileRaw(op.path)
-      if (!oldContent) return { error: `${op.path}: No such file` }
-      const result = await applyPatchAndStore(op.path, oldContent, op.diff, {
-        skipImmutableCheck: op.skipImmutableCheck,
+      const oldContent = getFileRaw(redirected.path)
+      if (!oldContent) return { error: `${redirected.path}: No such file` }
+      const result = await applyPatchAndStore(redirected.path, oldContent, redirected.diff, {
+        skipImmutableCheck: redirected.skipImmutableCheck,
         placeholderIds,
       })
       if (!isMutationError(result)) {
-        const newContent = getFileRaw(op.path) ?? ""
-        pushEntries(diffFileContent(oldContent, newContent, op.path, ts))
+        const newContent = getFileRaw(redirected.path) ?? ""
+        pushEntries(diffFileContent(oldContent, newContent, redirected.path, ts))
       }
       return result
     }
     case "write_file": {
-      const oldContent = getFileRaw(op.path)
-      const result = finalizeContent(op.path, op.content, {
+      const oldContent = getFileRaw(redirected.path)
+      const result = finalizeContent(redirected.path, redirected.content, {
         original: oldContent,
         actor: "ai",
-        skipImmutableCheck: op.skipBlockValidation,
-        skipCodeValidation: op.skipBlockValidation,
+        skipImmutableCheck: redirected.skipBlockValidation,
+        skipCodeValidation: redirected.skipBlockValidation,
       })
       if (result.status === "error") return { error: result.error }
 
-      const asyncError = await runAsyncValidation(op.path, result.content)
+      const asyncError = await runAsyncValidation(redirected.path, result.content)
       if (asyncError) return asyncError
 
       updateFileRaw(result.path, result.content)
-      pushEntries(diffFileContent(oldContent, result.content, op.path, ts))
+      pushEntries(diffFileContent(oldContent, result.content, redirected.path, ts))
       const ids = result.generatedIds ? formatGeneratedIds(result.generatedIds) : null
       const warnings = result.status === "partial" ? result.warnings : undefined
       return { ids, warnings }
     }
     case "delete_file": {
-      const oldContent = getFileRaw(op.path)
-      if (!oldContent) return { error: `${op.path}: No such file` }
-      pushEntries([...diffFileContent(oldContent, "", op.path, ts), fileDeletedEntry(op.path, ts)])
-      deleteFile(op.path)
+      const oldContent = getFileRaw(redirected.path)
+      if (!oldContent) return { error: `${redirected.path}: No such file` }
+      pushEntries([
+        ...diffFileContent(oldContent, "", redirected.path, ts),
+        fileDeletedEntry(redirected.path, ts),
+      ])
+      deleteFile(redirected.path)
       return { ids: null }
     }
     case "rename_file": {
-      if (!getFileRaw(op.path)) return { error: `${op.path}: No such file` }
-      if (getFileRaw(op.newPath)) return { error: `${op.newPath}: already exists` }
-      renameFile(op.path, op.newPath)
-      pushEntries([fileRenamedEntry(op.path, op.newPath, ts)])
+      if (!getFileRaw(redirected.path)) return { error: `${redirected.path}: No such file` }
+      if (getFileRaw(redirected.newPath)) return { error: `${redirected.newPath}: already exists` }
+      renameFile(redirected.path, redirected.newPath)
+      pushEntries([fileRenamedEntry(redirected.path, redirected.newPath, ts)])
       return { ids: null }
     }
     default:
-      return exhaustive(op)
+      return exhaustive(redirected)
   }
 }
 

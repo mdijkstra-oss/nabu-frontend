@@ -461,10 +461,10 @@ export default function ProjectLayout() {
   }
 
   const handleCodeFile = (code: Code) => {
-    const codeFile = `${code.id}.hidden.md`
+    const codeFile = `${code.id}.generated.hidden.md`
     dispatchTask({
       approaches: [],
-      context: `Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Use ONLY the generic codebook AND ${codeFile} for coding. Do not use any other codebooks. Note: ${codeFile} is a hidden file — it will not appear in ls output, but it exists and can be read directly with cat.`,
+      context: `Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Use ONLY the generic codebook AND ${codeFile} for coding. Do not use any other codebooks. Note: ${codeFile} is a generated file — it will not appear in ls output, but can be read with cat, head, tail, or grep.`,
       userMessage: `Can you code this file with only ${code.id}`,
     })
   }

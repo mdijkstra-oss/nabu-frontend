@@ -7,6 +7,9 @@ export const isProtectedFile = (path: string): boolean => PROTECTED_FILES.has(pa
 
 export const isHiddenFile = (path: string): boolean => path.includes(".hidden.")
 
+export const GENERATED_SUFFIX = ".generated.hidden.md"
+export const isGeneratedHiddenFile = (path: string): boolean => path.endsWith(GENERATED_SUFFIX)
+
 export const normalizeFilename = (name: string): string => name.toLowerCase().replace(/ /g, "_")
 
 export const toDisplayName = (filename: string): string =>

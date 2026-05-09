@@ -1,4 +1,13 @@
-import { command, ok, noMatch, err, normalizePath, isGlob, resolveFiles } from "./command"
+import {
+  command,
+  ok,
+  noMatch,
+  err,
+  normalizePath,
+  isGlob,
+  resolveFiles,
+  resolveFileContent,
+} from "./command"
 
 interface ContextMatch {
   lineNum: number
@@ -145,7 +154,14 @@ export const grep = command({
 
     if (filename) {
       const resolved = resolveFiles(files, filename)
-      if (resolved.length === 0 && !isGlob(filename)) return err(`grep: ${filename}: No such file`)
+      if (resolved.length === 0 && !isGlob(filename)) {
+        const generated = resolveFileContent(files, filename)
+        if (generated !== undefined) {
+          searchFile(filename, generated)
+        } else {
+          return err(`grep: ${filename}: No such file`)
+        }
+      }
       for (const filePath of resolved) {
         const content = files.get(filePath)
         if (content === undefined) continue

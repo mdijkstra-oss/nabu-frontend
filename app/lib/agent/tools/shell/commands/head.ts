@@ -1,4 +1,4 @@
-import { command, ok, err, normalizePath, isGlob } from "./command"
+import { command, ok, err, normalizePath, isGlob, resolveFileContent, hasFile } from "./command"
 
 export const head = command({
   description: "Print first N lines",
@@ -11,9 +11,9 @@ export const head = command({
 
     const filename = normalizePath(paths[0])
     if (filename && isGlob(filename)) return err("head: globs not supported")
-    if (filename && !files.has(filename)) return err(`head: ${filename}: No such file`)
+    if (filename && !hasFile(files, filename)) return err(`head: ${filename}: No such file`)
 
-    const content = filename ? (files.get(filename) ?? "") : stdin
+    const content = filename ? (resolveFileContent(files, filename) ?? "") : stdin
     const lines = content.split("\n").slice(0, count)
     return ok(lines.join("\n"))
   },
