@@ -8,21 +8,39 @@ interface TableRows {
 const isObjectArray = (prop: JsonSchema): boolean =>
   prop.type === "array" && prop.items?.type === "object"
 
+const isNestedObject = (prop: JsonSchema): boolean =>
+  prop.type === "object" && prop.properties !== undefined
+
+const flattenScalars = (
+  schema: JsonSchema,
+  data: Record<string, unknown>,
+  prefix: string
+): [string, unknown][] => {
+  const properties = schema.properties ?? {}
+  const entries: [string, unknown][] = []
+
+  for (const [field, prop] of Object.entries(properties)) {
+    if (isObjectArray(prop)) continue
+    const key = prefix ? `${prefix}_${field}` : field
+    if (isNestedObject(prop)) {
+      const nested = (data[field] ?? {}) as Record<string, unknown>
+      entries.push(...flattenScalars(prop, nested, key))
+    } else {
+      entries.push([key, data[field] ?? null])
+    }
+  }
+
+  return entries
+}
+
 const extractScalars = (
   schema: JsonSchema,
   data: Record<string, unknown>,
   filename: string
-): Record<string, unknown> => {
-  const properties = schema.properties ?? {}
-  const row: Record<string, unknown> = { file: filename }
-
-  for (const [field, prop] of Object.entries(properties)) {
-    if (isObjectArray(prop)) continue
-    row[field] = data[field] ?? null
-  }
-
-  return row
-}
+): Record<string, unknown> => ({
+  file: filename,
+  ...Object.fromEntries(flattenScalars(schema, data, "")),
+})
 
 const extractChildRows = (
   parentName: string,

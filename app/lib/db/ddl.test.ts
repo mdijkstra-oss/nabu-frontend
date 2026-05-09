@@ -207,6 +207,107 @@ describe("jsonSchemaToTableProjection", () => {
           },
         ],
       },
+      {
+        name: "nested object flattens into prefixed columns",
+        tableName: "annotations",
+        schema: {
+          type: "object",
+          properties: {
+            text: { type: "string" },
+            vote: {
+              type: "object",
+              properties: {
+                find: {
+                  type: "object",
+                  properties: {
+                    found: { type: "integer" },
+                    missed: { type: "integer" },
+                  },
+                },
+                filter: {
+                  type: "object",
+                  properties: {
+                    keep: { type: "integer" },
+                    remove: { type: "integer" },
+                  },
+                },
+                removalJustification: { type: "string" },
+              },
+            },
+          },
+        },
+        expectedSchemas: [
+          {
+            name: "annotations",
+            columns: [
+              { name: "file", type: "VARCHAR", nullable: false },
+              { name: "text", type: "VARCHAR", nullable: true },
+              { name: "vote_find_found", type: "INTEGER", nullable: true },
+              { name: "vote_find_missed", type: "INTEGER", nullable: true },
+              { name: "vote_filter_keep", type: "INTEGER", nullable: true },
+              { name: "vote_filter_remove", type: "INTEGER", nullable: true },
+              { name: "vote_removalJustification", type: "VARCHAR", nullable: true },
+            ],
+          },
+        ],
+      },
+      {
+        name: "object without properties stays VARCHAR",
+        tableName: "items",
+        schema: {
+          type: "object",
+          properties: {
+            meta: { type: "object" },
+          },
+        },
+        expectedSchemas: [
+          {
+            name: "items",
+            columns: [
+              { name: "file", type: "VARCHAR", nullable: false },
+              { name: "meta", type: "VARCHAR", nullable: true },
+            ],
+          },
+        ],
+      },
+      {
+        name: "child table items with nested objects flatten inside child",
+        tableName: "attributes",
+        schema: {
+          type: "object",
+          properties: {
+            annotations: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  text: { type: "string" },
+                  vote: {
+                    type: "object",
+                    properties: {
+                      score: { type: "integer" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        expectedSchemas: [
+          {
+            name: "attributes",
+            columns: [{ name: "file", type: "VARCHAR", nullable: false }],
+          },
+          {
+            name: "attributes_annotations",
+            columns: [
+              { name: "file", type: "VARCHAR", nullable: false },
+              { name: "text", type: "VARCHAR", nullable: true },
+              { name: "vote_score", type: "INTEGER", nullable: true },
+            ],
+          },
+        ],
+      },
     ]
 
   it.each(cases)("$name", ({ tableName, schema, expectedSchemas }) => {

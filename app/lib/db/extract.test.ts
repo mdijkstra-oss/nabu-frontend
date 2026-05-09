@@ -196,6 +196,139 @@ describe("extractRows", () => {
         },
       ],
     },
+    {
+      name: "nested object flattens into prefixed keys",
+      tableName: "annotations",
+      schema: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          vote: {
+            type: "object",
+            properties: {
+              find: {
+                type: "object",
+                properties: {
+                  found: { type: "integer" },
+                  missed: { type: "integer" },
+                },
+              },
+              filter: {
+                type: "object",
+                properties: {
+                  keep: { type: "integer" },
+                  remove: { type: "integer" },
+                },
+              },
+              removalJustification: { type: "string" },
+            },
+          },
+        },
+      },
+      data: {
+        text: "hello",
+        vote: {
+          find: { found: 3, missed: 0 },
+          filter: { keep: 2, remove: 1 },
+          removalJustification: "weak evidence",
+        },
+      },
+      filename: "doc.md",
+      expected: [
+        {
+          table: "annotations",
+          rows: [
+            {
+              file: "doc.md",
+              text: "hello",
+              vote_find_found: 3,
+              vote_find_missed: 0,
+              vote_filter_keep: 2,
+              vote_filter_remove: 1,
+              vote_removalJustification: "weak evidence",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: "missing nested object produces null leaves",
+      tableName: "annotations",
+      schema: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          vote: {
+            type: "object",
+            properties: {
+              find: {
+                type: "object",
+                properties: {
+                  found: { type: "integer" },
+                  missed: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+      },
+      data: { text: "hello" },
+      filename: "doc.md",
+      expected: [
+        {
+          table: "annotations",
+          rows: [
+            {
+              file: "doc.md",
+              text: "hello",
+              vote_find_found: null,
+              vote_find_missed: null,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: "child table items with nested objects flatten",
+      tableName: "attributes",
+      schema: {
+        type: "object",
+        properties: {
+          annotations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                text: { type: "string" },
+                vote: {
+                  type: "object",
+                  properties: {
+                    score: { type: "integer" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      data: {
+        annotations: [{ text: "hi", vote: { score: 5 } }, { text: "bye" }],
+      },
+      filename: "doc.md",
+      expected: [
+        {
+          table: "attributes",
+          rows: [{ file: "doc.md" }],
+        },
+        {
+          table: "attributes_annotations",
+          rows: [
+            { file: "doc.md", text: "hi", vote_score: 5 },
+            { file: "doc.md", text: "bye", vote_score: null },
+          ],
+        },
+      ],
+    },
   ]
 
   it.each(cases)("$name", ({ tableName, schema, data, filename, expected }) => {

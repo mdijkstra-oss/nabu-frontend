@@ -16,20 +16,26 @@ const jsonTypeToDuckDb = (prop: JsonSchema): DuckDbType => {
 const isObjectArray = (prop: JsonSchema): boolean =>
   prop.type === "array" && prop.items?.type === "object"
 
-const isScalarOrListProp = (prop: JsonSchema): boolean => !isObjectArray(prop)
+const isNestedObject = (prop: JsonSchema): boolean =>
+  prop.type === "object" && prop.properties !== undefined
 
 const fileColumn: DbColumn = { name: "file", type: "VARCHAR", nullable: false }
 
-const buildColumns = (schema: JsonSchema): DbColumn[] => {
+const buildColumns = (schema: JsonSchema, prefix = ""): DbColumn[] => {
   const properties = schema.properties ?? {}
+  const columns: DbColumn[] = []
 
-  return Object.entries(properties)
-    .filter(([, prop]) => isScalarOrListProp(prop))
-    .map(([name, prop]) => ({
-      name,
-      type: jsonTypeToDuckDb(prop),
-      nullable: true,
-    }))
+  for (const [name, prop] of Object.entries(properties)) {
+    if (isObjectArray(prop)) continue
+    const colName = prefix ? `${prefix}_${name}` : name
+    if (isNestedObject(prop)) {
+      columns.push(...buildColumns(prop, colName))
+    } else {
+      columns.push({ name: colName, type: jsonTypeToDuckDb(prop), nullable: true })
+    }
+  }
+
+  return columns
 }
 
 const buildChildTable = (
