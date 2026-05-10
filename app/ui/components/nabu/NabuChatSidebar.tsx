@@ -72,6 +72,7 @@ import type { HistoryEntry } from "~/lib/mutation-history/types"
 import { boldMissingFile } from "~/lib/files/filename"
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
 import { dispatchTask } from "~/lib/agent/dispatch"
+import { codeAllCodebooks, removeCodings, autoGreetingDirective } from "~/lib/agent/actions/actions"
 import { buildFileContextBlocks } from "~/lib/agent/context-blocks"
 import { getAnnotationCount } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { pickGreeting } from "./greetings"
@@ -1010,10 +1011,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
       pushBlocks([
         ...buildFileContextBlocks(files),
         { type: "user", content: pickGreeting() },
-        {
-          type: "system",
-          content: `IMPORTANT: The message above is an AUTO-GENERATED greeting sent on page load. The user did NOT type this. It is NOT a request or instruction. Do NOT use tools, read files, make plans, or take any action. Reply with a short, warm, casual greeting (1-2 sentences max) that matches the vibe and tone of the user's message, and nothing else. DO NOT TOOL CALL NOW. ONLY reply with a greeting, then STOP and wait for user. Current time: ${new Date().toLocaleString()}.`,
-        },
+        { type: "system", content: autoGreetingDirective(new Date().toLocaleString()) },
       ])
       runChat(getDeps())
     }
@@ -1032,21 +1030,12 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   }, [loading, waitingForInput, inputValue, send, respond, getDeps])
 
   const handleCodeFile = useCallback(() => {
-    dispatchTask(
-      {
-        approaches: [],
-        context:
-          "Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Include ALL codebooks. General Codebook is framework, other codebooks are dimensions",
-        userMessage: "Can you code this file",
-      },
-      getDeps()
-    )
+    dispatchTask(codeAllCodebooks, getDeps())
   }, [getDeps])
 
   const handleRemoveCodings = useCallback(() => {
-    if (loading) return
-    send("Can you clear all codings of this file", getDeps())
-  }, [loading, send, getDeps])
+    dispatchTask(removeCodings, getDeps())
+  }, [getDeps])
 
   const markTyping = useCallback(() => {
     setIsTyping(true)

@@ -1,7 +1,6 @@
 import { z } from "zod"
 import { tool, registerTool, ok, partial, err } from "../../executors/tool"
 import type { AnyTool } from "../../executors/tool"
-import type { RawFiles } from "../../types"
 import type { BlockTypeConfig } from "~/lib/data-blocks/definition"
 import { getFuzzyFields } from "~/lib/data-blocks/registry"
 import { applyEnrichedOps } from "~/lib/patch/structured-json/pipeline"
@@ -23,10 +22,6 @@ import {
   validatePatchedDoc,
   formatJson,
 } from "./shared"
-
-interface GenerateOpts {
-  guidance?: string
-}
 
 const PARALLEL_NOTE =
   "parallel: self=diff blocks yes / others=with reads yes / same block: batch into operations array"
@@ -205,15 +200,7 @@ const buildDeleteJsonSchema = (spec: TypedOpsSpec): unknown => {
   }
 }
 
-const buildGuidanceResolver =
-  (guidanceKey: string): ((files: RawFiles, args: Record<string, unknown>) => string[]) =>
-  () => [guidanceKey]
-
-export const generatePatchTool = (
-  language: string,
-  config: BlockTypeConfig,
-  opts?: GenerateOpts
-): AnyTool => {
+export const generatePatchTool = (language: string, config: BlockTypeConfig): AnyTool => {
   const spec = deriveTypedOps(language, config)
   const opsJsonSchema = deriveOpsJsonSchema(spec)
   const looseSchema = buildLooseSchema(spec)
@@ -226,7 +213,6 @@ export const generatePatchTool = (
       description: buildPatchDescription(spec),
       schema: looseSchema,
       jsonSchema: fullJsonSchema,
-      ...(opts?.guidance ? { requiresGuidance: buildGuidanceResolver(opts.guidance) } : {}),
       handler: async (_files, args) => {
         const { path, block_id, operations } = args as {
           path: string

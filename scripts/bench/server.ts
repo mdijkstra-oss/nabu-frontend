@@ -27,7 +27,7 @@ export const killOnPort = (port: number): void => {
 
 const isPortReady = async (port: number): Promise<boolean> => {
   try {
-    await fetch(`http://localhost:${port}/approaches`, {
+    await fetch(`http://localhost:${port}/guidance`, {
       signal: AbortSignal.timeout(500),
     })
     return true

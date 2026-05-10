@@ -1,6 +1,5 @@
 import { z } from "zod"
 import type { Handler, HandlerResult, RawFiles, Operation } from "../types"
-import { checkGuidance } from "./guidance"
 
 interface ToolDef<TSchema extends z.ZodType, TOutput> {
   name: string
@@ -8,7 +7,6 @@ interface ToolDef<TSchema extends z.ZodType, TOutput> {
   schema: TSchema
   jsonSchema?: unknown
   handler: (files: RawFiles, args: z.infer<TSchema>) => Promise<HandlerResult<TOutput>>
-  requiresGuidance?: (files: RawFiles, args: z.infer<TSchema>) => string[]
 }
 
 type Tool<TSchema extends z.ZodType, TOutput> = ToolDef<TSchema, TOutput> & {
@@ -33,10 +31,6 @@ export const tool = <TSchema extends z.ZodType, TOutput>(
         output: formatZodError(parsed.error),
         mutations: [],
       }
-    }
-    if (def.requiresGuidance) {
-      const blocked = checkGuidance(def.requiresGuidance(files, parsed.data))
-      if (blocked) return blocked
     }
     return def.handler(files, parsed.data)
   }

@@ -64,6 +64,7 @@ import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
 import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
+import { codeWithCodebook } from "~/lib/agent/actions/actions"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
@@ -453,12 +454,7 @@ export default function ProjectLayout() {
   }
 
   const handleCodeFile = (code: Code) => {
-    const codeFile = `${code.id}.generated.hidden.md`
-    dispatchTask({
-      approaches: [],
-      context: `Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Use ONLY the generic codebook AND ${codeFile} for coding. Do not use any other codebooks. Note: ${codeFile} is a generated file — it will not appear in ls output, but can be read with cat, head, tail, or grep.`,
-      userMessage: `Can you code this file with only ${code.id}`,
-    })
+    dispatchTask(codeWithCodebook(code.id))
   }
 
   const sidebarPanels = {

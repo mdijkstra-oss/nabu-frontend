@@ -1,12 +1,10 @@
 import type { Block, SystemBlock } from "./client/blocks"
 import { pushBlocks, getLoading, getAllBlocksWithDraft } from "./client/store"
-import { toMarkerBlock } from "./client/markers"
 import { isCompactedResult } from "./compact"
 import { run, type RunnerDeps } from "./runner"
 import { getPageContext, findLastContextMessage } from "~/lib/editor/chat-context"
 
 export interface TaskConfig {
-  approaches: string[]
   context: string
   userMessage: string
 }
@@ -44,7 +42,7 @@ const isNewBlock =
     block.type !== "system" || isModeDirective(block) || !existing.has(block.content)
 
 export const buildTaskBlocks = (config: TaskConfig, currentHistory: Block[]): Block[] => {
-  const blocks: Block[] = config.approaches.map(toMarkerBlock)
+  const blocks: Block[] = []
 
   const ctx = getPageContext()
   if (ctx) {
@@ -54,7 +52,9 @@ export const buildTaskBlocks = (config: TaskConfig, currentHistory: Block[]): Bl
     }
   }
 
-  blocks.push({ type: "system", content: config.context } satisfies SystemBlock)
+  if (config.context) {
+    blocks.push({ type: "system", content: config.context } satisfies SystemBlock)
+  }
   blocks.push({ type: "user", content: config.userMessage })
 
   const existing = collectRecentSystemContents(currentHistory)
