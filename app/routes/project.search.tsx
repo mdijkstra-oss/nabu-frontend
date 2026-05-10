@@ -173,7 +173,7 @@ export default function ProjectSearch() {
     <div className="flex h-full w-full flex-col gap-2 bg-neutral-100 p-2 pb-0">
       <div
         ref={scrollRef}
-        className="flex-1 overflow-auto rounded-xl bg-default-background px-12 py-8"
+        className="flex-1 overflow-auto rounded-xl border border-solid border-panel-border bg-default-background px-12 py-8"
       >
         <div className="flex w-full max-w-[1024px] flex-col items-start gap-6">
           <SearchHeader
@@ -210,7 +210,7 @@ export default function ProjectSearch() {
           )}
         </div>
       </div>
-      <div className="rounded-xl border border-solid border-neutral-border bg-default-background">
+      <div className="rounded-xl border border-solid border-panel-border bg-default-background">
         <StatusBar text={statusText} loading={isLoading} />
       </div>
     </div>

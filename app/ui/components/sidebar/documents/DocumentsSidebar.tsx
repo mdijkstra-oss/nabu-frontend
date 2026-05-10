@@ -206,7 +206,7 @@ export function DocumentsSidebar({
         onNew={onNewDocument}
       />
       {onSortChange && (
-        <div className="flex w-full border-b border-solid border-neutral-border px-4 pt-2 pb-0">
+        <div className="flex w-full border-b border-solid border-neutral-border px-4 py-2">
           <ToggleGroup
             className="w-full"
             value={sortMode}
@@ -223,7 +223,7 @@ export function DocumentsSidebar({
           </ToggleGroup>
         </div>
       )}
-      <div className="flex w-full grow shrink-0 basis-0 flex-col items-start py-2 overflow-y-auto">
+      <div className="flex w-full grow shrink-0 basis-0 flex-col items-start pb-2 overflow-y-auto">
         {isFiltering
           ? filteredDocs.map((doc) => (
               <DocumentItem

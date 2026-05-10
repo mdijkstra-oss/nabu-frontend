@@ -116,7 +116,11 @@ export const setCurrentFile = (filename: string | null): void => {
   notify()
 }
 
-export const updateFileRaw = (filename: string, raw: string): void => {
+export interface UpdateFileOptions {
+  immediate?: boolean
+}
+
+export const updateFileRaw = (filename: string, raw: string, options?: UpdateFileOptions): void => {
   const normalized = normalizeFile(raw)
   if (normalized === files[filename]) return
   const isNew = !(filename in files)
@@ -124,12 +128,14 @@ export const updateFileRaw = (filename: string, raw: string): void => {
     `[store] updateFileRaw: ${isNew ? "create" : "update"} "${filename}" (${normalized.length} chars)`
   )
 
+  const scheduleNotify = options?.immediate ? notify : debouncedNotify
+
   updateDefinitionIndex(filename, normalized)
 
   if (pendingRefsSuppressed) {
     files = { ...files, [filename]: normalized }
     persistWrite(filename)
-    debouncedNotify()
+    scheduleNotify()
     return
   }
 
@@ -163,7 +169,7 @@ export const updateFileRaw = (filename: string, raw: string): void => {
   files = updatedFiles
   persistWrite(filename)
   for (const path of resolvedPaths) persistWrite(path)
-  debouncedNotify()
+  scheduleNotify()
 }
 
 export const deleteFile = (filename: string): void => {

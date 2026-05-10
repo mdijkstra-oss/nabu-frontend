@@ -39,9 +39,13 @@ export const DebugMenuButton = ({
   <SubframeCore.DropdownMenu.Root>
     <SubframeCore.DropdownMenu.Trigger asChild>
       <IconButton
-        variant={isActive(debugOptions, "expanded") ? "brand-secondary" : "neutral-secondary"}
+        variant="brand-tertiary"
         icon={<Bug />}
-        className="!rounded-full"
+        className={
+          isActive(debugOptions, "expanded")
+            ? "!rounded-full [&_svg]:text-default-font"
+            : "!rounded-full [&_svg]:text-subtext-color"
+        }
       />
     </SubframeCore.DropdownMenu.Trigger>
     <SubframeCore.DropdownMenu.Portal>

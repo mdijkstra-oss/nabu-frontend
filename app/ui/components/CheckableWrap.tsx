@@ -18,8 +18,10 @@ const GAP = 10
 const springTransition = { type: "spring" as const, stiffness: 500, damping: 35 }
 
 export const CheckableWrap = ({ color, checked, onToggle, children }: CheckableWrapProps) => {
-  const [hovered, setHovered] = useState(false)
-  const isVisible = hovered || checked
+  const [rowHovered, setRowHovered] = useState(false)
+  const [boxHovered, setBoxHovered] = useState(false)
+  const isVisible = rowHovered || checked
+  const showPreview = boxHovered && !checked
 
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -29,8 +31,8 @@ export const CheckableWrap = ({ color, checked, onToggle, children }: CheckableW
   return (
     <div
       className="flex w-full items-center"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => setRowHovered(true)}
+      onMouseLeave={() => setRowHovered(false)}
     >
       <motion.div
         className="flex flex-none items-center justify-center overflow-hidden"
@@ -41,18 +43,22 @@ export const CheckableWrap = ({ color, checked, onToggle, children }: CheckableW
         transition={springTransition}
       >
         <button
-          className="flex items-center justify-center rounded-full border-2 border-solid transition-colors cursor-pointer"
+          className="flex items-center justify-center rounded-full border-2 border-solid transition-all cursor-pointer"
           style={{
             width: CHECKBOX_SIZE,
             height: CHECKBOX_SIZE,
             minWidth: CHECKBOX_SIZE,
-            borderColor: checked ? solidBackground(color) : hoveredElementBorder(color),
-            backgroundColor: checked ? solidBackground(color) : "transparent",
+            borderColor:
+              checked || showPreview ? solidBackground(color) : hoveredElementBorder(color),
+            backgroundColor: checked || showPreview ? solidBackground(color) : "transparent",
+            opacity: showPreview ? 0.4 : checked && boxHovered ? 0.7 : 1,
           }}
           onClick={handleCheckboxClick}
+          onMouseEnter={() => setBoxHovered(true)}
+          onMouseLeave={() => setBoxHovered(false)}
         >
           <AnimatePresence>
-            {checked && (
+            {(checked || showPreview) && (
               <motion.span
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}

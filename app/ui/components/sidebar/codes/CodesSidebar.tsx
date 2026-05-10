@@ -1,13 +1,19 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback, useSyncExternalStore } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Play } from "lucide-react"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
+import { CheckableWrap } from "~/ui/components/CheckableWrap"
 import { matchesAny } from "~/lib/utils/filter"
 import { solidBackground, hoveredElementBorder } from "~/ui/theme/radix"
 import type { GlobalAnnotationCount } from "~/domain/data-blocks/attributes/annotations/selectors"
+import {
+  getSelectedCodes,
+  toggleSelectedCode,
+  writeSelectedCodes,
+} from "~/domain/data-blocks/ux/selectors"
+import { getFiles, subscribe } from "~/lib/files/store"
 import type { Codebook, Code, CodeCategory } from "./types"
 import { CodeItem } from "./CodeItem"
 import { CodeDetail } from "./CodeDetail"
@@ -73,40 +79,27 @@ const SearchCodeButton = ({
   )
 }
 
-interface CodeFileButtonProps {
-  code: Code
-  disabled: boolean
-  onClick: () => void
-}
-
-const CodeFileButton = ({ code, disabled, onClick }: CodeFileButtonProps) => (
-  <TooltipWrap text="Code this file with only this code">
-    <button
-      disabled={disabled}
-      className="flex flex-none items-center justify-center rounded-full p-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 enabled:cursor-pointer enabled:hover:bg-neutral-100"
-      style={{ color: solidBackground(code.color) }}
-      onClick={(e) => {
-        e.stopPropagation()
-        onClick()
-      }}
-    >
-      <Play className="h-3.5 w-3.5" />
-    </button>
-  </TooltipWrap>
-)
-
 export const CodesSidebar = ({
   codebook,
   annotationCounts = {},
   globalAnnotationCounts = {},
-  busy = false,
   onEditCode,
-  onCodeFile,
   onFileSelect,
   onSearchCode,
 }: CodesSidebarProps) => {
   const [searchValue, setSearchValue] = useState("")
   const [hoveredCode, setHoveredCode] = useState<Code | null>(null)
+
+  const files = useSyncExternalStore(subscribe, getFiles)
+  const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
+
+  const toggleCode = useCallback(
+    (id: string) => {
+      const current = [...selectedCodes]
+      writeSelectedCodes(toggleSelectedCode(current, id))
+    },
+    [selectedCodes]
+  )
 
   const filteredCategories = useMemo(
     () => filterCategories(codebook.categories, searchValue),
@@ -135,18 +128,20 @@ export const CodesSidebar = ({
               {category.name}
             </span>
             {category.codes.map((code) => (
-              <div key={code.id} className="flex w-full items-center gap-1">
-                <CodeFileButton code={code} disabled={busy} onClick={() => onCodeFile?.(code)} />
-                <div className="min-w-0 grow">
-                  <CodeItem
-                    code={code}
-                    count={annotationCounts[code.id]}
-                    highlighted={code.id === hoveredCode?.id}
-                    onMouseEnter={() => setHoveredCode(code)}
-                    onClick={() => onEditCode?.(code)}
-                  />
-                </div>
-              </div>
+              <CheckableWrap
+                key={code.id}
+                color={code.color}
+                checked={selectedCodes.has(code.id)}
+                onToggle={() => toggleCode(code.id)}
+              >
+                <CodeItem
+                  code={code}
+                  count={annotationCounts[code.id]}
+                  highlighted={code.id === hoveredCode?.id}
+                  onMouseEnter={() => setHoveredCode(code)}
+                  onClick={() => onEditCode?.(code)}
+                />
+              </CheckableWrap>
             ))}
           </div>
         ))}

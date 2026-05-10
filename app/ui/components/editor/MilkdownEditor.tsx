@@ -22,8 +22,20 @@ import { FilePathProvider } from "./FilePathContext"
 import { DebugOptionsProvider } from "./DebugOptionsContext"
 import type { DebugOptions } from "./debug-config"
 import { useFiles } from "~/ui/hooks/useFiles"
-import { getAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
+import {
+  getAnnotations,
+  type Annotation,
+} from "~/domain/data-blocks/attributes/annotations/selectors"
+import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
+
+const isAnnotationVisible = (selected: Set<string>, annotation: Annotation): boolean =>
+  selected.size === 0 || (!!annotation.code && selected.has(annotation.code))
+
+const filterAnnotationsBySelectedCodes = (
+  annotations: Annotation[],
+  selected: Set<string>
+): Annotation[] => annotations.filter((a) => isAnnotationVisible(selected, a))
 
 const readOnlyKey = new PluginKey("readOnly")
 
@@ -57,7 +69,11 @@ const MilkdownEditorCore = ({
   const calloutBlocksPlugin = createCalloutBlocksPlugin(nodeViewFactory)
   const prevContentRef = useRef(defaultValue)
   const [loading, getEditor] = useInstance()
-  const annotations = useMemo(() => getAnnotations(files, defaultValue), [files, defaultValue])
+  const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
+  const annotations = useMemo(
+    () => filterAnnotationsBySelectedCodes(getAnnotations(files, defaultValue), selectedCodes),
+    [files, defaultValue, selectedCodes]
+  )
 
   const readOnlyPlugin = $prose(createReadOnlyPlugin)
 

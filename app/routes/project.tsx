@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from "react"
 import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
+import { AnimatePresence } from "framer-motion"
+import { Trash2, FolderInput, Sparkles } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
 import { useFiles } from "~/ui/hooks/useFiles"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
@@ -66,6 +68,8 @@ import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
 import { codeWithCodebook } from "~/lib/agent/actions/actions"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
+import { FloatingActionBar } from "~/ui/components/FloatingActionBar"
+import { getSelectedCodes, writeSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
 
@@ -185,6 +189,18 @@ export interface ProjectContextValue {
 }
 
 export const useProject = () => useOutletContext<ProjectContextValue>()
+
+const _noop = () => undefined
+
+const STUB_ACTIONS = [
+  { icon: <Trash2 />, label: "Delete", onClick: _noop, variant: "default" as const },
+  { icon: <FolderInput />, label: "Move", onClick: _noop, variant: "default" as const },
+  { icon: <Sparkles />, label: "Code file", onClick: _noop, variant: "ai" as const },
+  { icon: <Sparkles />, label: "Merge", onClick: _noop, variant: "ai" as const },
+]
+
+const formatSelectionTitle = (count: number): string =>
+  `${count} code${count === 1 ? "" : "s"} selected`
 
 export default function ProjectLayout() {
   const params = useParams<{ projectId: string; fileId?: string; searchId?: string }>()
@@ -432,6 +448,11 @@ export default function ProjectLayout() {
     )
   }
 
+  const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
+  const isOnDocumentPage = !!params.fileId
+  const hasSelectedCodes = selectedCodes.size > 0
+  const clearSelectedCodes = useCallback(() => writeSelectedCodes([]), [])
+
   const fileAnnotationCount = useMemo(
     () => (currentFile ? getAnnotationCount(files[currentFile] ?? "") : undefined),
     [currentFile, files]
@@ -574,6 +595,15 @@ export default function ProjectLayout() {
           dragHandlers={fileImport.dragHandlers}
           onDismiss={fileImport.dismiss}
         />
+        <AnimatePresence>
+          {isOnDocumentPage && hasSelectedCodes && (
+            <FloatingActionBar
+              title={formatSelectionTitle(selectedCodes.size)}
+              onClose={clearSelectedCodes}
+              actions={STUB_ACTIONS}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </NabuProvider>
   )

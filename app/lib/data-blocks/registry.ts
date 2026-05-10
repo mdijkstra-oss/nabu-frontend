@@ -7,6 +7,7 @@ import { jsonSettings } from "~/domain/data-blocks/settings/definition"
 import { jsonCallout } from "~/domain/data-blocks/callout/definition"
 import { jsonAnnotations } from "~/domain/data-blocks/annotations/definition"
 import { jsonChart } from "~/domain/data-blocks/chart/definition"
+import { jsonUx } from "~/domain/data-blocks/ux/definition"
 
 type AnyBlockConfig = BlockTypeConfig
 
@@ -16,6 +17,7 @@ const blockTypes: Record<string, AnyBlockConfig> = {
   "json-callout": jsonCallout as AnyBlockConfig,
   "json-annotations": jsonAnnotations as AnyBlockConfig,
   "json-chart": jsonChart as AnyBlockConfig,
+  "json-ux": jsonUx as AnyBlockConfig,
 }
 
 export const BLOCK_LANGUAGES = Object.keys(blockTypes) as [string, ...string[]]
