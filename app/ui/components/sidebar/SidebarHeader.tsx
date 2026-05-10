@@ -21,7 +21,7 @@ export const SidebarHeader = ({
 }: SidebarHeaderProps) => (
   <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border px-4 py-4">
     <div className="flex w-full items-center justify-between">
-      <span className="text-heading-2 font-heading-2 text-default-font">{title}</span>
+      <span className="text-heading-2 font-heading-2 font-bold text-default-font">{title}</span>
       {onNew && <Button variant="brand-primary" size="small" icon={<Plus />} onClick={onNew} />}
     </div>
     <TextField
@@ -29,7 +29,7 @@ export const SidebarHeader = ({
       variant="filled"
       label=""
       helpText=""
-      icon={<Search />}
+      icon={<Search className="text-brand-600" />}
       iconRight={
         filterValue ? (
           <button

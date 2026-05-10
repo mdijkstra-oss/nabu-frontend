@@ -1,18 +1,18 @@
 @theme {
   /* Colors */
-  --color-brand-50: rgb(247, 254, 231);
+  --color-brand-50: #e3ddd8;
   --color-brand-100: rgb(236, 252, 203);
   --color-brand-200: rgb(217, 249, 157);
   --color-brand-300: rgb(190, 242, 100);
   --color-brand-400: rgb(163, 230, 53);
-  --color-brand-500: rgb(132, 204, 22);
-  --color-brand-600: rgb(101, 163, 13);
+  --color-brand-500: #485969;
+  --color-brand-600: #354049;
   --color-brand-700: rgb(77, 124, 15);
-  --color-brand-800: rgb(63, 98, 18);
+  --color-brand-800: #485969;
   --color-brand-900: rgb(54, 83, 20);
   --color-neutral-0: rgb(255, 255, 255);
   --color-neutral-50: rgb(250, 250, 249);
-  --color-neutral-100: rgb(245, 245, 244);
+  --color-neutral-100: #f8f7f6;
   --color-neutral-200: rgb(231, 229, 228);
   --color-neutral-300: rgb(214, 211, 209);
   --color-neutral-400: rgb(168, 162, 158);
@@ -52,12 +52,18 @@
   --color-success-700: rgb(15, 118, 110);
   --color-success-800: rgb(17, 94, 89);
   --color-success-900: rgb(19, 78, 74);
-  --color-brand-primary: rgb(101, 163, 13);
-  --color-default-font: rgb(28, 25, 23);
-  --color-subtext-color: rgb(120, 113, 108);
-  --color-neutral-border: rgb(231, 229, 228);
-  --color-white: rgb(255, 255, 255);
-  --color-default-background: rgb(255, 255, 255);
+  --color-brand-primary: #c1bfbc;
+  --color-default-font: #2a2621;
+  --color-subtext-color: #2a2621;
+  --color-neutral-border: #dedddc;
+  --color-white: #fdfcfb;
+  --color-default-background: #fdfcfb;
+  --color-badge-active: #354049;
+  --color-panel-border: #efedea;
+  --color-list-hover: #efedea;
+  --color-sidebar: #efedea;
+  --color-sidebar-nested: #f8f7f6;
+  --color-sidebar-deep: #f8f7f6;
 
   /* Fonts */
   --text-caption: 12px;

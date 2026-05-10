@@ -452,14 +452,6 @@ export default function ProjectLayout() {
     navigate(`/project/${params.projectId}/search/${id}`)
   }
 
-  const handleRefineCode = (code: Code) => {
-    dispatchTask({
-      approaches: ["qual-coding/codebook/refine"],
-      context: `Review the definition for code "${code.name}" (id: ${code.id}). Check if it's well-structured and if the coded data matches what the definition describes.`,
-      userMessage: `Can you see if ${code.id} needs some refinement?`,
-    })
-  }
-
   const handleCodeFile = (code: Code) => {
     const codeFile = `${code.id}.generated.hidden.md`
     dispatchTask({
@@ -512,7 +504,6 @@ export default function ProjectLayout() {
               busy={chatLoading}
               onEditCode={handleEditCode}
               onCodeFile={handleCodeFile}
-              onRefineCode={handleRefineCode}
               onFileSelect={handleDocumentSelect}
               onSearchCode={handleSearchCode}
             />

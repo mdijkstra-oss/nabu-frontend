@@ -149,8 +149,8 @@ export default function ProjectFile() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col gap-2 bg-neutral-100 p-2 pb-0">
-      <div className="flex flex-1 min-h-0 flex-col rounded-xl bg-default-background overflow-hidden">
+    <div className="flex h-full w-full flex-col gap-2 bg-neutral-100 p-2">
+      <div className="flex flex-1 min-h-0 flex-col rounded-xl border border-solid border-panel-border bg-default-background overflow-hidden">
         <FileHeader
           title={toDisplayName(currentFile)}
           date={fileDate}
@@ -205,7 +205,7 @@ export default function ProjectFile() {
           />
         </div>
       </div>
-      <div className="rounded-xl border border-solid border-neutral-border bg-default-background">
+      <div className="rounded-xl border border-solid border-panel-border bg-default-background">
         <StatusBar
           text={rawContent ? documentStatusText(rawContent) : null}
           tooltip={rawContent ? documentStatusTooltip(rawContent) : undefined}

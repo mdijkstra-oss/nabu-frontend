@@ -2,11 +2,11 @@
 
 import { useState, useMemo } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { PenLine, Play, Search } from "lucide-react"
+import { Play } from "lucide-react"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { matchesAny } from "~/lib/utils/filter"
-import { solidBackground, elementBackground, hoveredElementBorder } from "~/ui/theme/radix"
+import { solidBackground, hoveredElementBorder } from "~/ui/theme/radix"
 import type { GlobalAnnotationCount } from "~/domain/data-blocks/attributes/annotations/selectors"
 import type { Codebook, Code, CodeCategory } from "./types"
 import { CodeItem } from "./CodeItem"
@@ -19,7 +19,6 @@ interface CodesSidebarProps {
   busy?: boolean
   onEditCode?: (code: Code) => void
   onCodeFile?: (code: Code) => void
-  onRefineCode?: (code: Code) => void
   onFileSelect?: (fileId: string) => void
   onSearchCode?: (code: Code) => void
 }
@@ -54,52 +53,21 @@ const SearchCodeButton = ({
     <TooltipWrap text={isDisabled ? "No annotations yet" : formatGlobalTooltip(resolvedCount)}>
       <button
         disabled={isDisabled}
-        className="ml-auto flex flex-none items-center gap-1.5 rounded-full border-2 border-solid py-0.5 pl-1.5 pr-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 enabled:cursor-pointer"
-        style={{
-          color: solidBackground(code.color),
-          borderColor: isHovered ? hoveredElementBorder(code.color) : "transparent",
-        }}
+        className="ml-auto flex flex-none items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed enabled:cursor-pointer"
         onClick={onClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <Search className="h-4 w-4" />
         <span
           className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none text-white"
-          style={{ backgroundColor: solidBackground(code.color) }}
+          style={{
+            backgroundColor: isHovered
+              ? hoveredElementBorder(code.color)
+              : solidBackground(code.color),
+          }}
         >
           {resolvedCount.count}
         </span>
-      </button>
-    </TooltipWrap>
-  )
-}
-
-const RefineCodeButton = ({
-  code,
-  disabled,
-  onClick,
-}: {
-  code: Code
-  disabled: boolean
-  onClick: () => void
-}) => {
-  const [isHovered, setIsHovered] = useState(false)
-  return (
-    <TooltipWrap text="Refine this code definition">
-      <button
-        disabled={disabled}
-        className="flex items-center gap-1 rounded-full border-2 border-solid py-0.5 px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 enabled:cursor-pointer"
-        style={{
-          color: solidBackground(code.color),
-          borderColor: isHovered ? hoveredElementBorder(code.color) : "transparent",
-        }}
-        onClick={onClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <PenLine className="h-3.5 w-3.5" />
-        <span className="text-[11px] font-bold leading-none">Refine</span>
       </button>
     </TooltipWrap>
   )
@@ -134,7 +102,6 @@ export const CodesSidebar = ({
   busy = false,
   onEditCode,
   onCodeFile,
-  onRefineCode,
   onFileSelect,
   onSearchCode,
 }: CodesSidebarProps) => {
@@ -147,7 +114,7 @@ export const CodesSidebar = ({
   )
 
   return (
-    <div className="relative z-10 flex h-full w-64 flex-none flex-col items-start bg-default-background shadow-lg">
+    <div className="relative z-10 flex h-full w-64 flex-none flex-col items-start bg-sidebar-nested shadow-lg after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-[#e3ddd8] after:z-30">
       <div className="flex w-full flex-none flex-col" onMouseEnter={() => setHoveredCode(null)}>
         <SidebarHeader
           title="Codes"
@@ -193,12 +160,11 @@ export const CodesSidebar = ({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -12, opacity: 0 }}
             transition={{ type: "spring", stiffness: 500, damping: 35 }}
-            className="absolute left-full top-0 h-full w-80 flex flex-col items-start bg-default-background [box-shadow:4px_0_6px_-1px_rgb(0_0_0/0.1),4px_0_4px_-2px_rgb(0_0_0/0.1)]"
+            className="absolute left-full top-0 h-full w-80 flex flex-col items-start border-r border-solid border-r-[#e3ddd8] bg-sidebar-deep [box-shadow:4px_0_6px_-1px_rgb(0_0_0/0.1),4px_0_4px_-2px_rgb(0_0_0/0.1)]"
           >
             <div
               className="flex w-full items-center gap-2 border-b-2 border-solid px-4 py-4"
               style={{
-                backgroundColor: elementBackground(hoveredCode.color),
                 borderColor: solidBackground(hoveredCode.color),
               }}
             >
@@ -206,14 +172,9 @@ export const CodesSidebar = ({
                 className="flex h-3 w-3 flex-none rounded-full"
                 style={{ backgroundColor: solidBackground(hoveredCode.color) }}
               />
-              <span className="text-heading-3 font-heading-3 text-default-font">
+              <span className="text-heading-3 font-heading-3 font-bold text-default-font">
                 {hoveredCode.name}
               </span>
-              <RefineCodeButton
-                code={hoveredCode}
-                disabled={busy}
-                onClick={() => onRefineCode?.(hoveredCode)}
-              />
               <SearchCodeButton
                 code={hoveredCode}
                 globalCount={globalAnnotationCounts[hoveredCode.id]}

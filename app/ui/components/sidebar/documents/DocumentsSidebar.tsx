@@ -194,7 +194,7 @@ export function DocumentsSidebar({
 
   return (
     <motion.div
-      className="relative z-10 flex h-full flex-none flex-col items-start bg-default-background shadow-lg"
+      className="relative z-10 flex h-full flex-none flex-col items-start bg-sidebar-nested shadow-lg after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-[#e3ddd8] after:z-30"
       animate={{ width: isFiltering ? 288 : 256 }}
       transition={{ type: "spring", stiffness: 500, damping: 35 }}
     >
@@ -206,7 +206,7 @@ export function DocumentsSidebar({
         onNew={onNewDocument}
       />
       {onSortChange && (
-        <div className="flex w-full px-4 py-2 border-b border-solid border-neutral-border">
+        <div className="flex w-full border-b border-solid border-neutral-border px-4 pt-2 pb-0">
           <ToggleGroup
             className="w-full"
             value={sortMode}
@@ -295,12 +295,11 @@ export function DocumentsSidebar({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -12, opacity: 0 }}
             transition={{ type: "spring", stiffness: 500, damping: 35 }}
-            className="absolute left-full top-0 h-full w-72 flex flex-col items-start bg-default-background [box-shadow:4px_0_6px_-1px_rgb(0_0_0/0.1),4px_0_4px_-2px_rgb(0_0_0/0.1)]"
+            className="absolute left-full top-0 h-full w-72 flex flex-col items-start border-r border-solid border-r-[#e3ddd8] bg-sidebar-deep [box-shadow:4px_0_6px_-1px_rgb(0_0_0/0.1),4px_0_4px_-2px_rgb(0_0_0/0.1)]"
           >
             <div
               className="flex w-full items-center gap-2 border-b-2 border-solid px-4 py-4"
               style={{
-                backgroundColor: elementBackground(hoveredResolved?.color ?? DEFAULT_TAG_COLOR),
                 borderColor: solidBackground(hoveredResolved?.color ?? DEFAULT_TAG_COLOR),
               }}
             >
@@ -311,7 +310,7 @@ export function DocumentsSidebar({
                 <HoveredIcon className="text-body font-body" />
               </span>
               <span
-                className="text-heading-3 font-heading-3"
+                className="text-heading-3 font-heading-3 font-bold"
                 style={{ color: highContrastText(hoveredResolved?.color ?? DEFAULT_TAG_COLOR) }}
               >
                 {hoveredResolved?.display ?? humanize(hoveredTag ?? "")}

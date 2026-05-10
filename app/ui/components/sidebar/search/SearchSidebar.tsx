@@ -90,7 +90,7 @@ const SearchItem = ({
     className={cn(
       "flex w-full cursor-pointer items-center justify-between py-3",
       selected ? "border-l-4 border-solid border-brand-600 px-5" : "px-6",
-      highlighted && "bg-brand-50"
+      highlighted && "bg-list-hover"
     )}
     onClick={onSelect}
     onMouseEnter={onMouseEnter}
@@ -98,21 +98,9 @@ const SearchItem = ({
     <div className="flex min-w-0 flex-col items-start gap-1">
       <div className="flex items-center gap-3">
         <SearchItemBookmark saved={entry.saved} onSave={onSave} onRemove={onRemove} />
-        <span
-          className={cn(
-            "text-body font-body",
-            highlighted ? "text-brand-800" : "text-default-font"
-          )}
-        >
-          {entry.title}
-        </span>
+        <span className="text-body font-body text-default-font">{entry.title}</span>
       </div>
-      <span
-        className={cn(
-          "text-caption font-caption pl-10",
-          highlighted ? "text-brand-700" : "text-subtext-color"
-        )}
-      >
+      <span className="text-caption font-caption pl-10 text-subtext-color">
         {entry.description}
       </span>
     </div>
@@ -170,7 +158,7 @@ export function SearchSidebar({
   )
 
   return (
-    <div className="flex h-full w-80 flex-none flex-col items-start bg-default-background shadow-lg">
+    <div className="flex h-full w-80 flex-none flex-col items-start border-r border-solid border-r-[#e3ddd8] bg-sidebar-nested shadow-lg">
       <SidebarHeader
         title="Search"
         filterPlaceholder="Filter results..."

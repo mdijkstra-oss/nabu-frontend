@@ -85,7 +85,12 @@ const SidebarRailWithLabelsRoot = ({
   children,
   className,
 }: SidebarRailWithLabelsProps) => (
-  <nav className={cn("flex h-full w-24 flex-col items-start bg-default-background", className)}>
+  <nav
+    className={cn(
+      "flex h-full w-24 flex-col items-start border-r border-solid border-r-[#dad0c7] bg-sidebar",
+      className
+    )}
+  >
     {header ? (
       <div className="flex w-full flex-col items-center justify-center gap-2 px-6 py-6">
         {header}

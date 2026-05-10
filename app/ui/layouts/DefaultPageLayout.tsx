@@ -32,7 +32,7 @@ interface DefaultPageLayoutProps {
   dismissSidebarRef?: MutableRefObject<(() => void) | null>
 }
 
-const BADGE_COLOR_ACTIVE = "var(--color-lime-600)"
+const BADGE_COLOR_ACTIVE = "var(--color-badge-active)"
 const BADGE_COLOR_EMPTY = "var(--color-neutral-400)"
 
 const buildNavItems = (
@@ -205,7 +205,10 @@ export const DefaultPageLayout = ({
                 )}
               />
             </div>
-            <div className="flex flex-col flex-none h-full" style={{ width: rightWidth }}>
+            <div
+              className="flex flex-col flex-none h-full pt-2 pr-2 pb-2"
+              style={{ width: rightWidth }}
+            >
               {rightPanel}
             </div>
           </>

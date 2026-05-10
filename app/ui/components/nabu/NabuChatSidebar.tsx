@@ -1076,7 +1076,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   const spinnerLabels = loading && !isStreamingText ? getSpinnerLabels(history, draft) : null
 
   return (
-    <div className="flex w-full grow flex-col rounded-xl bg-white overflow-hidden">
+    <div className="flex w-full grow flex-col rounded-xl border border-solid border-panel-border bg-white overflow-hidden">
       <AutoScroll className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-2 px-4 py-4 overflow-auto">
         {messages.length === 0 && !loading && (
           <div className="flex h-full w-full items-center justify-center">
