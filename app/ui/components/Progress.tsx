@@ -16,7 +16,7 @@ const Indicator = React.forwardRef<HTMLDivElement, IndicatorProps>(function Indi
     <SubframeCore.Progress.Indicator asChild={true} {...otherProps}>
       <div
         className={cn(
-          "flex h-2 w-full flex-col items-start gap-2 rounded-full bg-brand-600 transition-[width] duration-500 ease-out",
+          "flex h-2 w-full flex-col items-start gap-2 rounded-full bg-slate-950 transition-[width] duration-500 ease-out",
           className
         )}
         ref={ref}

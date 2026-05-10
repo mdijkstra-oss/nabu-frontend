@@ -1,6 +1,10 @@
+import { useCallback, useEffect, useState } from "react"
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router"
+import { AnimatePresence } from "framer-motion"
+import { Trash2, FolderInput, Sparkles } from "lucide-react"
 
 import type { Route } from "./+types/root"
+import { FloatingActionBar } from "~/ui/components/FloatingActionBar"
 import "./styles/index.css"
 
 export const links: Route.LinksFunction = () => [
@@ -34,8 +38,43 @@ export function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
+const _noop = () => undefined
+
+const STUB_ACTIONS = [
+  { icon: <Trash2 />, label: "Delete", onClick: _noop, variant: "default" as const },
+  { icon: <FolderInput />, label: "Move", onClick: _noop, variant: "default" as const },
+  { icon: <Sparkles />, label: "Code file", onClick: _noop, variant: "ai" as const },
+  { icon: <Sparkles />, label: "Merge", onClick: _noop, variant: "ai" as const },
+]
+
+const REAPPEAR_DELAY_MS = 2000
+
 export default function App() {
-  return <Outlet />
+  const [visible, setVisible] = useState(true)
+
+  const handleClose = useCallback(() => setVisible(false), [])
+
+  useEffect(() => {
+    if (visible) return
+    const timer = setTimeout(() => setVisible(true), REAPPEAR_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [visible])
+
+  return (
+    <>
+      <Outlet />
+      <AnimatePresence>
+        {visible && (
+          <FloatingActionBar
+            title="3 codes selected"
+            titleAction={{ label: "Select all 9", onClick: _noop }}
+            onClose={handleClose}
+            actions={STUB_ACTIONS}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  )
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

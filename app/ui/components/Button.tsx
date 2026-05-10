@@ -44,7 +44,7 @@ const ButtonRoot = forwardRef<HTMLButtonElement, ButtonRootProps>(function Butto
   return (
     <button
       className={cn(
-        "group/3b777358 flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border-none bg-brand-600 px-3 text-left hover:bg-brand-500 active:bg-brand-600 disabled:cursor-default disabled:bg-neutral-200 hover:disabled:cursor-default hover:disabled:bg-neutral-200 active:disabled:cursor-default active:disabled:bg-neutral-200",
+        "group/3b777358 flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border-none bg-slate-950 px-3 text-left hover:bg-slate-900 active:bg-slate-950 disabled:cursor-default disabled:bg-neutral-200 hover:disabled:cursor-default hover:disabled:bg-neutral-200 active:disabled:cursor-default active:disabled:bg-neutral-200",
         {
           "h-6 w-auto flex-row flex-nowrap gap-1 px-2 py-0": size === "small",
           "h-10 w-auto px-4 py-0": size === "large",

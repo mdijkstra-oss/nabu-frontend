@@ -33,16 +33,15 @@ const SearchItemBookmark = ({
 
   return saved ? (
     <IconButton
-      variant="brand-tertiary"
+      variant="neutral-tertiary"
       size="small"
       icon={
         showTrash ? (
           <Trash2 className="text-error-600" />
         ) : (
-          <Bookmark className="[&_path]:fill-current" />
+          <Bookmark className="text-success-600 [&_path]:fill-current" />
         )
       }
-      className="text-brand-600"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={(e) => {
@@ -89,7 +88,7 @@ const SearchItem = ({
   <div
     className={cn(
       "flex w-full cursor-pointer items-center justify-between py-3",
-      selected ? "border-l-4 border-solid border-brand-600 px-5" : "px-6",
+      selected ? "border-l-4 border-solid border-slate-950 px-5" : "px-6",
       highlighted && "bg-list-hover"
     )}
     onClick={onSelect}

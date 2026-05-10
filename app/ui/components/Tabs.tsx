@@ -21,7 +21,7 @@ const Item = React.forwardRef<HTMLDivElement, ItemProps>(function Item(
       className={cn(
         "group/d5612535 flex h-10 cursor-pointer items-center justify-center gap-2 border-b border-solid border-neutral-border px-2.5 py-0.5",
         {
-          "border-b-2 border-solid border-brand-600 px-2.5 pt-0.5 pb-px": active,
+          "border-b-2 border-solid border-slate-950 px-2.5 pt-0.5 pb-px": active,
         },
         className
       )}
@@ -34,7 +34,7 @@ const Item = React.forwardRef<HTMLDivElement, ItemProps>(function Item(
             "text-body font-body text-subtext-color group-hover/d5612535:text-default-font",
             {
               "text-neutral-400 group-hover/d5612535:text-neutral-400": disabled,
-              "text-brand-700 group-hover/d5612535:text-brand-700": active,
+              "text-slate-950 group-hover/d5612535:text-slate-950": active,
             }
           )}
         >
@@ -47,7 +47,7 @@ const Item = React.forwardRef<HTMLDivElement, ItemProps>(function Item(
             "text-body-bold font-body-bold text-subtext-color group-hover/d5612535:text-default-font",
             {
               "text-neutral-400 group-hover/d5612535:text-neutral-400": disabled,
-              "text-brand-700 group-hover/d5612535:text-brand-700": active,
+              "text-slate-950 group-hover/d5612535:text-slate-950": active,
             }
           )}
         >

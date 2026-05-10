@@ -29,7 +29,7 @@ export const SidebarHeader = ({
       variant="filled"
       label=""
       helpText=""
-      icon={<Search className="text-brand-600" />}
+      icon={<Search className="text-slate-950" />}
       iconRight={
         filterValue ? (
           <button

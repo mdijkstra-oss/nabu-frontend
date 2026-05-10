@@ -55,7 +55,7 @@ const IconButtonRoot = forwardRef<HTMLButtonElement, IconButtonRootProps>(functi
             variant === "neutral-primary",
           "hover:bg-brand-50 active:bg-brand-100": variant === "brand-tertiary",
           "bg-brand-50 hover:bg-brand-100 active:bg-brand-50": variant === "brand-secondary",
-          "bg-brand-600 hover:bg-brand-500 active:bg-brand-600": variant === "brand-primary",
+          "bg-slate-950 hover:bg-slate-900 active:bg-slate-950": variant === "brand-primary",
         },
         className
       )}

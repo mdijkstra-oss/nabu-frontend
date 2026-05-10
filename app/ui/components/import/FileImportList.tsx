@@ -47,7 +47,7 @@ export const FileImportList = ({
       <div className="flex w-full flex-col items-start gap-2">
         <div className="flex h-2 w-full flex-none flex-col items-start gap-2 overflow-hidden rounded-full bg-neutral-200">
           <div
-            className="flex h-full flex-col items-center gap-2 bg-brand-600 transition-all"
+            className="flex h-full flex-col items-center gap-2 bg-slate-950 transition-all"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
