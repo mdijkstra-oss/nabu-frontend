@@ -5,9 +5,8 @@ import { isEmbeddableFile } from "~/lib/embeddings/filter"
 import { stripAttributesBlock } from "~/lib/markdown/strip-attributes"
 import { toEmbeddableText } from "~/lib/embeddings/text"
 import { buildExcerpt } from "~/lib/text/excerpt"
-import { getAttributes } from "~/domain/data-blocks/attributes/selectors"
 import { shouldReclassify, contentHash } from "~/domain/data-blocks/attributes/topics/selectors"
-import { replaceSingletonBlock } from "~/lib/data-blocks/parse"
+import { executeFileAction } from "~/lib/data-blocks/file-action"
 import { classifyDocument, type Classification, type ExistingClassifications } from "./classify"
 import {
   collectClassifications,
@@ -28,7 +27,6 @@ const TOKENS_PER_SECTION = 250
 interface CorpusSyncDeps {
   getFiles: () => FileStore
   getFile: (f: string) => string | undefined
-  updateFile: (f: string, content: string) => void
   subscribe: (listener: () => void) => () => void
   toProseFns: Record<string, ToProseFn>
   getSignificantLanguages: () => Promise<string[]>
@@ -58,18 +56,21 @@ const toExcerpt = (raw: string, toProseFns: Record<string, ToProseFn>): string =
 const writeClassificationToAttributes = (
   content: string,
   classification: Classification,
-  updateFile: (f: string, content: string) => void,
   filename: string
 ): void => {
-  const existing = getAttributes(content)
-  const updated = {
-    ...existing,
-    type: classification.type,
-    subject: classification.subject,
-    hash: contentHash(content),
-  }
-  const newContent = replaceSingletonBlock(content, "json-attributes", JSON.stringify(updated))
-  updateFile(filename, newContent)
+  executeFileAction({
+    patches: [
+      {
+        path: filename,
+        language: "json-attributes",
+        ops: [
+          { op: "add", path: "/type", value: classification.type },
+          { op: "add", path: "/subject", value: classification.subject },
+          { op: "add", path: "/hash", value: contentHash(content) },
+        ],
+      },
+    ],
+  })
 }
 
 const collectExisting = (files: FileStore): ExistingClassifications => ({
@@ -94,7 +95,7 @@ const classifyFile =
       return []
     }
 
-    writeClassificationToAttributes(item.content, classification, deps.updateFile, item.filename)
+    writeClassificationToAttributes(item.content, classification, item.filename)
     console.debug(
       `[classify] ${item.filename} → ${classification.type} / ${classification.subject}`
     )

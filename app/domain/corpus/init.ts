@@ -1,4 +1,4 @@
-import { getFiles, getFileRaw, updateFileRaw } from "~/lib/files/store"
+import { getFiles, getFileRaw } from "~/lib/files/store"
 import { subscribeContentChanges } from "~/lib/files/subscribe-content"
 import { toProseFns } from "~/domain/data-blocks/prose-registry"
 import { getDatabase } from "~/domain/db/database"
@@ -44,7 +44,6 @@ export const startTopicAssignment = async (onProgress?: OnSyncProgress): Promise
       const raw = getFileRaw(f)
       return raw || undefined
     },
-    updateFile: updateFileRaw,
     subscribe: subscribeContentChanges,
     toProseFns,
     getSignificantLanguages,
