@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from "react"
 import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
 import { AnimatePresence } from "framer-motion"
-import { Trash2, FolderInput, Sparkles } from "lucide-react"
+import { Eraser, Sparkles } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
 import { useFiles } from "~/ui/hooks/useFiles"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
@@ -66,9 +66,12 @@ import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
 import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
-import { codeWithCodebook } from "~/lib/agent/actions/actions"
+import { codeWithCodebook } from "~/domain/actions/coding/actions"
+import { clearCodingsAction } from "~/domain/actions/clear-codings/apply"
+import { executeFileAction } from "~/lib/data-blocks/file-action"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
-import { FloatingActionBar } from "~/ui/components/FloatingActionBar"
+import { FloatingActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
+import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
 import { getSelectedCodes, writeSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { getAllCodes } from "~/domain/data-blocks/callout/codes/selectors"
 
@@ -192,13 +195,6 @@ export interface ProjectContextValue {
 export const useProject = () => useOutletContext<ProjectContextValue>()
 
 const _noop = () => undefined
-
-const STUB_ACTIONS = [
-  { icon: <Trash2 />, label: "Delete", onClick: _noop, variant: "default" as const },
-  { icon: <FolderInput />, label: "Move", onClick: _noop, variant: "default" as const },
-  { icon: <Sparkles />, label: "Code file", onClick: _noop, variant: "ai" as const },
-  { icon: <Sparkles />, label: "Merge", onClick: _noop, variant: "ai" as const },
-]
 
 const formatSelectionTitle = (count: number): string =>
   `${count} code${count === 1 ? "" : "s"} selected`
@@ -470,6 +466,53 @@ export default function ProjectLayout() {
   )
   const globalAnnotationCounts = useMemo(() => getAnnotationGlobalCountsByCode(files), [files])
 
+  const hasSelectedAnnotationsInFile = useMemo(
+    () => Object.keys(annotationCounts).some((code) => selectedCodes.has(code)),
+    [annotationCounts, selectedCodes]
+  )
+
+  const handleClearCodings = useCallback(() => {
+    if (!currentFile) return
+    executeFileAction(clearCodingsAction(currentFile, selectedCodes))
+  }, [currentFile, selectedCodes])
+
+  const selectedCodesDetail = useMemo(() => {
+    const ids = [...selectedCodes]
+    if (ids.length === 0) return null
+    return ids.map((id) => (
+      <div key={id} className="whitespace-nowrap py-1">
+        <InlineMarkdown
+          files={files}
+          projectId={params.projectId ?? null}
+          currentFile={currentFile ?? null}
+          currentFileContent={currentFile ? (files[currentFile] ?? null) : null}
+          navigate={navigate}
+        >
+          {id}
+        </InlineMarkdown>
+      </div>
+    ))
+  }, [selectedCodes, files, params.projectId, currentFile, navigate])
+
+  const codeSelectionActions = useMemo(
+    (): ActionBarAction[] => [
+      {
+        icon: <Eraser />,
+        label: hasSelectedAnnotationsInFile ? "Clear codings" : "No codings in file",
+        onClick: handleClearCodings,
+        variant: "default",
+        disabled: !hasSelectedAnnotationsInFile,
+      },
+      {
+        icon: <Sparkles />,
+        label: "Code file",
+        onClick: _noop,
+        variant: "ai",
+      },
+    ],
+    [hasSelectedAnnotationsInFile, handleClearCodings]
+  )
+
   const handleSearchCode = (code: Code) => {
     const id = saveNewSearch({
       title: code.id,
@@ -613,8 +656,9 @@ export default function ProjectLayout() {
               titleAction={
                 hasAllCodesSelected ? undefined : { label: "Select all", onClick: selectAllCodes }
               }
+              titleDetail={selectedCodesDetail}
               onClose={clearSelectedCodes}
-              actions={STUB_ACTIONS}
+              actions={codeSelectionActions}
             />
           )}
         </AnimatePresence>
