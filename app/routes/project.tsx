@@ -70,6 +70,7 @@ import { codeWithCodebook } from "~/lib/agent/actions/actions"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 import { FloatingActionBar } from "~/ui/components/FloatingActionBar"
 import { getSelectedCodes, writeSelectedCodes } from "~/domain/data-blocks/ux/selectors"
+import { getAllCodes } from "~/domain/data-blocks/callout/codes/selectors"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
 
@@ -450,8 +451,14 @@ export default function ProjectLayout() {
 
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
   const isOnDocumentPage = !!params.fileId
+  const totalCodeCount = useMemo(() => getAllCodes(files).length, [files])
   const hasSelectedCodes = selectedCodes.size > 0
+  const hasAllCodesSelected = selectedCodes.size >= totalCodeCount && totalCodeCount > 0
   const clearSelectedCodes = useCallback(() => writeSelectedCodes([]), [])
+  const selectAllCodes = useCallback(
+    () => writeSelectedCodes(getAllCodes(files).map((c) => c.id)),
+    [files]
+  )
 
   const fileAnnotationCount = useMemo(
     () => (currentFile ? getAnnotationCount(files[currentFile] ?? "") : undefined),
@@ -598,7 +605,14 @@ export default function ProjectLayout() {
         <AnimatePresence>
           {isOnDocumentPage && hasSelectedCodes && (
             <FloatingActionBar
-              title={formatSelectionTitle(selectedCodes.size)}
+              title={
+                hasAllCodesSelected
+                  ? "All codes selected"
+                  : formatSelectionTitle(selectedCodes.size)
+              }
+              titleAction={
+                hasAllCodesSelected ? undefined : { label: "Select all", onClick: selectAllCodes }
+              }
               onClose={clearSelectedCodes}
               actions={STUB_ACTIONS}
             />

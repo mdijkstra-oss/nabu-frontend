@@ -1,7 +1,6 @@
 import { UxSchema, type Ux } from "./schema"
 import { getBlock } from "~/lib/data-blocks/query"
 import { replaceSingletonBlock } from "~/lib/data-blocks/parse"
-import { finalizeContent } from "~/lib/patch/apply"
 import { getFileRaw, updateFileRaw, type FileStore } from "~/lib/files/store"
 import { SETTINGS_FILE } from "~/lib/files/filename"
 
@@ -18,8 +17,8 @@ export const writeSelectedCodes = (codes: string[]): string | null => {
   const current = getUx(raw) ?? {}
   const updated = { ...current, selectedCodes: codes }
   const newRaw = replaceSingletonBlock(raw, "json-ux", JSON.stringify(updated, null, 2))
-  const result = finalizeContent(SETTINGS_FILE, newRaw, { original: raw })
-  if (result.status === "error") return result.error
-  updateFileRaw(result.path, result.content, { immediate: true })
+  // UX: bypass finalizeContent + pending refs — json-ux is machine-generated state,
+  // the full pipeline (validation, ID-fill, tag-ref-check, cross-file-scan) causes visible lag on toggle
+  updateFileRaw(SETTINGS_FILE, newRaw, { immediate: true, skipPendingRefs: true })
   return null
 }

@@ -118,6 +118,7 @@ export const setCurrentFile = (filename: string | null): void => {
 
 export interface UpdateFileOptions {
   immediate?: boolean
+  skipPendingRefs?: boolean
 }
 
 export const updateFileRaw = (filename: string, raw: string, options?: UpdateFileOptions): void => {
@@ -130,14 +131,15 @@ export const updateFileRaw = (filename: string, raw: string, options?: UpdateFil
 
   const scheduleNotify = options?.immediate ? notify : debouncedNotify
 
-  updateDefinitionIndex(filename, normalized)
-
-  if (pendingRefsSuppressed) {
+  if (options?.skipPendingRefs || pendingRefsSuppressed) {
+    if (!options?.skipPendingRefs) updateDefinitionIndex(filename, normalized)
     files = { ...files, [filename]: normalized }
     persistWrite(filename)
     scheduleNotify()
     return
   }
+
+  updateDefinitionIndex(filename, normalized)
 
   const definitions = getAllDefinitions()
   const marked = markPendingRefs(normalized, definitions)
