@@ -72,8 +72,10 @@ import { executeFileAction } from "~/lib/data-blocks/file-action"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 import { FloatingActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
-import { getSelectedCodes, writeSelectedCodes } from "~/domain/data-blocks/ux/selectors"
+import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
+import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getAllCodes } from "~/domain/data-blocks/callout/codes/selectors"
+import { DismissableWrap } from "~/ui/components/DismissableWrap"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
 
@@ -476,23 +478,33 @@ export default function ProjectLayout() {
     executeFileAction(clearCodingsAction(currentFile, selectedCodes))
   }, [currentFile, selectedCodes])
 
+  const deselectCode = useCallback(
+    (id: string) => {
+      const remaining = [...selectedCodes].filter((c) => c !== id)
+      writeSelectedCodes(remaining)
+    },
+    [selectedCodes]
+  )
+
   const selectedCodesDetail = useMemo(() => {
-    const ids = [...selectedCodes]
+    const ids = [...selectedCodes].sort()
     if (ids.length === 0) return null
     return ids.map((id) => (
       <div key={id} className="whitespace-nowrap py-1">
-        <InlineMarkdown
-          files={files}
-          projectId={params.projectId ?? null}
-          currentFile={currentFile ?? null}
-          currentFileContent={currentFile ? (files[currentFile] ?? null) : null}
-          navigate={navigate}
-        >
-          {id}
-        </InlineMarkdown>
+        <DismissableWrap onDismiss={() => deselectCode(id)}>
+          <InlineMarkdown
+            files={files}
+            projectId={params.projectId ?? null}
+            currentFile={currentFile ?? null}
+            currentFileContent={currentFile ? (files[currentFile] ?? null) : null}
+            navigate={navigate}
+          >
+            {id}
+          </InlineMarkdown>
+        </DismissableWrap>
       </div>
     ))
-  }, [selectedCodes, files, params.projectId, currentFile, navigate])
+  }, [selectedCodes, files, params.projectId, currentFile, navigate, deselectCode])
 
   const codeSelectionActions = useMemo(
     (): ActionBarAction[] => [

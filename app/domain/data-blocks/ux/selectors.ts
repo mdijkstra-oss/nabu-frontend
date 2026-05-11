@@ -1,6 +1,5 @@
 import { UxSchema, type Ux } from "./schema"
 import { getBlock } from "~/lib/data-blocks/query"
-import { executeFileAction } from "~/lib/data-blocks/file-action"
 import type { FileStore } from "~/lib/files/store"
 import { SETTINGS_FILE } from "~/lib/files/filename"
 
@@ -11,17 +10,3 @@ export const getSelectedCodes = (files: FileStore): Set<string> =>
 
 export const toggleSelectedCode = (codes: string[], id: string): string[] =>
   codes.includes(id) ? codes.filter((c) => c !== id) : [...codes, id]
-
-export const writeSelectedCodes = (codes: string[]): void => {
-  executeFileAction({
-    patches: [
-      {
-        path: SETTINGS_FILE,
-        language: "json-ux",
-        ops: [{ op: "add", path: "/selectedCodes", value: codes }],
-      },
-    ],
-    immediate: true,
-    skipPendingRefs: true,
-  })
-}

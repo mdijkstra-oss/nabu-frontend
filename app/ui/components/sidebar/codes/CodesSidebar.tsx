@@ -8,11 +8,8 @@ import { CheckableWrap } from "~/ui/components/CheckableWrap"
 import { matchesAny } from "~/lib/utils/filter"
 import { solidBackground, hoveredElementBorder } from "~/ui/theme/radix"
 import type { GlobalAnnotationCount } from "~/domain/data-blocks/attributes/annotations/selectors"
-import {
-  getSelectedCodes,
-  toggleSelectedCode,
-  writeSelectedCodes,
-} from "~/domain/data-blocks/ux/selectors"
+import { getSelectedCodes, toggleSelectedCode } from "~/domain/data-blocks/ux/selectors"
+import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getFiles, subscribe } from "~/lib/files/store"
 import type { Codebook, Code, CodeCategory } from "./types"
 import { CodeItem } from "./CodeItem"

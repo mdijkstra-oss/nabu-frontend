@@ -1,6 +1,6 @@
 "use client"
 
-import { Children, useState, type ReactNode } from "react"
+import { Children, useRef, useState, type ReactNode } from "react"
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion"
 import { X } from "lucide-react"
 import { cn } from "~/ui/utils"
@@ -82,8 +82,16 @@ export function FloatingActionBar({
   onClose,
 }: FloatingActionBarProps) {
   const [showDetail, setShowDetail] = useState(false)
+  const [detailHovered, setDetailHovered] = useState(false)
+  const [frozenGrid, setFrozenGrid] = useState<{
+    cols: string
+    rows: number
+    height: number
+  } | null>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
   const detailCount = Children.count(titleDetail)
-  const detailGridCols = detailCount <= 6 ? "grid-cols-[auto_auto]" : "grid-cols-[auto_auto_auto]"
+  const detailCols = detailCount <= 6 ? 2 : 3
+  const detailRows = Math.ceil(detailCount / detailCols)
 
   return (
     <div
@@ -101,13 +109,33 @@ export function FloatingActionBar({
               transition={detailTransition}
             >
               <motion.div
-                layout
-                className={cn(
-                  "grid gap-x-4 gap-y-0 rounded-xl bg-sidebar px-4 py-3 shadow-lg text-xs overflow-hidden",
-                  detailGridCols
-                )}
-                style={{ originX: 0.5, originY: 1 }}
+                ref={detailRef}
+                layout={!detailHovered}
+                className="grid grid-flow-col content-start gap-x-4 gap-y-0 rounded-xl bg-sidebar px-4 py-3 shadow-lg text-xs overflow-hidden"
+                style={{
+                  originX: 0.5,
+                  originY: 1,
+                  gridTemplateRows: `repeat(${frozenGrid?.rows ?? detailRows}, auto)`,
+                  ...(frozenGrid
+                    ? { gridTemplateColumns: frozenGrid.cols, height: frozenGrid.height }
+                    : {}),
+                }}
                 transition={springTransition}
+                onMouseEnter={() => {
+                  setDetailHovered(true)
+                  if (detailRef.current) {
+                    const style = getComputedStyle(detailRef.current)
+                    setFrozenGrid({
+                      cols: style.gridTemplateColumns,
+                      rows: detailRows,
+                      height: detailRef.current.getBoundingClientRect().height,
+                    })
+                  }
+                }}
+                onMouseLeave={() => {
+                  setDetailHovered(false)
+                  setFrozenGrid(null)
+                }}
               >
                 {titleDetail}
               </motion.div>
