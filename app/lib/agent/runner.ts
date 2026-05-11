@@ -22,18 +22,6 @@ const stop = () => {
 let active = false
 let controller: AbortController | null = null
 
-const appendToTextDraft = (chunk: string): void => {
-  const current = getDraft()
-  const content = current?.type === "text" ? current.content + chunk : chunk
-  setDraft({ type: "text", content })
-}
-
-const appendToReasoningDraft = (chunk: string): void => {
-  const current = getDraft()
-  const content = current?.type === "reasoning" ? current.content + chunk : chunk
-  setDraft({ type: "reasoning", content })
-}
-
 const appendToToolArgsDraft = (chunk: string): void => {
   const current = getDraft()
   if (current?.type === "tool_call") {
@@ -51,18 +39,26 @@ const appendToToolArgsDraft = (chunk: string): void => {
   })
 }
 
-const buildCallbacks = () => ({
-  onChunk: (chunk: string) => appendToTextDraft(chunk),
-  onReasoningChunk: (chunk: string) => appendToReasoningDraft(chunk),
-  onToolName: (name: string) => {
-    setDraft({
-      type: "tool_call",
-      calls: [{ id: "", name, args: "" as unknown as Record<string, unknown> }],
-    })
-  },
-  onToolArgsChunk: (chunk: string) => appendToToolArgsDraft(chunk),
-  onStreamEnd: () => undefined,
-})
+const buildCallbacks = () => {
+  let textContent = ""
+  return {
+    onChunk: (chunk: string) => {
+      textContent += chunk
+      setDraft({ type: "text", content: textContent })
+    },
+    onToolName: (name: string) => {
+      textContent = ""
+      setDraft({
+        type: "tool_call",
+        calls: [{ id: "", name, args: "" as unknown as Record<string, unknown> }],
+      })
+    },
+    onToolArgsChunk: (chunk: string) => appendToToolArgsDraft(chunk),
+    onStreamEnd: () => {
+      textContent = ""
+    },
+  }
+}
 
 const runAgent = async (deps: RunnerDeps): Promise<void> => {
   controller = new AbortController()

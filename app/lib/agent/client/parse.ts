@@ -100,7 +100,7 @@ export const processLine = (
     if (state.currentEvent === "response.output_text.delta") {
       if (parsed.delta) {
         callbacks.onChunk?.(parsed.delta)
-        const flushed = flushReasoning(flushToolCalls(state))
+        const flushed = flushToolCalls(state)
         return { ...flushed, textContent: flushed.textContent + parsed.delta }
       }
     }
@@ -126,7 +126,7 @@ export const processLine = (
     if (state.currentEvent === "response.reasoning_summary_text.delta") {
       if (parsed.delta) {
         callbacks.onReasoningChunk?.(parsed.delta)
-        const flushed = flushText(flushToolCalls(state))
+        const flushed = flushToolCalls(state)
         return { ...flushed, reasoningContent: flushed.reasoningContent + parsed.delta }
       }
       return state

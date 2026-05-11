@@ -231,6 +231,30 @@ describe("parser", () => {
       ])
     })
 
+    it("merges interleaved text and reasoning into single blocks", () => {
+      const ctx = emptyCtx()
+      const blocks = flushBlocks(
+        [
+          "event: response.output_text.delta",
+          'data: {"delta":"Hello"}',
+          "event: response.reasoning_summary_text.delta",
+          'data: {"delta":"thinking"}',
+          "event: response.output_text.delta",
+          'data: {"delta":" world"}',
+          "event: response.reasoning_summary_text.delta",
+          'data: {"delta":" more"}',
+        ],
+        makeCallbacks(ctx)
+      )
+
+      expect(blocks).toEqual([
+        { type: "reasoning", content: "thinking more" },
+        { type: "text", content: "Hello world" },
+      ])
+      expect(ctx.chunks).toEqual(["Hello", " world"])
+      expect(ctx.reasoningChunks).toEqual(["thinking", " more"])
+    })
+
     it("interleaves reasoning and tool calls into separate blocks", () => {
       const blocks = flushBlocks([
         "event: response.reasoning_summary_text.delta",
