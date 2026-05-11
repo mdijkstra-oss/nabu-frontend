@@ -2,6 +2,9 @@
 
 import { useCallback, useRef, useEffect, useLayoutEffect, useState } from "react"
 import { createPortal } from "react-dom"
+import { useInstance } from "@milkdown/react"
+import { editorViewCtx } from "@milkdown/kit/core"
+import { annotationsMeta } from "~/lib/editor/annotations/plugin"
 import type { Annotation } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { HighlightTooltip, type HighlightEntry } from "~/ui/components/HighlightTooltip"
 import { elementBorder } from "~/ui/theme/radix"
@@ -70,13 +73,41 @@ const getFirstLineRect = (el: HTMLElement): DOMRect => {
 const clampLeft = (mouseX: number, width: number): number =>
   Math.min(Math.max(VIEWPORT_MARGIN, mouseX), window.innerWidth - width - VIEWPORT_MARGIN)
 
+type GetEditor = ReturnType<typeof useInstance>[1]
+
+const dispatchAnnotations = (getEditor: GetEditor, loading: boolean, list: Annotation[]): void => {
+  if (loading) return
+  const editor = getEditor()
+  if (!editor) return
+  try {
+    editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      view.dispatch(view.state.tr.setMeta(annotationsMeta, list))
+    })
+  } catch {
+    /* editor may be destroyed */
+  }
+}
+
 export const AnnotationHover = ({ annotations, filePath, children }: AnnotationHoverProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const bridgeRef = useRef<HTMLDivElement>(null)
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [hover, setHover] = useState<HoverState | null>(null)
+  const [loading, getEditor] = useInstance()
+  const isolatedRef = useRef(false)
 
-  const dismiss = useCallback(() => setHover(null), [])
+  const restoreAnnotations = useCallback(() => {
+    if (isolatedRef.current) {
+      isolatedRef.current = false
+      dispatchAnnotations(getEditor, loading, annotations)
+    }
+  }, [getEditor, loading, annotations])
+
+  const dismiss = useCallback(() => {
+    restoreAnnotations()
+    setHover(null)
+  }, [restoreAnnotations])
 
   const cancelDismiss = useCallback(() => {
     if (dismissTimerRef.current) {
@@ -153,6 +184,19 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
 
   const matchingAnnotations = hover ? findMatchingAnnotations(annotations, hover.text) : []
   const files = getFiles()
+
+  const handleEntryHover = useCallback(
+    (entryId: string) => {
+      const annotation = matchingAnnotations.find((a) => (a.id ?? "") === entryId)
+      if (!annotation) return
+      const overlappingIds = new Set(matchingAnnotations.map((a) => a.id ?? ""))
+      const nonOverlapping = annotations.filter((a) => !overlappingIds.has(a.id ?? ""))
+      isolatedRef.current = true
+      dispatchAnnotations(getEditor, loading, [...nonOverlapping, annotation])
+    },
+    [annotations, matchingAnnotations, getEditor, loading]
+  )
+
   const entries = matchingAnnotations.map(annotationToEntry(files, filePath))
 
   useLayoutEffect(() => {
@@ -218,7 +262,11 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
             }}
           >
             <div style={{ pointerEvents: "auto" }}>
-              <HighlightTooltip entries={entries} />
+              <HighlightTooltip
+                entries={entries}
+                onEntryHover={handleEntryHover}
+                onEntryLeave={restoreAnnotations}
+              />
             </div>
           </div>,
           document.body

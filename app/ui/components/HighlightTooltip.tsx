@@ -11,6 +11,8 @@ export interface HighlightEntry {
 
 interface HighlightTooltipProps {
   entries: HighlightEntry[]
+  onEntryHover?: (id: string) => void
+  onEntryLeave?: () => void
 }
 
 const Divider = () => <div className="h-px w-full bg-neutral-border" />
@@ -47,10 +49,17 @@ const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
   </div>
 )
 
-export const HighlightTooltip = ({ entries }: HighlightTooltipProps) => {
+const isMultiEntry = (entries: HighlightEntry[]): boolean => entries.length > 1
+
+export const HighlightTooltip = ({
+  entries,
+  onEntryHover,
+  onEntryLeave,
+}: HighlightTooltipProps) => {
   if (entries.length === 0) return null
 
   const colors = entries.map((e) => e.color)
+  const hoverable = isMultiEntry(entries) && !!onEntryHover
 
   return (
     <div
@@ -61,11 +70,19 @@ export const HighlightTooltip = ({ entries }: HighlightTooltipProps) => {
         className="flex h-1 w-full flex-none"
         style={{ background: createHeaderBackground(colors) }}
       />
-      <div className="flex w-full min-h-0 flex-col items-start gap-3 overflow-y-auto px-3 py-3">
+      <div
+        className="flex w-full min-h-0 flex-col items-start overflow-y-auto"
+        onMouseLeave={hoverable ? onEntryLeave : undefined}
+      >
         {entries.map((entry, i) => (
-          <div key={entry.id} className="flex w-full flex-col items-start gap-3">
+          <div key={entry.id} className="flex w-full flex-col items-start">
             {i > 0 && <Divider />}
-            <EntryContent entry={entry} />
+            <div
+              className={`flex w-full px-3 py-2 ${hoverable ? "hover:bg-neutral-100" : ""}`}
+              onMouseEnter={hoverable ? () => onEntryHover(entry.id) : undefined}
+            >
+              <EntryContent entry={entry} />
+            </div>
           </div>
         ))}
       </div>
