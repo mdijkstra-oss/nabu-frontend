@@ -5,10 +5,9 @@ import {
   getDocumentType,
   getDocumentSubject,
 } from "~/domain/data-blocks/attributes/topics/selectors"
-import { getFileRaw, updateFileRaw } from "~/lib/files/store"
+import { getFileRaw } from "~/lib/files/store"
+import { executeFileAction } from "~/lib/data-blocks/file-action"
 import { getSettings } from "~/domain/data-blocks/settings/selectors"
-import { replaceSingletonBlock } from "~/lib/data-blocks/parse"
-import { finalizeContent } from "~/lib/patch/apply"
 import { SETTINGS_FILE } from "~/lib/files/filename"
 import { toCorpusKey, type CorpusDescription } from "~/domain/corpus/types"
 import { processPool } from "~/lib/utils/pool"
@@ -119,16 +118,16 @@ const removeStale = (
 }
 
 const writeDescriptions = (descriptions: CorpusDescription[]): void => {
-  const raw = getFileRaw(SETTINGS_FILE) ?? ""
-  const current = getSettings(raw) ?? {}
-  const updated = { ...current, corpusDescriptions: descriptions }
-  const newRaw = replaceSingletonBlock(raw, "json-settings", JSON.stringify(updated, null, 2))
-  const result = finalizeContent(SETTINGS_FILE, newRaw, { original: raw })
-  if (result.status === "error") {
-    console.error("[corpus-describe] failed to write descriptions:", result.error)
-    return
-  }
-  updateFileRaw(result.path, result.content)
+  executeFileAction({
+    patches: [
+      {
+        path: SETTINGS_FILE,
+        language: "json-settings",
+        ops: [{ op: "add", path: "/corpusDescriptions", value: descriptions }],
+      },
+    ],
+    skipPendingRefs: true,
+  })
 }
 
 const clusterAxes = async (

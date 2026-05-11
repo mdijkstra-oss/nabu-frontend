@@ -1,6 +1,5 @@
-import { getFileRaw, updateFileRaw } from "~/lib/files/store"
-import { finalizeContent } from "~/lib/patch/apply"
-import { replaceSingletonBlock } from "~/lib/data-blocks/parse"
+import { getFileRaw } from "~/lib/files/store"
+import { executeFileAction } from "~/lib/data-blocks/file-action"
 import type { Settings } from "~/domain/data-blocks/settings/schema"
 import { getSettings } from "~/domain/data-blocks/settings/selectors"
 import { SETTINGS_FILE } from "~/lib/files/filename"
@@ -36,15 +35,17 @@ const rotateUnsaved = (entries: SearchEntry[]): SearchEntry[] => {
 
 const readSettings = (): Settings => getSettings(getFileRaw(SETTINGS_FILE)) ?? {}
 
-export const updateSearchEntries = (entries: SearchEntry[]): string | null => {
-  const raw = getFileRaw(SETTINGS_FILE)
-  const current = getSettings(raw) ?? {}
-  const updated = { ...current, searches: entries }
-  const newRaw = replaceSingletonBlock(raw, "json-settings", JSON.stringify(updated, null, 2))
-  const result = finalizeContent(SETTINGS_FILE, newRaw, { original: raw })
-  if (result.status === "error") return result.error
-  updateFileRaw(result.path, result.content)
-  return null
+export const updateSearchEntries = (entries: SearchEntry[]): void => {
+  executeFileAction({
+    patches: [
+      {
+        path: SETTINGS_FILE,
+        language: "json-settings",
+        ops: [{ op: "add", path: "/searches", value: entries }],
+      },
+    ],
+    skipPendingRefs: true,
+  })
 }
 
 const bySql =
@@ -69,7 +70,7 @@ const bumpExisting = (
       : e
   )
 
-export const saveNewSearch = (data: NewSearchData): string | null => {
+export const saveNewSearch = (data: NewSearchData): string => {
   const settings = readSettings()
   const existing = (settings.searches ?? []).find(bySql(data.sql))
 
@@ -80,8 +81,8 @@ export const saveNewSearch = (data: NewSearchData): string | null => {
       data.hydes,
       data.descriptionsHash
     )
-    const writeError = updateSearchEntries(bumped)
-    return writeError ? null : existing.id
+    updateSearchEntries(bumped)
+    return existing.id
   }
 
   const id = generateSearchId()
@@ -99,8 +100,8 @@ export const saveNewSearch = (data: NewSearchData): string | null => {
 
   const withNew = [...(settings.searches ?? []), entry]
   const rotated = rotateUnsaved(withNew)
-  const writeError = updateSearchEntries(rotated)
-  return writeError ? null : id
+  updateSearchEntries(rotated)
+  return id
 }
 
 export const updateSearchHydes = (

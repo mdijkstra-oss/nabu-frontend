@@ -80,8 +80,6 @@ const handleSearch = async (call: { args: unknown }): Promise<ToolResult<unknown
   if (hasNoResults(hits)) return formatEmpty(sql)
 
   const id = saveNewSearch({ ...parsed.data, sql, hydes, descriptionsHash: entryDescriptionsHash })
-  if (!id) return { status: "error", output: "Failed to save search" }
-
   return { status: "ok", output: formatOutput(id, hits, capped, isSemantic) }
 }
 
