@@ -1,3 +1,5 @@
+import { getEntityPrefixes } from "~/lib/data-blocks/registry"
+
 export const filterCodeBlocks = (content: string): string | null => {
   const markers = content.match(/```/g)
   if (!markers) return content
@@ -26,8 +28,37 @@ export const stripIncompleteLink = (content: string): string => {
   return before
 }
 
+const PARTIAL_HIDDEN = /\.generated\S*$/
+
+const buildPartialEntityPattern = (): RegExp => {
+  const alt = getEntityPrefixes().join("|")
+  return new RegExp(`(?:${alt})-[a-z0-9]{0,7}$`, "i")
+}
+
+export const stripPartialEntity = (content: string): string => {
+  const lastNewline = content.lastIndexOf("\n")
+  const lastLine = content.slice(lastNewline + 1)
+  const lineOffset = lastNewline + 1
+
+  const hiddenMatch = PARTIAL_HIDDEN.exec(lastLine)
+  if (hiddenMatch) {
+    const before = content.slice(0, lineOffset + hiddenMatch.index).trimEnd()
+    return before
+  }
+
+  const pattern = buildPartialEntityPattern()
+  const entityMatch = pattern.exec(lastLine)
+  if (entityMatch) {
+    const before = content.slice(0, lineOffset + entityMatch.index).trimEnd()
+    return before
+  }
+
+  return content
+}
+
 export const preprocessStreaming = (content: string): string | null => {
   const afterCode = filterCodeBlocks(content)
   if (!afterCode) return null
-  return stripIncompleteLink(afterCode) || null
+  const afterLinks = stripIncompleteLink(afterCode)
+  return stripPartialEntity(afterLinks) || null
 }

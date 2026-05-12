@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { filterCodeBlocks, stripIncompleteLink, preprocessStreaming } from "./partial"
+import {
+  filterCodeBlocks,
+  stripIncompleteLink,
+  stripPartialEntity,
+  preprocessStreaming,
+} from "./partial"
 
 describe("filterCodeBlocks", () => {
   const cases = [
@@ -134,6 +139,90 @@ describe("stripIncompleteLink", () => {
   })
 })
 
+describe("stripPartialEntity", () => {
+  const cases = [
+    {
+      name: "plain text returns as-is",
+      input: "Hello world",
+      expected: "Hello world",
+    },
+    {
+      name: "complete entity ID passes through",
+      input: "See callout-1abc2def here",
+      expected: "See callout-1abc2def here",
+    },
+    {
+      name: "strips partial callout ID at end",
+      input: "I coded callout-1ab",
+      expected: "I coded",
+    },
+    {
+      name: "strips callout prefix with hyphen only",
+      input: "I coded callout-",
+      expected: "I coded",
+    },
+    {
+      name: "strips partial annotation ID at end",
+      input: "Found annotation-12",
+      expected: "Found",
+    },
+    {
+      name: "strips partial tag ID at end",
+      input: "Using tag-abc",
+      expected: "Using",
+    },
+    {
+      name: "strips partial chart ID at end",
+      input: "See chart-1a2b3c",
+      expected: "See",
+    },
+    {
+      name: "strips partial search ID at end",
+      input: "Run search-aabb",
+      expected: "Run",
+    },
+    {
+      name: "strips trailing .generated suffix",
+      input: "See callout-1abc2def.generated",
+      expected: "See callout-1abc2def",
+    },
+    {
+      name: "strips trailing .generated.hidden suffix",
+      input: "See callout-1abc2def.generated.hidden",
+      expected: "See callout-1abc2def",
+    },
+    {
+      name: "strips trailing .generated.hid partial",
+      input: "See callout-1abc2def.generated.hid",
+      expected: "See callout-1abc2def",
+    },
+    {
+      name: "strips trailing .generated.hidden.m partial",
+      input: "See callout-1abc2def.generated.hidden.m",
+      expected: "See callout-1abc2def",
+    },
+    {
+      name: "complete entity ID at end passes through",
+      input: "See callout-1abc2def",
+      expected: "See callout-1abc2def",
+    },
+    {
+      name: "only checks last line",
+      input: "Line one callout-1abc2def\nLine two is fine",
+      expected: "Line one callout-1abc2def\nLine two is fine",
+    },
+    {
+      name: "empty string returns empty",
+      input: "",
+      expected: "",
+    },
+  ]
+
+  it.each(cases)("$name", ({ input, expected }) => {
+    expect(stripPartialEntity(input)).toBe(expected)
+  })
+})
+
 describe("preprocessStreaming", () => {
   const cases = [
     {
@@ -155,6 +244,16 @@ describe("preprocessStreaming", () => {
       name: "complete content passes through",
       input: "See [this](https://a.com) for details",
       expected: "See [this](https://a.com) for details",
+    },
+    {
+      name: "strips partial entity at end",
+      input: "Now coding callout-1ab",
+      expected: "Now coding",
+    },
+    {
+      name: "strips partial hidden suffix at end",
+      input: "Using callout-1abc2def.generated.hi",
+      expected: "Using callout-1abc2def",
     },
   ]
 
