@@ -201,7 +201,12 @@ const isInRange = (index: number, range: PlanRange): boolean =>
 const isConsumedLeaf = (leaf: Indexed<LeafMessage>, consumed: Set<number>): boolean =>
   leaf.message.role === "user" && consumed.has(leaf.index)
 
-export const toGroupedMessages = (history: Block[], derived: Derived): GroupedMessage[] => {
+export interface KeyedMessage {
+  key: number
+  message: GroupedMessage
+}
+
+export const toGroupedMessages = (history: Block[], derived: Derived): KeyedMessage[] => {
   const planRanges = buildPlanRanges(history, derived.plans)
   const { messages: askMessages, consumedUserIndices } = extractAskMessages(history)
 
@@ -249,5 +254,5 @@ export const toGroupedMessages = (history: Block[], derived: Derived): GroupedMe
 
   return [...outsideEntries, ...askEntries, ...scoutEntries, ...planEntries]
     .sort((a, b) => a.blockIndex - b.blockIndex)
-    .map((e) => e.item)
+    .map((e) => ({ key: e.blockIndex, message: e.item }))
 }

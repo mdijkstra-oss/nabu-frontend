@@ -28,7 +28,7 @@ function mustFind<T>(arr: T[], pred: (item: T) => boolean): T {
 beforeEach(() => resetCallIdCounter())
 
 const group = (history: Block[], files = {}): GroupedMessage[] =>
-  toGroupedMessages(history, derive(history, files))
+  toGroupedMessages(history, derive(history, files)).map((k) => k.message)
 
 const isPlanHeader = (m: GroupedMessage): m is PlanHeader => m.type === "plan-header"
 const isPlanItem = (m: GroupedMessage): m is PlanItem => m.type === "plan-item"
