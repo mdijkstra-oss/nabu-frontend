@@ -1,20 +1,17 @@
 import type { TaskConfig } from "~/lib/agent/dispatch"
+import type { CodingFileRef } from "./selectors"
 
-export const codeAllCodebooks: TaskConfig = {
-  context:
-    "Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Include ALL codebooks. General Codebook is framework, other codebooks are dimensions",
-  userMessage: "Can you code this file",
-}
+// Todo run from chat too - somehow
+// also llm retarted
 
-export const codeWithCodebook = (codeId: string): TaskConfig => {
-  const codeFile = `${codeId}.generated.hidden.md`
+export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig => {
+  const fileList = refs.map((r) => r.file).join(", ")
+  const hasHidden = refs.some((r) => r.hidden)
+  const hiddenNote = hasHidden
+    ? " Note: .generated.hidden.md files will not appear in ls output, but do exist - DO NOT read supplied files plan deep will read for you."
+    : ""
   return {
-    context: `Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Use ONLY the generic codebook AND ${codeFile} for coding. Do not use any other codebooks. Note: ${codeFile} is a generated file — it will not appear in ls output, but can be read with cat, head, tail, or grep.`,
-    userMessage: `Can you code this file with only ${codeId}`,
+    context: `Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Use the generic codebook as framework if exists AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote}`,
+    userMessage: `Can you code this file with ${fileList}`,
   }
-}
-
-export const removeCodings: TaskConfig = {
-  context: "",
-  userMessage: "Can you clear all codings of this file",
 }

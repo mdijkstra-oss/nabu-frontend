@@ -39,7 +39,7 @@ const calloutToCode = (callout: CalloutBlock): Code => ({
   detail: callout.content,
 })
 
-const groupCodesByFile = (files: FileStore): CodeGroup[] =>
+export const groupCodesByFile = (files: FileStore): CodeGroup[] =>
   Object.entries(files).reduce<CodeGroup[]>((acc, [filename, raw]) => {
     const codes = getCodes(raw).map(calloutToCode)
     if (codes.length > 0) acc.push({ fileId: filename, name: toDisplayName(filename), codes })
