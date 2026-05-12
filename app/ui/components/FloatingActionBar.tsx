@@ -4,12 +4,14 @@ import { Children, useRef, useState, type ReactNode } from "react"
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion"
 import { X } from "lucide-react"
 import { cn } from "~/ui/utils"
+import { NabuGate } from "~/ui/components/nabu/NabuGate"
+import { ConfirmButton } from "~/ui/components/ConfirmButton"
 
 export interface ActionBarAction {
   icon: ReactNode
   label: string
   onClick: () => void
-  variant?: "default" | "ai"
+  variant?: "default" | "ai" | "confirm"
   disabled?: boolean
 }
 
@@ -179,9 +181,24 @@ export function FloatingActionBar({
           </div>
           <div className="flex h-px w-full flex-none bg-neutral-700" />
           <div className="flex items-center gap-3" onMouseEnter={() => setShowDetail(false)}>
-            {actions.map((action) => (
-              <ActionBarButton key={action.label} {...action} />
-            ))}
+            {actions.map((action, i) => {
+              if (action.variant === "confirm")
+                return (
+                  <ConfirmButton
+                    key={i}
+                    icon={action.icon}
+                    label={action.label}
+                    onConfirm={action.onClick}
+                    disabled={action.disabled}
+                  />
+                )
+              const button = <ActionBarButton {...action} />
+              return action.variant === "ai" ? (
+                <NabuGate key={i}>{button}</NabuGate>
+              ) : (
+                <ActionBarButton key={i} {...action} />
+              )
+            })}
           </div>
         </motion.div>
       </LayoutGroup>
