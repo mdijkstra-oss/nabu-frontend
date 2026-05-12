@@ -134,6 +134,7 @@ export const ENDPOINT = "/qual-coder?chat=true"
 const promptToMode: Record<string, ModeName> = {
   planning: "plan",
   execution: "exec",
+  chat: "chat",
 }
 
 const modeFromPromptMarker = (content: string): ModeName | undefined => {
@@ -165,6 +166,10 @@ export const modeSystemBlocks = (mode: ModeName): Block[] => {
 export const activatePlan = (task: string, steps: StepDef[], decisions: string[]): void => {
   pushBlocks([{ type: "system", content: serializePlanBlock(task, steps, decisions) }])
   pushBlocks(modeSystemBlocks("exec"))
+}
+
+export const deactivatePlan = (): void => {
+  pushBlocks([{ type: "system", content: "<!-- prompt: chat -->" }])
 }
 
 const buildAvailableToolNames = (mode: ModeName): Set<string> => {

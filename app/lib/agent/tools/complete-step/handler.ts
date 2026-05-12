@@ -1,6 +1,7 @@
 import { getAllBlocks } from "../../client/store"
 import { derive } from "../../derived"
 import { tool, registerTool } from "../../executors/tool"
+import { deactivatePlan } from "../../executors/modes"
 import { completeStep as def } from "./def"
 
 type StepKind = "final" | "checkpoint" | "continue"
@@ -23,11 +24,15 @@ const STEP_DIRECTIVE: Record<StepKind, string> = {
 const _completeStep = registerTool(
   tool({
     ...def,
-    handler: async (_files, args) => ({
-      status: "ok",
-      output: args,
-      directive: STEP_DIRECTIVE[classifyStep()],
-      mutations: [],
-    }),
+    handler: async (_files, args) => {
+      const kind = classifyStep()
+      if (kind === "final") deactivatePlan()
+      return {
+        status: "ok",
+        output: args,
+        directive: STEP_DIRECTIVE[kind],
+        mutations: [],
+      }
+    },
   })
 )
