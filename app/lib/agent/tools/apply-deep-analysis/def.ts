@@ -45,6 +45,6 @@ export const SPAN_STEP_CONTEXT_SENTENCES = 6
 export const applyDeepAnalysisTool: AnyTool = {
   name: "apply_deep_analysis",
   description:
-    "Run deep analysis on one file section against source criteria. Returns structured results or writes annotations depending on post_action.\n\nparallel: yes — each call handles one section independently",
+    "Run deep analysis on one file section against source criteria. Returns structured results or writes annotations depending on post_action.\n\nparallel: no — internally fans out to many calls",
   schema: ApplyDeepAnalysisArgs,
 }

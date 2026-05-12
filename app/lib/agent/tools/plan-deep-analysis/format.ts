@@ -61,10 +61,17 @@ const toAnalysisStep = (
 })
 
 const SYNTHESIS_STEP: StepDefObject = {
-  title: "Relate to Research Questions",
+  title: "Synthesis",
   expected: `
-    Write the RQ synthesis for the researcher. Annotations + codebook are your input. 150-250 words max. One or two annotation IDs per observation. No general summary. No next steps. Stop after the last RQ. Do not predict what later documents will show. Do not evaluate this document's importance relative to the corpus or research.
-    Do not reference annotation ids directly, only quote the relevant parts of the text. Do not call apply_deep_analysis again.
-  `,
+  Ground every observation by quoting the relevant source text. Do not predict what later documents will show. Do not evaluate this document's importance relative to the corpus. Do not call apply_deep_analysis again.
+
+  If Research Questions exist:
+    - Write a synthesis per RQ. Annotations + codebook are your input.
+    - 1-2 quotes per observation. 150-250 words max.
+    - No general summary. No next steps. Stop after the last RQ.
+  Else:
+    - Summarize key patterns found across annotations.
+    - 100-150 words. No next steps.
+`,
   checkpoint: false,
 }
