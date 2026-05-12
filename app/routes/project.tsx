@@ -66,7 +66,8 @@ import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
 import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
-import { codeWithCodebook } from "~/domain/actions/coding/actions"
+import { codeWithFiles } from "~/domain/actions/coding/actions"
+import { resolveCodingFiles } from "~/domain/actions/coding/selectors"
 import { clearCodingsAction } from "~/domain/actions/clear-codings/apply"
 import { executeFileAction } from "~/lib/data-blocks/file-action"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
@@ -195,8 +196,6 @@ export interface ProjectContextValue {
 }
 
 export const useProject = () => useOutletContext<ProjectContextValue>()
-
-const _noop = () => undefined
 
 const formatSelectionTitle = (count: number): string =>
   `${count} code${count === 1 ? "" : "s"} selected`
@@ -478,6 +477,11 @@ export default function ProjectLayout() {
     executeFileAction(clearCodingsAction(currentFile, selectedCodes))
   }, [currentFile, selectedCodes])
 
+  const handleCodeSelectedCodes = useCallback(() => {
+    const refs = resolveCodingFiles(files, [...selectedCodes])
+    if (refs.length > 0) dispatchTask(codeWithFiles(refs))
+  }, [selectedCodes, files])
+
   const deselectCode = useCallback(
     (id: string) => {
       const remaining = [...selectedCodes].filter((c) => c !== id)
@@ -510,19 +514,19 @@ export default function ProjectLayout() {
     (): ActionBarAction[] => [
       {
         icon: <Eraser />,
-        label: hasSelectedAnnotationsInFile ? "Clear codings" : "No codings in file",
+        label: hasSelectedAnnotationsInFile ? "Clear codings" : "Not coded",
         onClick: handleClearCodings,
-        variant: "default",
+        variant: "confirm",
         disabled: !hasSelectedAnnotationsInFile,
       },
       {
         icon: <Sparkles />,
         label: "Code file",
-        onClick: _noop,
+        onClick: handleCodeSelectedCodes,
         variant: "ai",
       },
     ],
-    [hasSelectedAnnotationsInFile, handleClearCodings]
+    [hasSelectedAnnotationsInFile, handleClearCodings, handleCodeSelectedCodes]
   )
 
   const handleSearchCode = (code: Code) => {
@@ -537,7 +541,8 @@ export default function ProjectLayout() {
   }
 
   const handleCodeFile = (code: Code) => {
-    dispatchTask(codeWithCodebook(code.id))
+    const refs = resolveCodingFiles(files, [code.id])
+    if (refs.length > 0) dispatchTask(codeWithFiles(refs))
   }
 
   const sidebarPanels = {

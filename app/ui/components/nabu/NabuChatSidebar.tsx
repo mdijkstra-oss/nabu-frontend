@@ -18,8 +18,6 @@ import {
   Check,
   ChevronRight,
   Circle,
-  Eraser,
-  FileCode,
   Loader2,
   MessageCircle,
   MessageSquare,
@@ -34,11 +32,12 @@ import { AnimatePresence } from "framer-motion"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { AnimatedListItem } from "~/ui/components/AnimatedListItem"
 import { useChat } from "~/ui/hooks/useChat"
-import { derive, hasActivePlan } from "~/lib/agent/derived"
+import { derive } from "~/lib/agent/derived"
 import { pushBlocks } from "~/lib/agent/client/store"
 import {
   toGroupedMessages,
   type GroupedMessage,
+  type KeyedMessage,
   type LeafMessage,
   type PlanHeader,
   type PlanItem,
@@ -70,12 +69,10 @@ import { truncateLabel, presentEntry } from "~/lib/mutation-history/presentation
 import { useMutationHistory } from "~/lib/mutation-history/useMutationHistory"
 import type { HistoryEntry } from "~/lib/mutation-history/types"
 import { boldMissingFile } from "~/lib/files/filename"
+import { stripHiddenSuffix, stripEntityQuotes } from "~/lib/markdown/sanitize/strip-hidden"
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
-import { dispatchTask } from "~/lib/agent/dispatch"
 import { autoGreetingDirective } from "~/lib/agent/actions/actions"
-import { codeAllCodebooks, removeCodings } from "~/domain/actions/coding/actions"
 import { buildFileContextBlocks } from "~/lib/agent/context-blocks"
-import { getAnnotationCount } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { pickGreeting } from "./greetings"
 import { exhaustive } from "~/lib/utils/exhaustive"
 
@@ -141,7 +138,7 @@ const MessageContent = memo(
             linkifyQuotes(
               normalizeBacktickQuotes(
                 linkifyEntityIds(
-                  content,
+                  stripEntityQuotes(stripHiddenSuffix(content)),
                   (id) => resolveAndTruncateName(files, id),
                   boldMissingFile
                 )
@@ -713,6 +710,11 @@ interface CollapsedSteps {
 type RenderSegment = LeafMessage | AskMessage | ScoutMessage | PlanSegment
 type FinalSegment = RenderSegment | CollapsedSteps
 
+interface KeyedSegment {
+  key: string
+  segment: FinalSegment
+}
+
 const isPlanRelated = (m: GroupedMessage): m is PlanMessage =>
   m.type === "plan-header" || m.type === "plan-item"
 
@@ -724,42 +726,51 @@ const isScoutSegment = (s: FinalSegment): s is ScoutMessage => s.type === "scout
 
 const isCollapsedSteps = (s: FinalSegment): s is CollapsedSteps => s.type === "collapsed-steps"
 
-const toRenderSegments = (messages: GroupedMessage[]): RenderSegment[] =>
-  messages.reduce<RenderSegment[]>((acc, m) => {
-    if (!isPlanRelated(m)) {
-      acc.push(m)
+const toKeyedSegments = (entries: KeyedMessage[]): KeyedSegment[] => {
+  const result = entries.reduce<KeyedSegment[]>((acc, { key, message }) => {
+    if (!isPlanRelated(message)) {
+      acc.push({ key: String(key), segment: message })
       return acc
     }
     const prev = acc[acc.length - 1]
-    if (prev && isPlanSegment(prev)) {
-      prev.items.push(m)
+    if (prev && isPlanSegment(prev.segment)) {
+      ;(prev.segment as PlanSegment).items.push(message)
       return acc
     }
-    acc.push({ type: "plan-segment", items: [m] })
+    acc.push({ key: `plan-${key}`, segment: { type: "plan-segment", items: [message] } })
     return acc
   }, [])
+  console.debug(
+    "[KEYS]",
+    result.map((s) => s.key)
+  )
+  return result
+}
 
 const countPlanSteps = (items: PlanMessage[]): number =>
   items.filter((item) => item.type === "plan-item" && isPlanStep(item.child)).length
 
-const findLastAskIndex = (segments: RenderSegment[]): number => {
+const findLastAskIndex = (segments: KeyedSegment[]): number => {
   for (let i = segments.length - 1; i >= 0; i--) {
-    if (isAskSegment(segments[i])) return i
+    if (isAskSegment(segments[i].segment)) return i
   }
   return -1
 }
 
-const collapseAfterPendingAsk = (segments: RenderSegment[], waiting: boolean): FinalSegment[] => {
+const collapseAfterPendingAsk = (segments: KeyedSegment[], waiting: boolean): KeyedSegment[] => {
   if (!waiting) return segments
   const lastAskIdx = findLastAskIndex(segments)
   if (lastAskIdx === -1) return segments
   const after = segments.slice(lastAskIdx + 1)
   const count = after.reduce(
-    (sum: number, s) => (isPlanSegment(s) ? sum + countPlanSteps(s.items) : sum),
+    (sum: number, { segment: s }) => (isPlanSegment(s) ? sum + countPlanSteps(s.items) : sum),
     0
   )
   if (count === 0) return segments
-  return [...segments.slice(0, lastAskIdx + 1), { type: "collapsed-steps", count }]
+  return [
+    ...segments.slice(0, lastAskIdx + 1),
+    { key: "collapsed", segment: { type: "collapsed-steps", count } },
+  ]
 }
 
 interface PlanSegmentItemRendererProps {
@@ -982,13 +993,12 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   const lastEntry = useMemo(() => findLastWriteEntry(mutationHistory), [mutationHistory])
   const { files, currentFile } = useFiles()
   const currentFileContent = currentFile ? (files[currentFile] ?? null) : null
-  const hasCodings = currentFileContent ? getAnnotationCount(currentFileContent) > 0 : false
 
   const derived = useMemo(() => derive(history, files), [history, files])
-  const busy = loading || hasActivePlan(derived.plans)
+
   const isStreamingText = draft?.type === "text" && preprocessStreaming(draft.content) !== null
-  const messages = useMemo(() => toGroupedMessages(history, derived), [history, derived])
-  const rawSegments = useMemo(() => toRenderSegments(messages), [messages])
+  const keyedMessages = useMemo(() => toGroupedMessages(history, derived), [history, derived])
+  const rawSegments = useMemo(() => toKeyedSegments(keyedMessages), [keyedMessages])
   const waitingForInput = useMemo(() => isWaitingForAsk(history), [history])
   const segments = useMemo(
     () => collapseAfterPendingAsk(rawSegments, waitingForInput),
@@ -1030,14 +1040,6 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
     setInputValue("")
   }, [loading, waitingForInput, inputValue, send, respond, getDeps])
 
-  const handleCodeFile = useCallback(() => {
-    dispatchTask(codeAllCodebooks, getDeps())
-  }, [getDeps])
-
-  const handleRemoveCodings = useCallback(() => {
-    dispatchTask(removeCodings, getDeps())
-  }, [getDeps])
-
   const markTyping = useCallback(() => {
     setIsTyping(true)
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
@@ -1068,7 +1070,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   return (
     <div className="flex w-full grow flex-col rounded-xl border border-solid border-panel-border bg-white overflow-hidden">
       <AutoScroll className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-2 px-4 py-4 overflow-auto">
-        {messages.length === 0 && !loading && (
+        {keyedMessages.length === 0 && !loading && (
           <div className="flex h-full w-full items-center justify-center">
             <span className="text-body font-body text-subtext-color">
               How can I help you today?
@@ -1076,8 +1078,8 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
           </div>
         )}
         <AnimatePresence initial={false}>
-          {segments.map((segment, i) => (
-            <AnimatedListItem key={i} layout={isTyping ? false : "position"}>
+          {segments.map(({ key, segment }) => (
+            <AnimatedListItem key={key} layout={isTyping ? false : "position"}>
               {isPlanSegment(segment) ? (
                 <PlanSegmentRenderer
                   items={segment.items}
@@ -1158,29 +1160,6 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
           />
         )}
       </div>
-
-      {currentFile && (
-        <div className="flex gap-2 px-4 pb-3">
-          <Button
-            variant="neutral-secondary"
-            size="small"
-            icon={<FileCode />}
-            disabled={busy || hasCodings}
-            onClick={handleCodeFile}
-          >
-            Code File
-          </Button>
-          <Button
-            variant="neutral-secondary"
-            size="small"
-            icon={<Eraser />}
-            disabled={busy || !hasCodings}
-            onClick={handleRemoveCodings}
-          >
-            Remove Codings
-          </Button>
-        </div>
-      )}
     </div>
   )
 }
