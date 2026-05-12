@@ -202,7 +202,7 @@ const isConsumedLeaf = (leaf: Indexed<LeafMessage>, consumed: Set<number>): bool
   leaf.message.role === "user" && consumed.has(leaf.index)
 
 export interface KeyedMessage {
-  key: number
+  key: string
   message: GroupedMessage
 }
 
@@ -228,31 +228,39 @@ export const toGroupedMessages = (history: Block[], derived: Derived): KeyedMess
     }
   }
 
-  interface OrderedEntry {
-    blockIndex: number
+  interface KeyedEntry {
+    sortIndex: number
+    key: string
     item: GroupedMessage
   }
 
-  const outsideEntries: OrderedEntry[] = outsideLeaves.map((l) => ({
-    blockIndex: l.index,
+  const outsideKeyed: KeyedEntry[] = outsideLeaves.map((l, i) => ({
+    sortIndex: l.index,
+    key: `msg-${i}`,
     item: l.message,
   }))
 
-  const askEntries: OrderedEntry[] = askMessages.map((a) => ({
-    blockIndex: a.index,
+  const askKeyed: KeyedEntry[] = askMessages.map((a) => ({
+    sortIndex: a.index,
+    key: `ask-${a.index}`,
     item: a.message,
   }))
 
-  const scoutEntries: OrderedEntry[] = extractScoutMessages(history).map((s) => ({
-    blockIndex: s.index,
+  const scoutKeyed: KeyedEntry[] = extractScoutMessages(history).map((s) => ({
+    sortIndex: s.index,
+    key: `scout-${s.index}`,
     item: s.message,
   }))
 
-  const planEntries: OrderedEntry[] = planRanges.flatMap((range, i) =>
-    buildPlanEntries(range, planLeaves.get(i) ?? [], history)
+  const planKeyed: KeyedEntry[] = planRanges.flatMap((range, planIdx) =>
+    buildPlanEntries(range, planLeaves.get(planIdx) ?? [], history).map((e) => ({
+      sortIndex: e.blockIndex,
+      key: `plan-${planIdx}`,
+      item: e.item,
+    }))
   )
 
-  return [...outsideEntries, ...askEntries, ...scoutEntries, ...planEntries]
-    .sort((a, b) => a.blockIndex - b.blockIndex)
-    .map((e) => ({ key: e.blockIndex, message: e.item }))
+  return [...outsideKeyed, ...askKeyed, ...scoutKeyed, ...planKeyed]
+    .sort((a, b) => a.sortIndex - b.sortIndex)
+    .map((e) => ({ key: e.key, message: e.item }))
 }

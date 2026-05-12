@@ -726,10 +726,10 @@ const isScoutSegment = (s: FinalSegment): s is ScoutMessage => s.type === "scout
 
 const isCollapsedSteps = (s: FinalSegment): s is CollapsedSteps => s.type === "collapsed-steps"
 
-const toKeyedSegments = (entries: KeyedMessage[]): KeyedSegment[] => {
-  const result = entries.reduce<KeyedSegment[]>((acc, { key, message }) => {
+const toKeyedSegments = (entries: KeyedMessage[]): KeyedSegment[] =>
+  entries.reduce<KeyedSegment[]>((acc, { key, message }) => {
     if (!isPlanRelated(message)) {
-      acc.push({ key: String(key), segment: message })
+      acc.push({ key, segment: message })
       return acc
     }
     const prev = acc[acc.length - 1]
@@ -737,15 +737,9 @@ const toKeyedSegments = (entries: KeyedMessage[]): KeyedSegment[] => {
       ;(prev.segment as PlanSegment).items.push(message)
       return acc
     }
-    acc.push({ key: `plan-${key}`, segment: { type: "plan-segment", items: [message] } })
+    acc.push({ key, segment: { type: "plan-segment", items: [message] } })
     return acc
   }, [])
-  console.debug(
-    "[KEYS]",
-    result.map((s) => s.key)
-  )
-  return result
-}
 
 const countPlanSteps = (items: PlanMessage[]): number =>
   items.filter((item) => item.type === "plan-item" && isPlanStep(item.child)).length
