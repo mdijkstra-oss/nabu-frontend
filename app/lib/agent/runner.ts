@@ -41,10 +41,15 @@ const appendToToolArgsDraft = (chunk: string): void => {
 
 const buildCallbacks = () => {
   let textContent = ""
+  let reasoningContent = ""
   return {
     onChunk: (chunk: string) => {
       textContent += chunk
       setDraft({ type: "text", content: textContent })
+    },
+    onReasoningChunk: (chunk: string) => {
+      reasoningContent += chunk
+      setDraft({ type: "reasoning", content: reasoningContent })
     },
     onToolName: (name: string) => {
       textContent = ""
@@ -56,6 +61,7 @@ const buildCallbacks = () => {
     onToolArgsChunk: (chunk: string) => appendToToolArgsDraft(chunk),
     onStreamEnd: () => {
       textContent = ""
+      reasoningContent = ""
     },
   }
 }
