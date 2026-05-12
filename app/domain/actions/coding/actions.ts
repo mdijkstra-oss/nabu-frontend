@@ -1,11 +1,12 @@
 import type { TaskConfig } from "~/lib/agent/dispatch"
 import type { CodingFileRef } from "./selectors"
 
-// Todo run from chat too - somehow
-// also llm retarted
+const concatPretty = (items: string[]) =>
+  items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} & ${items.at(-1)}`
 
 export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig => {
-  const fileList = refs.map((r) => r.file).join(", ")
+  const fileList = concatPretty(refs.map((r) => r.file))
+
   const hasHidden = refs.some((r) => r.hidden)
   const hiddenNote = hasHidden
     ? " Note: .generated.hidden.md files will not appear in ls output, but do exist - DO NOT read supplied files plan deep will read for you."
