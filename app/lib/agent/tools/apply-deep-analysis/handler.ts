@@ -1,5 +1,5 @@
 import type { HandlerResult, Operation } from "../../types"
-import type { PostAction, SourceFile } from "./def"
+import type { PostAction, Section, SourceFile } from "./def"
 import { ApplyDeepAnalysisArgs, applyDeepAnalysisTool } from "./def"
 import { registerTool, tool } from "../../executors/tool"
 import { getFileView, getViewableFiles } from "../file-view"
@@ -23,8 +23,21 @@ import {
   type VoteRecord,
 } from "./format"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
-import { type ContentResolver, partitionSources, buildCallList } from "./messages"
-import { runDimensionPipeline, mergeDimensionResults, runReasonStep, runFilter } from "./pipeline"
+import {
+  type ContentResolver,
+  type ScopedSources,
+  partitionSources,
+  buildCallList,
+} from "./messages"
+import {
+  runDimensionPipeline,
+  mergeDimensionResults,
+  runReasonStep,
+  runFilter,
+  type DimensionResult,
+} from "./pipeline"
+import { processPool } from "~/lib/utils/pool"
+import { noop } from "~/lib/utils/noop"
 
 interface PostActionCtx {
   mapped: MappedResult[]
@@ -34,15 +47,30 @@ interface PostActionCtx {
   endLine: number
 }
 
-const validateFiles = (path: string, sourceFiles: SourceFile[]): HandlerResult<string> | null => {
-  if (getFile(path) === undefined)
-    return { status: "error", output: `File not found: ${path}`, mutations: [] }
+interface SectionResult {
+  section: Section
+  result: HandlerResult<string>
+}
 
-  const missingPaths = sourceFiles.filter((f) => getFile(f.path) === undefined).map((f) => f.path)
-  if (missingPaths.length > 0)
+const validateFiles = (
+  sections: Section[],
+  sourceFiles: SourceFile[]
+): HandlerResult<string> | null => {
+  const missingTargets = [...new Set(sections.map((s) => s.path))].filter(
+    (p) => getFile(p) === undefined
+  )
+  if (missingTargets.length > 0)
     return {
       status: "error",
-      output: `Source files not found: ${missingPaths.join(", ")}`,
+      output: `Files not found: ${missingTargets.join(", ")}`,
+      mutations: [],
+    }
+
+  const missingSources = sourceFiles.filter((f) => getFile(f.path) === undefined).map((f) => f.path)
+  if (missingSources.length > 0)
+    return {
+      status: "error",
+      output: `Source files not found: ${missingSources.join(", ")}`,
       mutations: [],
     }
 
@@ -162,100 +190,148 @@ const postActions: Record<PostAction, (ctx: PostActionCtx) => Promise<HandlerRes
   annotate_as_comment: handleAnnotation("annotate_as_comment"),
 }
 
+const processSection = async (
+  section: Section,
+  scoped: ReturnType<typeof partitionSources>,
+  calls: ScopedSources[],
+  resolve: ContentResolver,
+  postAction: PostAction
+): Promise<HandlerResult<string>> => {
+  const { path, start_line, end_line } = section
+
+  const content = getFileView(path)
+  if (content === undefined)
+    return { status: "error", output: `Cannot read file: ${path}`, mutations: [] }
+
+  logSectionBounds(path, start_line, end_line, content.split("\n"))
+
+  const { rawSection, leadingCtx, trailingCtx, sentences } = prepareSectionWithContext(
+    content,
+    start_line,
+    end_line
+  )
+
+  if (sentences.length === 0)
+    return {
+      status: "ok",
+      output: `${path} [${start_line}-${end_line}]: no sentences.`,
+      mutations: [],
+    }
+
+  const { results: dimensionResults } = await processPool<ScopedSources, DimensionResult>(
+    calls,
+    async (sources) => [
+      await runDimensionPipeline(sources, rawSection, leadingCtx, trailingCtx, resolve),
+    ],
+    noop,
+    { concurrency: 5 }
+  )
+
+  const { allSpans, allFindVotes, errors: findErrors } = mergeDimensionResults(dimensionResults)
+
+  if (allSpans.length === 0 && calls.length > 0 && findErrors.length > 0)
+    return { status: "error", output: findErrors.join("; "), mutations: [] }
+
+  const { surviving, dropped, filterVotes, filterJustifications } = await runFilter(
+    allSpans,
+    sentences,
+    scoped,
+    leadingCtx,
+    trailingCtx,
+    resolve
+  )
+
+  for (const d of dropped) {
+    const text = sentences.slice(d.start - 1, d.end).join(" ")
+    console.debug(`[deep-filter] dropped [${d.start}-${d.end}] ${d.analysis_source_id}: ${text}`)
+  }
+
+  const reasonResult = await runReasonStep(
+    surviving,
+    sentences,
+    scoped,
+    leadingCtx,
+    trailingCtx,
+    resolve
+  )
+
+  const countVotes = (votes: boolean[]) => {
+    const found = votes.filter(Boolean).length
+    return { found, missed: votes.length - found }
+  }
+  const countFilter = (votes: boolean[]) => {
+    const keep = votes.filter(Boolean).length
+    return { keep, remove: votes.length - keep }
+  }
+
+  const voteRecords = new Map<string, VoteRecord>()
+  for (const s of surviving) {
+    const key = spanKey(s.start, s.end, s.analysis_source_id)
+    const findVotes = allFindVotes.get(key) ?? []
+    const fVotes = filterVotes.get(key) ?? []
+    voteRecords.set(key, {
+      find: countVotes(findVotes),
+      filter: countFilter(fVotes),
+      removalJustification: filterJustifications.get(key) ?? null,
+    })
+  }
+
+  const analysisResults = toAnalysisResults(surviving, reasonResult.values, voteRecords)
+  const mapped = mapResults(sentences, analysisResults)
+
+  return postActions[postAction]({
+    mapped,
+    path,
+    content,
+    startLine: start_line,
+    endLine: end_line,
+  })
+}
+
+const mergeSectionResults = (sectionResults: SectionResult[]): HandlerResult<string> => {
+  const outputs: string[] = []
+  const allMutations: Operation[] = []
+  let hasError = false
+
+  for (const { section, result } of sectionResults) {
+    const label = `## ${section.path} [${section.start_line}-${section.end_line}]`
+    outputs.push(`${label}\n${result.output}`)
+    allMutations.push(...result.mutations)
+    if (result.status === "error") hasError = true
+  }
+
+  return {
+    status: hasError ? "error" : "ok",
+    output: outputs.join("\n\n"),
+    mutations: allMutations,
+  }
+}
+
 registerTool(
   tool({
     ...applyDeepAnalysisTool,
     schema: ApplyDeepAnalysisArgs,
-    handler: async (_files, { path, start_line, end_line, source_files, post_action }) => {
-      const validationError = validateFiles(path, source_files)
+    handler: async (_files, { sections, source_files, post_action }) => {
+      const validationError = validateFiles(sections, source_files)
       if (validationError) return validationError
-
-      const content = getFileView(path)
-      if (content === undefined)
-        return { status: "error", output: `Cannot read file: ${path}`, mutations: [] }
-
-      logSectionBounds(path, start_line, end_line, content.split("\n"))
-
-      const { rawSection, leadingCtx, trailingCtx, sentences } = prepareSectionWithContext(
-        content,
-        start_line,
-        end_line
-      )
-
-      if (sentences.length === 0)
-        return { status: "ok", output: "Section contains no sentences.", mutations: [] }
 
       const scoped = partitionSources(source_files)
       const calls = buildCallList(scoped)
       const resolve: ContentResolver = getFileView
 
-      const dimensionResults = await Promise.all(
-        calls.map((sources) =>
-          runDimensionPipeline(sources, rawSection, leadingCtx, trailingCtx, resolve)
-        )
+      const { results: sectionResults } = await processPool<Section, SectionResult>(
+        sections,
+        async (section) => {
+          const result = await processSection(section, scoped, calls, resolve, post_action)
+          return [{ section, result }]
+        },
+        noop,
+        { concurrency: 5 }
       )
 
-      const { allSpans, allFindVotes, errors: findErrors } = mergeDimensionResults(dimensionResults)
+      if (sectionResults.length === 1) return sectionResults[0].result
 
-      if (allSpans.length === 0 && calls.length > 0 && findErrors.length > 0)
-        return { status: "error", output: findErrors.join("; "), mutations: [] }
-
-      const { surviving, dropped, filterVotes, filterJustifications } = await runFilter(
-        allSpans,
-        sentences,
-        scoped,
-        leadingCtx,
-        trailingCtx,
-        resolve
-      )
-
-      for (const d of dropped) {
-        const text = sentences.slice(d.start - 1, d.end).join(" ")
-        console.debug(
-          `[deep-filter] dropped [${d.start}-${d.end}] ${d.analysis_source_id}: ${text}`
-        )
-      }
-
-      const reasonResult = await runReasonStep(
-        surviving,
-        sentences,
-        scoped,
-        leadingCtx,
-        trailingCtx,
-        resolve
-      )
-
-      const countVotes = (votes: boolean[]) => {
-        const found = votes.filter(Boolean).length
-        return { found, missed: votes.length - found }
-      }
-      const countFilter = (votes: boolean[]) => {
-        const keep = votes.filter(Boolean).length
-        return { keep, remove: votes.length - keep }
-      }
-
-      const voteRecords = new Map<string, VoteRecord>()
-      for (const s of surviving) {
-        const key = spanKey(s.start, s.end, s.analysis_source_id)
-        const findVotes = allFindVotes.get(key) ?? []
-        const fVotes = filterVotes.get(key) ?? []
-        voteRecords.set(key, {
-          find: countVotes(findVotes),
-          filter: countFilter(fVotes),
-          removalJustification: filterJustifications.get(key) ?? null,
-        })
-      }
-
-      const analysisResults = toAnalysisResults(surviving, reasonResult.values, voteRecords)
-      const mapped = mapResults(sentences, analysisResults)
-
-      return postActions[post_action]({
-        mapped,
-        path,
-        content,
-        startLine: start_line,
-        endLine: end_line,
-      })
+      return mergeSectionResults(sectionResults)
     },
   })
 )

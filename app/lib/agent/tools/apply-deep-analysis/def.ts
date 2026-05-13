@@ -12,14 +12,23 @@ export const SourceFile = z.object({
 
 export type SourceFile = z.infer<typeof SourceFile>
 
-export const ApplyDeepAnalysisArgs = z.object({
-  path: z.string().describe("File to analyze"),
+export const Section = z.object({
+  path: z.string().describe("File path"),
   start_line: z
     .number()
     .int()
     .min(1)
     .describe("First line of the section (1-based, from scout map)"),
   end_line: z.number().int().min(1).describe("Last line of the section (1-based, from scout map)"),
+})
+
+export type Section = z.infer<typeof Section>
+
+export const ApplyDeepAnalysisArgs = z.object({
+  sections: z
+    .array(Section)
+    .min(1)
+    .describe("Sections to analyze. Each section is a range within a file."),
   source_files: z
     .array(SourceFile)
     .min(1)
@@ -45,6 +54,6 @@ export const SPAN_STEP_CONTEXT_SENTENCES = 6
 export const applyDeepAnalysisTool: AnyTool = {
   name: "apply_deep_analysis",
   description:
-    "Run deep analysis on one file section against source criteria. Returns structured results or writes annotations depending on post_action.\n\nparallel: no — internally fans out to many calls",
+    "Run deep analysis on file sections against source criteria. Accepts multiple sections — all run in parallel internally. Returns structured results or writes annotations depending on post_action.\n\nparallel: no — batches internally, one call handles all sections",
   schema: ApplyDeepAnalysisArgs,
 }
