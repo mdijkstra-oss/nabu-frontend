@@ -290,7 +290,7 @@ const processSection = async (
     voteRecords.set(key, {
       find: countVotes(findVotes),
       filter: countFilter(fVotes),
-      removalJustification: filterJustifications.get(key) ?? null,
+      removalJustifications: filterJustifications.get(key) ?? [],
     })
   }
 

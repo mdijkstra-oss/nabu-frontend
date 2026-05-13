@@ -32,6 +32,7 @@ import {
   FILTER_ENDPOINT,
   FIND_RUNS,
   FIND_THRESHOLD,
+  FIND_MAX_GAP,
   FILTER_RUNS,
   FILTER_THRESHOLD,
   SPAN_STEP_CONTEXT_SENTENCES,
@@ -93,8 +94,9 @@ const runFindRuns = async (
   const findSlots = Array.from({ length: FIND_RUNS }, (_, i) => i)
   const { results } = await processPool<number, FindResult[]>(
     findSlots,
-    async () => {
-      const result = await callAndParse(FIND_ENDPOINT, messages, schema)
+    async (slot) => {
+      const endpoint = `${FIND_ENDPOINT}?model=${slot % 2}`
+      const result = await callAndParse(endpoint, messages, schema)
       if (!result.ok) {
         errors.push(result.error)
         return []
@@ -208,7 +210,7 @@ export interface FilterResult {
   surviving: FindResult[]
   dropped: FindResult[]
   filterVotes: Map<string, boolean[]>
-  filterJustifications: Map<string, string>
+  filterJustifications: Map<string, string[]>
 }
 
 interface FilterHit {
@@ -236,7 +238,7 @@ export const runFilter = async (
   resolve: ContentResolver
 ): Promise<FilterResult> => {
   const emptyVotes = new Map<string, boolean[]>()
-  const emptyJustifications = new Map<string, string>()
+  const emptyJustifications = new Map<string, string[]>()
   const grouped = groupBySpan(allSpans)
   if (grouped.length === 0)
     return {
@@ -310,12 +312,15 @@ export const runFilter = async (
     filterVotes.set(key, perVoter)
   }
 
-  const filterJustifications = new Map<string, string>()
+  const filterJustifications = new Map<string, string[]>()
   for (const key of allSpanKeys) {
     if (rejected.has(key)) continue
     const dissent = rawRuns.flatMap((hits) => hits.filter((h) => h.key === key))
     if (dissent.length > 0) {
-      filterJustifications.set(key, dissent[0].justification)
+      filterJustifications.set(
+        key,
+        dissent.map((d) => d.justification)
+      )
     }
   }
 
@@ -359,7 +364,7 @@ export const runDimensionPipeline = async (
   }
 
   const tally = tallyVotes(findRuns, sentences.length)
-  const spans = filterByTally(tally, FIND_THRESHOLD)
+  const spans = filterByTally(tally, FIND_THRESHOLD, FIND_MAX_GAP)
 
   const titles = buildSourceTitleMap(sources, resolve)
   const perCode = [...tally.entries()].map(([code, votesMap]) => {

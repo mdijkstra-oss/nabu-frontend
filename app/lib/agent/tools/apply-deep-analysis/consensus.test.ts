@@ -124,6 +124,54 @@ describe("groupConsecutive", () => {
   cases.forEach(({ name, sentences, code, expected }) => {
     it(name, () => expect(groupConsecutive(sentences, code)).toEqual(expected))
   })
+
+  const gapCases: {
+    name: string
+    sentences: number[]
+    code: string
+    maxGap: number
+    expected: FindResult[]
+  }[] = [
+    {
+      name: "maxGap=1 bridges single-sentence gap",
+      sentences: [1, 2, 4, 5],
+      code: "A",
+      maxGap: 1,
+      expected: [r(1, 5, "A")],
+    },
+    {
+      name: "maxGap=1 does not bridge two-sentence gap",
+      sentences: [1, 2, 5, 6],
+      code: "B",
+      maxGap: 1,
+      expected: [r(1, 2, "B"), r(5, 6, "B")],
+    },
+    {
+      name: "maxGap=1 bridges multiple single gaps",
+      sentences: [1, 3, 5],
+      code: "C",
+      maxGap: 1,
+      expected: [r(1, 5, "C")],
+    },
+    {
+      name: "maxGap=0 preserves original strict behavior",
+      sentences: [1, 3, 5],
+      code: "D",
+      maxGap: 0,
+      expected: [r(1, 1, "D"), r(3, 3, "D"), r(5, 5, "D")],
+    },
+    {
+      name: "maxGap=2 bridges two-sentence gap",
+      sentences: [1, 4],
+      code: "E",
+      maxGap: 2,
+      expected: [r(1, 4, "E")],
+    },
+  ]
+
+  gapCases.forEach(({ name, sentences, code, maxGap, expected }) => {
+    it(name, () => expect(groupConsecutive(sentences, code, maxGap)).toEqual(expected))
+  })
 })
 
 describe("consensus", () => {

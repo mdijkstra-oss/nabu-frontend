@@ -31,7 +31,7 @@ export const tallyVotes = (
   return tally
 }
 
-export const groupConsecutive = (sentences: number[], code: string): FindResult[] => {
+export const groupConsecutive = (sentences: number[], code: string, maxGap = 0): FindResult[] => {
   if (sentences.length === 0) return []
   const sorted = [...sentences].sort((a, b) => a - b)
   const spans: FindResult[] = []
@@ -39,7 +39,7 @@ export const groupConsecutive = (sentences: number[], code: string): FindResult[
   let end = sorted[0]
 
   for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i] === end + 1) {
+    if (sorted[i] <= end + 1 + maxGap) {
       end = sorted[i]
     } else {
       spans.push({ start, end, analysis_source_id: code })
@@ -55,14 +55,15 @@ const countTrue = (votes: boolean[]): number => votes.filter(Boolean).length
 
 export const filterByTally = (
   tally: Map<string, Map<number, boolean[]>>,
-  threshold: number
+  threshold: number,
+  maxGap = 0
 ): FindResult[] => {
   const spans: FindResult[] = []
   for (const [code, votesMap] of tally) {
     const matched = [...votesMap.entries()]
       .filter(([, v]) => countTrue(v) >= threshold)
       .map(([s]) => s)
-    spans.push(...groupConsecutive(matched, code))
+    spans.push(...groupConsecutive(matched, code, maxGap))
   }
   return spans
 }
@@ -117,8 +118,9 @@ export const buildFindVoteMap = (
 export const consensus = (
   runs: FindResult[][],
   sentenceCount: number,
-  threshold: number
-): FindResult[] => filterByTally(tallyVotes(runs, sentenceCount), threshold)
+  threshold: number,
+  maxGap = 0
+): FindResult[] => filterByTally(tallyVotes(runs, sentenceCount), threshold, maxGap)
 
 export const countKeys = (runs: string[][]): Map<string, number> => {
   const counts = new Map<string, number>()

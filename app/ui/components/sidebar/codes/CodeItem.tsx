@@ -7,6 +7,7 @@ import type { Code } from "./types"
 interface CodeItemProps {
   code: Code
   count?: number
+  removalCount?: number
   highlighted?: boolean
   onMouseEnter?: () => void
   onClick?: () => void
@@ -15,9 +16,13 @@ interface CodeItemProps {
 const formatFileTooltip = (count: number): string =>
   `${count} annotation${count === 1 ? "" : "s"} in this file`
 
+const formatRemovalTooltip = (count: number): string =>
+  `${count} unsure annotation${count === 1 ? "" : "s"} across all files`
+
 export const CodeItem = ({
   code,
   count = 0,
+  removalCount,
   highlighted = false,
   onMouseEnter,
   onClick,
@@ -36,6 +41,13 @@ export const CodeItem = ({
       style={{ backgroundColor: solidBackground(code.color) }}
     />
     <span className="grow truncate text-body font-body text-default-font">{code.name}</span>
+    {removalCount != null && removalCount > 0 && (
+      <TooltipWrap text={formatRemovalTooltip(removalCount)}>
+        <span className="flex h-5 min-w-5 flex-none items-center justify-center rounded px-1.5 text-[11px] font-bold leading-none text-amber-900 bg-amber-200/70">
+          {removalCount}
+        </span>
+      </TooltipWrap>
+    )}
     {count > 0 && (
       <TooltipWrap text={formatFileTooltip(count)}>
         <span

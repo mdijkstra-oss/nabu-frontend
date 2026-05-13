@@ -69,3 +69,16 @@ export const getAnnotationGlobalCountsByCode = (
   }
   return result
 }
+
+const hasRemovalVotes = (a: StoredAnnotation): boolean => (a.vote?.filter.remove ?? 0) > 0
+
+export const getRemovalCountsByCode = (files: FileStore): Record<string, number> => {
+  const result: Record<string, number> = {}
+  for (const raw of Object.values(files)) {
+    for (const a of getStoredAnnotations(raw)) {
+      if (!a.code || !hasRemovalVotes(a)) continue
+      result[a.code] = (result[a.code] ?? 0) + 1
+    }
+  }
+  return result
+}

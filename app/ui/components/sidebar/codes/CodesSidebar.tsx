@@ -19,6 +19,7 @@ interface CodesSidebarProps {
   codebook: Codebook
   annotationCounts?: Record<string, number>
   globalAnnotationCounts?: Record<string, GlobalAnnotationCount>
+  removalCounts?: Record<string, number>
   busy?: boolean
   onEditCode?: (code: Code) => void
   onCodeFile?: (code: Code) => void
@@ -80,6 +81,7 @@ export const CodesSidebar = ({
   codebook,
   annotationCounts = {},
   globalAnnotationCounts = {},
+  removalCounts,
   onEditCode,
   onFileSelect,
   onSearchCode,
@@ -134,6 +136,7 @@ export const CodesSidebar = ({
                 <CodeItem
                   code={code}
                   count={annotationCounts[code.id]}
+                  removalCount={removalCounts?.[code.id]}
                   highlighted={code.id === hoveredCode?.id}
                   onMouseEnter={() => setHoveredCode(code)}
                   onClick={() => onEditCode?.(code)}

@@ -18,10 +18,7 @@ const prettyJson = (json: string): string => {
 
 const PREVIEW_LENGTH = 80
 
-const endpointLabel = (endpoint: string): string => {
-  const parts = endpoint.split("?")
-  return parts[0]
-}
+const endpointLabel = (endpoint: string): string => endpoint
 
 const toggleId = (set: Set<number>, id: number): Set<number> => {
   const next = new Set(set)
@@ -31,7 +28,7 @@ const toggleId = (set: Set<number>, id: number): Set<number> => {
 }
 
 const formatCallEntry = (call: RawLlmCall): string =>
-  `[${endpointLabel(call.endpoint)}] ${formatDuration(call.duration)}\n\n--- Input ---\n${call.requestBody}\n\n--- Output ---\n${call.rawResponse}`
+  `[${endpointLabel(call.endpoint)}] ${formatDuration(call.duration)}\n\n${call.rawResponse}`
 
 const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false)

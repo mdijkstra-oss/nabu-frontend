@@ -29,6 +29,7 @@ export const buildFindResultSchema = (validIds: string[]) =>
         end: z.number().int().min(1),
         analysis_source_id:
           validIds.length > 0 ? z.enum(validIds as [string, ...string[]]) : z.string(),
+        reasonToKeep: z.string(),
       })
     ),
   })
