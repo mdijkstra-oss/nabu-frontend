@@ -1,8 +1,6 @@
 import type { TaskConfig } from "~/lib/agent/dispatch"
 import type { CodingFileRef } from "./selectors"
-
-const concatPretty = (items: string[]) =>
-  items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} & ${items.at(-1)}`
+import { concatPretty } from "~/lib/utils/format"
 
 export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig => {
   const fileList = concatPretty(refs.map((r) => r.file))
