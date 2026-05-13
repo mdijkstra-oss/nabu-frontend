@@ -112,39 +112,44 @@ describe("buildAutoSteps", () => {
   ]
   const sourceArg =
     '[{path: "source1.md", scope: "framework"}, {path: "source2.md", scope: "dimension"}]'
+  const sectionsArg =
+    '[{path: "a.md", start_line: 1, end_line: 10}, {path: "b.md", start_line: 5, end_line: 15}]'
 
   const cases = [
     {
-      name: "one step per section plus synthesis",
+      name: "two steps: batch analysis + synthesis",
       postAction: "annotate_as_code",
-      expectedLength: 3,
-      expectedTitles: ["Intro", "Methods", "Relate to Research Questions"],
+      check: (steps: ReturnType<typeof buildAutoSteps>) => {
+        expect(steps).toHaveLength(2)
+        expect(steps.map((s) => s.title)).toEqual(["Intro & Methods", "Synthesis"])
+      },
     },
     {
-      name: "expected contains apply_deep_analysis call",
+      name: "batch step contains single apply_deep_analysis with all sections",
       postAction: "annotate_as_code",
-      expectedExpected: [
-        `apply_deep_analysis(path="a.md", start_line=1, end_line=10, source_files=${sourceArg}, post_action="annotate_as_code")`,
-        `apply_deep_analysis(path="b.md", start_line=5, end_line=15, source_files=${sourceArg}, post_action="annotate_as_code")`,
-      ],
+      check: (steps: ReturnType<typeof buildAutoSteps>) => {
+        expect(steps[0].expected).toContain(
+          `apply_deep_analysis(sections=${sectionsArg}, source_files=${sourceArg}, post_action="annotate_as_code")`
+        )
+      },
     },
     {
-      name: "return post_action propagates",
+      name: "post_action propagates",
       postAction: "return",
-      expectedExpected: [
-        `apply_deep_analysis(path="a.md", start_line=1, end_line=10, source_files=${sourceArg}, post_action="return")`,
-      ],
+      check: (steps: ReturnType<typeof buildAutoSteps>) => {
+        expect(steps[0].expected).toContain(`post_action="return"`)
+      },
+    },
+    {
+      name: "all steps have checkpoint false",
+      postAction: "annotate_as_code",
+      check: (steps: ReturnType<typeof buildAutoSteps>) => {
+        steps.forEach((s) => expect(s.checkpoint).toBe(false))
+      },
     },
   ]
 
-  cases.forEach(({ name, postAction, expectedLength, expectedTitles, expectedExpected }) => {
-    it(name, () => {
-      const steps = buildAutoSteps(matches, sources, postAction)
-      if (expectedLength !== undefined) expect(steps).toHaveLength(expectedLength)
-      if (expectedTitles !== undefined) expect(steps.map((s) => s.title)).toEqual(expectedTitles)
-      if (expectedExpected !== undefined)
-        expectedExpected.forEach((exp, i) => expect(steps[i].expected).toBe(exp))
-      steps.forEach((s) => expect(s.checkpoint).toBe(false))
-    })
+  cases.forEach(({ name, postAction, check }) => {
+    it(name, () => check(buildAutoSteps(matches, sources, postAction)))
   })
 })

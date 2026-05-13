@@ -1,5 +1,4 @@
 import type { Block } from "../../client/blocks"
-import type { HandlerResult } from "../../types"
 import type { FileEntry } from "../file-entry"
 import type { ScoutEntry } from "../scout/api"
 import { planDeepAnalysisTool, PlanDeepAnalysisArgs } from "./def"
@@ -14,22 +13,29 @@ import { PREFERENCES_FILE } from "~/lib/files/filename"
 import { getFiles } from "~/lib/files/store"
 import { formatTarget, collectSections, buildAutoSteps, buildExecRules } from "./format"
 import type { SourceEntry } from "./format"
+
+interface ScoutJob {
+  file: FileEntry
+  role: "source" | "target"
+  forceScout: boolean
+}
+
+interface ScoutSuccess {
+  path: string
+  role: "source" | "target"
+  entry: ScoutEntry
+}
+
 const toSystemBlock = (content: string): Block => ({ type: "system", content })
 
 const READ_MARKER = "## READ MEMORY"
 const RECENCY_THRESHOLD = 15
 
-type ScoutResult = { ok: true; path: string; entry: ScoutEntry } | { ok: false; path: string }
-
-const tryScout = async (file: FileEntry, forceScout: boolean): Promise<ScoutResult> => {
-  try {
-    const content = getFileView(file.path)
-    if (content === undefined) return { ok: false, path: file.path }
-    const entry = await scoutFile(file.path, content, { forceScout })
-    return { ok: true, path: file.path, entry }
-  } catch {
-    return { ok: false, path: file.path }
-  }
+const tryScout = async (job: ScoutJob): Promise<ScoutSuccess> => {
+  const content = getFileView(job.file.path)
+  if (content === undefined) throw new Error(`Cannot read: ${job.file.path}`)
+  const entry = await scoutFile(job.file.path, content, { forceScout: job.forceScout })
+  return { path: job.file.path, role: job.role, entry }
 }
 
 const findMissingFiles = (files: FileEntry[]): string[] =>
@@ -56,50 +62,28 @@ registerTool(
       if (missing.length > 0)
         return { status: "error", output: `Files not found: ${missing.join(", ")}`, mutations: [] }
 
-      const sourceFailed: string[] = []
+      const jobs: ScoutJob[] = [
+        ...source_files.map((file): ScoutJob => ({ file, role: "source", forceScout: false })),
+        ...target_files.map((file): ScoutJob => ({ file, role: "target", forceScout: true })),
+      ]
 
-      const { failures: sourceFailures } = await processPool(
-        source_files,
-        async (f) => {
-          const result = await tryScout(f, false)
-          if (!result.ok) {
-            sourceFailed.push(result.path)
-            return []
+      const { results, failures } = await processPool<ScoutJob, ScoutSuccess>(
+        jobs,
+        async (job) => [await tryScout(job)],
+        (completed) => {
+          for (const r of completed) {
+            if (r.role === "source") pushBlocks([toSystemBlock(formatScoutEntry(r.entry))])
           }
-          return [toSystemBlock(formatScoutEntry(result.entry))]
         },
-        (blocks) => pushBlocks(blocks),
-        { concurrency: 3 }
+        { concurrency: 10 }
       )
 
-      for (const f of sourceFailures) sourceFailed.push(f.item.path)
+      if (failures.length > 0) {
+        const failedPaths = failures.map((f) => f.item.file.path)
+        return { status: "error", output: `Scout failed: ${failedPaths.join(", ")}`, mutations: [] }
+      }
 
-      if (sourceFailed.length === source_files.length)
-        return {
-          status: "error",
-          output: `All source files failed: ${sourceFailed.join(", ")}`,
-          mutations: [],
-        }
-
-      const targetEntries: { path: string; entry: ScoutEntry }[] = []
-      const targetFailed: string[] = []
-
-      const { failures: targetFailures } = await processPool(
-        target_files,
-        async (f) => {
-          const result = await tryScout(f, true)
-          if (!result.ok) {
-            targetFailed.push(result.path)
-            return []
-          }
-          targetEntries.push({ path: result.path, entry: result.entry })
-          return []
-        },
-        () => undefined,
-        { concurrency: 3 }
-      )
-
-      for (const f of targetFailures) targetFailed.push(f.item.path)
+      const targetEntries = results.filter((r) => r.role === "target")
 
       for (const { path, entry } of targetEntries) {
         pushBlocks([toSystemBlock(formatTarget(path, entry))])
@@ -128,20 +112,7 @@ registerTool(
         directive = buildExecRules(steps[0].expected)
       }
 
-      const total = target_files.length + source_files.length
-      const failed = [...sourceFailed, ...targetFailed]
-
-      if (failed.length === 0) return { status: "ok", output: "ok", directive, mutations: [] }
-      if (failed.length === total)
-        return { status: "error", output: `All files failed: ${failed.join(", ")}`, mutations: [] }
-
-      return {
-        status: "partial",
-        output: "ok",
-        directive,
-        message: `${total - failed.length}/${total} files processed. Failed: ${failed.join(", ")}`,
-        mutations: [],
-      } as HandlerResult<string>
+      return { status: "ok", output: "ok", directive, mutations: [] }
     },
   })
 )
