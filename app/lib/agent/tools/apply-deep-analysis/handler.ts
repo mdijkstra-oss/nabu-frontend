@@ -1,10 +1,9 @@
 import type { HandlerResult, Operation } from "../../types"
 import type { PostAction, Section, SourceFile } from "./def"
 import { ApplyDeepAnalysisArgs, applyDeepAnalysisTool } from "./def"
-import { registerTool, tool } from "../../executors/tool"
+import { registerTool, tool, getToolHandlers } from "../../executors/tool"
 import { getFileView, getViewableFiles } from "../file-view"
-import { getFile } from "~/lib/files/store"
-import { getToolHandlers } from "../../executors/tool"
+import { getFile, getFileRaw } from "~/lib/files/store"
 import { CONTEXT_OVERLAP_CHARS } from "~/lib/data-blocks/chunk-lines"
 import {
   extractSection,
@@ -38,11 +37,15 @@ import {
 } from "./pipeline"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
+import { createKeyedQueue } from "~/lib/utils/keyed-queue"
+import { writeFileTracked } from "~/lib/files/write-tracked"
+import { finalizeContent } from "~/lib/patch/apply"
+
+type Enqueue = <T>(key: string, fn: () => Promise<T>) => Promise<T>
 
 interface PostActionCtx {
   mapped: MappedResult[]
   path: string
-  content: string
   startLine: number
   endLine: number
 }
@@ -120,10 +123,10 @@ const prepareSectionWithContext = (
   return { rawSection, leadingCtx, trailingCtx, sentences }
 }
 
-const skipValidation = (mutations: Operation[]): Operation[] =>
-  mutations.map((m) => (m.type === "write_file" ? { ...m, skipBlockValidation: true } : m))
-
-const applyAnnotations = async (path: string, ops: unknown[]): Promise<HandlerResult<string>> => {
+const applyAnnotationsEager = async (
+  path: string,
+  ops: unknown[]
+): Promise<HandlerResult<string>> => {
   const handler = getToolHandlers()["patch_annotations"]
   if (!handler)
     return { status: "error", output: "patch_annotations handler not registered", mutations: [] }
@@ -134,11 +137,21 @@ const applyAnnotations = async (path: string, ops: unknown[]): Promise<HandlerRe
   if (result.status === "error")
     return { status: "error", output: String(result.output), mutations: [] }
 
-  return {
-    status: result.status,
-    output: String(result.output),
-    mutations: skipValidation(result.mutations),
+  for (const mutation of result.mutations) {
+    if (mutation.type !== "write_file") continue
+    const oldContent = getFileRaw(mutation.path)
+    const finalized = finalizeContent(mutation.path, mutation.content, {
+      original: oldContent,
+      actor: "ai",
+      skipImmutableCheck: true,
+      skipCodeValidation: true,
+    })
+    if (finalized.status === "error")
+      return { status: "error", output: finalized.error, mutations: [] }
+    writeFileTracked(mutation.path, finalized.content)
   }
+
+  return { status: result.status, output: String(result.output), mutations: [] }
 }
 
 const handleReturn = async ({
@@ -152,14 +165,8 @@ const handleReturn = async ({
 })
 
 const handleAnnotation =
-  (action: "annotate_as_code" | "annotate_as_comment") =>
-  async ({
-    mapped,
-    path,
-    content,
-    startLine,
-    endLine,
-  }: PostActionCtx): Promise<HandlerResult<string>> => {
+  (action: "annotate_as_code" | "annotate_as_comment", enqueue: Enqueue) =>
+  async ({ mapped, path, startLine, endLine }: PostActionCtx): Promise<HandlerResult<string>> => {
     if (mapped.length === 0)
       return {
         status: "ok",
@@ -167,35 +174,46 @@ const handleAnnotation =
         mutations: [],
       }
 
-    const addOps = toAnnotationOps(mapped, action)
-    const newCodes = new Set(mapped.map((r) => r.analysis_source_id))
-    const removeOps =
-      action === "annotate_as_code"
-        ? buildRemovalOps(getStoredAnnotations(content), content, newCodes, startLine, endLine)
-        : []
-    const ops = [...removeOps, ...addOps]
-    const annotationResult = await applyAnnotations(path, ops)
-    if (annotationResult.status === "error") return annotationResult
+    return enqueue(path, async () => {
+      const freshContent = getFileView(path) ?? ""
+      const addOps = toAnnotationOps(mapped, action)
+      const newCodes = new Set(mapped.map((r) => r.analysis_source_id))
+      const removeOps =
+        action === "annotate_as_code"
+          ? buildRemovalOps(
+              getStoredAnnotations(freshContent),
+              freshContent,
+              newCodes,
+              startLine,
+              endLine
+            )
+          : []
+      const ops = [...removeOps, ...addOps]
+      const annotationResult = await applyAnnotationsEager(path, ops)
+      if (annotationResult.status === "error") return annotationResult
 
-    return {
-      status: "ok",
-      output: formatAnnotateOutput(mapped, action, startLine, endLine),
-      mutations: annotationResult.mutations,
-    }
+      return {
+        status: annotationResult.status,
+        output: formatAnnotateOutput(mapped, action, startLine, endLine),
+        mutations: [],
+      }
+    })
   }
 
-const postActions: Record<PostAction, (ctx: PostActionCtx) => Promise<HandlerResult<string>>> = {
+type PostActionFn = (ctx: PostActionCtx) => Promise<HandlerResult<string>>
+
+const buildPostActions = (enqueue: Enqueue): Record<PostAction, PostActionFn> => ({
   return: handleReturn,
-  annotate_as_code: handleAnnotation("annotate_as_code"),
-  annotate_as_comment: handleAnnotation("annotate_as_comment"),
-}
+  annotate_as_code: handleAnnotation("annotate_as_code", enqueue),
+  annotate_as_comment: handleAnnotation("annotate_as_comment", enqueue),
+})
 
 const processSection = async (
   section: Section,
   scoped: ReturnType<typeof partitionSources>,
   calls: ScopedSources[],
   resolve: ContentResolver,
-  postAction: PostAction
+  postAction: PostActionFn
 ): Promise<HandlerResult<string>> => {
   const { path, start_line, end_line } = section
 
@@ -279,10 +297,9 @@ const processSection = async (
   const analysisResults = toAnalysisResults(surviving, reasonResult.values, voteRecords)
   const mapped = mapResults(sentences, analysisResults)
 
-  return postActions[postAction]({
+  return postAction({
     mapped,
     path,
-    content,
     startLine: start_line,
     endLine: end_line,
   })
@@ -318,11 +335,13 @@ registerTool(
       const scoped = partitionSources(source_files)
       const calls = buildCallList(scoped)
       const resolve: ContentResolver = getFileView
+      const enqueue = createKeyedQueue()
+      const actions = buildPostActions(enqueue)
 
       const { results: sectionResults } = await processPool<Section, SectionResult>(
         sections,
         async (section) => {
-          const result = await processSection(section, scoped, calls, resolve, post_action)
+          const result = await processSection(section, scoped, calls, resolve, actions[post_action])
           return [{ section, result }]
         },
         noop,
