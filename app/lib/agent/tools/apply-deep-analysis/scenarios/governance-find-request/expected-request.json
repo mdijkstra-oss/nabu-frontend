@@ -51,9 +51,12 @@
                     "callout-2n6xupou",
                     "callout-9w3ynj4i"
                   ]
+                },
+                "reasonToKeep": {
+                  "type": "string"
                 }
               },
-              "required": ["start", "end", "analysis_source_id"],
+              "required": ["start", "end", "analysis_source_id", "reasonToKeep"],
               "additionalProperties": false
             }
           }
