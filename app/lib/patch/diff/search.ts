@@ -1,4 +1,5 @@
 import { findMatchOffset } from "~/lib/text/find"
+import { charOffsetToLine } from "~/lib/text/lines"
 
 export interface Match {
   start: number
@@ -105,14 +106,6 @@ const findFuzzyMatches = (contentLines: string[], needleLines: string[]): Match[
   }
 
   return matches.sort((a, b) => b.score - a.score).map((m) => m.match)
-}
-
-const charOffsetToLine = (content: string, charOffset: number): number => {
-  let line = 0
-  for (let i = 0; i < charOffset && i < content.length; i++) {
-    if (content[i] === "\n") line++
-  }
-  return line
 }
 
 const findSubstringMatches = (content: string, needle: string): Match[] => {

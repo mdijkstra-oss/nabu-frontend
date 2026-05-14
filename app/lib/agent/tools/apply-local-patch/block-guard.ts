@@ -2,6 +2,7 @@ import { parseV4ADiff, buildMatchText, type HunkPart } from "~/lib/patch/diff/pa
 import { findMatches, type Match } from "~/lib/patch/diff/search"
 import { parseCodeBlocks, parseBlockJson } from "~/lib/data-blocks/parse"
 import { isKnownBlockType, isSingleton } from "~/lib/data-blocks/registry"
+import { charOffsetToLine } from "~/lib/text/lines"
 
 export interface BlockTouch {
   language: string
@@ -20,13 +21,7 @@ interface BlockLineSpan {
 const stripJsonPrefix = (language: string): string =>
   language.startsWith("json-") ? language.slice(5) : language
 
-const charToLine = (content: string, offset: number): number => {
-  let line = 0
-  for (let i = 0; i < offset && i < content.length; i++) {
-    if (content[i] === "\n") line++
-  }
-  return line
-}
+const charToLine = charOffsetToLine
 
 const hasStringId = (data: unknown): data is { id: string } =>
   typeof data === "object" &&

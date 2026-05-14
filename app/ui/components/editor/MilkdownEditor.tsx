@@ -14,6 +14,7 @@ import { $prose, replaceAll } from "@milkdown/utils"
 import { Plugin, PluginKey } from "prosemirror-state"
 import { createAnnotationsPlugin, annotationsMeta } from "~/lib/editor/annotations/plugin"
 import { createSpotlightPlugin, spotlightMeta } from "~/lib/editor/spotlight/plugin"
+import { createSelectionPlugin } from "~/lib/editor/selection/plugin"
 import { createHiddenBlocksPlugin } from "~/lib/editor/hidden-blocks/plugin"
 import { createCalloutBlocksPlugin } from "~/lib/editor/callout-blocks/plugin"
 import { AnnotationHover } from "./AnnotationHover"
@@ -64,6 +65,7 @@ const MilkdownEditorCore = ({
   const nodeViewFactory = useNodeViewFactory()
   const annotationsPlugin = $prose(() => createAnnotationsPlugin())
   const spotlightPlugin = $prose(() => createSpotlightPlugin())
+  const selectionPlugin = $prose(() => createSelectionPlugin())
   const hiddenBlocksPlugin = $prose(() => createHiddenBlocksPlugin())
   const gapCursorPlugin = $prose(gapCursor)
   const calloutBlocksPlugin = createCalloutBlocksPlugin(nodeViewFactory)
@@ -88,6 +90,7 @@ const MilkdownEditorCore = ({
         .use(gfm)
         .use(annotationsPlugin)
         .use(spotlightPlugin)
+        .use(selectionPlugin)
 
       if (readOnly) {
         editor.use(readOnlyPlugin)
