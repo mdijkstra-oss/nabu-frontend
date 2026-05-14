@@ -44,6 +44,7 @@ export const updateSearchEntries = (entries: SearchEntry[]): void => {
         ops: [{ op: "add", path: "/searches", value: entries }],
       },
     ],
+    immediate: true,
     skipPendingRefs: true,
   })
 }
@@ -94,8 +95,8 @@ export const saveNewSearch = (data: NewSearchData): string => {
     saved: false,
     createdAt: Date.now(),
     sql: data.sql,
-    hydes: data.hydes,
-    descriptionsHash: data.descriptionsHash,
+    ...(data.hydes && { hydes: data.hydes }),
+    ...(data.descriptionsHash && { descriptionsHash: data.descriptionsHash }),
   }
 
   const withNew = [...(settings.searches ?? []), entry]

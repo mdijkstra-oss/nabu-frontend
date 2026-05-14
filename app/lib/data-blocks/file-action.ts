@@ -20,7 +20,13 @@ export const executeFileAction = (action: FileAction): void => {
   for (const patch of action.patches) {
     const original = getFileRaw(patch.path)
     const result = patchBlockContent(original, patch.language, patch.ops, patch.blockId)
-    if (!result.ok) continue
+    if (!result.ok) {
+      console.error(
+        `[FILE-ACTION] patch failed for ${patch.path} (${patch.language}):`,
+        result.error
+      )
+      continue
+    }
 
     const stamped = stampActors(original, result.content, "user")
     updateFileRaw(patch.path, stamped, {
