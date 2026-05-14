@@ -211,6 +211,7 @@ export interface FilterResult {
   dropped: FindResult[]
   filterVotes: Map<string, boolean[]>
   filterJustifications: Map<string, string[]>
+  error?: string
 }
 
 interface FilterHit {
@@ -285,12 +286,14 @@ export const runFilter = async (
   )
 
   if (rawRuns.length < FILTER_RUNS) {
-    console.debug(`[deep-filter] ${rawRuns.length}/${FILTER_RUNS} runs (insufficient, keeping all)`)
+    const error = `Filter failed: ${rawRuns.length}/${FILTER_RUNS} runs completed (${errors.join("; ")})`
+    console.debug(`[deep-filter] ${error}`)
     return {
-      surviving: allSpans,
+      surviving: [],
       dropped: [],
       filterVotes: emptyVotes,
       filterJustifications: emptyJustifications,
+      error,
     }
   }
 

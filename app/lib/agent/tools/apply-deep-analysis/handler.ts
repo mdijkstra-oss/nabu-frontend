@@ -250,7 +250,7 @@ const processSection = async (
   if (allSpans.length === 0 && calls.length > 0 && findErrors.length > 0)
     return { status: "error", output: findErrors.join("; "), mutations: [] }
 
-  const { surviving, dropped, filterVotes, filterJustifications } = await runFilter(
+  const filterResult = await runFilter(
     allSpans,
     sentences,
     scoped,
@@ -258,6 +258,10 @@ const processSection = async (
     trailingCtx,
     resolve
   )
+
+  if (filterResult.error) return { status: "error", output: filterResult.error, mutations: [] }
+
+  const { surviving, dropped, filterVotes, filterJustifications } = filterResult
 
   for (const d of dropped) {
     const text = sentences.slice(d.start - 1, d.end).join(" ")
@@ -305,21 +309,30 @@ const processSection = async (
   })
 }
 
+const sectionLabel = (s: Section): string => `${s.path} [${s.start_line}-${s.end_line}]`
+
 const mergeSectionResults = (sectionResults: SectionResult[]): HandlerResult<string> => {
   const outputs: string[] = []
   const allMutations: Operation[] = []
-  let hasError = false
+  const failed: string[] = []
 
   for (const { section, result } of sectionResults) {
-    const label = `## ${section.path} [${section.start_line}-${section.end_line}]`
-    outputs.push(`${label}\n${result.output}`)
+    outputs.push(`## ${sectionLabel(section)}\n${result.output}`)
     allMutations.push(...result.mutations)
-    if (result.status === "error") hasError = true
+    if (result.status === "error") failed.push(sectionLabel(section))
   }
 
+  const total = sectionResults.length
+  const output = outputs.join("\n\n")
+
+  if (failed.length === 0) return { status: "ok", output, mutations: allMutations }
+
+  if (failed.length === total) return { status: "error", output, mutations: allMutations }
+
   return {
-    status: hasError ? "error" : "ok",
-    output: outputs.join("\n\n"),
+    status: "partial",
+    output,
+    message: `${total - failed.length}/${total} sections completed. Failed: ${failed.join(", ")}`,
     mutations: allMutations,
   }
 }
