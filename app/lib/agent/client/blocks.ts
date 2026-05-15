@@ -53,6 +53,11 @@ export interface ErrorBlock {
   errorType?: string
 }
 
+export interface ProgressBlock {
+  type: "progress"
+  label: string
+}
+
 export interface DebugPauseBlock {
   type: "debug_pause"
 }
@@ -66,5 +71,6 @@ export type Block = (
   | ReasoningBlock
   | EmptyNudgeBlock
   | ErrorBlock
+  | ProgressBlock
   | DebugPauseBlock
 ) & { timestamp?: number; source?: string; streaming?: true }

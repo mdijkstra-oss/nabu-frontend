@@ -89,6 +89,9 @@ const blockToInputItem = (block: Block): InputItem | InputItem[] => {
       ...(hasExtra ? { extra_content: block.extraContent } : {}),
     }
   }
+  if (block.type === "progress") {
+    return []
+  }
   if (block.type === "empty_nudge") {
     return []
   }

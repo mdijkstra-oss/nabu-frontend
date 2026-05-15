@@ -11,7 +11,7 @@ import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 const RETRYABLE_STATUS = [429, 502, 503]
 const MAX_RETRIES = 3
 const MAX_FILTER_RETRIES = 2
-const STALL_TIMEOUT_MS = 30_000
+const STALL_TIMEOUT_MS = 120_000
 
 const RETRYABLE_ERROR_TYPES = new Set(["SAFETY", "RECITATION", "content_filter"])
 

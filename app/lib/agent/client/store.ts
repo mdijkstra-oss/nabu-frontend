@@ -84,6 +84,10 @@ export const clearBlocks = (): void => {
   notify()
 }
 
+export const showProgress = (label: string): void => {
+  setDraft({ type: "progress", label })
+}
+
 export const clearPauseBlocks = (): void => {
   const filtered = blocks.filter((b) => b.type !== "debug_pause")
   if (filtered.length === blocks.length) return

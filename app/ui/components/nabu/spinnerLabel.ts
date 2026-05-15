@@ -47,6 +47,7 @@ const findLastBoldText = (text: string): string | null => {
 }
 
 const blockToSpinnerLabels = (block: Block): string[] | null => {
+  if (block.type === "progress") return [block.label]
   if (block.type === "reasoning") {
     const bold = findLastBoldText(block.content)
     return [bold ?? "Thinking"]
