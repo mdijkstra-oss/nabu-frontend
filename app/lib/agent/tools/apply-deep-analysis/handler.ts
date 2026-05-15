@@ -40,6 +40,56 @@ import { noop } from "~/lib/utils/noop"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
+import { showProgress } from "../../client/store"
+
+interface PhaseTracker {
+  tickFind: () => void
+  tickFilter: () => void
+  tickReason: () => void
+}
+
+const derivePhaseLabel = (finds: number, filters: number, reasons: number): string => {
+  if (finds > 0) return "Interpreting dimensions"
+  if (filters > 0) return "Cross-referencing findings"
+  if (reasons > 0) return "Building justifications"
+  return "Finishing up"
+}
+
+const createPhaseTracker = (
+  totalFinds: number,
+  totalFilters: number,
+  totalReasons: number
+): PhaseTracker => {
+  let pendingFinds = totalFinds
+  let pendingFilters = totalFilters
+  let pendingReasons = totalReasons
+  const total = totalFinds + totalFilters + totalReasons
+  let completed = 0
+
+  const emit = () => {
+    const pct = Math.round((completed / total) * 100)
+    const label = derivePhaseLabel(pendingFinds, pendingFilters, pendingReasons)
+    showProgress(`${pct}% · ${label}`)
+  }
+
+  return {
+    tickFind: () => {
+      pendingFinds--
+      completed++
+      emit()
+    },
+    tickFilter: () => {
+      pendingFilters--
+      completed++
+      emit()
+    },
+    tickReason: () => {
+      pendingReasons--
+      completed++
+      emit()
+    },
+  }
+}
 
 type Enqueue = <T>(key: string, fn: () => Promise<T>) => Promise<T>
 
@@ -48,6 +98,7 @@ interface PostActionCtx {
   path: string
   startLine: number
   endLine: number
+  warnings: string[]
 }
 
 interface SectionResult {
@@ -158,19 +209,26 @@ const handleReturn = async ({
   mapped,
   startLine,
   endLine,
+  warnings,
 }: PostActionCtx): Promise<HandlerResult<string>> => ({
   status: "ok",
-  output: formatReturnOutput(mapped, startLine, endLine),
+  output: formatReturnOutput(mapped, startLine, endLine, warnings),
   mutations: [],
 })
 
 const handleAnnotation =
   (action: "annotate_as_code" | "annotate_as_comment", enqueue: Enqueue) =>
-  async ({ mapped, path, startLine, endLine }: PostActionCtx): Promise<HandlerResult<string>> => {
+  async ({
+    mapped,
+    path,
+    startLine,
+    endLine,
+    warnings,
+  }: PostActionCtx): Promise<HandlerResult<string>> => {
     if (mapped.length === 0)
       return {
         status: "ok",
-        output: formatAnnotateOutput(mapped, action, startLine, endLine),
+        output: formatAnnotateOutput(mapped, action, startLine, endLine, warnings),
         mutations: [],
       }
 
@@ -194,7 +252,7 @@ const handleAnnotation =
 
       return {
         status: annotationResult.status,
-        output: formatAnnotateOutput(mapped, action, startLine, endLine),
+        output: formatAnnotateOutput(mapped, action, startLine, endLine, warnings),
         mutations: [],
       }
     })
@@ -213,7 +271,8 @@ const processSection = async (
   scoped: ReturnType<typeof partitionSources>,
   calls: ScopedSources[],
   resolve: ContentResolver,
-  postAction: PostActionFn
+  postAction: PostActionFn,
+  tracker: PhaseTracker
 ): Promise<HandlerResult<string>> => {
   const { path, start_line, end_line } = section
 
@@ -242,10 +301,15 @@ const processSection = async (
       await runDimensionPipeline(sources, rawSection, leadingCtx, trailingCtx, resolve),
     ],
     noop,
-    { concurrency: 5 }
+    { concurrency: 5, onItemComplete: () => tracker.tickFind() }
   )
 
   const { allSpans, allFindVotes, errors: findErrors } = mergeDimensionResults(dimensionResults)
+  const warnings: string[] = []
+
+  if (findErrors.length > 0) {
+    warnings.push(...findErrors.map((e) => `find: ${e}`))
+  }
 
   if (allSpans.length === 0 && calls.length > 0 && findErrors.length > 0)
     return { status: "error", output: findErrors.join("; "), mutations: [] }
@@ -258,15 +322,13 @@ const processSection = async (
     trailingCtx,
     resolve
   )
+  tracker.tickFilter()
 
-  if (filterResult.error) return { status: "error", output: filterResult.error, mutations: [] }
+  if (filterResult.errors.length > 0) {
+    warnings.push(...filterResult.errors.map((e) => `filter: ${e}`))
+  }
 
   const { surviving, dropped, filterVotes, filterJustifications } = filterResult
-
-  for (const d of dropped) {
-    const text = sentences.slice(d.start - 1, d.end).join(" ")
-    console.debug(`[deep-filter] dropped [${d.start}-${d.end}] ${d.analysis_source_id}: ${text}`)
-  }
 
   const reasonResult = await runReasonStep(
     surviving,
@@ -276,6 +338,7 @@ const processSection = async (
     trailingCtx,
     resolve
   )
+  tracker.tickReason()
 
   const countVotes = (votes: boolean[]) => {
     const found = votes.filter(Boolean).length
@@ -301,11 +364,19 @@ const processSection = async (
   const analysisResults = toAnalysisResults(surviving, reasonResult.values, voteRecords)
   const mapped = mapResults(sentences, analysisResults)
 
+  const withRemovalDissent = [...voteRecords.values()].filter(
+    (v) => v.removalJustifications.length > 0
+  ).length
+  console.debug(
+    `[deep-analysis] result: ${allSpans.length} found → ${surviving.length} surviving, ${dropped.length} dropped, ${withRemovalDissent} with removal dissent`
+  )
+
   return postAction({
     mapped,
     path,
     startLine: start_line,
     endLine: end_line,
+    warnings,
   })
 }
 
@@ -351,10 +422,24 @@ registerTool(
       const enqueue = createKeyedQueue()
       const actions = buildPostActions(enqueue)
 
+      const tracker = createPhaseTracker(
+        sections.length * calls.length,
+        sections.length,
+        sections.length
+      )
+
+      showProgress("Preparing deep analysis")
       const { results: sectionResults } = await processPool<Section, SectionResult>(
         sections,
         async (section) => {
-          const result = await processSection(section, scoped, calls, resolve, actions[post_action])
+          const result = await processSection(
+            section,
+            scoped,
+            calls,
+            resolve,
+            actions[post_action],
+            tracker
+          )
           return [{ section, result }]
         },
         noop,
