@@ -12,6 +12,21 @@ describe("matchesFilter", () => {
     { query: "foo", text: "FOOBAR", expected: true, name: "case insensitive text" },
     { query: "baz", text: "foobar", expected: false, name: "no match" },
     { query: "foo bar", text: "foobar", expected: false, name: "space in query no match" },
+    {
+      query: "policy commitment",
+      text: "policy-commitment",
+      expected: true,
+      name: "space matches hyphen",
+    },
+    {
+      query: "policy-commitment",
+      text: "policy commitment",
+      expected: true,
+      name: "hyphen matches space",
+    },
+    { query: "foo bar", text: "foo_bar", expected: true, name: "space matches underscore" },
+    { query: "foo bar", text: "foo.bar", expected: true, name: "space matches dot" },
+    { query: "foo.bar", text: "foo bar", expected: true, name: "dot matches space" },
   ]
 
   it.each(cases)("$name", ({ query, text, expected }) => {
@@ -69,6 +84,12 @@ describe("matchesAllWords", () => {
       texts: ["x marks", "the y"],
       expected: true,
       name: "words spread across texts",
+    },
+    {
+      query: "policy commitment",
+      texts: ["policy-commitment report"],
+      expected: true,
+      name: "space matches hyphen separator",
     },
   ]
 

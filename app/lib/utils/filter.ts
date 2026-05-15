@@ -1,4 +1,6 @@
-const normalize = (text: string): string => text.toLowerCase().trim()
+const collapseSeparators = (text: string): string => text.replace(/[-_./\\]+/g, " ")
+
+const normalize = (text: string): string => collapseSeparators(text.toLowerCase().trim())
 
 export const matchesFilter = (query: string, text: string): boolean => {
   const normalizedQuery = normalize(query)
