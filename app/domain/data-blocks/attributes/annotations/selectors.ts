@@ -27,6 +27,7 @@ const resolveAnnotation = (files: FileStore, stored: StoredAnnotation): Annotati
   color: resolveAnnotationColor(files, stored),
   reason: stored.reason,
   code: stored.code,
+  vote: stored.vote,
 })
 
 export const getAnnotations = (files: FileStore, raw: string): Annotation[] =>
@@ -71,6 +72,9 @@ export const getAnnotationGlobalCountsByCode = (
 }
 
 const hasRemovalVotes = (a: StoredAnnotation): boolean => (a.vote?.filter.remove ?? 0) > 0
+
+export const hasRemovalJustifications = (a: Annotation): boolean =>
+  (a.vote?.removalJustifications?.length ?? 0) > 0
 
 export const getRemovalCountsByCode = (files: FileStore): Record<string, number> => {
   const result: Record<string, number> = {}

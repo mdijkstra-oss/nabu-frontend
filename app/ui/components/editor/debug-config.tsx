@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Bug, Cloud, Code, Activity, Bot, Filter, Table, TriangleAlert } from "lucide-react"
+import { Bug, Cloud, Code, Activity, Bot, Filter, Table, TriangleAlert, Eye } from "lucide-react"
 
 interface DebugToggle {
   key: string
@@ -41,6 +41,12 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     key: "showRemovalCounts",
     label: "Removal counts",
     icon: <TriangleAlert />,
+    defaultValue: false,
+  },
+  {
+    key: "showDeletionReasons",
+    label: "Deletion reasons",
+    icon: <Eye />,
     defaultValue: false,
   },
 ]

@@ -20,11 +20,12 @@ import { createCalloutBlocksPlugin } from "~/lib/editor/callout-blocks/plugin"
 import { AnnotationHover } from "./AnnotationHover"
 import { ReadOnlyProvider } from "./ReadOnlyContext"
 import { FilePathProvider } from "./FilePathContext"
-import { DebugOptionsProvider } from "./DebugOptionsContext"
+import { DebugOptionsProvider, useDebugOptions } from "./DebugOptionsContext"
 import type { DebugOptions } from "./debug-config"
 import { useFiles } from "~/ui/hooks/useFiles"
 import {
   getAnnotations,
+  hasRemovalJustifications,
   type Annotation,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
@@ -37,6 +38,9 @@ const filterAnnotationsBySelectedCodes = (
   annotations: Annotation[],
   selected: Set<string>
 ): Annotation[] => annotations.filter((a) => isAnnotationVisible(selected, a))
+
+const filterAnnotationsByDeletionReasons = (annotations: Annotation[]): Annotation[] =>
+  annotations.filter(hasRemovalJustifications)
 
 const readOnlyKey = new PluginKey("readOnly")
 
@@ -71,11 +75,15 @@ const MilkdownEditorCore = ({
   const calloutBlocksPlugin = createCalloutBlocksPlugin(nodeViewFactory)
   const prevContentRef = useRef(defaultValue)
   const [loading, getEditor] = useInstance()
+  const debugOptions = useDebugOptions()
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
-  const annotations = useMemo(
-    () => filterAnnotationsBySelectedCodes(getAnnotations(files, defaultValue), selectedCodes),
-    [files, defaultValue, selectedCodes]
-  )
+  const annotations = useMemo(() => {
+    const byCode = filterAnnotationsBySelectedCodes(
+      getAnnotations(files, defaultValue),
+      selectedCodes
+    )
+    return debugOptions.showDeletionReasons ? filterAnnotationsByDeletionReasons(byCode) : byCode
+  }, [files, defaultValue, selectedCodes, debugOptions.showDeletionReasons])
 
   const readOnlyPlugin = $prose(createReadOnlyPlugin)
 

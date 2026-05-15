@@ -25,6 +25,7 @@ interface CodesSidebarProps {
   onCodeFile?: (code: Code) => void
   onFileSelect?: (fileId: string) => void
   onSearchCode?: (code: Code) => void
+  onSearchUnsure?: (code: Code) => void
 }
 
 const formatGlobalTooltip = ({ count, fileCount }: GlobalAnnotationCount): string =>
@@ -85,6 +86,7 @@ export const CodesSidebar = ({
   onEditCode,
   onFileSelect,
   onSearchCode,
+  onSearchUnsure,
 }: CodesSidebarProps) => {
   const [searchValue, setSearchValue] = useState("")
   const [hoveredCode, setHoveredCode] = useState<Code | null>(null)
@@ -140,6 +142,7 @@ export const CodesSidebar = ({
                   highlighted={code.id === hoveredCode?.id}
                   onMouseEnter={() => setHoveredCode(code)}
                   onClick={() => onEditCode?.(code)}
+                  onSearchUnsure={() => onSearchUnsure?.(code)}
                 />
               </CheckableWrap>
             ))}

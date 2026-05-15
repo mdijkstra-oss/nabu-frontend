@@ -56,6 +56,7 @@ const annotationToEntry =
       color: elementBorder(annotation.color),
       title: annotation.code ? getCodeTitle(files, annotation.code) : undefined,
       description: annotation.reason,
+      review: annotation.vote?.removalJustifications,
       onDelete: canMutate ? buildDeleteCallback(filePath, id) : undefined,
     }
   }

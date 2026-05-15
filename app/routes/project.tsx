@@ -545,6 +545,17 @@ export default function ProjectLayout() {
     navigate(`/project/${params.projectId}/search/${id}`)
   }
 
+  const handleSearchUnsure = (code: Code) => {
+    const id = saveNewSearch({
+      title: `${code.id} (unsure)`,
+      description: `Unsure annotations for: ${code.id}`,
+      sql: `SELECT file, id, text, vote_filter_keep, vote_filter_remove FROM annotations WHERE code = '${code.id}' AND vote_filter_remove > 0`,
+    })
+    if (!id) return
+    dismissSidebarRef.current?.()
+    navigate(`/project/${params.projectId}/search/${id}`)
+  }
+
   const handleCodeFile = (code: Code) => {
     const refs = resolveCodingFiles(files, [code.id])
     if (refs.length > 0) dispatchTask(codeWithFiles(refs))
@@ -596,6 +607,7 @@ export default function ProjectLayout() {
               onCodeFile={handleCodeFile}
               onFileSelect={handleDocumentSelect}
               onSearchCode={handleSearchCode}
+              onSearchUnsure={handleSearchUnsure}
             />
           ),
         }

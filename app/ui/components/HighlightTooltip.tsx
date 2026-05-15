@@ -6,6 +6,7 @@ export interface HighlightEntry {
   color: string
   title?: string
   description?: string
+  review?: string[]
   onDelete?: () => void
 }
 
@@ -16,6 +17,19 @@ interface HighlightTooltipProps {
 }
 
 const Divider = () => <div className="h-px w-full bg-neutral-border" />
+
+const ReviewBlock = ({ justifications }: { justifications: string[] }) => (
+  <div className="mt-1 rounded bg-amber-200/70 px-2 py-1.5 w-full">
+    <span className="text-caption font-caption text-amber-900 font-semibold">Review</span>
+    <ul className="list-disc pl-4 mt-0.5">
+      {justifications.map((j, i) => (
+        <li key={i} className="text-caption font-caption text-amber-900">
+          {j}
+        </li>
+      ))}
+    </ul>
+  </div>
+)
 
 const createHeaderBackground = (colors: string[]): string => {
   if (colors.length === 0) return "transparent"
@@ -37,6 +51,7 @@ const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
       {entry.description && (
         <span className="text-caption font-caption text-subtext-color">{entry.description}</span>
       )}
+      {entry.review && entry.review.length > 0 && <ReviewBlock justifications={entry.review} />}
     </div>
     {entry.onDelete && (
       <SwapButton
