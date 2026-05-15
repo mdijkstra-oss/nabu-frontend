@@ -187,21 +187,32 @@ export const ABSENCE_HINT = [
 const formatAbsence = (startLine: number, endLine: number, suffix: string): string =>
   `Lines ${startLine}-${endLine} analyzed. No matches found.${suffix}${ABSENCE_HINT}`
 
+const formatWarnings = (warnings: string[]): string =>
+  warnings.length === 0
+    ? ""
+    : `\n\n⚠ Degraded: ${warnings.length} model call(s) failed and were dropped. Results are based on fewer voters.\n${warnings.map((w) => `- ${w}`).join("\n")}`
+
 export const formatReturnOutput = (
   results: MappedResult[],
   startLine: number,
-  endLine: number
-): string => (results.length === 0 ? formatAbsence(startLine, endLine, "") : formatResults(results))
+  endLine: number,
+  warnings: string[] = []
+): string => {
+  const base = results.length === 0 ? formatAbsence(startLine, endLine, "") : formatResults(results)
+  return base + formatWarnings(warnings)
+}
 
 export const formatAnnotateOutput = (
   results: MappedResult[],
   action: "annotate_as_code" | "annotate_as_comment",
   startLine: number,
-  endLine: number
+  endLine: number,
+  warnings: string[] = []
 ): string => {
-  if (results.length === 0) return formatAbsence(startLine, endLine, " No annotations written.")
+  if (results.length === 0)
+    return formatAbsence(startLine, endLine, " No annotations written.") + formatWarnings(warnings)
   const kind = action === "annotate_as_code" ? "code" : "comment"
-  return `${results.length} ${kind} annotation(s) written. Do not re-apply these.\n\n${formatResults(results)}`
+  return `${results.length} ${kind} annotation(s) written. Do not re-apply these.\n\n${formatResults(results)}${formatWarnings(warnings)}`
 }
 
 export const isAnnotateAction = (

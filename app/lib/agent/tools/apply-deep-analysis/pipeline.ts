@@ -37,6 +37,7 @@ import {
   FILTER_THRESHOLD,
   SPAN_STEP_CONTEXT_SENTENCES,
 } from "./def"
+import { errorMessage } from "~/lib/utils/error"
 
 export type CallResult<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -92,7 +93,7 @@ const runFindRuns = async (
 ): Promise<{ runs: FindResult[][]; errors: string[] }> => {
   const errors: string[] = []
   const findSlots = Array.from({ length: FIND_RUNS }, (_, i) => i)
-  const { results } = await processPool<number, FindResult[]>(
+  const { results, failures } = await processPool<number, FindResult[]>(
     findSlots,
     async (slot) => {
       const endpoint = `${FIND_ENDPOINT}?model=${slot % 2}`
@@ -104,8 +105,10 @@ const runFindRuns = async (
       return [result.data.results]
     },
     noop,
-    { concurrency: 3, warmup: 1 }
+    // warmup: 2 — primes prompt cache for both model=0 and model=1 before the parallel burst
+    { concurrency: 3, warmup: 2 }
   )
+  for (const f of failures) errors.push(errorMessage(f.error))
   return { runs: results, errors }
 }
 
@@ -211,7 +214,7 @@ export interface FilterResult {
   dropped: FindResult[]
   filterVotes: Map<string, boolean[]>
   filterJustifications: Map<string, string[]>
-  error?: string
+  errors: string[]
 }
 
 interface FilterHit {
@@ -247,6 +250,7 @@ export const runFilter = async (
       dropped: [],
       filterVotes: emptyVotes,
       filterJustifications: emptyJustifications,
+      errors: [],
     }
 
   const codeIds = collectCodeIds(grouped)
@@ -271,10 +275,11 @@ export const runFilter = async (
   const schema = buildFilterSchema(validCodes)
   const errors: string[] = []
   const slots = Array.from({ length: FILTER_RUNS }, (_, i) => i)
-  const { results: rawRuns } = await processPool<number, FilterHit[]>(
+  const { results: rawRuns, failures } = await processPool<number, FilterHit[]>(
     slots,
-    async () => {
-      const result = await callAndParse(FILTER_ENDPOINT, messages, schema)
+    async (slot) => {
+      const endpoint = `${FILTER_ENDPOINT}?model=${slot % 2}`
+      const result = await callAndParse(endpoint, messages, schema)
       if (!result.ok) {
         errors.push(result.error)
         return []
@@ -282,18 +287,28 @@ export const runFilter = async (
       return [mapFilterResults(result.data.results, mapping)]
     },
     noop,
-    { concurrency: 3, warmup: 1 }
+    // no warmup — only 2 runs on 2 different models, no same-model repeat to benefit from cache
+    { concurrency: 3 }
   )
+  for (const f of failures) errors.push(errorMessage(f.error))
+
+  const filterPerRun = rawRuns.map((hits, i) => `run-${i}(m${i % 2}):${hits.length}`).join(", ")
+  console.debug(`[deep-filter] runs: ${filterPerRun}`)
 
   if (rawRuns.length < FILTER_RUNS) {
-    const error = `Filter failed: ${rawRuns.length}/${FILTER_RUNS} runs completed (${errors.join("; ")})`
-    console.debug(`[deep-filter] ${error}`)
+    console.debug(
+      `[deep-filter] ${rawRuns.length}/${FILTER_RUNS} runs (${FILTER_RUNS - rawRuns.length} dropped)`
+    )
+  }
+
+  if (rawRuns.length === 0) {
+    console.debug(`[deep-filter] 0/${FILTER_RUNS} runs — skipping filter, all spans survive`)
     return {
-      surviving: [],
+      surviving: allSpans,
       dropped: [],
       filterVotes: emptyVotes,
       filterJustifications: emptyJustifications,
-      error,
+      errors,
     }
   }
 
@@ -303,12 +318,13 @@ export const runFilter = async (
     [...votes.entries()].filter(([, v]) => v >= FILTER_THRESHOLD).map(([k]) => k)
   )
 
-  for (const [key, count] of votes) {
-    const verdict = rejected.has(key) ? "reject" : "keep"
-    console.debug(`[deep-filter] ${key} ${count}/${FILTER_RUNS} → ${verdict}`)
-  }
-
   const allSpanKeys = new Set(allSpans.map((s) => spanKey(s.start, s.end, s.analysis_source_id)))
+  const agreedRemove = rejected.size
+  const partialFlag = votes.size - rejected.size
+  const untouched = allSpanKeys.size - votes.size
+  console.debug(
+    `[deep-filter] agreement: ${agreedRemove} agreed-remove, ${partialFlag} one-flagged, ${untouched} untouched`
+  )
   const filterVotes = new Map<string, boolean[]>()
   for (const key of allSpanKeys) {
     const perVoter = rawRuns.map((hits) => !hits.some((h) => h.key === key))
@@ -338,7 +354,7 @@ export const runFilter = async (
     }
   }
 
-  return { surviving, dropped, filterVotes, filterJustifications }
+  return { surviving, dropped, filterVotes, filterJustifications, errors }
 }
 
 export const runDimensionPipeline = async (
@@ -361,9 +377,24 @@ export const runDimensionPipeline = async (
 
   const { runs: findRuns, errors } = await runFindRuns(findMessages, findSchema)
 
-  if (findRuns.length < FIND_RUNS) {
-    console.debug(`[deep-analysis] consensus: ${findRuns.length}/${FIND_RUNS} runs (insufficient)`)
+  const findPerRun = findRuns.map((run, i) => `run-${i}(m${i % 2}):${run.length}`).join(", ")
+  console.debug(`[deep-analysis] find runs: ${findPerRun}`)
+  const modelCounts = [0, 1].map((m) => {
+    const total = findRuns.reduce((sum, r, i) => sum + (i % 2 === m ? r.length : 0), 0)
+    const runCount = findRuns.filter((_, i) => i % 2 === m).length
+    return `m${m} ${total} sections (${runCount} runs)`
+  })
+  console.debug(`[deep-analysis] find models: ${modelCounts.join(", ")}`)
+
+  if (findRuns.length === 0) {
+    console.debug(`[deep-analysis] consensus: 0/${FIND_RUNS} runs — all failed`)
     return { spans: [], findVotes: new Map(), errors }
+  }
+
+  if (findRuns.length < FIND_RUNS) {
+    console.debug(
+      `[deep-analysis] consensus: ${findRuns.length}/${FIND_RUNS} runs (${FIND_RUNS - findRuns.length} dropped)`
+    )
   }
 
   const tally = tallyVotes(findRuns, sentences.length)
@@ -379,6 +410,7 @@ export const runDimensionPipeline = async (
   console.debug(
     `[deep-analysis] consensus (${FIND_THRESHOLD}/${FIND_RUNS}): ${perCode.join(", ") || "no votes"}`
   )
+  console.debug(`[deep-analysis] find → next: ${spans.length} spans`)
 
   if (spans.length === 0) return { spans: [], findVotes: new Map(), errors }
 

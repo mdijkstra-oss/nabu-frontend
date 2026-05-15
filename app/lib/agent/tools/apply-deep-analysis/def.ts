@@ -49,7 +49,7 @@ export const FILTER_ENDPOINT = "/deep-analysis-filter"
 export const FIND_RUNS = 4
 export const FIND_THRESHOLD = 2
 export const FIND_MAX_GAP = 1
-export const FILTER_RUNS = 4
+export const FILTER_RUNS = 2
 export const FILTER_THRESHOLD = 2
 export const SPAN_STEP_CONTEXT_SENTENCES = 6
 

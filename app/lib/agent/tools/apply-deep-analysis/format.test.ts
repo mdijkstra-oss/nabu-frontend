@@ -220,6 +220,7 @@ describe("formatReturnOutput", () => {
       results: [],
       startLine: 10,
       endLine: 50,
+      warnings: [],
       expected: `Lines 10-50 analyzed. No matches found.${ABSENCE_HINT}`,
     },
     {
@@ -230,12 +231,30 @@ describe("formatReturnOutput", () => {
       ],
       startLine: 1,
       endLine: 10,
+      warnings: [],
       expected: '- [code_1] "Some text": because\n- [code_2] "Other text": also',
+    },
+    {
+      name: "appends warnings when present",
+      results: [{ text: "Some text", analysis_source_id: "code_1", reason: "because" }],
+      startLine: 1,
+      endLine: 10,
+      warnings: ["find: LLM returned no text response"],
+      expected:
+        '- [code_1] "Some text": because\n\n⚠ Degraded: 1 model call(s) failed and were dropped. Results are based on fewer voters.\n- find: LLM returned no text response',
+    },
+    {
+      name: "appends warnings to absence output",
+      results: [],
+      startLine: 5,
+      endLine: 20,
+      warnings: ["filter: connection dropped"],
+      expected: `Lines 5-20 analyzed. No matches found.${ABSENCE_HINT}\n\n⚠ Degraded: 1 model call(s) failed and were dropped. Results are based on fewer voters.\n- filter: connection dropped`,
     },
   ]
 
-  cases.forEach(({ name, results, startLine, endLine, expected }) => {
-    it(name, () => expect(formatReturnOutput(results, startLine, endLine)).toBe(expected))
+  cases.forEach(({ name, results, startLine, endLine, warnings, expected }) => {
+    it(name, () => expect(formatReturnOutput(results, startLine, endLine, warnings)).toBe(expected))
   })
 })
 
@@ -252,6 +271,7 @@ describe("formatAnnotateOutput", () => {
       input: [],
       startLine: 5,
       endLine: 20,
+      warnings: [] as string[],
       contains: "Lines 5-20 analyzed. No matches found. No annotations written.",
     },
     {
@@ -260,6 +280,7 @@ describe("formatAnnotateOutput", () => {
       input: [],
       startLine: 5,
       endLine: 20,
+      warnings: [] as string[],
       contains: "Lines 5-20 analyzed. No matches found. No annotations written.",
     },
     {
@@ -268,6 +289,7 @@ describe("formatAnnotateOutput", () => {
       input: [],
       startLine: 5,
       endLine: 20,
+      warnings: [] as string[],
       contains: "Absence is data.",
     },
     {
@@ -276,6 +298,7 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
+      warnings: [] as string[],
       contains: "2 code annotation(s) written. Do not re-apply these.",
     },
     {
@@ -284,6 +307,7 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
+      warnings: [] as string[],
       contains: "2 comment annotation(s) written. Do not re-apply these.",
     },
     {
@@ -292,13 +316,32 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
+      warnings: [] as string[],
       contains: '- [code_1] "Some text": because',
+    },
+    {
+      name: "warnings appended to annotation output",
+      action: "annotate_as_code" as const,
+      input: results,
+      startLine: 1,
+      endLine: 10,
+      warnings: ["find: timeout"],
+      contains: "Degraded: 1 model call(s) failed",
+    },
+    {
+      name: "warnings appended to empty annotation output",
+      action: "annotate_as_code" as const,
+      input: [],
+      startLine: 5,
+      endLine: 20,
+      warnings: ["filter: connection reset"],
+      contains: "filter: connection reset",
     },
   ]
 
-  cases.forEach(({ name, action, input, startLine, endLine, contains }) => {
+  cases.forEach(({ name, action, input, startLine, endLine, warnings, contains }) => {
     it(name, () =>
-      expect(formatAnnotateOutput(input, action, startLine, endLine)).toContain(contains)
+      expect(formatAnnotateOutput(input, action, startLine, endLine, warnings)).toContain(contains)
     )
   })
 })
