@@ -19,7 +19,6 @@ const toSection = (chunk: LineChunk, label: SectionLabel): ScoutSection => ({
   start_line: chunk.startLine,
   end_line: chunk.endLine,
   desc: label.desc,
-  keywords: label.keywords,
 })
 
 interface IndexedChunk {

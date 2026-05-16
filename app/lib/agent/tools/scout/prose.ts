@@ -53,9 +53,8 @@ export const extractLines = (content: string, startLine: number, endLine: number
 
 export const formatSection = (section: ScoutSection): string => {
   const header = `[${section.start_line}-${section.end_line}] ${section.label}`
-  const keywords = `  keywords: ${section.keywords.join(", ")}`
-  const desc = section.desc ? `  desc: ${section.desc}` : null
-  return [header, keywords, desc].filter((l): l is string => l !== null).join("\n")
+  const desc = section.desc ? `  ${section.desc}` : null
+  return [header, desc].filter((l): l is string => l !== null).join("\n")
 }
 
 export const formatScoutMap = (path: string, map: ScoutMap): string => {

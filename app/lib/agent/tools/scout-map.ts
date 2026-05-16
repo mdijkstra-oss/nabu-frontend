@@ -7,13 +7,6 @@ export const ScoutSection = z.object({
   start_line: z.number().int().min(1).describe("1-based first line of this section"),
   end_line: z.number().int().min(1).describe("1-based last line of this section"),
   desc: z.string().optional().describe("Brief description of section contents"),
-  keywords: z
-    .array(z.string())
-    .min(1)
-    .max(6)
-    .describe(
-      "Key names, topics, and entities present in this section — no interpretation, just what's concretely there."
-    ),
 })
 
 export type ScoutSection = z.infer<typeof ScoutSection>
@@ -32,13 +25,6 @@ const SectionLabelResponse = z.object({
     .string()
     .describe(
       "One or two sentences. What the section contains, specific enough for a planner to decide whether this section is relevant to a given task."
-    ),
-  keywords: z
-    .array(z.string())
-    .min(1)
-    .max(6)
-    .describe(
-      "Salient terms that literally appear in the section text. Names, topics, entities. No interpretation, no inference."
     ),
 })
 

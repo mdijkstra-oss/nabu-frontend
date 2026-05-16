@@ -7,7 +7,6 @@ const section = (overrides: Partial<ScoutSection>): ScoutSection => ({
   label: "s",
   start_line: 1,
   end_line: 1,
-  keywords: ["k"],
   ...overrides,
 })
 
@@ -110,39 +109,36 @@ describe("extractLines", () => {
 })
 
 describe("formatScoutMap", () => {
-  it("renders sections with keywords and desc", () => {
+  it("renders sections with desc", () => {
     const map = {
       sections: [
         section({
           label: "Opening",
           start_line: 1,
           end_line: 10,
-          keywords: ["a", "b"],
           desc: "intro",
         }),
       ],
     }
-    expect(formatScoutMap("f.md", map)).toBe(
-      `File: f.md\n\n[1-10] Opening\n  keywords: a, b\n  desc: intro`
-    )
+    expect(formatScoutMap("f.md", map)).toBe(`File: f.md\n\n[1-10] Opening\n  intro`)
   })
 
   it("omits desc when undefined", () => {
     const map = {
-      sections: [section({ label: "A", start_line: 1, end_line: 2, keywords: ["k"] })],
+      sections: [section({ label: "A", start_line: 1, end_line: 2 })],
     }
-    expect(formatScoutMap("f.md", map)).toBe(`File: f.md\n\n[1-2] A\n  keywords: k`)
+    expect(formatScoutMap("f.md", map)).toBe(`File: f.md\n\n[1-2] A`)
   })
 
   it("renders multiple sections separated by blank line", () => {
     const map = {
       sections: [
-        section({ label: "A", start_line: 1, end_line: 5, keywords: ["x"] }),
-        section({ label: "B", start_line: 6, end_line: 15, keywords: ["y"] }),
+        section({ label: "A", start_line: 1, end_line: 5 }),
+        section({ label: "B", start_line: 6, end_line: 15 }),
       ],
     }
     expect(formatScoutMap("f.md", map)).toBe(
-      [`File: f.md`, ``, `[1-5] A`, `  keywords: x`, ``, `[6-15] B`, `  keywords: y`].join("\n")
+      [`File: f.md`, ``, `[1-5] A`, ``, `[6-15] B`].join("\n")
     )
   })
 })
@@ -161,15 +157,14 @@ describe("formatSection", () => {
         label: "Intro",
         start_line: 1,
         end_line: 10,
-        keywords: ["a"],
         desc: "opening",
       }),
-      expected: "[1-10] Intro\n  keywords: a\n  desc: opening",
+      expected: "[1-10] Intro\n  opening",
     },
     {
       name: "without desc",
-      section: section({ label: "Intro", start_line: 1, end_line: 10, keywords: ["a", "b"] }),
-      expected: "[1-10] Intro\n  keywords: a, b",
+      section: section({ label: "Intro", start_line: 1, end_line: 10 }),
+      expected: "[1-10] Intro",
     },
   ]
 

@@ -7,7 +7,6 @@ const section = (overrides: Partial<ScoutSection> = {}): ScoutSection => ({
   label: "Section A",
   start_line: 1,
   end_line: 10,
-  keywords: ["topic"],
   ...overrides,
 })
 
@@ -35,18 +34,10 @@ describe("formatTarget", () => {
       name: "mapped entry includes all sections",
       path: "a.md",
       entry: mappedEntry([
-        section({ label: "S1", start_line: 1, end_line: 10, keywords: ["k1"] }),
-        section({ label: "S2", start_line: 11, end_line: 20, keywords: ["k2"] }),
+        section({ label: "S1", start_line: 1, end_line: 10 }),
+        section({ label: "S2", start_line: 11, end_line: 20 }),
       ]),
-      expected: [
-        "File: a.md",
-        "",
-        "[1-10] S1",
-        "  keywords: k1",
-        "",
-        "[11-20] S2",
-        "  keywords: k2",
-      ].join("\n"),
+      expected: ["File: a.md", "", "[1-10] S1", "", "[11-20] S2"].join("\n"),
     },
   ]
 
@@ -112,24 +103,25 @@ describe("buildAutoSteps", () => {
   ]
   const sourceArg =
     '[{path: "source1.md", scope: "framework"}, {path: "source2.md", scope: "dimension"}]'
-  const sectionsArg =
-    '[{path: "a.md", start_line: 1, end_line: 10}, {path: "b.md", start_line: 5, end_line: 15}]'
 
   const cases = [
     {
-      name: "two steps: batch analysis + synthesis",
+      name: "one step per section plus synthesis",
       postAction: "annotate_as_code",
       check: (steps: ReturnType<typeof buildAutoSteps>) => {
-        expect(steps).toHaveLength(2)
-        expect(steps.map((s) => s.title)).toEqual(["Intro & Methods", "Synthesis"])
+        expect(steps).toHaveLength(3)
+        expect(steps.map((s) => s.title)).toEqual(["Intro", "Methods", "Synthesis"])
       },
     },
     {
-      name: "batch step contains single apply_deep_analysis with all sections",
+      name: "each section step contains single-section apply_deep_analysis",
       postAction: "annotate_as_code",
       check: (steps: ReturnType<typeof buildAutoSteps>) => {
         expect(steps[0].expected).toContain(
-          `apply_deep_analysis(sections=${sectionsArg}, source_files=${sourceArg}, post_action="annotate_as_code")`
+          `apply_deep_analysis(sections=[{path: "a.md", start_line: 1, end_line: 10}], source_files=${sourceArg}, post_action="annotate_as_code")`
+        )
+        expect(steps[1].expected).toContain(
+          `apply_deep_analysis(sections=[{path: "b.md", start_line: 5, end_line: 15}], source_files=${sourceArg}, post_action="annotate_as_code")`
         )
       },
     },

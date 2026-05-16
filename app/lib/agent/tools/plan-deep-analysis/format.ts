@@ -1,7 +1,6 @@
 import type { ScoutEntry } from "../scout/api"
 import type { StepDefObject } from "../../derived"
 import { formatSection } from "../scout/prose"
-import { concatPretty } from "~/lib/utils/format"
 
 export const formatTarget = (path: string, entry: ScoutEntry): string => {
   if (entry.kind !== "mapped") return `File: ${path}\n${(entry as { content: string }).content}`
@@ -38,7 +37,7 @@ export const buildAutoSteps = (
   matches: SectionMatch[],
   sources: SourceEntry[],
   postAction: string
-): StepDefObject[] => [toBatchAnalysisStep(matches, sources, postAction), SYNTHESIS_STEP]
+): StepDefObject[] => [...matches.map((m) => toSectionStep(m, sources, postAction)), SYNTHESIS_STEP]
 
 export const buildExecRules = (firstStepCall: string): string =>
   `Your only action: call the tool below. No other tool calls. No reasoning about the tool call. Execute.
@@ -48,21 +47,18 @@ export const buildExecRules = (firstStepCall: string): string =>
 const formatSourceArg = (sources: SourceEntry[]): string =>
   `[${sources.map((s) => `{path: "${s.path}", scope: "${s.scope}"}`).join(", ")}]`
 
-const formatSectionsArg = (matches: SectionMatch[]): string =>
-  `[${matches.map((m) => `{path: "${m.path}", start_line: ${m.startLine}, end_line: ${m.endLine}}`).join(", ")}]`
+const formatSectionArg = (m: SectionMatch): string =>
+  `[{path: "${m.path}", start_line: ${m.startLine}, end_line: ${m.endLine}}]`
 
-const buildStepLabel = (matches: SectionMatch[]): string =>
-  concatPretty(matches.map((m) => m.label))
-
-const toBatchAnalysisStep = (
-  matches: SectionMatch[],
+const toSectionStep = (
+  match: SectionMatch,
   sources: SourceEntry[],
   postAction: string
 ): StepDefObject => ({
-  title: buildStepLabel(matches),
+  title: match.label,
   expected: `
-    first call: apply_deep_analysis(sections=${formatSectionsArg(matches)}, source_files=${formatSourceArg(sources)}, post_action="${postAction}")
-    on result: give short 1-3 sentence summary then call complete_step
+    first call: apply_deep_analysis(sections=${formatSectionArg(match)}, source_files=${formatSourceArg(sources)}, post_action="${postAction}")
+    on result: write nothing. call complete_step immediately.
     `,
   checkpoint: false,
 })
