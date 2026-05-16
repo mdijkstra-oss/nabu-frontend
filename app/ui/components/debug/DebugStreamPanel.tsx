@@ -108,6 +108,8 @@ const formatBlock = (block: Block): string => {
       return `[error]\n${block.content}`
     case "debug_pause":
       return `[debug_pause]`
+    case "progress":
+      return `[progress] ${block.label}`
     default:
       return exhaustive(block)
   }
@@ -219,6 +221,7 @@ const blockRole = (block: Block): BlockRole => {
       return "output"
     case "empty_nudge":
     case "debug_pause":
+    case "progress":
       return "hidden"
     default:
       return exhaustive(block)
@@ -352,6 +355,7 @@ const BlockRenderer = ({ block, source, selected, onToggleSelect }: BlockRendere
     case "empty_nudge":
       return null
     case "debug_pause":
+    case "progress":
       return null
     case "error":
       return (
