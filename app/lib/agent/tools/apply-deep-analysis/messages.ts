@@ -157,6 +157,9 @@ export const REASON_CTA =
 export const FILTER_CTA =
   "For each coded section, judge whether the passage satisfies the code definition. Return only items that fail. Return results as JSON."
 
+export const ADJUDICATE_CTA =
+  "For each coded section, judge whether the passage satisfies the code definition. Return your judgment as JSON."
+
 export const buildFilterSchema = (validCodes: string[]) =>
   z.object({
     results: z.array(
@@ -164,6 +167,18 @@ export const buildFilterSchema = (validCodes: string[]) =>
         id: z.number().int().min(1),
         code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
         removalJustification: z.string(),
+      })
+    ),
+  })
+
+export const buildAdjudicateSchema = (validCodes: string[]) =>
+  z.object({
+    results: z.array(
+      z.object({
+        id: z.number().int().min(1),
+        code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
+        judgment: z.enum(["remove", "keep", "ambiguous"]),
+        reason: z.string(),
       })
     ),
   })

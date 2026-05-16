@@ -72,54 +72,53 @@ export const getAnnotationGlobalCountsByCode = (
   return result
 }
 
-const hasRemovalVotes = (a: StoredAnnotation): boolean => (a.vote?.filter.remove ?? 0) > 0
+export const hasReview = (a: Annotation): boolean => a.vote?.review !== undefined
 
-export const hasRemovalJustifications = (a: Annotation): boolean =>
-  (a.vote?.removalJustifications?.length ?? 0) > 0
+const hasStoredReview = (a: StoredAnnotation): boolean => a.vote?.review !== undefined
 
-export type RemovalSeverity = "normal" | "warning" | "danger"
+export type ReviewSeverity = "normal" | "warning" | "danger"
 
-export interface RemovalStat {
+export interface ReviewStat {
   ratio: number
-  severity: RemovalSeverity
+  severity: ReviewSeverity
 }
 
-const collectRemovalTallies = (
+const collectReviewTallies = (
   files: FileStore
-): { totals: Record<string, number>; dissents: Record<string, number> } => {
+): { totals: Record<string, number>; reviewed: Record<string, number> } => {
   const totals: Record<string, number> = {}
-  const dissents: Record<string, number> = {}
+  const reviewed: Record<string, number> = {}
   for (const raw of Object.values(files)) {
     for (const a of getStoredAnnotations(raw)) {
       if (!a.code) continue
       totals[a.code] = (totals[a.code] ?? 0) + 1
-      if (hasRemovalVotes(a)) dissents[a.code] = (dissents[a.code] ?? 0) + 1
+      if (hasStoredReview(a)) reviewed[a.code] = (reviewed[a.code] ?? 0) + 1
     }
   }
-  return { totals, dissents }
+  return { totals, reviewed }
 }
 
-const isRemovalOutlier = (
+const isReviewOutlier = (
   code: string,
   totals: Record<string, number>,
-  dissents: Record<string, number>
+  reviewed: Record<string, number>
 ): boolean => {
   const codeTotal = totals[code] ?? 0
-  const codeDissent = dissents[code] ?? 0
+  const codeReviewed = reviewed[code] ?? 0
   if (codeTotal === 0) return false
 
   const otherTotal = Object.entries(totals).reduce((sum, [k, v]) => sum + (k === code ? 0 : v), 0)
-  const otherDissent = Object.entries(dissents).reduce(
+  const otherReviewed = Object.entries(reviewed).reduce(
     (sum, [k, v]) => sum + (k === code ? 0 : v),
     0
   )
 
-  const baselineUpper = wilsonUpperBound(otherDissent, otherTotal)
-  const codeRatio = codeDissent / codeTotal
+  const baselineUpper = wilsonUpperBound(otherReviewed, otherTotal)
+  const codeRatio = codeReviewed / codeTotal
   const above = codeRatio > baselineUpper
 
   console.debug(
-    `[wilson] ${code}: total=${codeTotal} flagged=${codeDissent} ratio=${codeRatio.toFixed(2)} wilson=${baselineUpper.toFixed(3)} self=${codeRatio.toFixed(3)} above=${above}`
+    `[wilson] ${code}: total=${codeTotal} reviewed=${codeReviewed} ratio=${codeRatio.toFixed(2)} wilson=${baselineUpper.toFixed(3)} self=${codeRatio.toFixed(3)} above=${above}`
   )
 
   return above
@@ -127,17 +126,17 @@ const isRemovalOutlier = (
 
 const LOW_CONFIDENCE_THRESHOLD = 5
 
-const toSeverity = (outlier: boolean, total: number): RemovalSeverity => {
+const toSeverity = (outlier: boolean, total: number): ReviewSeverity => {
   if (!outlier) return "normal"
   return total < LOW_CONFIDENCE_THRESHOLD ? "warning" : "danger"
 }
 
-export const getRemovalStatsByCode = (files: FileStore): Record<string, RemovalStat> => {
-  const { totals, dissents } = collectRemovalTallies(files)
-  const result: Record<string, RemovalStat> = {}
-  for (const code of Object.keys(dissents)) {
-    const ratio = Math.round((dissents[code] / totals[code]) * 100) / 100
-    const outlier = isRemovalOutlier(code, totals, dissents)
+export const getReviewStatsByCode = (files: FileStore): Record<string, ReviewStat> => {
+  const { totals, reviewed } = collectReviewTallies(files)
+  const result: Record<string, ReviewStat> = {}
+  for (const code of Object.keys(reviewed)) {
+    const ratio = Math.round((reviewed[code] / totals[code]) * 100) / 100
+    const outlier = isReviewOutlier(code, totals, reviewed)
     result[code] = { ratio, severity: toSeverity(outlier, totals[code]) }
   }
   return result

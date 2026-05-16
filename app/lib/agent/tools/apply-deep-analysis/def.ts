@@ -45,6 +45,7 @@ export type ApplyDeepAnalysisArgs = z.infer<typeof ApplyDeepAnalysisArgs>
 export const FIND_ENDPOINT = "/deep-analysis-find"
 export const REASON_ENDPOINT = "/deep-analysis-reason"
 export const FILTER_ENDPOINT = "/deep-analysis-filter"
+export const ADJUDICATE_ENDPOINT = "/deep-analysis-adjudicate"
 // Splits even uneven to ?model=1 or model=0 for model diversification
 export const FIND_RUNS = 4
 export const FIND_THRESHOLD = 2

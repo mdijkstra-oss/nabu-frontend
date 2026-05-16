@@ -9,7 +9,7 @@ import { matchesAny } from "~/lib/utils/filter"
 import { solidBackground, hoveredElementBorder } from "~/ui/theme/radix"
 import type {
   GlobalAnnotationCount,
-  RemovalStat,
+  ReviewStat,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes, toggleSelectedCode } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
@@ -22,8 +22,8 @@ interface CodesSidebarProps {
   codebook: Codebook
   annotationCounts?: Record<string, number>
   globalAnnotationCounts?: Record<string, GlobalAnnotationCount>
-  removalStats?: Record<string, RemovalStat>
-  debugRemoval?: boolean
+  reviewStats?: Record<string, ReviewStat>
+  debugReview?: boolean
   busy?: boolean
   onEditCode?: (code: Code) => void
   onCodeFile?: (code: Code) => void
@@ -86,8 +86,8 @@ export const CodesSidebar = ({
   codebook,
   annotationCounts = {},
   globalAnnotationCounts = {},
-  removalStats,
-  debugRemoval = false,
+  reviewStats,
+  debugReview = false,
   onEditCode,
   onFileSelect,
   onSearchCode,
@@ -143,8 +143,8 @@ export const CodesSidebar = ({
                 <CodeItem
                   code={code}
                   count={annotationCounts[code.id]}
-                  removalStat={removalStats?.[code.id]}
-                  debugRemoval={debugRemoval}
+                  reviewStat={reviewStats?.[code.id]}
+                  debugReview={debugReview}
                   highlighted={code.id === hoveredCode?.id}
                   onMouseEnter={() => setHoveredCode(code)}
                   onClick={() => onEditCode?.(code)}

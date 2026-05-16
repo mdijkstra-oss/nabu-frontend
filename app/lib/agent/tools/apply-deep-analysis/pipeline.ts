@@ -9,11 +9,13 @@ import {
   buildFindCall,
   buildFindResultSchema,
   buildFilterSchema,
+  buildAdjudicateSchema,
   buildSpanStepMessages,
   extractSourceIds,
   buildSourceTitleMap,
   REASON_CTA,
   FILTER_CTA,
+  ADJUDICATE_CTA,
 } from "./messages"
 import {
   tallyVotes,
@@ -30,6 +32,7 @@ import {
   FIND_ENDPOINT,
   REASON_ENDPOINT,
   FILTER_ENDPOINT,
+  ADJUDICATE_ENDPOINT,
   FIND_RUNS,
   FIND_THRESHOLD,
   FIND_MAX_GAP,
@@ -355,6 +358,98 @@ export const runFilter = async (
   }
 
   return { surviving, dropped, filterVotes, filterJustifications, errors }
+}
+
+export interface AdjudicateResult {
+  surviving: FindResult[]
+  removed: FindResult[]
+  reviews: Map<string, string>
+  errors: string[]
+}
+
+const EMPTY_ADJUDICATE: AdjudicateResult = {
+  surviving: [],
+  removed: [],
+  reviews: new Map(),
+  errors: [],
+}
+
+export const runAdjudicate = async (
+  disputedSpans: FindResult[],
+  sentences: string[],
+  sources: ScopedSources,
+  leadingCtx: string,
+  trailingCtx: string,
+  resolve: ContentResolver
+): Promise<AdjudicateResult> => {
+  if (disputedSpans.length === 0) return EMPTY_ADJUDICATE
+
+  console.debug(`[deep-adjudicate] ${disputedSpans.length} disputed span(s) entering adjudication`)
+
+  const grouped = groupBySpan(disputedSpans)
+  const codeIds = collectCodeIds(grouped)
+  const codedItems = toCodedItems(grouped)
+  const { text: presented, mapping } = formatCodedSection(
+    sentences,
+    codedItems,
+    SPAN_STEP_CONTEXT_SENTENCES
+  )
+
+  const messages = buildSpanStepMessages(
+    presented,
+    codeIds,
+    sources,
+    leadingCtx,
+    trailingCtx,
+    resolve,
+    ADJUDICATE_CTA
+  )
+
+  const validCodes = [...codeIds]
+  const schema = buildAdjudicateSchema(validCodes)
+  const result = await callAndParse(ADJUDICATE_ENDPOINT, messages, schema)
+
+  if (!result.ok) {
+    console.debug(`[deep-adjudicate] failed: ${result.error}`)
+    return {
+      surviving: disputedSpans,
+      removed: [],
+      reviews: new Map(),
+      errors: [result.error],
+    }
+  }
+
+  const surviving: FindResult[] = []
+  const removed: FindResult[] = []
+  const reviews = new Map<string, string>()
+
+  const judgmentByKey = new Map<string, { judgment: string; reason: string }>()
+  for (const r of result.data.results) {
+    const m = mapping.find((entry) => entry.index === r.id)
+    if (!m) continue
+    const key = spanKey(m.start, m.end, r.code)
+    judgmentByKey.set(key, { judgment: r.judgment, reason: r.reason })
+    console.debug(`[deep-adjudicate]   [${m.start}-${m.end}] ${r.code}: ${r.judgment}`)
+  }
+
+  for (const span of disputedSpans) {
+    const key = spanKey(span.start, span.end, span.analysis_source_id)
+    const entry = judgmentByKey.get(key)
+    if (!entry || entry.judgment === "keep") {
+      surviving.push(span)
+    } else if (entry.judgment === "remove") {
+      removed.push(span)
+    } else {
+      surviving.push(span)
+      reviews.set(key, entry.reason)
+    }
+  }
+
+  console.debug(
+    `[deep-adjudicate] ${surviving.length} surviving, ${removed.length} removed, ${reviews.size} ambiguous`
+  )
+
+  return { surviving, removed, reviews, errors: [] }
 }
 
 export const runDimensionPipeline = async (

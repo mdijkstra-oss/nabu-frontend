@@ -488,12 +488,11 @@ describe("buildRemovalOps", () => {
 const vote3of3: VoteRecord = {
   find: { found: 3, missed: 0 },
   filter: { keep: 3, remove: 0 },
-  removalJustifications: [],
 }
 const vote2of3: VoteRecord = {
   find: { found: 2, missed: 1 },
   filter: { keep: 2, remove: 1 },
-  removalJustifications: ["dissenting reason"],
+  review: "dissenting reason",
 }
 
 describe("vote pass-through", () => {

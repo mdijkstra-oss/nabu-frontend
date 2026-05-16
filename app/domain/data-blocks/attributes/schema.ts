@@ -34,7 +34,7 @@ const BaseAnnotationSchema = z.object({
     .object({
       find: z.object({ found: z.number().int(), missed: z.number().int() }),
       filter: z.object({ keep: z.number().int(), remove: z.number().int() }),
-      removalJustifications: z.array(z.string()),
+      review: z.string().optional(),
     })
     .optional(),
 })

@@ -54,7 +54,7 @@ import {
   getAnnotationCount,
   getAnnotationCountsByCode,
   getAnnotationGlobalCountsByCode,
-  getRemovalStatsByCode,
+  getReviewStatsByCode,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { findDocumentForCallout } from "~/domain/data-blocks/callout/selectors"
 import { toDisplayName, isHiddenFile } from "~/lib/files/filename"
@@ -467,7 +467,7 @@ export default function ProjectLayout() {
     [currentFile, files]
   )
   const globalAnnotationCounts = useMemo(() => getAnnotationGlobalCountsByCode(files), [files])
-  const removalStats = useMemo(() => getRemovalStatsByCode(files), [files])
+  const reviewStats = useMemo(() => getReviewStatsByCode(files), [files])
 
   const hasSelectedAnnotationsInFile = useMemo(
     () => Object.keys(annotationCounts).some((code) => selectedCodes.has(code)),
@@ -598,8 +598,8 @@ export default function ProjectLayout() {
               codebook={codebook}
               annotationCounts={annotationCounts}
               globalAnnotationCounts={globalAnnotationCounts}
-              removalStats={removalStats}
-              debugRemoval={debugOptions.showRemovalCounts}
+              reviewStats={reviewStats}
+              debugReview={debugOptions.showReviewStats}
               busy={chatLoading}
               onEditCode={handleEditCode}
               onCodeFile={handleCodeFile}

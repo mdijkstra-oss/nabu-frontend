@@ -9,7 +9,7 @@ import type { FindResult } from "./consensus"
 export interface VoteRecord {
   find: { found: number; missed: number }
   filter: { keep: number; remove: number }
-  removalJustifications: string[]
+  review?: string
 }
 
 export interface AnalysisResult {

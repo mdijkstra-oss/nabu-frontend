@@ -33,8 +33,10 @@ import {
   mergeDimensionResults,
   runReasonStep,
   runFilter,
+  runAdjudicate,
   type DimensionResult,
 } from "./pipeline"
+import type { FindResult } from "./consensus"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
@@ -45,12 +47,19 @@ import { showProgress } from "../../client/store"
 interface PhaseTracker {
   tickFind: () => void
   tickFilter: () => void
+  tickAdjudicate: () => void
   tickReason: () => void
 }
 
-const derivePhaseLabel = (finds: number, filters: number, reasons: number): string => {
+const derivePhaseLabel = (
+  finds: number,
+  filters: number,
+  adjudicates: number,
+  reasons: number
+): string => {
   if (finds > 0) return "Interpreting dimensions"
   if (filters > 0) return "Cross-referencing findings"
+  if (adjudicates > 0) return "Adjudicating disputes"
   if (reasons > 0) return "Building justifications"
   return "Finishing up"
 }
@@ -58,17 +67,19 @@ const derivePhaseLabel = (finds: number, filters: number, reasons: number): stri
 const createPhaseTracker = (
   totalFinds: number,
   totalFilters: number,
+  totalAdjudicates: number,
   totalReasons: number
 ): PhaseTracker => {
   let pendingFinds = totalFinds
   let pendingFilters = totalFilters
+  let pendingAdjudicates = totalAdjudicates
   let pendingReasons = totalReasons
-  const total = totalFinds + totalFilters + totalReasons
+  const total = totalFinds + totalFilters + totalAdjudicates + totalReasons
   let completed = 0
 
   const emit = () => {
     const pct = Math.round((completed / total) * 100)
-    const label = derivePhaseLabel(pendingFinds, pendingFilters, pendingReasons)
+    const label = derivePhaseLabel(pendingFinds, pendingFilters, pendingAdjudicates, pendingReasons)
     showProgress(`${pct}% · ${label}`)
   }
 
@@ -80,6 +91,11 @@ const createPhaseTracker = (
     },
     tickFilter: () => {
       pendingFilters--
+      completed++
+      emit()
+    },
+    tickAdjudicate: () => {
+      pendingAdjudicates--
       completed++
       emit()
     },
@@ -328,7 +344,29 @@ const processSection = async (
     warnings.push(...filterResult.errors.map((e) => `filter: ${e}`))
   }
 
-  const { surviving, dropped, filterVotes, filterJustifications } = filterResult
+  const { dropped: filterDropped, filterVotes, filterJustifications } = filterResult
+
+  const isDisputed = (s: FindResult) =>
+    filterJustifications.has(spanKey(s.start, s.end, s.analysis_source_id))
+  const disputedSpans = filterResult.surviving.filter(isDisputed)
+  const undisputedSpans = filterResult.surviving.filter((s) => !isDisputed(s))
+
+  const adjudicateResult = await runAdjudicate(
+    disputedSpans,
+    sentences,
+    scoped,
+    leadingCtx,
+    trailingCtx,
+    resolve
+  )
+  tracker.tickAdjudicate()
+
+  if (adjudicateResult.errors.length > 0) {
+    warnings.push(...adjudicateResult.errors.map((e) => `adjudicate: ${e}`))
+  }
+
+  const surviving = [...undisputedSpans, ...adjudicateResult.surviving]
+  const dropped = [...filterDropped, ...adjudicateResult.removed]
 
   const reasonResult = await runReasonStep(
     surviving,
@@ -354,21 +392,21 @@ const processSection = async (
     const key = spanKey(s.start, s.end, s.analysis_source_id)
     const findVotes = allFindVotes.get(key) ?? []
     const fVotes = filterVotes.get(key) ?? []
-    voteRecords.set(key, {
+    const review = adjudicateResult.reviews.get(key)
+    const vote: VoteRecord = {
       find: countVotes(findVotes),
       filter: countFilter(fVotes),
-      removalJustifications: filterJustifications.get(key) ?? [],
-    })
+    }
+    if (review !== undefined) vote.review = review
+    voteRecords.set(key, vote)
   }
 
   const analysisResults = toAnalysisResults(surviving, reasonResult.values, voteRecords)
   const mapped = mapResults(sentences, analysisResults)
 
-  const withRemovalDissent = [...voteRecords.values()].filter(
-    (v) => v.removalJustifications.length > 0
-  ).length
+  const withReview = [...voteRecords.values()].filter((v) => v.review !== undefined).length
   console.debug(
-    `[deep-analysis] result: ${allSpans.length} found → ${surviving.length} surviving, ${dropped.length} dropped, ${withRemovalDissent} with removal dissent`
+    `[deep-analysis] result: ${allSpans.length} found → ${surviving.length} surviving, ${dropped.length} dropped, ${withReview} with review`
   )
 
   return postAction({
@@ -424,6 +462,7 @@ registerTool(
 
       const tracker = createPhaseTracker(
         sections.length * calls.length,
+        sections.length,
         sections.length,
         sections.length
       )
