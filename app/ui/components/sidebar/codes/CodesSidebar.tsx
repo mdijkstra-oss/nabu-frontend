@@ -7,7 +7,10 @@ import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { CheckableWrap } from "~/ui/components/CheckableWrap"
 import { matchesAny } from "~/lib/utils/filter"
 import { solidBackground, hoveredElementBorder } from "~/ui/theme/radix"
-import type { GlobalAnnotationCount } from "~/domain/data-blocks/attributes/annotations/selectors"
+import type {
+  GlobalAnnotationCount,
+  RemovalStat,
+} from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes, toggleSelectedCode } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getFiles, subscribe } from "~/lib/files/store"
@@ -19,7 +22,8 @@ interface CodesSidebarProps {
   codebook: Codebook
   annotationCounts?: Record<string, number>
   globalAnnotationCounts?: Record<string, GlobalAnnotationCount>
-  removalCounts?: Record<string, number>
+  removalStats?: Record<string, RemovalStat>
+  debugRemoval?: boolean
   busy?: boolean
   onEditCode?: (code: Code) => void
   onCodeFile?: (code: Code) => void
@@ -82,7 +86,8 @@ export const CodesSidebar = ({
   codebook,
   annotationCounts = {},
   globalAnnotationCounts = {},
-  removalCounts,
+  removalStats,
+  debugRemoval = false,
   onEditCode,
   onFileSelect,
   onSearchCode,
@@ -138,7 +143,8 @@ export const CodesSidebar = ({
                 <CodeItem
                   code={code}
                   count={annotationCounts[code.id]}
-                  removalCount={removalCounts?.[code.id]}
+                  removalStat={removalStats?.[code.id]}
+                  debugRemoval={debugRemoval}
                   highlighted={code.id === hoveredCode?.id}
                   onMouseEnter={() => setHoveredCode(code)}
                   onClick={() => onEditCode?.(code)}

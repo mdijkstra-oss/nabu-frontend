@@ -4,6 +4,7 @@ import { getBlock } from "~/lib/data-blocks/query"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
 import type { FileStore } from "~/lib/files/store"
 import { findIn, findFileFor } from "~/lib/files/collect"
+import { wilsonUpperBound } from "~/lib/utils/wilson"
 
 export type Annotation = Omit<StoredAnnotation, "color"> & { color: string }
 
@@ -76,13 +77,68 @@ const hasRemovalVotes = (a: StoredAnnotation): boolean => (a.vote?.filter.remove
 export const hasRemovalJustifications = (a: Annotation): boolean =>
   (a.vote?.removalJustifications?.length ?? 0) > 0
 
-export const getRemovalCountsByCode = (files: FileStore): Record<string, number> => {
-  const result: Record<string, number> = {}
+export type RemovalSeverity = "normal" | "warning" | "danger"
+
+export interface RemovalStat {
+  ratio: number
+  severity: RemovalSeverity
+}
+
+const collectRemovalTallies = (
+  files: FileStore
+): { totals: Record<string, number>; dissents: Record<string, number> } => {
+  const totals: Record<string, number> = {}
+  const dissents: Record<string, number> = {}
   for (const raw of Object.values(files)) {
     for (const a of getStoredAnnotations(raw)) {
-      if (!a.code || !hasRemovalVotes(a)) continue
-      result[a.code] = (result[a.code] ?? 0) + 1
+      if (!a.code) continue
+      totals[a.code] = (totals[a.code] ?? 0) + 1
+      if (hasRemovalVotes(a)) dissents[a.code] = (dissents[a.code] ?? 0) + 1
     }
+  }
+  return { totals, dissents }
+}
+
+const isRemovalOutlier = (
+  code: string,
+  totals: Record<string, number>,
+  dissents: Record<string, number>
+): boolean => {
+  const codeTotal = totals[code] ?? 0
+  const codeDissent = dissents[code] ?? 0
+  if (codeTotal === 0) return false
+
+  const otherTotal = Object.entries(totals).reduce((sum, [k, v]) => sum + (k === code ? 0 : v), 0)
+  const otherDissent = Object.entries(dissents).reduce(
+    (sum, [k, v]) => sum + (k === code ? 0 : v),
+    0
+  )
+
+  const baselineUpper = wilsonUpperBound(otherDissent, otherTotal)
+  const codeRatio = codeDissent / codeTotal
+  const above = codeRatio > baselineUpper
+
+  console.debug(
+    `[wilson] ${code}: total=${codeTotal} flagged=${codeDissent} ratio=${codeRatio.toFixed(2)} wilson=${baselineUpper.toFixed(3)} self=${codeRatio.toFixed(3)} above=${above}`
+  )
+
+  return above
+}
+
+const LOW_CONFIDENCE_THRESHOLD = 5
+
+const toSeverity = (outlier: boolean, total: number): RemovalSeverity => {
+  if (!outlier) return "normal"
+  return total < LOW_CONFIDENCE_THRESHOLD ? "warning" : "danger"
+}
+
+export const getRemovalStatsByCode = (files: FileStore): Record<string, RemovalStat> => {
+  const { totals, dissents } = collectRemovalTallies(files)
+  const result: Record<string, RemovalStat> = {}
+  for (const code of Object.keys(dissents)) {
+    const ratio = Math.round((dissents[code] / totals[code]) * 100) / 100
+    const outlier = isRemovalOutlier(code, totals, dissents)
+    result[code] = { ratio, severity: toSeverity(outlier, totals[code]) }
   }
   return result
 }
