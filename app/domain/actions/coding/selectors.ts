@@ -13,7 +13,7 @@ export const resolveCodingFiles = (files: FileStore, selectedIds: string[]): Cod
   const selected = new Set(selectedIds)
   const groups = groupCodesByFile(files)
 
-  return groups.flatMap((group) => {
+  return groups.flatMap((group): CodingFileRef[] => {
     const matching = group.codes.filter((c) => selected.has(c.id))
     if (matching.length === 0) return []
 
