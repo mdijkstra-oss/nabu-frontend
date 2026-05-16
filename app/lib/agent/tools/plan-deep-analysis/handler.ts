@@ -12,6 +12,7 @@ import { processPool } from "~/lib/utils/pool"
 import { PREFERENCES_FILE } from "~/lib/files/filename"
 import { getFiles } from "~/lib/files/store"
 import { formatTarget, collectSections, buildAutoSteps, buildExecRules } from "./format"
+import { errorMessage } from "~/lib/utils/error"
 import type { SourceEntry } from "./format"
 
 interface ScoutJob {
@@ -79,8 +80,8 @@ registerTool(
       )
 
       if (failures.length > 0) {
-        const failedPaths = failures.map((f) => f.item.file.path)
-        return { status: "error", output: `Scout failed: ${failedPaths.join(", ")}`, mutations: [] }
+        const details = failures.map((f) => `${f.item.file.path}: ${errorMessage(f.error)}`)
+        return { status: "error", output: `Scout failed:\n${details.join("\n")}`, mutations: [] }
       }
 
       const targetEntries = results.filter((r) => r.role === "target")
