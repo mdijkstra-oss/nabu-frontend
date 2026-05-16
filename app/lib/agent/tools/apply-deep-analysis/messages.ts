@@ -177,7 +177,7 @@ export const buildAdjudicateSchema = (validCodes: string[]) =>
       z.object({
         id: z.number().int().min(1),
         code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
-        judgment: z.enum(["remove", "keep", "ambiguous"]),
+        judgment: z.enum(["remove", "keep", "ambiguous", "conflict"]),
         reason: z.string(),
       })
     ),

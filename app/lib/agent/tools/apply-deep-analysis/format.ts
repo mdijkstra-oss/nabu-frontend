@@ -91,6 +91,15 @@ export const numberSection = (text: string): { sentences: string[]; numbered: st
   return { sentences, numbered: formatNumberedPassage(sentences) }
 }
 
+export const numberSectionWithPositions = (
+  text: string
+): { sentences: string[]; numbered: string; positions: { start: number }[] } => {
+  const segments = splitSentenceTexts(text)
+  const sentences = segments.map((s) => s.text)
+  const positions = segments.map((s) => ({ start: s.start }))
+  return { sentences, numbered: formatNumberedPassage(sentences), positions }
+}
+
 export const mapResults = (sentences: string[], results: AnalysisResult[]): MappedResult[] =>
   results.flatMap((r) => {
     const spans = sentences.slice(r.start - 1, r.end)

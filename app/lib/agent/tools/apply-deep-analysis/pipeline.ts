@@ -39,6 +39,8 @@ import {
   FILTER_RUNS,
   FILTER_THRESHOLD,
   SPAN_STEP_CONTEXT_SENTENCES,
+  POST_FIND_BATCH_SIZE,
+  POST_FIND_CONCURRENCY,
 } from "./def"
 import { errorMessage } from "~/lib/utils/error"
 
@@ -190,33 +192,29 @@ const runSpanStep = async (
   return { values }
 }
 
-export const runReasonStep = async (
-  allSpans: FindResult[],
-  sentences: string[],
-  sources: ScopedSources,
-  leadingCtx: string,
-  trailingCtx: string,
-  resolve: ContentResolver
-): Promise<{ values: Map<string, string>; error?: string }> => {
-  const grouped = groupBySpan(allSpans)
-  return runSpanStep(
-    "reason",
-    grouped,
-    REASON_ENDPOINT,
-    REASON_CTA,
-    sentences,
-    sources,
-    leadingCtx,
-    trailingCtx,
-    resolve
-  )
+const batchItems = <T>(items: T[], size: number): T[][] => {
+  const batches: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    batches.push(items.slice(i, i + size))
+  }
+  return batches
 }
 
-export interface FilterResult {
+export interface BatchPhaseNotifier {
+  setBatchCount: (n: number) => void
+  enterFilter: () => void
+  enterAdjudicate: () => void
+  enterReason: () => void
+  exitBatch: () => void
+}
+
+export interface PostFindResult {
   surviving: FindResult[]
   dropped: FindResult[]
   filterVotes: Map<string, boolean[]>
   filterJustifications: Map<string, string[]>
+  reviews: Map<string, string>
+  reasons: Map<string, string>
   errors: string[]
 }
 
@@ -236,26 +234,21 @@ const mapFilterResults = (
       : []
   })
 
-export const runFilter = async (
-  allSpans: FindResult[],
+const runFilterBatch = async (
+  batchSpans: FindResult[],
+  grouped: CodedSpan[],
   sentences: string[],
   sources: ScopedSources,
   leadingCtx: string,
   trailingCtx: string,
   resolve: ContentResolver
-): Promise<FilterResult> => {
-  const emptyVotes = new Map<string, boolean[]>()
-  const emptyJustifications = new Map<string, string[]>()
-  const grouped = groupBySpan(allSpans)
-  if (grouped.length === 0)
-    return {
-      surviving: [],
-      dropped: [],
-      filterVotes: emptyVotes,
-      filterJustifications: emptyJustifications,
-      errors: [],
-    }
-
+): Promise<{
+  surviving: FindResult[]
+  dropped: FindResult[]
+  filterVotes: Map<string, boolean[]>
+  filterJustifications: Map<string, string[]>
+  errors: string[]
+}> => {
   const codeIds = collectCodeIds(grouped)
   const codedItems = toCodedItems(grouped)
   const { text: presented, mapping } = formatCodedSection(
@@ -290,27 +283,16 @@ export const runFilter = async (
       return [mapFilterResults(result.data.results, mapping)]
     },
     noop,
-    // no warmup — only 2 runs on 2 different models, no same-model repeat to benefit from cache
     { concurrency: 3 }
   )
   for (const f of failures) errors.push(errorMessage(f.error))
 
-  const filterPerRun = rawRuns.map((hits, i) => `run-${i}(m${i % 2}):${hits.length}`).join(", ")
-  console.debug(`[deep-filter] runs: ${filterPerRun}`)
-
-  if (rawRuns.length < FILTER_RUNS) {
-    console.debug(
-      `[deep-filter] ${rawRuns.length}/${FILTER_RUNS} runs (${FILTER_RUNS - rawRuns.length} dropped)`
-    )
-  }
-
   if (rawRuns.length === 0) {
-    console.debug(`[deep-filter] 0/${FILTER_RUNS} runs — skipping filter, all spans survive`)
     return {
-      surviving: allSpans,
+      surviving: batchSpans,
       dropped: [],
-      filterVotes: emptyVotes,
-      filterJustifications: emptyJustifications,
+      filterVotes: new Map(),
+      filterJustifications: new Map(),
       errors,
     }
   }
@@ -321,13 +303,7 @@ export const runFilter = async (
     [...votes.entries()].filter(([, v]) => v >= FILTER_THRESHOLD).map(([k]) => k)
   )
 
-  const allSpanKeys = new Set(allSpans.map((s) => spanKey(s.start, s.end, s.analysis_source_id)))
-  const agreedRemove = rejected.size
-  const partialFlag = votes.size - rejected.size
-  const untouched = allSpanKeys.size - votes.size
-  console.debug(
-    `[deep-filter] agreement: ${agreedRemove} agreed-remove, ${partialFlag} one-flagged, ${untouched} untouched`
-  )
+  const allSpanKeys = new Set(batchSpans.map((s) => spanKey(s.start, s.end, s.analysis_source_id)))
   const filterVotes = new Map<string, boolean[]>()
   for (const key of allSpanKeys) {
     const perVoter = rawRuns.map((hits) => !hits.some((h) => h.key === key))
@@ -348,7 +324,7 @@ export const runFilter = async (
 
   const surviving: FindResult[] = []
   const dropped: FindResult[] = []
-  for (const span of allSpans) {
+  for (const span of batchSpans) {
     const key = spanKey(span.start, span.end, span.analysis_source_id)
     if (rejected.has(key)) {
       dropped.push(span)
@@ -360,31 +336,21 @@ export const runFilter = async (
   return { surviving, dropped, filterVotes, filterJustifications, errors }
 }
 
-export interface AdjudicateResult {
-  surviving: FindResult[]
-  removed: FindResult[]
-  reviews: Map<string, string>
-  errors: string[]
-}
-
-const EMPTY_ADJUDICATE: AdjudicateResult = {
-  surviving: [],
-  removed: [],
-  reviews: new Map(),
-  errors: [],
-}
-
-export const runAdjudicate = async (
+const runAdjudicateBatch = async (
   disputedSpans: FindResult[],
   sentences: string[],
   sources: ScopedSources,
   leadingCtx: string,
   trailingCtx: string,
   resolve: ContentResolver
-): Promise<AdjudicateResult> => {
-  if (disputedSpans.length === 0) return EMPTY_ADJUDICATE
-
-  console.debug(`[deep-adjudicate] ${disputedSpans.length} disputed span(s) entering adjudication`)
+): Promise<{
+  surviving: FindResult[]
+  removed: FindResult[]
+  reviews: Map<string, string>
+  errors: string[]
+}> => {
+  if (disputedSpans.length === 0)
+    return { surviving: [], removed: [], reviews: new Map(), errors: [] }
 
   const grouped = groupBySpan(disputedSpans)
   const codeIds = collectCodeIds(grouped)
@@ -410,13 +376,7 @@ export const runAdjudicate = async (
   const result = await callAndParse(ADJUDICATE_ENDPOINT, messages, schema)
 
   if (!result.ok) {
-    console.debug(`[deep-adjudicate] failed: ${result.error}`)
-    return {
-      surviving: disputedSpans,
-      removed: [],
-      reviews: new Map(),
-      errors: [result.error],
-    }
+    return { surviving: disputedSpans, removed: [], reviews: new Map(), errors: [result.error] }
   }
 
   const surviving: FindResult[] = []
@@ -427,9 +387,7 @@ export const runAdjudicate = async (
   for (const r of result.data.results) {
     const m = mapping.find((entry) => entry.index === r.id)
     if (!m) continue
-    const key = spanKey(m.start, m.end, r.code)
-    judgmentByKey.set(key, { judgment: r.judgment, reason: r.reason })
-    console.debug(`[deep-adjudicate]   [${m.start}-${m.end}] ${r.code}: ${r.judgment}`)
+    judgmentByKey.set(spanKey(m.start, m.end, r.code), { judgment: r.judgment, reason: r.reason })
   }
 
   for (const span of disputedSpans) {
@@ -445,11 +403,176 @@ export const runAdjudicate = async (
     }
   }
 
-  console.debug(
-    `[deep-adjudicate] ${surviving.length} surviving, ${removed.length} removed, ${reviews.size} ambiguous`
+  return { surviving, removed, reviews, errors: [] }
+}
+
+const spansForBatch = (allSpans: FindResult[], batch: CodedSpan[]): FindResult[] => {
+  const keys = new Set<string>()
+  for (const cs of batch) {
+    for (const code of cs.codings) keys.add(spanKey(cs.start, cs.end, code))
+  }
+  return allSpans.filter((s) => keys.has(spanKey(s.start, s.end, s.analysis_source_id)))
+}
+
+interface BatchResult {
+  surviving: FindResult[]
+  dropped: FindResult[]
+  filterVotes: Map<string, boolean[]>
+  filterJustifications: Map<string, string[]>
+  reviews: Map<string, string>
+  reasons: Map<string, string>
+  errors: string[]
+}
+
+const runBatch = async (
+  batch: CodedSpan[],
+  allSpans: FindResult[],
+  sentences: string[],
+  sources: ScopedSources,
+  leadingCtx: string,
+  trailingCtx: string,
+  resolve: ContentResolver,
+  notify: BatchPhaseNotifier
+): Promise<BatchResult> => {
+  const batchSpans = spansForBatch(allSpans, batch)
+
+  notify.enterFilter()
+  const filterResult = await runFilterBatch(
+    batchSpans,
+    batch,
+    sentences,
+    sources,
+    leadingCtx,
+    trailingCtx,
+    resolve
   )
 
-  return { surviving, removed, reviews, errors: [] }
+  const isDisputed = (s: FindResult) =>
+    filterResult.filterJustifications.has(spanKey(s.start, s.end, s.analysis_source_id))
+  const disputedSpans = filterResult.surviving.filter(isDisputed)
+  const undisputedSpans = filterResult.surviving.filter((s) => !isDisputed(s))
+
+  notify.enterAdjudicate()
+  const adjResult = await runAdjudicateBatch(
+    disputedSpans,
+    sentences,
+    sources,
+    leadingCtx,
+    trailingCtx,
+    resolve
+  )
+
+  const surviving = [...undisputedSpans, ...adjResult.surviving]
+  const dropped = [...filterResult.dropped, ...adjResult.removed]
+
+  notify.enterReason()
+  const reasonResult = await runSpanStep(
+    "reason",
+    groupBySpan(surviving),
+    REASON_ENDPOINT,
+    REASON_CTA,
+    sentences,
+    sources,
+    leadingCtx,
+    trailingCtx,
+    resolve
+  )
+
+  notify.exitBatch()
+
+  const errors = [
+    ...filterResult.errors,
+    ...adjResult.errors,
+    ...(reasonResult.error ? [reasonResult.error] : []),
+  ]
+
+  return {
+    surviving,
+    dropped,
+    filterVotes: filterResult.filterVotes,
+    filterJustifications: filterResult.filterJustifications,
+    reviews: adjResult.reviews,
+    reasons: reasonResult.values,
+    errors,
+  }
+}
+
+const EMPTY_POST_FIND: PostFindResult = {
+  surviving: [],
+  dropped: [],
+  filterVotes: new Map(),
+  filterJustifications: new Map(),
+  reviews: new Map(),
+  reasons: new Map(),
+  errors: [],
+}
+
+const mergeBatchResults = (batchResults: BatchResult[]): PostFindResult => {
+  const surviving: FindResult[] = []
+  const dropped: FindResult[] = []
+  const filterVotes = new Map<string, boolean[]>()
+  const filterJustifications = new Map<string, string[]>()
+  const reviews = new Map<string, string>()
+  const reasons = new Map<string, string>()
+  const errors: string[] = []
+
+  for (const br of batchResults) {
+    surviving.push(...br.surviving)
+    dropped.push(...br.dropped)
+    for (const [k, v] of br.filterVotes) filterVotes.set(k, v)
+    for (const [k, v] of br.filterJustifications) filterJustifications.set(k, v)
+    for (const [k, v] of br.reviews) reviews.set(k, v)
+    for (const [k, v] of br.reasons) reasons.set(k, v)
+    errors.push(...br.errors)
+  }
+
+  return { surviving, dropped, filterVotes, filterJustifications, reviews, reasons, errors }
+}
+
+export const runPostFindPipeline = async (
+  allSpans: FindResult[],
+  sentences: string[],
+  sources: ScopedSources,
+  leadingCtx: string,
+  trailingCtx: string,
+  resolve: ContentResolver,
+  notify: BatchPhaseNotifier
+): Promise<PostFindResult> => {
+  const grouped = groupBySpan(allSpans)
+  if (grouped.length === 0) return EMPTY_POST_FIND
+
+  const batches = batchItems(grouped, POST_FIND_BATCH_SIZE)
+  notify.setBatchCount(batches.length)
+  console.debug(`[deep-analysis] post-find: ${grouped.length} spans → ${batches.length} batch(es)`)
+
+  const { results: batchResults, failures } = await processPool<CodedSpan[], BatchResult>(
+    batches,
+    async (batch) => {
+      const result = await runBatch(
+        batch,
+        allSpans,
+        sentences,
+        sources,
+        leadingCtx,
+        trailingCtx,
+        resolve,
+        notify
+      )
+      return [result]
+    },
+    noop,
+    { concurrency: POST_FIND_CONCURRENCY }
+  )
+
+  const failErrors = failures.map((f) => errorMessage(f.error))
+  const merged = mergeBatchResults(batchResults)
+  merged.errors.push(...failErrors)
+
+  console.debug(
+    `[deep-analysis] post-find result: ${merged.surviving.length} surviving, ${merged.dropped.length} dropped`
+  )
+
+  return merged
 }
 
 export const runDimensionPipeline = async (

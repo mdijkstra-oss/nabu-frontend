@@ -53,6 +53,8 @@ export const FIND_MAX_GAP = 1
 export const FILTER_RUNS = 2
 export const FILTER_THRESHOLD = 2
 export const SPAN_STEP_CONTEXT_SENTENCES = 6
+export const POST_FIND_BATCH_SIZE = 15
+export const POST_FIND_CONCURRENCY = 5
 
 export const applyDeepAnalysisTool: AnyTool = {
   name: "apply_deep_analysis",

@@ -4,13 +4,14 @@ import { ApplyDeepAnalysisArgs, applyDeepAnalysisTool } from "./def"
 import { registerTool, tool, getToolHandlers } from "../../executors/tool"
 import { getFileView, getViewableFiles } from "../file-view"
 import { getFile, getFileRaw } from "~/lib/files/store"
-import { CONTEXT_OVERLAP_CHARS } from "~/lib/data-blocks/chunk-lines"
+import { CHUNK_TARGET_CHARS, CONTEXT_OVERLAP_CHARS } from "~/lib/data-blocks/chunk-lines"
 import {
   extractSection,
   extractLeadingContext,
   extractTrailingContext,
   prepareTargetContent,
   numberSection,
+  numberSectionWithPositions,
   mapResults,
   toAnnotationOps,
   buildRemovalOps,
@@ -19,8 +20,17 @@ import {
   toAnalysisResults,
   spanKey,
   type MappedResult,
+  type AnalysisResult,
   type VoteRecord,
 } from "./format"
+import {
+  sortSegments,
+  packComposites,
+  type Segment,
+  type Composite,
+  type PackedSegment,
+} from "~/lib/composite/pack"
+import { buildSentenceSegmentMap, resolveSentenceIndex } from "~/lib/composite/sentence-map"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import {
   type ContentResolver,
@@ -31,12 +41,10 @@ import {
 import {
   runDimensionPipeline,
   mergeDimensionResults,
-  runReasonStep,
-  runFilter,
-  runAdjudicate,
+  runPostFindPipeline,
   type DimensionResult,
+  type BatchPhaseNotifier,
 } from "./pipeline"
-import type { FindResult } from "./consensus"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
@@ -44,65 +52,61 @@ import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
 import { showProgress } from "../../client/store"
 
-interface PhaseTracker {
-  tickFind: () => void
-  tickFilter: () => void
-  tickAdjudicate: () => void
-  tickReason: () => void
-}
+const FIND_WEIGHT = 35
+const POST_FIND_RANGE = 100 - FIND_WEIGHT
 
-const derivePhaseLabel = (
-  finds: number,
-  filters: number,
-  adjudicates: number,
-  reasons: number
-): string => {
-  if (finds > 0) return "Interpreting dimensions"
-  if (filters > 0) return "Cross-referencing findings"
-  if (adjudicates > 0) return "Adjudicating disputes"
-  if (reasons > 0) return "Building justifications"
+const deriveBatchLabel = (filtering: number, adjudicating: number, reasoning: number): string => {
+  if (filtering > 0) return "Cross-referencing findings"
+  if (adjudicating > 0) return "Adjudicating disputes"
+  if (reasoning > 0) return "Building justifications"
   return "Finishing up"
 }
 
-const createPhaseTracker = (
-  totalFinds: number,
-  totalFilters: number,
-  totalAdjudicates: number,
-  totalReasons: number
-): PhaseTracker => {
-  let pendingFinds = totalFinds
-  let pendingFilters = totalFilters
-  let pendingAdjudicates = totalAdjudicates
-  let pendingReasons = totalReasons
-  const total = totalFinds + totalFilters + totalAdjudicates + totalReasons
-  let completed = 0
+const createProgressTracker = (
+  totalFinds: number
+): BatchPhaseNotifier & { tickFind: () => void } => {
+  let completedFinds = 0
+  let totalBatches = 0
+  let completedBatches = 0
+  let filtering = 0
+  let adjudicating = 0
+  let reasoning = 0
+  let highWater = 0
 
-  const emit = () => {
-    const pct = Math.round((completed / total) * 100)
-    const label = derivePhaseLabel(pendingFinds, pendingFilters, pendingAdjudicates, pendingReasons)
+  const emit = (raw: number, label: string) => {
+    const pct = Math.max(raw, highWater)
+    highWater = pct
     showProgress(`${pct}% · ${label}`)
   }
 
   return {
     tickFind: () => {
-      pendingFinds--
-      completed++
-      emit()
+      completedFinds++
+      const raw = totalFinds > 0 ? Math.round((completedFinds / totalFinds) * FIND_WEIGHT) : 0
+      emit(raw, "Interpreting dimensions")
     },
-    tickFilter: () => {
-      pendingFilters--
-      completed++
-      emit()
+    setBatchCount: (n: number) => {
+      totalBatches += n
     },
-    tickAdjudicate: () => {
-      pendingAdjudicates--
-      completed++
-      emit()
+    enterFilter: () => {
+      filtering++
     },
-    tickReason: () => {
-      pendingReasons--
-      completed++
-      emit()
+    enterAdjudicate: () => {
+      filtering--
+      adjudicating++
+    },
+    enterReason: () => {
+      adjudicating--
+      reasoning++
+    },
+    exitBatch: () => {
+      reasoning--
+      completedBatches++
+      const raw =
+        totalBatches > 0
+          ? FIND_WEIGHT + Math.round((completedBatches / totalBatches) * POST_FIND_RANGE)
+          : FIND_WEIGHT
+      emit(Math.min(raw, 99), deriveBatchLabel(filtering, adjudicating, reasoning))
     },
   }
 }
@@ -288,7 +292,7 @@ const processSection = async (
   calls: ScopedSources[],
   resolve: ContentResolver,
   postAction: PostActionFn,
-  tracker: PhaseTracker
+  tracker: BatchPhaseNotifier & { tickFind: () => void }
 ): Promise<HandlerResult<string>> => {
   const { path, start_line, end_line } = section
 
@@ -330,53 +334,21 @@ const processSection = async (
   if (allSpans.length === 0 && calls.length > 0 && findErrors.length > 0)
     return { status: "error", output: findErrors.join("; "), mutations: [] }
 
-  const filterResult = await runFilter(
+  const postFind = await runPostFindPipeline(
     allSpans,
     sentences,
     scoped,
     leadingCtx,
     trailingCtx,
-    resolve
+    resolve,
+    tracker
   )
-  tracker.tickFilter()
 
-  if (filterResult.errors.length > 0) {
-    warnings.push(...filterResult.errors.map((e) => `filter: ${e}`))
+  if (postFind.errors.length > 0) {
+    warnings.push(...postFind.errors)
   }
 
-  const { dropped: filterDropped, filterVotes, filterJustifications } = filterResult
-
-  const isDisputed = (s: FindResult) =>
-    filterJustifications.has(spanKey(s.start, s.end, s.analysis_source_id))
-  const disputedSpans = filterResult.surviving.filter(isDisputed)
-  const undisputedSpans = filterResult.surviving.filter((s) => !isDisputed(s))
-
-  const adjudicateResult = await runAdjudicate(
-    disputedSpans,
-    sentences,
-    scoped,
-    leadingCtx,
-    trailingCtx,
-    resolve
-  )
-  tracker.tickAdjudicate()
-
-  if (adjudicateResult.errors.length > 0) {
-    warnings.push(...adjudicateResult.errors.map((e) => `adjudicate: ${e}`))
-  }
-
-  const surviving = [...undisputedSpans, ...adjudicateResult.surviving]
-  const dropped = [...filterDropped, ...adjudicateResult.removed]
-
-  const reasonResult = await runReasonStep(
-    surviving,
-    sentences,
-    scoped,
-    leadingCtx,
-    trailingCtx,
-    resolve
-  )
-  tracker.tickReason()
+  const { surviving, dropped, filterVotes, reviews, reasons } = postFind
 
   const countVotes = (votes: boolean[]) => {
     const found = votes.filter(Boolean).length
@@ -392,7 +364,7 @@ const processSection = async (
     const key = spanKey(s.start, s.end, s.analysis_source_id)
     const findVotes = allFindVotes.get(key) ?? []
     const fVotes = filterVotes.get(key) ?? []
-    const review = adjudicateResult.reviews.get(key)
+    const review = reviews.get(key)
     const vote: VoteRecord = {
       find: countVotes(findVotes),
       filter: countFilter(fVotes),
@@ -401,7 +373,7 @@ const processSection = async (
     voteRecords.set(key, vote)
   }
 
-  const analysisResults = toAnalysisResults(surviving, reasonResult.values, voteRecords)
+  const analysisResults = toAnalysisResults(surviving, reasons, voteRecords)
   const mapped = mapResults(sentences, analysisResults)
 
   const withReview = [...voteRecords.values()].filter((v) => v.review !== undefined).length
@@ -416,6 +388,131 @@ const processSection = async (
     endLine: end_line,
     warnings,
   })
+}
+
+const compositeSeparator = (seg: Segment): string =>
+  `\n\n# ${seg.path} [${seg.startLine}-${seg.endLine}]\n\n`
+
+const toSegments = (sections: Section[]): Segment[] =>
+  sections.flatMap((s) => {
+    const content = getFileView(s.path)
+    if (content === undefined) return []
+    return [
+      {
+        path: s.path,
+        startLine: s.start_line,
+        endLine: s.end_line,
+        content: extractSection(content, s.start_line, s.end_line),
+      },
+    ]
+  })
+
+const groupResultsBySegment = (
+  results: AnalysisResult[],
+  sentenceMap: (PackedSegment | null)[]
+): Map<PackedSegment, AnalysisResult[]> => {
+  const grouped = new Map<PackedSegment, AnalysisResult[]>()
+  for (const r of results) {
+    const seg = resolveSentenceIndex(sentenceMap, r.start)
+    if (!seg) continue
+    const list = grouped.get(seg) ?? []
+    list.push(r)
+    grouped.set(seg, list)
+  }
+  return grouped
+}
+
+const processComposite = async (
+  composite: Composite,
+  scoped: ReturnType<typeof partitionSources>,
+  calls: ScopedSources[],
+  resolve: ContentResolver,
+  postAction: PostActionFn,
+  tracker: BatchPhaseNotifier & { tickFind: () => void }
+): Promise<SectionResult[]> => {
+  const prepared = prepareTargetContent(composite.content)
+  const { sentences, positions } = numberSectionWithPositions(prepared)
+
+  if (sentences.length === 0) {
+    return composite.segments.map((seg) => ({
+      section: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
+      result: {
+        status: "ok" as const,
+        output: `${seg.path} [${seg.startLine}-${seg.endLine}]: no sentences.`,
+        mutations: [],
+      },
+    }))
+  }
+
+  const sentenceMap = buildSentenceSegmentMap(composite, positions)
+
+  const { results: dimensionResults } = await processPool<ScopedSources, DimensionResult>(
+    calls,
+    async (sources) => [await runDimensionPipeline(sources, composite.content, "", "", resolve)],
+    noop,
+    { concurrency: 5, onItemComplete: () => tracker.tickFind() }
+  )
+
+  const { allSpans, allFindVotes, errors: findErrors } = mergeDimensionResults(dimensionResults)
+  const warnings: string[] = []
+
+  if (findErrors.length > 0) warnings.push(...findErrors.map((e) => `find: ${e}`))
+
+  if (allSpans.length === 0) {
+    return composite.segments.map((seg) => ({
+      section: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
+      result:
+        findErrors.length > 0
+          ? { status: "error" as const, output: findErrors.join("; "), mutations: [] }
+          : { status: "ok" as const, output: `Lines analyzed. No matches found.`, mutations: [] },
+    }))
+  }
+
+  const postFind = await runPostFindPipeline(allSpans, sentences, scoped, "", "", resolve, tracker)
+
+  if (postFind.errors.length > 0) warnings.push(...postFind.errors)
+
+  const { surviving, filterVotes, reviews, reasons } = postFind
+
+  const countVotes = (votes: boolean[]) => {
+    const found = votes.filter(Boolean).length
+    return { found, missed: votes.length - found }
+  }
+  const countFilter = (votes: boolean[]) => {
+    const keep = votes.filter(Boolean).length
+    return { keep, remove: votes.length - keep }
+  }
+
+  const voteRecords = new Map<string, VoteRecord>()
+  for (const s of surviving) {
+    const key = spanKey(s.start, s.end, s.analysis_source_id)
+    const fv = allFindVotes.get(key) ?? []
+    const filt = filterVotes.get(key) ?? []
+    const review = reviews.get(key)
+    const vote: VoteRecord = { find: countVotes(fv), filter: countFilter(filt) }
+    if (review !== undefined) vote.review = review
+    voteRecords.set(key, vote)
+  }
+
+  const analysisResults = toAnalysisResults(surviving, reasons, voteRecords)
+  const grouped = groupResultsBySegment(analysisResults, sentenceMap)
+
+  const sectionResults: SectionResult[] = []
+  for (const seg of composite.segments) {
+    const segResults = grouped.get(seg) ?? []
+    const mapped = mapResults(sentences, segResults)
+    const section: Section = { path: seg.path, start_line: seg.startLine, end_line: seg.endLine }
+    const result = await postAction({
+      mapped,
+      path: seg.path,
+      startLine: seg.startLine,
+      endLine: seg.endLine,
+      warnings,
+    })
+    sectionResults.push({ section, result })
+  }
+
+  return sectionResults
 }
 
 const sectionLabel = (s: Section): string => `${s.path} [${s.start_line}-${s.end_line}]`
@@ -460,34 +557,53 @@ registerTool(
       const enqueue = createKeyedQueue()
       const actions = buildPostActions(enqueue)
 
-      const tracker = createPhaseTracker(
-        sections.length * calls.length,
-        sections.length,
-        sections.length,
-        sections.length
-      )
+      const segments = toSegments(sections)
+      const sorted = sortSegments(segments)
+      const composites = packComposites(sorted, CHUNK_TARGET_CHARS, compositeSeparator)
+
+      const totalFinds = composites.length * calls.length
+      const tracker = createProgressTracker(totalFinds)
 
       showProgress("Preparing deep analysis")
-      const { results: sectionResults } = await processPool<Section, SectionResult>(
-        sections,
-        async (section) => {
-          const result = await processSection(
-            section,
-            scoped,
-            calls,
-            resolve,
-            actions[post_action],
-            tracker
-          )
-          return [{ section, result }]
+      const { results: sectionResults } = await processPool<Composite, SectionResult[]>(
+        composites,
+        async (composite) => {
+          if (composite.segments.length === 1) {
+            const seg = composite.segments[0]
+            const section: Section = {
+              path: seg.path,
+              start_line: seg.startLine,
+              end_line: seg.endLine,
+            }
+            const result = await processSection(
+              section,
+              scoped,
+              calls,
+              resolve,
+              actions[post_action],
+              tracker
+            )
+            return [[{ section, result }]]
+          }
+          return [
+            await processComposite(
+              composite,
+              scoped,
+              calls,
+              resolve,
+              actions[post_action],
+              tracker
+            ),
+          ]
         },
         noop,
         { concurrency: 5 }
       )
 
-      if (sectionResults.length === 1) return sectionResults[0].result
+      const flat = sectionResults.flat()
+      if (flat.length === 1) return flat[0].result
 
-      return mergeSectionResults(sectionResults)
+      return mergeSectionResults(flat)
     },
   })
 )

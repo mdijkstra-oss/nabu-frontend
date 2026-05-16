@@ -23,15 +23,23 @@ export interface ScoutMap {
 }
 
 const SectionLabelResponse = z.object({
-  label: z.string().describe("Short name for this section, 2-5 words"),
+  label: z
+    .string()
+    .describe(
+      "2-5 words. Names what this part of the file is about, not the file's overall topic. The specific argument, event, entity, or question in this section."
+    ),
   desc: z
     .string()
-    .describe("What the section contains — specific enough for a planner to decide scope"),
+    .describe(
+      "One or two sentences. What the section contains, specific enough for a planner to decide whether this section is relevant to a given task."
+    ),
   keywords: z
     .array(z.string())
     .min(1)
     .max(6)
-    .describe("Salient terms concretely present in the section. No interpretation, no inference."),
+    .describe(
+      "Salient terms that literally appear in the section text. Names, topics, entities. No interpretation, no inference."
+    ),
 })
 
 export type SectionLabel = z.infer<typeof SectionLabelResponse>
