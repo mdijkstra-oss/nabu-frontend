@@ -44,7 +44,7 @@ export function ActionBarButton({
               "cursor-pointer",
               isAi
                 ? "border border-solid border-brand-600 hover:border-brand-300 bg-transparent hover:bg-brand-900/40"
-                : "border-none bg-transparent hover:bg-neutral-700/60"
+                : "border-none bg-transparent hover:bg-neutral-600/60"
             ),
         !disabled && !isAi && "border-none bg-transparent"
       )}
@@ -55,7 +55,7 @@ export function ActionBarButton({
       <span
         className={cn(
           "flex items-center [&>svg]:h-3.5 [&>svg]:w-3.5 transition-colors",
-          isAi ? "text-brand-400" : "text-neutral-400",
+          isAi ? "text-brand-400" : disabled ? "text-neutral-400" : "text-white",
           !disabled && !isAi && "group-hover/action:text-neutral-100"
         )}
       >
@@ -64,7 +64,7 @@ export function ActionBarButton({
       <span
         className={cn(
           "text-caption-bold font-caption-bold transition-colors",
-          isAi ? "text-brand-300" : "text-neutral-400",
+          isAi ? "text-brand-300" : disabled ? "text-neutral-400" : "text-white",
           !disabled && !isAi && "group-hover/action:text-neutral-100"
         )}
       >
@@ -157,12 +157,12 @@ export function FloatingActionBar({
               className="flex flex-1 items-center gap-2"
               onMouseEnter={titleDetail ? () => setShowDetail(true) : undefined}
             >
-              <span className="text-body-bold font-body-bold text-white cursor-default">
+              <span className="text-body-bold font-body-bold text-neutral-200 cursor-default">
                 {title}
               </span>
               {titleAction && (
                 <button
-                  className="cursor-pointer border-none bg-transparent text-caption font-caption text-neutral-400 hover:text-brand-400"
+                  className="cursor-pointer border-none bg-transparent text-caption font-caption text-neutral-200 hover:text-brand-400"
                   onClick={titleAction.onClick}
                   type="button"
                 >
@@ -176,7 +176,7 @@ export function FloatingActionBar({
               onMouseEnter={() => setShowDetail(false)}
               type="button"
             >
-              <X className="h-3 w-3 text-neutral-400" />
+              <X className="h-3 w-3 text-neutral-200" />
             </button>
           </div>
           <div className="flex h-px w-full flex-none bg-neutral-700" />

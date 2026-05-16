@@ -16,6 +16,11 @@ const layoutTransition = { type: "spring" as const, stiffness: 500, damping: 30 
 
 export function ConfirmButton({ icon, label, onConfirm, disabled, className }: ConfirmButtonProps) {
   const [phase, setPhase] = useState<"idle" | "armed" | "done">("idle")
+  const [prevDisabled, setPrevDisabled] = useState(disabled)
+  if (disabled !== prevDisabled) {
+    setPrevDisabled(disabled)
+    if (disabled) setPhase("idle")
+  }
   const effectivePhase = disabled ? "idle" : phase
 
   const handleClick = () => {
@@ -59,7 +64,7 @@ export function ConfirmButton({ icon, label, onConfirm, disabled, className }: C
       <span
         className={cn(
           "flex items-center [&>svg]:h-3.5 [&>svg]:w-3.5 transition-colors duration-200",
-          isArmed || isDone ? "text-white" : "text-neutral-400",
+          isArmed || isDone ? "text-white" : disabled ? "text-neutral-400" : "text-white",
           !disabled && !isArmed && !isDone && "group-hover/confirm:text-neutral-100"
         )}
       >
@@ -68,7 +73,7 @@ export function ConfirmButton({ icon, label, onConfirm, disabled, className }: C
       <span
         className={cn(
           "text-caption-bold font-caption-bold transition-colors duration-200",
-          isArmed || isDone ? "text-white" : "text-neutral-400",
+          isArmed || isDone ? "text-white" : disabled ? "text-neutral-400" : "text-white",
           !disabled && !isArmed && !isDone && "group-hover/confirm:text-neutral-100"
         )}
       >
