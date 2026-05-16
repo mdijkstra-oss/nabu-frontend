@@ -109,6 +109,22 @@ describe("linkifyQuotes", () => {
       expected:
         'Look at "interviews.md" and [frustration with the onboarding flow](file://notes.md/frustration%20with%20the%20onboarding%20flow) together.',
     },
+    {
+      name: "skips quoted text that already contains a markdown link",
+      text: '"[the signup process takes too long](file://notes.md/the%20signup%20process%20takes%20too%20long)" was flagged.',
+      documentId: "notes.md",
+      fileContent: FILE_CONTENT,
+      expected:
+        '"[the signup process takes too long](file://notes.md/the%20signup%20process%20takes%20too%20long)" was flagged.',
+    },
+    {
+      name: "skips curly-quoted text that already contains a markdown link",
+      text: "\u201C[frustration with the onboarding flow](file://notes.md/frustration%20with%20the%20onboarding%20flow)\u201D is notable.",
+      documentId: "notes.md",
+      fileContent: FILE_CONTENT,
+      expected:
+        "\u201C[frustration with the onboarding flow](file://notes.md/frustration%20with%20the%20onboarding%20flow)\u201D is notable.",
+    },
   ]
 
   test.each(cases)("$name", ({ text, documentId, fileContent, expected }) => {

@@ -6,6 +6,7 @@ const QUOTE_PATTERN =
 
 const isFilename = (text: string): boolean => /^[\w][\w-]*\.md$/.test(text)
 const isSingleWord = (text: string): boolean => !text.trim().includes(" ")
+const containsMarkdownLink = (text: string): boolean => /\[[^\]]*\]\([^)]*\)/.test(text)
 
 const encodeSpotlightText = (text: string): string =>
   encodeURIComponent(serializeSpotlight({ type: "single", text }))
@@ -17,6 +18,7 @@ const shouldSkip = (match: RegExpExecArray): boolean => {
   if (match[1] !== undefined) return true
   if (isFilename(match[2])) return true
   if (isSingleWord(match[2])) return true
+  if (containsMarkdownLink(match[2])) return true
   return false
 }
 
