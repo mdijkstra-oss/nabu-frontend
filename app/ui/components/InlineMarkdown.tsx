@@ -9,6 +9,7 @@ import { normalizeBacktickQuotes } from "~/lib/markdown/sanitize/normalize-backt
 import { resolveEntityName } from "~/lib/files/selectors"
 import { boldMissingFile } from "~/lib/files/filename"
 import { stripHiddenSuffix, stripEntityQuotes } from "~/lib/markdown/sanitize/strip-hidden"
+import { stripEntityLinks } from "~/lib/markdown/sanitize/strip-entity-links"
 
 const allowFileProtocol = (url: string) => url
 
@@ -44,7 +45,7 @@ export const InlineMarkdown = memo(
         {linkifyQuotes(
           normalizeBacktickQuotes(
             linkifyEntityIds(
-              stripEntityQuotes(stripHiddenSuffix(children)),
+              stripEntityLinks(stripEntityQuotes(stripHiddenSuffix(children))),
               (id) => resolveEntityName(files, id),
               boldMissingFile
             )

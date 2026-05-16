@@ -87,7 +87,7 @@ const SidebarRailWithLabelsRoot = ({
 }: SidebarRailWithLabelsProps) => (
   <nav
     className={cn(
-      "flex h-full w-24 flex-col items-start border-r border-solid border-r-[#dad0c7] bg-sidebar",
+      "flex h-full w-24 flex-col items-start border-r border-solid border-neutral-border bg-sidebar",
       className
     )}
   >

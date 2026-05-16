@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useSyncExternalStore } from "react"
 import { AnimatePresence, motion } from "framer-motion"
+import { CheckSquare } from "lucide-react"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { CheckableWrap } from "~/ui/components/CheckableWrap"
@@ -25,6 +26,9 @@ interface CodesSidebarProps {
   reviewStats?: Record<string, ReviewStat>
   debugReview?: boolean
   busy?: boolean
+  allSelected?: boolean
+  onSelectAll?: () => void
+  onDeselectAll?: () => void
   onEditCode?: (code: Code) => void
   onCodeFile?: (code: Code) => void
   onFileSelect?: (fileId: string) => void
@@ -88,6 +92,9 @@ export const CodesSidebar = ({
   globalAnnotationCounts = {},
   reviewStats,
   debugReview = false,
+  allSelected = false,
+  onSelectAll,
+  onDeselectAll,
   onEditCode,
   onFileSelect,
   onSearchCode,
@@ -155,6 +162,21 @@ export const CodesSidebar = ({
           </div>
         ))}
       </div>
+
+      {onSelectAll && (
+        <div className="flex w-full flex-none items-center gap-2 border-t border-solid border-neutral-border bg-sidebar px-4 py-2">
+          <button
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 border-none bg-sidebar-nested hover:bg-brand-50 cursor-pointer transition-colors"
+            onClick={allSelected ? onDeselectAll : onSelectAll}
+            type="button"
+          >
+            <CheckSquare className="h-3.5 w-3.5 text-subtext-color" />
+            <span className="text-caption-bold font-caption-bold text-subtext-color">
+              {allSelected ? "Deselect all" : "Select all"}
+            </span>
+          </button>
+        </div>
+      )}
 
       <AnimatePresence>
         {hoveredCode && (

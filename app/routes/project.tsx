@@ -601,6 +601,9 @@ export default function ProjectLayout() {
               reviewStats={reviewStats}
               debugReview={debugOptions.showReviewStats}
               busy={chatLoading}
+              allSelected={hasAllCodesSelected}
+              onSelectAll={selectAllCodes}
+              onDeselectAll={clearSelectedCodes}
               onEditCode={handleEditCode}
               onCodeFile={handleCodeFile}
               onFileSelect={handleDocumentSelect}
