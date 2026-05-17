@@ -6,29 +6,84 @@ import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { think, FINDING, CONSENSUS } from "./thoughts"
-import {
-  buildFindCall,
-  buildFindResultSchema,
-  extractSourceIds,
-  buildSourceTitleMap,
-} from "./messages"
-import { tallyVotes, filterByTally, groupBySpan, buildFindVoteMap } from "./consensus"
+import { buildFindCall, buildFindResultSchema, extractSourceIds } from "./messages"
+import { groupBySpan } from "./consensus"
 import { spanKey } from "./format"
-import { FIND_ENDPOINT, FIND_RUNS, FIND_THRESHOLD, FIND_MAX_GAP } from "./def"
+import { FIND_ENDPOINT, FIND_RUNS } from "./def"
 
 export interface FindStepResult {
   annotations: Annotation[]
   errors: string[]
 }
 
-const countUniqueSentences = (spans: FindResult[], code: string): number => {
-  const seen = new Set<number>()
-  for (const s of spans) {
-    if (s.analysis_source_id !== code) continue
-    for (let i = s.start; i <= s.end; i++) seen.add(i)
-  }
-  return seen.size
+interface DedupedSpan {
+  span: FindResult
+  votes: boolean[]
 }
+
+const deduplicateSpans = (runs: FindResult[][]): DedupedSpan[] => {
+  const map = new Map<string, DedupedSpan>()
+  for (let runIdx = 0; runIdx < runs.length; runIdx++) {
+    for (const s of runs[runIdx]) {
+      const key = spanKey(s.start, s.end, s.analysis_source_id)
+      const existing = map.get(key)
+      if (existing) {
+        existing.votes[runIdx] = true
+      } else {
+        const votes = Array.from({ length: runs.length }, () => false)
+        votes[runIdx] = true
+        map.set(key, { span: s, votes })
+      }
+    }
+  }
+  return [...map.values()]
+}
+
+const OVERLAP_THRESHOLD = 0.2
+
+const spanLength = (s: FindResult): number => s.end - s.start + 1
+
+const overlapCount = (a: FindResult, b: FindResult): number => {
+  const start = Math.max(a.start, b.start)
+  const end = Math.min(a.end, b.end)
+  return end >= start ? end - start + 1 : 0
+}
+
+const isSignificantOverlap = (a: FindResult, b: FindResult): boolean => {
+  const overlap = overlapCount(a, b)
+  const smaller = Math.min(spanLength(a), spanLength(b))
+  return overlap / smaller > OVERLAP_THRESHOLD
+}
+
+const collapseOverlapping = (spans: DedupedSpan[]): DedupedSpan[] => {
+  const byCode = new Map<string, DedupedSpan[]>()
+  for (const d of spans) {
+    const group = byCode.get(d.span.analysis_source_id) ?? []
+    group.push(d)
+    byCode.set(d.span.analysis_source_id, group)
+  }
+
+  const result: DedupedSpan[] = []
+  for (const group of byCode.values()) {
+    const sorted = [...group].sort((a, b) => spanLength(a.span) - spanLength(b.span))
+    const accepted: DedupedSpan[] = []
+    for (const d of sorted) {
+      const dominated = accepted.some((a) => isSignificantOverlap(a.span, d.span))
+      if (!dominated) accepted.push(d)
+    }
+    result.push(...accepted)
+  }
+  return result
+}
+
+const dedupedToAnnotation = (d: DedupedSpan): Annotation => ({
+  start: d.span.start,
+  end: d.span.end,
+  code: d.span.analysis_source_id,
+  findVotes: d.votes,
+  filterVotes: [],
+  reason: "",
+})
 
 const runFindRuns = async (
   messages: { type: "message"; role: "system" | "user"; content: string }[],
@@ -54,16 +109,6 @@ const runFindRuns = async (
   return { runs: results, errors }
 }
 
-const toAnnotations = (spans: FindResult[], findVotes: Map<string, boolean[]>): Annotation[] =>
-  spans.map((s) => ({
-    start: s.start,
-    end: s.end,
-    code: s.analysis_source_id,
-    findVotes: findVotes.get(spanKey(s.start, s.end, s.analysis_source_id)) ?? [],
-    filterVotes: [],
-    reason: "",
-  }))
-
 export const findAnnotations = async (
   sources: ScopedSources,
   rawTarget: string,
@@ -73,7 +118,7 @@ export const findAnnotations = async (
 ): Promise<FindStepResult> => {
   think(FINDING)
 
-  const { messages: findMessages, sentences } = buildFindCall(
+  const { messages: findMessages } = buildFindCall(
     rawTarget,
     sources,
     resolve,
@@ -107,31 +152,17 @@ export const findAnnotations = async (
   }
 
   think(CONSENSUS)
-  const tally = tallyVotes(findRuns, sentences.length)
-  const spans = filterByTally(tally, FIND_THRESHOLD, FIND_MAX_GAP)
+  const deduped = collapseOverlapping(deduplicateSpans(findRuns))
 
-  const titles = buildSourceTitleMap(sources, resolve)
-  const perCode = [...tally.entries()].map(([code, votesMap]) => {
-    const voted = votesMap.size
-    const survived = countUniqueSentences(spans, code)
-    const name = titles.get(code) ?? code
-    return `${name} ${voted}→${survived}`
-  })
-  console.debug(
-    `[deep-analysis] consensus (${FIND_THRESHOLD}/${FIND_RUNS}): ${perCode.join(", ") || "no votes"}`
-  )
-  console.debug(`[deep-analysis] find → next: ${spans.length} spans`)
-
-  if (spans.length === 0) return { annotations: [], errors }
-
-  const findVotes = buildFindVoteMap(tally, spans, spanKey)
-
-  const codedSpans = groupBySpan(spans)
+  const codedSpans = groupBySpan(deduped.map((d) => d.span))
   for (const cs of codedSpans) {
     console.debug(`[deep-analysis]   [${cs.start}-${cs.end}] ${cs.codings.join(", ")}`)
   }
+  console.debug(`[deep-analysis] find → next: ${deduped.length} spans`)
 
-  return { annotations: toAnnotations(spans, findVotes), errors }
+  if (deduped.length === 0) return { annotations: [], errors }
+
+  return { annotations: deduped.map(dedupedToAnnotation), errors }
 }
 
 export const findAllDimensions = async (

@@ -8,6 +8,7 @@ import {
 import { stripBoundaryComments } from "~/lib/patch/resolve/json-boundary"
 import { calloutToDeepSource } from "~/domain/data-blocks/callout/definition"
 import { getCallouts } from "~/domain/data-blocks/callout/selectors"
+import { GENERATED_SUFFIX } from "~/lib/files/filename"
 import { prepareTargetContent, numberSection } from "./format"
 
 interface Message {
@@ -43,6 +44,29 @@ export const buildCallList = ({ framework, dimension }: ScopedSources): ScopedSo
   dimension.length === 0
     ? [{ framework, dimension: [] }]
     : dimension.map((p) => ({ framework, dimension: [p] }))
+
+const toCalloutPath = (id: string): string => `${id}${GENERATED_SUFFIX}`
+
+export const expandDimensions = (
+  sources: ScopedSources,
+  resolve: ContentResolver
+): ScopedSources => {
+  const expanded: string[] = []
+  for (const path of sources.dimension) {
+    const raw = resolve(path)
+    if (!raw) {
+      expanded.push(path)
+      continue
+    }
+    const callouts = getCallouts(raw)
+    if (callouts.length === 0) {
+      expanded.push(path)
+      continue
+    }
+    for (const c of callouts) expanded.push(toCalloutPath(c.id))
+  }
+  return { framework: sources.framework, dimension: expanded }
+}
 
 export type ContentResolver = (path: string) => string | undefined
 

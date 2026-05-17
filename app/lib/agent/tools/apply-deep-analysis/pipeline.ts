@@ -5,29 +5,18 @@ import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { readDebugOption } from "~/lib/agent/debug"
 import { think, REVISITING, FILTERING, ADJUDICATING, GROUNDING, TRIMMING } from "./thoughts"
-import { groupBySpan, type CodedSpan } from "./consensus"
+import { batchByCode, BATCH_MAX_SIZE } from "./step-batch"
 import { findAllDimensions, type FindStepResult } from "./step-find"
 import { filterAnnotations } from "./step-filter"
 import { adjudicateAnnotations } from "./step-adjudicate"
 import { reasonAnnotations } from "./step-reason"
 import { trimAnnotations } from "./step-trim"
-import { POST_FIND_BATCH_SIZE, POST_FIND_CONCURRENCY } from "./def"
+import { POST_FIND_CONCURRENCY } from "./def"
 
 export interface PipelineResult {
   annotations: Annotation[]
   errors: string[]
 }
-
-const batchItems = <T>(items: T[], size: number): T[][] => {
-  const batches: T[][] = []
-  for (let i = 0; i < items.length; i += size) {
-    batches.push(items.slice(i, i + size))
-  }
-  return batches
-}
-
-const annotationsToCoded = (annotations: Annotation[]): CodedSpan[] =>
-  groupBySpan(annotations.map((a) => ({ start: a.start, end: a.end, analysis_source_id: a.code })))
 
 const refineAnnotationBatch = async (
   batch: Annotation[],
@@ -90,19 +79,12 @@ const refineAnnotations = async (
   resolve: ContentResolver
 ): Promise<{ annotations: Annotation[]; errors: string[] }> => {
   think(REVISITING)
-  const coded = annotationsToCoded(annotations)
-  if (coded.length === 0) return { annotations: [], errors: [] }
+  if (annotations.length === 0) return { annotations: [], errors: [] }
 
-  const batches = batchItems(coded, POST_FIND_BATCH_SIZE)
-  console.debug(`[deep-analysis] post-find: ${coded.length} spans → ${batches.length} batch(es)`)
-
-  const batchAnnotations = batches.map((codedBatch) => {
-    const keys = new Set<string>()
-    for (const cs of codedBatch) {
-      for (const code of cs.codings) keys.add(`${cs.start}-${cs.end}-${code}`)
-    }
-    return annotations.filter((a) => keys.has(`${a.start}-${a.end}-${a.code}`))
-  })
+  const batchAnnotations = batchByCode(annotations, BATCH_MAX_SIZE)
+  console.debug(
+    `[deep-analysis] post-find: ${annotations.length} annotations → ${batchAnnotations.length} batch(es)`
+  )
 
   const { results: batchResults, failures } = await processPool(
     batchAnnotations,

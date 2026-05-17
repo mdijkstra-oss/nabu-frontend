@@ -26,7 +26,7 @@ import {
 } from "~/lib/composite/pack"
 import { buildSentenceSegmentMap, resolveSentenceIndex } from "~/lib/composite/sentence-map"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
-import { type ContentResolver, partitionSources, buildCallList } from "./messages"
+import { type ContentResolver, partitionSources, buildCallList, expandDimensions } from "./messages"
 import { runAnalysisPipeline } from "./pipeline"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
@@ -344,8 +344,9 @@ registerTool(
       if (validationError) return validationError
 
       const scoped = partitionSources(source_files)
-      const calls = buildCallList(scoped)
       const resolve: ContentResolver = getFileView
+      const isAnnotate = post_action === "annotate_as_code" || post_action === "annotate_as_comment"
+      const calls = buildCallList(isAnnotate ? expandDimensions(scoped, resolve) : scoped)
       const enqueue = createKeyedQueue()
       const actions = buildPostActions(enqueue)
 
