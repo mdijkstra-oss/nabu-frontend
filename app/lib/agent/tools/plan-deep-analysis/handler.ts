@@ -62,39 +62,60 @@ const buildFramework = (sourceFiles: SourceFileEntry[]): string =>
 
 const paragraphSeparator = (): string => "\n\n"
 
-const mergeConsecutive = (paragraphs: NumberedParagraph[], path: string): Segment[] => {
+const groupConsecutiveRuns = (paragraphs: NumberedParagraph[]): NumberedParagraph[][] => {
   if (paragraphs.length === 0) return []
-  const segments: Segment[] = []
-  let start = paragraphs[0]
-  let end = paragraphs[0]
-  const texts: string[] = [paragraphs[0].text]
+  const runs: NumberedParagraph[][] = [[paragraphs[0]]]
 
   for (let i = 1; i < paragraphs.length; i++) {
     const p = paragraphs[i]
-    if (p.index === end.index + 1) {
-      end = p
-      texts.push(p.text)
+    const currentRun = runs[runs.length - 1]
+    const prev = currentRun[currentRun.length - 1]
+    if (p.index === prev.index + 1) {
+      currentRun.push(p)
     } else {
-      segments.push({
-        path,
-        startLine: start.startLine,
-        endLine: end.endLine,
-        content: texts.join("\n\n"),
-      })
-      start = p
-      end = p
-      texts.length = 0
-      texts.push(p.text)
+      runs.push([p])
     }
   }
-  segments.push({
-    path,
-    startLine: start.startLine,
-    endLine: end.endLine,
-    content: texts.join("\n\n"),
-  })
+  return runs
+}
+
+const chunkRun = (run: NumberedParagraph[], path: string, maxChars: number): Segment[] => {
+  const segments: Segment[] = []
+  let chunk: NumberedParagraph[] = []
+  let chunkSize = 0
+
+  for (const p of run) {
+    const added = chunkSize > 0 ? p.text.length + 2 : p.text.length
+    if (chunkSize > 0 && chunkSize + added > maxChars) {
+      segments.push({
+        path,
+        startLine: chunk[0].startLine,
+        endLine: chunk[chunk.length - 1].endLine,
+        content: chunk.map((c) => c.text).join("\n\n"),
+      })
+      chunk = []
+      chunkSize = 0
+    }
+    chunk.push(p)
+    chunkSize += added
+  }
+
+  if (chunk.length > 0) {
+    segments.push({
+      path,
+      startLine: chunk[0].startLine,
+      endLine: chunk[chunk.length - 1].endLine,
+      content: chunk.map((c) => c.text).join("\n\n"),
+    })
+  }
   return segments
 }
+
+const mergeAndChunk = (
+  paragraphs: NumberedParagraph[],
+  path: string,
+  maxChars: number
+): Segment[] => groupConsecutiveRuns(paragraphs).flatMap((run) => chunkRun(run, path, maxChars))
 
 const filterAndLabelTarget = async (
   path: string,
@@ -105,7 +126,7 @@ const filterAndLabelTarget = async (
 
   if (surviving.length === 0) return []
 
-  const segments = mergeConsecutive(surviving, path)
+  const segments = mergeAndChunk(surviving, path, CHUNK_TARGET_CHARS)
 
   const sorted = sortSegments(segments)
   const composites = packComposites(sorted, CHUNK_TARGET_CHARS, paragraphSeparator)
@@ -204,7 +225,7 @@ registerTool(
   tool({
     ...planDeepAnalysisTool,
     schema: PlanDeepAnalysisArgs,
-    handler: async (_files, { source_files, target_files, post_action }) => {
+    handler: async (_files, { source_files, target_files, post_action, interactive }) => {
       const missing = findMissingFiles([...source_files, ...target_files])
       if (missing.length > 0)
         return { status: "error", output: `Files not found: ${missing.join(", ")}`, mutations: [] }
@@ -234,7 +255,7 @@ registerTool(
         path: f.path,
         scope: f.group,
       }))
-      const steps = buildAutoSteps(matches, sourceEntries, post_action)
+      const steps = buildAutoSteps(matches, sourceEntries, post_action, interactive)
       const task = `Deep analysis: ${[...new Set(labeled.map((t) => t.path))].join(", ")}`
       activatePlan(task, steps, [])
       const directive = buildExecRules(steps[0].expected)

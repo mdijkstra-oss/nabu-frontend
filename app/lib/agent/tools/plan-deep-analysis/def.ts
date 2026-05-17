@@ -25,6 +25,11 @@ export const PlanDeepAnalysisArgs = z.object({
   post_action: PostAction.describe(
     "How apply_deep_analysis handles results: return (results only), annotate_as_code (write code annotations), annotate_as_comment (write comment annotations)."
   ),
+  interactive: z
+    .boolean()
+    .describe(
+      "Pause for user feedback after each analysis section. Set false if user preferences are established. If unknown, ask before calling."
+    ),
 })
 
 export type PlanDeepAnalysisArgs = z.infer<typeof PlanDeepAnalysisArgs>

@@ -3,6 +3,7 @@ import type { ScopedSources, ContentResolver } from "./messages"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
+import { readDebugOption } from "~/lib/agent/debug"
 import { think, REVISITING, FILTERING, ADJUDICATING, GROUNDING, TRIMMING } from "./thoughts"
 import { groupBySpan, type CodedSpan } from "./consensus"
 import { findAllDimensions, type FindStepResult } from "./step-find"
@@ -133,6 +134,8 @@ const refineAnnotations = async (
   return { annotations: allAnnotations, errors: allErrors }
 }
 
+const isFindOnly = (): boolean => readDebugOption("findOnly", false)
+
 export const runAnalysisPipeline = async (
   calls: ScopedSources[],
   rawTarget: string,
@@ -150,8 +153,8 @@ export const runAnalysisPipeline = async (
     resolve
   )
 
-  if (findResult.annotations.length === 0) {
-    return { annotations: [], errors: findResult.errors }
+  if (findResult.annotations.length === 0 || isFindOnly()) {
+    return { annotations: findResult.annotations, errors: findResult.errors }
   }
 
   const refined = await refineAnnotations(

@@ -11,6 +11,7 @@ import { elementBorder } from "~/ui/theme/radix"
 import { getCodeTitle } from "~/domain/data-blocks/callout/codes/selectors"
 import { getFiles } from "~/lib/files/store"
 import { patchBlock } from "~/lib/data-blocks/patch"
+import { findAllTextRanges, proseTextContent } from "~/lib/editor/text"
 
 interface HoverState {
   text: string
@@ -37,6 +38,45 @@ const isWithinRect = (x: number, y: number, rect: DOMRect): boolean =>
 
 const findMatchingAnnotations = (annotations: Annotation[], text: string): Annotation[] =>
   annotations.filter((a) => a.text.includes(text))
+
+interface TextRange {
+  from: number
+  to: number
+}
+
+const rangesOverlap = (a: TextRange, b: TextRange): boolean => a.from < b.to && b.from < a.to
+
+const findOverlappingAnnotations = (
+  target: Annotation,
+  annotations: Annotation[],
+  getEditor: GetEditor,
+  loading: boolean
+): Set<string> => {
+  if (loading) return new Set()
+  const editor = getEditor()
+  if (!editor) return new Set()
+
+  const overlapping = new Set<string>()
+  try {
+    editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      const doc = view.state.doc
+      const docText = proseTextContent(doc)
+      const targetRanges = findAllTextRanges(doc, target.text, docText)
+      if (targetRanges.length === 0) return
+
+      for (const a of annotations) {
+        if (a.id === target.id) continue
+        const aRanges = findAllTextRanges(doc, a.text, docText)
+        const touches = aRanges.some((ar) => targetRanges.some((tr) => rangesOverlap(ar, tr)))
+        if (touches) overlapping.add(a.id ?? "")
+      }
+    })
+  } catch {
+    /* editor may be destroyed */
+  }
+  return overlapping
+}
 
 const removeAnnotationOp = (id: string) => [
   { op: "remove" as const, path: `/annotations[id=${id}]` },
@@ -190,10 +230,10 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
     (entryId: string) => {
       const annotation = matchingAnnotations.find((a) => (a.id ?? "") === entryId)
       if (!annotation) return
-      const overlappingIds = new Set(matchingAnnotations.map((a) => a.id ?? ""))
-      const nonOverlapping = annotations.filter((a) => !overlappingIds.has(a.id ?? ""))
+      const overlappingIds = findOverlappingAnnotations(annotation, annotations, getEditor, loading)
+      const surviving = annotations.filter((a) => !overlappingIds.has(a.id ?? ""))
       isolatedRef.current = true
-      dispatchAnnotations(getEditor, loading, [...nonOverlapping, annotation])
+      dispatchAnnotations(getEditor, loading, surviving)
     },
     [annotations, matchingAnnotations, getEditor, loading]
   )

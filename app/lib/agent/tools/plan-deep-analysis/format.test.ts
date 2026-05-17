@@ -144,6 +144,7 @@ describe("buildAutoSteps", () => {
     {
       name: "one step per section plus synthesis",
       postAction: "annotate_as_code",
+      interactive: false,
       check: (steps: ReturnType<typeof buildAutoSteps>) => {
         expect(steps).toHaveLength(3)
         expect(steps.map((s) => s.title)).toEqual(["Intro", "Methods", "Synthesis"])
@@ -152,6 +153,7 @@ describe("buildAutoSteps", () => {
     {
       name: "single-range section emits one section in array",
       postAction: "annotate_as_code",
+      interactive: false,
       check: (steps: ReturnType<typeof buildAutoSteps>) => {
         expect(steps[0].expected).toContain(
           `apply_deep_analysis(sections=[{path: "a.md", start_line: 1, end_line: 10}], source_files=${sourceArg}, post_action="annotate_as_code")`
@@ -161,6 +163,7 @@ describe("buildAutoSteps", () => {
     {
       name: "multi-range section emits multiple sections in array",
       postAction: "annotate_as_code",
+      interactive: false,
       check: (steps: ReturnType<typeof buildAutoSteps>) => {
         expect(steps[1].expected).toContain(
           `apply_deep_analysis(sections=[{path: "b.md", start_line: 5, end_line: 15}, {path: "b.md", start_line: 25, end_line: 35}], source_files=${sourceArg}, post_action="annotate_as_code")`
@@ -170,20 +173,30 @@ describe("buildAutoSteps", () => {
     {
       name: "post_action propagates",
       postAction: "return",
+      interactive: false,
       check: (steps: ReturnType<typeof buildAutoSteps>) => {
         expect(steps[0].expected).toContain(`post_action="return"`)
       },
     },
     {
-      name: "all steps have checkpoint false",
+      name: "non-interactive: all steps have checkpoint false",
       postAction: "annotate_as_code",
+      interactive: false,
       check: (steps: ReturnType<typeof buildAutoSteps>) => {
         steps.forEach((s) => expect(s.checkpoint).toBe(false))
       },
     },
+    {
+      name: "interactive: all steps have checkpoint true",
+      postAction: "annotate_as_code",
+      interactive: true,
+      check: (steps: ReturnType<typeof buildAutoSteps>) => {
+        steps.forEach((s) => expect(s.checkpoint).toBe(true))
+      },
+    },
   ]
 
-  cases.forEach(({ name, postAction, check }) => {
-    it(name, () => check(buildAutoSteps(matches, sources, postAction)))
+  cases.forEach(({ name, postAction, interactive, check }) => {
+    it(name, () => check(buildAutoSteps(matches, sources, postAction, interactive)))
   })
 })

@@ -35,8 +35,12 @@ export const toSectionMatches = (labeled: LabeledTarget[]): SectionMatch[] =>
 export const buildAutoSteps = (
   matches: SectionMatch[],
   sources: SourceEntry[],
-  postAction: string
-): StepDefObject[] => [...matches.map((m) => toSectionStep(m, sources, postAction)), SYNTHESIS_STEP]
+  postAction: string,
+  interactive: boolean
+): StepDefObject[] => [
+  ...matches.map((m) => toSectionStep(m, sources, postAction, interactive)),
+  { ...SYNTHESIS_STEP, checkpoint: interactive },
+]
 
 export const buildExecRules = (firstStepCall: string): string =>
   `Your only action: call the tool below. No other tool calls. No reasoning about the tool call. Execute.
@@ -49,17 +53,22 @@ const formatSourceArg = (sources: SourceEntry[]): string =>
 const formatSectionsArg = (m: SectionMatch): string =>
   `[${m.ranges.map((r) => `{path: "${m.path}", start_line: ${r.startLine}, end_line: ${r.endLine}}`).join(", ")}]`
 
+const autoResult = "on result: write nothing. call complete_step immediately."
+const interactiveResult =
+  "on result: briefly summarize key findings. use ask tool to confirm whether to continue to the next section."
+
 const toSectionStep = (
   match: SectionMatch,
   sources: SourceEntry[],
-  postAction: string
+  postAction: string,
+  interactive: boolean
 ): StepDefObject => ({
   title: match.label,
   expected: `
     first call: apply_deep_analysis(sections=${formatSectionsArg(match)}, source_files=${formatSourceArg(sources)}, post_action="${postAction}")
-    on result: write nothing. call complete_step immediately.
+    ${interactive ? interactiveResult : autoResult}
     `,
-  checkpoint: false,
+  checkpoint: interactive,
 })
 
 const SYNTHESIS_STEP: StepDefObject = {

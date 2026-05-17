@@ -16,6 +16,7 @@ import { modes, deriveMode, rejectUnavailableTools, ENDPOINT } from "./executors
 import { getFiles } from "~/lib/files/store"
 import { resolveEntityName } from "~/lib/files/selectors"
 import { compactHistory, stepCompactHistory } from "./compact"
+import { readDebugOption, writeDebugOption } from "./debug"
 
 interface AgentLoopConfig {
   executor: ToolExecutor
@@ -97,31 +98,10 @@ export const runAgentLoop = async (config: AgentRunConfig): Promise<void> => {
   }
 }
 
-const readDebugOption = <T>(key: string, fallback: T): T => {
-  if (typeof window === "undefined") return fallback
-  try {
-    const stored = localStorage.getItem("nabu-debug-options")
-    return stored ? (JSON.parse(stored)[key] ?? fallback) : fallback
-  } catch {
-    return fallback
-  }
-}
-
 const readReasoningSummary = (): string =>
   readDebugOption("reasoningSummaryAuto", false) ? "auto" : "concise"
 
 const readStepCompaction = (): boolean => readDebugOption("stepCompaction", false)
-
-const writeDebugOption = (key: string, value: unknown): void => {
-  if (typeof window === "undefined") return
-  try {
-    const stored = localStorage.getItem("nabu-debug-options")
-    const options = stored ? JSON.parse(stored) : {}
-    localStorage.setItem("nabu-debug-options", JSON.stringify({ ...options, [key]: value }))
-  } catch (_) {
-    void _
-  }
-}
 
 const consumeForceCompaction = (): boolean => {
   const value = readDebugOption("forceCompaction", false)
