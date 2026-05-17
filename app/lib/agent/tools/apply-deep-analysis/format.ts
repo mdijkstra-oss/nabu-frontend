@@ -5,6 +5,7 @@ import { stripMarkdown } from "~/lib/text/strip"
 import { findMatches } from "~/lib/patch/diff/search"
 import type { PostAction } from "./def"
 import type { FindResult } from "./consensus"
+import type { Annotation } from "./types"
 
 export interface VoteRecord {
   find: { found: number; missed: number }
@@ -231,6 +232,39 @@ export const isAnnotateAction = (
 
 export const spanKey = (start: number, end: number, code: string): string =>
   `${start}-${end}-${code}`
+
+const countVotes = (votes: boolean[]): { found: number; missed: number } => {
+  const found = votes.filter(Boolean).length
+  return { found, missed: votes.length - found }
+}
+
+const countFilter = (votes: boolean[]): { keep: number; remove: number } => {
+  const keep = votes.filter(Boolean).length
+  return { keep, remove: votes.length - keep }
+}
+
+const annotationToVoteRecord = (a: Annotation): VoteRecord => {
+  const vote: VoteRecord = {
+    find: countVotes(a.findVotes),
+    filter: countFilter(a.filterVotes),
+  }
+  if (a.review !== undefined) vote.review = a.review
+  return vote
+}
+
+export const mapAnnotations = (sentences: string[], annotations: Annotation[]): MappedResult[] =>
+  annotations.flatMap((a) => {
+    const spans = sentences.slice(a.start - 1, a.end)
+    if (spans.length === 0) return []
+    return [
+      {
+        text: spans.join(" "),
+        analysis_source_id: a.code,
+        reason: a.reason,
+        vote: annotationToVoteRecord(a),
+      },
+    ]
+  })
 
 export const toAnalysisResults = (
   spans: FindResult[],

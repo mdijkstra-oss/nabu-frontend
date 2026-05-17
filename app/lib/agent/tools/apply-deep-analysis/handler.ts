@@ -4,25 +4,19 @@ import { ApplyDeepAnalysisArgs, applyDeepAnalysisTool } from "./def"
 import { registerTool, tool, getToolHandlers } from "../../executors/tool"
 import { getFileView, getViewableFiles } from "../file-view"
 import { getFile, getFileRaw } from "~/lib/files/store"
-import { CHUNK_TARGET_CHARS, CONTEXT_OVERLAP_CHARS } from "~/lib/data-blocks/chunk-lines"
+import { CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
 import {
   extractSection,
-  extractLeadingContext,
-  extractTrailingContext,
   prepareTargetContent,
-  numberSection,
   numberSectionWithPositions,
-  mapResults,
+  mapAnnotations,
   toAnnotationOps,
   buildRemovalOps,
   formatReturnOutput,
   formatAnnotateOutput,
-  toAnalysisResults,
-  spanKey,
   type MappedResult,
-  type AnalysisResult,
-  type VoteRecord,
 } from "./format"
+import type { Annotation } from "./types"
 import {
   sortSegments,
   packComposites,
@@ -32,84 +26,14 @@ import {
 } from "~/lib/composite/pack"
 import { buildSentenceSegmentMap, resolveSentenceIndex } from "~/lib/composite/sentence-map"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
-import {
-  type ContentResolver,
-  type ScopedSources,
-  partitionSources,
-  buildCallList,
-} from "./messages"
-import {
-  runDimensionPipeline,
-  mergeDimensionResults,
-  runPostFindPipeline,
-  type DimensionResult,
-  type BatchPhaseNotifier,
-} from "./pipeline"
+import { type ContentResolver, partitionSources, buildCallList } from "./messages"
+import { runAnalysisPipeline } from "./pipeline"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
 import { showProgress } from "../../client/store"
-
-const FIND_WEIGHT = 35
-const POST_FIND_RANGE = 100 - FIND_WEIGHT
-
-const deriveBatchLabel = (filtering: number, adjudicating: number, reasoning: number): string => {
-  if (filtering > 0) return "Cross-referencing findings"
-  if (adjudicating > 0) return "Adjudicating disputes"
-  if (reasoning > 0) return "Building justifications"
-  return "Finishing up"
-}
-
-const createProgressTracker = (
-  totalFinds: number
-): BatchPhaseNotifier & { tickFind: () => void } => {
-  let completedFinds = 0
-  let totalBatches = 0
-  let completedBatches = 0
-  let filtering = 0
-  let adjudicating = 0
-  let reasoning = 0
-  let highWater = 0
-
-  const emit = (raw: number, label: string) => {
-    const pct = Math.max(raw, highWater)
-    highWater = pct
-    showProgress(`${pct}% · ${label}`)
-  }
-
-  return {
-    tickFind: () => {
-      completedFinds++
-      const raw = totalFinds > 0 ? Math.round((completedFinds / totalFinds) * FIND_WEIGHT) : 0
-      emit(raw, "Interpreting dimensions")
-    },
-    setBatchCount: (n: number) => {
-      totalBatches += n
-    },
-    enterFilter: () => {
-      filtering++
-    },
-    enterAdjudicate: () => {
-      filtering--
-      adjudicating++
-    },
-    enterReason: () => {
-      adjudicating--
-      reasoning++
-    },
-    exitBatch: () => {
-      reasoning--
-      completedBatches++
-      const raw =
-        totalBatches > 0
-          ? FIND_WEIGHT + Math.round((completedBatches / totalBatches) * POST_FIND_RANGE)
-          : FIND_WEIGHT
-      emit(Math.min(raw, 99), deriveBatchLabel(filtering, adjudicating, reasoning))
-    },
-  }
-}
 
 type Enqueue = <T>(key: string, fn: () => Promise<T>) => Promise<T>
 
@@ -175,23 +99,6 @@ const logSectionBounds = (
   console.debug(`[deep-analysis] ${path} [${startLine}-${endLine}]`)
   console.debug(`[deep-analysis]   first: ${first}`)
   console.debug(`[deep-analysis]   last:  ${last}`)
-}
-
-const prepareSectionWithContext = (
-  content: string,
-  startLine: number,
-  endLine: number
-): { rawSection: string; leadingCtx: string; trailingCtx: string; sentences: string[] } => {
-  const rawSection = extractSection(content, startLine, endLine)
-  const leadingCtx = prepareTargetContent(
-    extractLeadingContext(content, startLine, CONTEXT_OVERLAP_CHARS)
-  )
-  const trailingCtx = prepareTargetContent(
-    extractTrailingContext(content, endLine, CONTEXT_OVERLAP_CHARS)
-  )
-  const section = prepareTargetContent(rawSection)
-  const { sentences } = numberSection(section)
-  return { rawSection, leadingCtx, trailingCtx, sentences }
 }
 
 const applyAnnotationsEager = async (
@@ -286,110 +193,6 @@ const buildPostActions = (enqueue: Enqueue): Record<PostAction, PostActionFn> =>
   annotate_as_comment: handleAnnotation("annotate_as_comment", enqueue),
 })
 
-const processSection = async (
-  section: Section,
-  scoped: ReturnType<typeof partitionSources>,
-  calls: ScopedSources[],
-  resolve: ContentResolver,
-  postAction: PostActionFn,
-  tracker: BatchPhaseNotifier & { tickFind: () => void }
-): Promise<HandlerResult<string>> => {
-  const { path, start_line, end_line } = section
-
-  const content = getFileView(path)
-  if (content === undefined)
-    return { status: "error", output: `Cannot read file: ${path}`, mutations: [] }
-
-  logSectionBounds(path, start_line, end_line, content.split("\n"))
-
-  const { rawSection, leadingCtx, trailingCtx, sentences } = prepareSectionWithContext(
-    content,
-    start_line,
-    end_line
-  )
-
-  if (sentences.length === 0)
-    return {
-      status: "ok",
-      output: `${path} [${start_line}-${end_line}]: no sentences.`,
-      mutations: [],
-    }
-
-  const { results: dimensionResults } = await processPool<ScopedSources, DimensionResult>(
-    calls,
-    async (sources) => [
-      await runDimensionPipeline(sources, rawSection, leadingCtx, trailingCtx, resolve),
-    ],
-    noop,
-    { concurrency: 5, onItemComplete: () => tracker.tickFind() }
-  )
-
-  const { allSpans, allFindVotes, errors: findErrors } = mergeDimensionResults(dimensionResults)
-  const warnings: string[] = []
-
-  if (findErrors.length > 0) {
-    warnings.push(...findErrors.map((e) => `find: ${e}`))
-  }
-
-  if (allSpans.length === 0 && calls.length > 0 && findErrors.length > 0)
-    return { status: "error", output: findErrors.join("; "), mutations: [] }
-
-  const postFind = await runPostFindPipeline(
-    allSpans,
-    sentences,
-    scoped,
-    leadingCtx,
-    trailingCtx,
-    resolve,
-    tracker
-  )
-
-  if (postFind.errors.length > 0) {
-    warnings.push(...postFind.errors)
-  }
-
-  const { surviving, dropped, filterVotes, reviews, reasons } = postFind
-
-  const countVotes = (votes: boolean[]) => {
-    const found = votes.filter(Boolean).length
-    return { found, missed: votes.length - found }
-  }
-  const countFilter = (votes: boolean[]) => {
-    const keep = votes.filter(Boolean).length
-    return { keep, remove: votes.length - keep }
-  }
-
-  const voteRecords = new Map<string, VoteRecord>()
-  for (const s of surviving) {
-    const key = spanKey(s.start, s.end, s.analysis_source_id)
-    const findVotes = allFindVotes.get(key) ?? []
-    const fVotes = filterVotes.get(key) ?? []
-    const review = reviews.get(key)
-    const vote: VoteRecord = {
-      find: countVotes(findVotes),
-      filter: countFilter(fVotes),
-    }
-    if (review !== undefined) vote.review = review
-    voteRecords.set(key, vote)
-  }
-
-  const analysisResults = toAnalysisResults(surviving, reasons, voteRecords)
-  const mapped = mapResults(sentences, analysisResults)
-
-  const withReview = [...voteRecords.values()].filter((v) => v.review !== undefined).length
-  console.debug(
-    `[deep-analysis] result: ${allSpans.length} found → ${surviving.length} surviving, ${dropped.length} dropped, ${withReview} with review`
-  )
-
-  return postAction({
-    mapped,
-    path,
-    startLine: start_line,
-    endLine: end_line,
-    warnings,
-  })
-}
-
 const compositeSeparator = (seg: Segment): string =>
   `\n\n# ${seg.path} [${seg.startLine}-${seg.endLine}]\n\n`
 
@@ -407,16 +210,16 @@ const toSegments = (sections: Section[]): Segment[] =>
     ]
   })
 
-const groupResultsBySegment = (
-  results: AnalysisResult[],
+const groupAnnotationsBySegment = (
+  annotations: Annotation[],
   sentenceMap: (PackedSegment | null)[]
-): Map<PackedSegment, AnalysisResult[]> => {
-  const grouped = new Map<PackedSegment, AnalysisResult[]>()
-  for (const r of results) {
-    const seg = resolveSentenceIndex(sentenceMap, r.start)
+): Map<PackedSegment, Annotation[]> => {
+  const grouped = new Map<PackedSegment, Annotation[]>()
+  for (const a of annotations) {
+    const seg = resolveSentenceIndex(sentenceMap, a.start)
     if (!seg) continue
     const list = grouped.get(seg) ?? []
-    list.push(r)
+    list.push(a)
     grouped.set(seg, list)
   }
   return grouped
@@ -425,10 +228,9 @@ const groupResultsBySegment = (
 const processComposite = async (
   composite: Composite,
   scoped: ReturnType<typeof partitionSources>,
-  calls: ScopedSources[],
+  calls: ReturnType<typeof buildCallList>,
   resolve: ContentResolver,
-  postAction: PostActionFn,
-  tracker: BatchPhaseNotifier & { tickFind: () => void }
+  postAction: PostActionFn
 ): Promise<SectionResult[]> => {
   const prepared = prepareTargetContent(composite.content)
   const { sentences, positions } = numberSectionWithPositions(prepared)
@@ -444,63 +246,48 @@ const processComposite = async (
     }))
   }
 
-  const sentenceMap = buildSentenceSegmentMap(composite, positions)
+  for (const seg of composite.segments) {
+    const content = resolve(seg.path)
+    if (content) logSectionBounds(seg.path, seg.startLine, seg.endLine, content.split("\n"))
+  }
 
-  const { results: dimensionResults } = await processPool<ScopedSources, DimensionResult>(
+  const pipelineResult = await runAnalysisPipeline(
     calls,
-    async (sources) => [await runDimensionPipeline(sources, composite.content, "", "", resolve)],
-    noop,
-    { concurrency: 5, onItemComplete: () => tracker.tickFind() }
+    composite.content,
+    "",
+    "",
+    scoped,
+    sentences,
+    resolve
   )
 
-  const { allSpans, allFindVotes, errors: findErrors } = mergeDimensionResults(dimensionResults)
   const warnings: string[] = []
+  if (pipelineResult.errors.length > 0) {
+    warnings.push(...pipelineResult.errors)
+  }
 
-  if (findErrors.length > 0) warnings.push(...findErrors.map((e) => `find: ${e}`))
-
-  if (allSpans.length === 0) {
+  if (pipelineResult.annotations.length === 0) {
     return composite.segments.map((seg) => ({
       section: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
       result:
-        findErrors.length > 0
-          ? { status: "error" as const, output: findErrors.join("; "), mutations: [] }
-          : { status: "ok" as const, output: `Lines analyzed. No matches found.`, mutations: [] },
+        pipelineResult.errors.length > 0
+          ? { status: "error" as const, output: pipelineResult.errors.join("; "), mutations: [] }
+          : { status: "ok" as const, output: "Lines analyzed. No matches found.", mutations: [] },
     }))
   }
 
-  const postFind = await runPostFindPipeline(allSpans, sentences, scoped, "", "", resolve, tracker)
+  const sentenceMap = buildSentenceSegmentMap(composite, positions)
+  const grouped = groupAnnotationsBySegment(pipelineResult.annotations, sentenceMap)
 
-  if (postFind.errors.length > 0) warnings.push(...postFind.errors)
-
-  const { surviving, filterVotes, reviews, reasons } = postFind
-
-  const countVotes = (votes: boolean[]) => {
-    const found = votes.filter(Boolean).length
-    return { found, missed: votes.length - found }
-  }
-  const countFilter = (votes: boolean[]) => {
-    const keep = votes.filter(Boolean).length
-    return { keep, remove: votes.length - keep }
-  }
-
-  const voteRecords = new Map<string, VoteRecord>()
-  for (const s of surviving) {
-    const key = spanKey(s.start, s.end, s.analysis_source_id)
-    const fv = allFindVotes.get(key) ?? []
-    const filt = filterVotes.get(key) ?? []
-    const review = reviews.get(key)
-    const vote: VoteRecord = { find: countVotes(fv), filter: countFilter(filt) }
-    if (review !== undefined) vote.review = review
-    voteRecords.set(key, vote)
-  }
-
-  const analysisResults = toAnalysisResults(surviving, reasons, voteRecords)
-  const grouped = groupResultsBySegment(analysisResults, sentenceMap)
+  const withReview = pipelineResult.annotations.filter((a) => a.review !== undefined).length
+  console.debug(
+    `[deep-analysis] result: ${pipelineResult.annotations.length} surviving, ${withReview} with review`
+  )
 
   const sectionResults: SectionResult[] = []
   for (const seg of composite.segments) {
-    const segResults = grouped.get(seg) ?? []
-    const mapped = mapResults(sentences, segResults)
+    const segAnnotations = grouped.get(seg) ?? []
+    const mapped = mapAnnotations(sentences, segAnnotations)
     const section: Section = { path: seg.path, start_line: seg.startLine, end_line: seg.endLine }
     const result = await postAction({
       mapped,
@@ -561,41 +348,12 @@ registerTool(
       const sorted = sortSegments(segments)
       const composites = packComposites(sorted, CHUNK_TARGET_CHARS, compositeSeparator)
 
-      const totalFinds = composites.length * calls.length
-      const tracker = createProgressTracker(totalFinds)
-
       showProgress("Preparing deep analysis")
       const { results: sectionResults } = await processPool<Composite, SectionResult[]>(
         composites,
-        async (composite) => {
-          if (composite.segments.length === 1) {
-            const seg = composite.segments[0]
-            const section: Section = {
-              path: seg.path,
-              start_line: seg.startLine,
-              end_line: seg.endLine,
-            }
-            const result = await processSection(
-              section,
-              scoped,
-              calls,
-              resolve,
-              actions[post_action],
-              tracker
-            )
-            return [[{ section, result }]]
-          }
-          return [
-            await processComposite(
-              composite,
-              scoped,
-              calls,
-              resolve,
-              actions[post_action],
-              tracker
-            ),
-          ]
-        },
+        async (composite) => [
+          await processComposite(composite, scoped, calls, resolve, actions[post_action]),
+        ],
         noop,
         { concurrency: 5 }
       )
