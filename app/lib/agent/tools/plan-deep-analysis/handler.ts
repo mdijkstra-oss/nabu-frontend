@@ -1,7 +1,5 @@
 import type { Block } from "../../client/blocks"
 import type { FileEntry } from "../file-entry"
-import type { ScoutEntry } from "../scout/api"
-import type { ScoutSection } from "../scout-map"
 import { labelSection } from "../scout-map"
 import { planDeepAnalysisTool, PlanDeepAnalysisArgs } from "./def"
 import { registerTool, tool } from "../../executors/tool"
@@ -14,77 +12,103 @@ import { activatePlan } from "../../executors/modes"
 import { processPool } from "~/lib/utils/pool"
 import { PREFERENCES_FILE } from "~/lib/files/filename"
 import { getFiles } from "~/lib/files/store"
-import { formatTarget, collectSections, buildAutoSteps, buildExecRules } from "./format"
+import { buildAutoSteps, buildExecRules, toSectionMatches, formatTargetFile } from "./format"
+import type { LabeledTarget, SourceEntry } from "./format"
 import { errorMessage } from "~/lib/utils/error"
-import type { SourceEntry } from "./format"
 import { filterTarget } from "../scout-filter/api"
+import type { NumberedParagraph } from "../scout-filter/messages"
 import { packComposites, sortSegments } from "~/lib/composite/pack"
 import type { Segment } from "~/lib/composite/pack"
 import { CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
 import type { SourceFileEntry } from "./def"
-
-interface ScoutJob {
-  file: FileEntry
-  role: "source" | "target"
-  forceScout: boolean
-}
-
-interface ScoutSuccess {
-  path: string
-  role: "source" | "target"
-  entry: ScoutEntry
-}
 
 const toSystemBlock = (content: string): Block => ({ type: "system", content })
 
 const READ_MARKER = "## READ MEMORY"
 const RECENCY_THRESHOLD = 15
 
-const tryScout = async (job: ScoutJob): Promise<ScoutSuccess> => {
-  const content = getFileView(job.file.path)
-  if (content === undefined) throw new Error(`Cannot read: ${job.file.path}`)
-  const entry = await scoutFile(job.file.path, content, { forceScout: job.forceScout })
-  return { path: job.file.path, role: job.role, entry }
+const findMissingFiles = (files: FileEntry[]): string[] =>
+  files.filter((f) => getFile(f.path) === undefined).map((f) => f.path)
+
+const scoutSources = async (sourceFiles: SourceFileEntry[]): Promise<void> => {
+  const { failures } = await processPool(
+    sourceFiles,
+    async (file) => {
+      const content = getFileView(file.path)
+      if (content === undefined) throw new Error(`Cannot read: ${file.path}`)
+      const entry = await scoutFile(file.path, content, { forceScout: false })
+      return [entry]
+    },
+    (completed) => {
+      for (const entry of completed) {
+        pushBlocks([toSystemBlock(formatScoutEntry(entry))])
+      }
+    },
+    { concurrency: 10 }
+  )
+
+  if (failures.length > 0) {
+    const details = failures.map((f) => `${f.item.path}: ${errorMessage(f.error)}`)
+    throw new Error(`Scout failed:\n${details.join("\n")}`)
+  }
 }
 
-const buildFrameworkContent = (sourceFiles: SourceFileEntry[]): string => {
-  const frameworks = sourceFiles.filter((f) => f.group === "framework")
-  return frameworks
-    .map((f) => {
-      const content = getFileView(f.path)
-      return content ?? ""
-    })
+const buildFramework = (sourceFiles: SourceFileEntry[]): string =>
+  sourceFiles
+    .filter((f) => f.group === "framework")
+    .map((f) => getFileView(f.path) ?? "")
     .filter((c) => c.length > 0)
     .join("\n\n")
-}
 
 const paragraphSeparator = (): string => "\n\n"
+
+const mergeConsecutive = (paragraphs: NumberedParagraph[], path: string): Segment[] => {
+  if (paragraphs.length === 0) return []
+  const segments: Segment[] = []
+  let start = paragraphs[0]
+  let end = paragraphs[0]
+  const texts: string[] = [paragraphs[0].text]
+
+  for (let i = 1; i < paragraphs.length; i++) {
+    const p = paragraphs[i]
+    if (p.index === end.index + 1) {
+      end = p
+      texts.push(p.text)
+    } else {
+      segments.push({
+        path,
+        startLine: start.startLine,
+        endLine: end.endLine,
+        content: texts.join("\n\n"),
+      })
+      start = p
+      end = p
+      texts.length = 0
+      texts.push(p.text)
+    }
+  }
+  segments.push({
+    path,
+    startLine: start.startLine,
+    endLine: end.endLine,
+    content: texts.join("\n\n"),
+  })
+  return segments
+}
 
 const filterAndLabelTarget = async (
   path: string,
   content: string,
   framework: string
-): Promise<ScoutEntry> => {
+): Promise<LabeledTarget[]> => {
   const { surviving } = await filterTarget(framework, content)
 
-  if (surviving.length === 0) {
-    return { kind: "mapped", path, map: { sections: [] } }
-  }
+  if (surviving.length === 0) return []
 
-  const segments: Segment[] = surviving.map((p) => ({
-    path,
-    startLine: p.startLine,
-    endLine: p.endLine,
-    content: p.text,
-  }))
+  const segments = mergeConsecutive(surviving, path)
 
   const sorted = sortSegments(segments)
   const composites = packComposites(sorted, CHUNK_TARGET_CHARS, paragraphSeparator)
-
-  interface IndexedSection {
-    index: number
-    section: ScoutSection
-  }
 
   const indexed = composites.map((composite, index) => ({ index, composite }))
 
@@ -93,15 +117,9 @@ const filterAndLabelTarget = async (
     async ({ index, composite }) => {
       const presented = presentContent(composite.content)
       const label = await labelSection(presented)
-      const first = composite.segments[0]
-      const last = composite.segments[composite.segments.length - 1]
-      const section: ScoutSection = {
-        label: label.label,
-        start_line: first.startLine,
-        end_line: last.endLine,
-        desc: label.desc,
-      }
-      return [{ index, section }]
+      const ranges = composite.segments.map((s) => ({ startLine: s.startLine, endLine: s.endLine }))
+      const target: LabeledTarget = { path, label: label.label, desc: label.desc, ranges }
+      return [{ index, target }]
     },
     () => undefined,
     { concurrency: 10, warmup: 1 }
@@ -111,15 +129,53 @@ const filterAndLabelTarget = async (
     throw new Error(`scout-filter labeling failed for ${path}: ${failures.length} chunk(s)`)
   }
 
-  const sections = (results as IndexedSection[])
+  return (results as { index: number; target: LabeledTarget }[])
     .sort((a, b) => a.index - b.index)
-    .map((r) => r.section)
-
-  return { kind: "mapped", path, map: { sections } }
+    .map((r) => r.target)
 }
 
-const findMissingFiles = (files: FileEntry[]): string[] =>
-  files.filter((f) => getFile(f.path) === undefined).map((f) => f.path)
+const filterAndLabelTargets = async (
+  targetFiles: FileEntry[],
+  framework: string
+): Promise<LabeledTarget[]> => {
+  const allTargets: LabeledTarget[] = []
+
+  const { failures } = await processPool(
+    targetFiles,
+    async (file: FileEntry) => {
+      const content = getFileView(file.path)
+      if (content === undefined) throw new Error(`Cannot read: ${file.path}`)
+      const targets = await filterAndLabelTarget(file.path, content, framework)
+      allTargets.push(...targets)
+      return []
+    },
+    () => undefined,
+    { concurrency: 3 }
+  )
+
+  if (failures.length > 0) {
+    const details = failures.map((f) => `${(f.item as FileEntry).path}: ${errorMessage(f.error)}`)
+    throw new Error(`Scout-filter failed:\n${details.join("\n")}`)
+  }
+
+  return allTargets
+}
+
+const groupByPath = (labeled: LabeledTarget[]): Map<string, LabeledTarget[]> => {
+  const map = new Map<string, LabeledTarget[]>()
+  for (const t of labeled) {
+    const group = map.get(t.path)
+    if (group) group.push(t)
+    else map.set(t.path, [t])
+  }
+  return map
+}
+
+const pushTargetBlocks = (labeled: LabeledTarget[]): void => {
+  for (const [path, targets] of groupByPath(labeled)) {
+    pushBlocks([toSystemBlock(formatTargetFile(path, targets))])
+  }
+}
 
 const isMemoryRecent = (blocks: Block[]): boolean => {
   let actionCount = 0
@@ -132,93 +188,56 @@ const isMemoryRecent = (blocks: Block[]): boolean => {
   return false
 }
 
+const injectMemory = (): void => {
+  const preferences = getFiles()[PREFERENCES_FILE] ?? null
+  const blocks = getAllBlocks()
+  if (!isMemoryRecent(blocks) && preferences) {
+    pushBlocks([
+      toSystemBlock(
+        `${READ_MARKER}\n<file ${PREFERENCES_FILE}>\n${preferences}\n</file ${PREFERENCES_FILE}>`
+      ),
+    ])
+  }
+}
+
 registerTool(
   tool({
     ...planDeepAnalysisTool,
     schema: PlanDeepAnalysisArgs,
     handler: async (_files, { source_files, target_files, post_action }) => {
-      const allFiles = [...source_files, ...target_files]
-      const missing = findMissingFiles(allFiles)
+      const missing = findMissingFiles([...source_files, ...target_files])
       if (missing.length > 0)
         return { status: "error", output: `Files not found: ${missing.join(", ")}`, mutations: [] }
 
-      const sourceJobs: ScoutJob[] = source_files.map(
-        (file): ScoutJob => ({
-          file,
-          role: "source",
-          forceScout: false,
-        })
-      )
-
-      const { failures: sourceFailures } = await processPool<ScoutJob, ScoutSuccess>(
-        sourceJobs,
-        async (job) => [await tryScout(job)],
-        (completed) => {
-          for (const r of completed) {
-            pushBlocks([toSystemBlock(formatScoutEntry(r.entry))])
-          }
-        },
-        { concurrency: 10 }
-      )
-
-      if (sourceFailures.length > 0) {
-        const details = sourceFailures.map((f) => `${f.item.file.path}: ${errorMessage(f.error)}`)
-        return { status: "error", output: `Scout failed:\n${details.join("\n")}`, mutations: [] }
+      try {
+        await scoutSources(source_files)
+      } catch (e) {
+        return { status: "error", output: errorMessage(e), mutations: [] }
       }
 
-      const framework = buildFrameworkContent(source_files)
+      const framework = buildFramework(source_files)
 
-      const targetEntries: ScoutSuccess[] = []
-      const { failures: targetFailures } = await processPool(
-        target_files,
-        async (file: FileEntry) => {
-          const content = getFileView(file.path)
-          if (content === undefined) throw new Error(`Cannot read: ${file.path}`)
-          const entry = await filterAndLabelTarget(file.path, content, framework)
-          targetEntries.push({ path: file.path, role: "target", entry })
-          return []
-        },
-        () => undefined,
-        { concurrency: 3 }
-      )
-
-      if (targetFailures.length > 0) {
-        const details = targetFailures.map(
-          (f) => `${(f.item as FileEntry).path}: ${errorMessage(f.error)}`
-        )
-        return {
-          status: "error",
-          output: `Scout-filter failed:\n${details.join("\n")}`,
-          mutations: [],
-        }
+      let labeled: LabeledTarget[]
+      try {
+        labeled = await filterAndLabelTargets(target_files, framework)
+      } catch (e) {
+        return { status: "error", output: errorMessage(e), mutations: [] }
       }
 
-      for (const { path, entry } of targetEntries) {
-        pushBlocks([toSystemBlock(formatTarget(path, entry))])
-      }
+      pushTargetBlocks(labeled)
+      injectMemory()
 
-      const preferences = getFiles()[PREFERENCES_FILE] ?? null
-      const blocks = getAllBlocks()
-      if (!isMemoryRecent(blocks) && preferences) {
-        pushBlocks([
-          toSystemBlock(
-            `${READ_MARKER}\n<file ${PREFERENCES_FILE}>\n${preferences}\n</file ${PREFERENCES_FILE}>`
-          ),
-        ])
-      }
+      const matches = toSectionMatches(labeled)
+      if (matches.length === 0) return { status: "ok", output: "ok", mutations: [] }
 
-      let directive: string | undefined
-      const matches = collectSections(targetEntries)
-      if (matches.length > 0) {
-        const sourceEntries: SourceEntry[] = source_files.map((f) => ({
-          path: f.path,
-          scope: f.group,
-        }))
-        const steps = buildAutoSteps(matches, sourceEntries, post_action)
-        const task = `Deep analysis: ${targetEntries.map((e) => e.path).join(", ")}`
-        activatePlan(task, steps, [])
-        directive = buildExecRules(steps[0].expected)
-      }
+      const sourceEntries: SourceEntry[] = source_files.map((f) => ({
+        path: f.path,
+        scope: f.group,
+      }))
+      const steps = buildAutoSteps(matches, sourceEntries, post_action)
+      const task = `Deep analysis: ${[...new Set(labeled.map((t) => t.path))].join(", ")}`
+      activatePlan(task, steps, [])
+      const directive = buildExecRules(steps[0].expected)
 
       return { status: "ok", output: "ok", directive, mutations: [] }
     },

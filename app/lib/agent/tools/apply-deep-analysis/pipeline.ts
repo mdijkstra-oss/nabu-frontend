@@ -3,6 +3,7 @@ import type { ScopedSources, ContentResolver } from "./messages"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
+import { think, REVISITING, FILTERING, ADJUDICATING, GROUNDING, TRIMMING } from "./thoughts"
 import { groupBySpan, type CodedSpan } from "./consensus"
 import { findAllDimensions, type FindStepResult } from "./step-find"
 import { filterAnnotations } from "./step-filter"
@@ -37,6 +38,7 @@ const refineAnnotationBatch = async (
 ): Promise<{ annotations: Annotation[]; errors: string[] }> => {
   const errors: string[] = []
 
+  think(FILTERING)
   const filterResult = await filterAnnotations(
     batch,
     sentences,
@@ -47,6 +49,7 @@ const refineAnnotationBatch = async (
   )
   errors.push(...filterResult.errors)
 
+  think(ADJUDICATING)
   const adjResult = await adjudicateAnnotations(
     filterResult.disputed,
     sentences,
@@ -59,6 +62,7 @@ const refineAnnotationBatch = async (
 
   const surviving = [...filterResult.undisputed, ...adjResult.surviving]
 
+  think(GROUNDING)
   const reasonResult = await reasonAnnotations(
     surviving,
     sentences,
@@ -69,6 +73,7 @@ const refineAnnotationBatch = async (
   )
   if (reasonResult.error) errors.push(reasonResult.error)
 
+  think(TRIMMING)
   const trimResult = await trimAnnotations(reasonResult.annotations, sentences)
   if (trimResult.error) errors.push(trimResult.error)
 
@@ -83,6 +88,7 @@ const refineAnnotations = async (
   trailingCtx: string,
   resolve: ContentResolver
 ): Promise<{ annotations: Annotation[]; errors: string[] }> => {
+  think(REVISITING)
   const coded = annotationsToCoded(annotations)
   if (coded.length === 0) return { annotations: [], errors: [] }
 

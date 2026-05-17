@@ -33,7 +33,7 @@ import { noop } from "~/lib/utils/noop"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
-import { showProgress } from "../../client/store"
+import { think, thinkWithName, STARTING, PICKING_UP, READING_FRAMEWORK, WRITING } from "./thoughts"
 
 type Enqueue = <T>(key: string, fn: () => Promise<T>) => Promise<T>
 
@@ -251,6 +251,9 @@ const processComposite = async (
     if (content) logSectionBounds(seg.path, seg.startLine, seg.endLine, content.split("\n"))
   }
 
+  const name = composite.segments[0]?.path.split("/").pop() ?? "section"
+  think(READING_FRAMEWORK)
+
   const pipelineResult = await runAnalysisPipeline(
     calls,
     composite.content,
@@ -283,6 +286,8 @@ const processComposite = async (
   console.debug(
     `[deep-analysis] result: ${pipelineResult.annotations.length} surviving, ${withReview} with review`
   )
+
+  thinkWithName(WRITING, name)
 
   const sectionResults: SectionResult[] = []
   for (const seg of composite.segments) {
@@ -348,12 +353,14 @@ registerTool(
       const sorted = sortSegments(segments)
       const composites = packComposites(sorted, CHUNK_TARGET_CHARS, compositeSeparator)
 
-      showProgress("Preparing deep analysis")
+      think(STARTING)
       const { results: sectionResults } = await processPool<Composite, SectionResult[]>(
         composites,
-        async (composite) => [
-          await processComposite(composite, scoped, calls, resolve, actions[post_action]),
-        ],
+        async (composite) => {
+          const name = composite.segments[0]?.path.split("/").pop() ?? "section"
+          thinkWithName(PICKING_UP, name)
+          return [await processComposite(composite, scoped, calls, resolve, actions[post_action])]
+        },
         noop,
         { concurrency: 5 }
       )

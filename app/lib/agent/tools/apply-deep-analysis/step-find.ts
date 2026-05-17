@@ -5,6 +5,7 @@ import { callAndParse } from "../../client/call-parse"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
+import { think, FINDING, CONSENSUS } from "./thoughts"
 import {
   buildFindCall,
   buildFindResultSchema,
@@ -70,6 +71,8 @@ export const findAnnotations = async (
   trailingCtx: string,
   resolve: ContentResolver
 ): Promise<FindStepResult> => {
+  think(FINDING)
+
   const { messages: findMessages, sentences } = buildFindCall(
     rawTarget,
     sources,
@@ -103,6 +106,7 @@ export const findAnnotations = async (
     )
   }
 
+  think(CONSENSUS)
   const tally = tallyVotes(findRuns, sentences.length)
   const spans = filterByTally(tally, FIND_THRESHOLD, FIND_MAX_GAP)
 

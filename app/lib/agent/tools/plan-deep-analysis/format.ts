@@ -1,20 +1,16 @@
-import type { ScoutEntry } from "../scout/api"
 import type { StepDefObject } from "../../derived"
-import { formatSection } from "../scout/prose"
 
-export const formatTarget = (path: string, entry: ScoutEntry): string => {
-  if (entry.kind !== "mapped") return `File: ${path}\n${(entry as { content: string }).content}`
-
-  const header = `File: ${path}`
-  const body = entry.map.sections.map(formatSection).join("\n\n")
-  return `${header}\n\n${body}`
+export interface LabeledTarget {
+  path: string
+  label: string
+  desc?: string
+  ranges: { startLine: number; endLine: number }[]
 }
 
 export interface SectionMatch {
   path: string
   label: string
-  startLine: number
-  endLine: number
+  ranges: { startLine: number; endLine: number }[]
 }
 
 export interface SourceEntry {
@@ -22,16 +18,19 @@ export interface SourceEntry {
   scope: string
 }
 
-export const collectSections = (entries: { path: string; entry: ScoutEntry }[]): SectionMatch[] =>
-  entries.flatMap(({ path, entry }) => {
-    if (entry.kind !== "mapped") return []
-    return entry.map.sections.map((section) => ({
-      path,
-      label: section.label,
-      startLine: section.start_line,
-      endLine: section.end_line,
-    }))
-  })
+export const formatLabeledTarget = (target: LabeledTarget): string => {
+  const ranges = target.ranges.map((r) => `${r.startLine}-${r.endLine}`).join(", ")
+  return `[${ranges}] ${target.label}${target.desc ? `\n  ${target.desc}` : ""}`
+}
+
+export const formatTargetFile = (path: string, targets: LabeledTarget[]): string => {
+  const header = `File: ${path}`
+  const body = targets.map(formatLabeledTarget).join("\n\n")
+  return `${header}\n\n${body}`
+}
+
+export const toSectionMatches = (labeled: LabeledTarget[]): SectionMatch[] =>
+  labeled.map((t) => ({ path: t.path, label: t.label, ranges: t.ranges }))
 
 export const buildAutoSteps = (
   matches: SectionMatch[],
@@ -47,8 +46,8 @@ export const buildExecRules = (firstStepCall: string): string =>
 const formatSourceArg = (sources: SourceEntry[]): string =>
   `[${sources.map((s) => `{path: "${s.path}", scope: "${s.scope}"}`).join(", ")}]`
 
-const formatSectionArg = (m: SectionMatch): string =>
-  `[{path: "${m.path}", start_line: ${m.startLine}, end_line: ${m.endLine}}]`
+const formatSectionsArg = (m: SectionMatch): string =>
+  `[${m.ranges.map((r) => `{path: "${m.path}", start_line: ${r.startLine}, end_line: ${r.endLine}}`).join(", ")}]`
 
 const toSectionStep = (
   match: SectionMatch,
@@ -57,7 +56,7 @@ const toSectionStep = (
 ): StepDefObject => ({
   title: match.label,
   expected: `
-    first call: apply_deep_analysis(sections=${formatSectionArg(match)}, source_files=${formatSourceArg(sources)}, post_action="${postAction}")
+    first call: apply_deep_analysis(sections=${formatSectionsArg(match)}, source_files=${formatSourceArg(sources)}, post_action="${postAction}")
     on result: write nothing. call complete_step immediately.
     `,
   checkpoint: false,
