@@ -4,6 +4,7 @@ export interface ResolvedAnnotation {
   from: number
   to: number
   color: string
+  review?: boolean
 }
 
 export interface OverlapSegment {

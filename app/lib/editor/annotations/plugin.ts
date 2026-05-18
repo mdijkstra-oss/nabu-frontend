@@ -1,7 +1,7 @@
 import { Plugin, PluginKey } from "prosemirror-state"
 import { DecorationSet } from "prosemirror-view"
 import type { Node } from "prosemirror-model"
-import type { Annotation } from "~/domain/data-blocks/attributes/annotations/selectors"
+import { hasReview, type Annotation } from "~/domain/data-blocks/attributes/annotations/selectors"
 import type { ResolvedAnnotation } from "./types"
 import { segmentByOverlap } from "./overlap"
 import { createDecorationSet, createMarkerDecorations } from "./decorations"
@@ -25,6 +25,7 @@ const toResolvedAnnotations = (
       color: a.color,
     }
     if (a.id) resolved.id = a.id
+    if (hasReview(a)) resolved.review = true
     return resolved
   })
 

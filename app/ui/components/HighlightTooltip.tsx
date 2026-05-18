@@ -1,4 +1,4 @@
-import { X, Trash2 } from "lucide-react"
+import { X, Trash2, AlertTriangle } from "lucide-react"
 import { SwapButton } from "~/ui/components/SwapButton"
 
 export interface HighlightEntry {
@@ -19,15 +19,9 @@ interface HighlightTooltipProps {
 const Divider = () => <div className="h-px w-full bg-neutral-border" />
 
 const ReviewBlock = ({ justifications }: { justifications: string[] }) => (
-  <div className="mt-1 rounded bg-amber-200/70 px-2 py-1.5 w-full">
-    <span className="text-caption font-caption text-amber-900 font-semibold">Review</span>
-    <ul className="list-disc pl-4 mt-0.5">
-      {justifications.map((j, i) => (
-        <li key={i} className="text-caption font-caption text-amber-900">
-          {j}
-        </li>
-      ))}
-    </ul>
+  <div className="mt-1 flex items-start gap-1.5 rounded bg-amber-200/70 px-2 py-1.5 w-full">
+    <AlertTriangle className="h-3 w-3 flex-none mt-0.5 text-amber-700" />
+    <span className="text-caption font-caption text-amber-900">{justifications.join(" ")}</span>
   </div>
 )
 

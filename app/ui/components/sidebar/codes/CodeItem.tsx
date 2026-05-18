@@ -43,8 +43,10 @@ const SEVERITY_CLASSES: Record<ReviewSeverity, string> = {
   danger: "text-red-900 bg-red-200/70 hover:bg-red-300/80",
 }
 
-const isDangerVisible = (stat: ReviewStat | undefined): stat is ReviewStat =>
-  stat != null && stat.severity === "danger"
+type ElevatedStat = ReviewStat & { severity: "warning" | "danger" }
+
+const isReviewVisible = (stat: ReviewStat | undefined): stat is ElevatedStat =>
+  stat != null && stat.severity !== "normal"
 
 const ReviewBadgeDebug = ({
   stat,
@@ -63,10 +65,25 @@ const ReviewBadgeDebug = ({
   </TooltipWrap>
 )
 
-const ReviewBadgeCompact = ({ onSearchUnsure }: { onSearchUnsure?: () => void }) => (
-  <TooltipWrap text="May need sharper boundaries">
+const COMPACT_CLASSES: Record<"warning" | "danger", string> = {
+  warning: "text-amber-600 hover:text-amber-800",
+  danger: "text-red-600 hover:text-red-800",
+}
+
+const ReviewBadgeCompact = ({
+  severity,
+  onSearchUnsure,
+}: {
+  severity: "warning" | "danger"
+  onSearchUnsure?: () => void
+}) => (
+  <TooltipWrap
+    text={
+      severity === "danger" ? "Probably needs sharper boundaries" : "May need sharper boundaries"
+    }
+  >
     <button
-      className="flex h-5 w-5 flex-none cursor-pointer items-center justify-center rounded text-amber-700 transition-colors hover:text-amber-900"
+      className={`flex h-5 w-5 flex-none cursor-pointer items-center justify-center rounded transition-colors ${COMPACT_CLASSES[severity]}`}
       onClick={stopAndCall(onSearchUnsure)}
     >
       <AlertTriangle className="h-3.5 w-3.5" />
@@ -101,8 +118,8 @@ export const CodeItem = ({
     {debugReview && reviewStat != null && (
       <ReviewBadgeDebug stat={reviewStat} onSearchUnsure={onSearchUnsure} />
     )}
-    {!debugReview && isDangerVisible(reviewStat) && (
-      <ReviewBadgeCompact onSearchUnsure={onSearchUnsure} />
+    {!debugReview && isReviewVisible(reviewStat) && (
+      <ReviewBadgeCompact severity={reviewStat.severity} onSearchUnsure={onSearchUnsure} />
     )}
     {count > 0 && (
       <TooltipWrap text={formatFileTooltip(count)}>
