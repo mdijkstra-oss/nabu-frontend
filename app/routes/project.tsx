@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from "react"
-import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
+import { Outlet, useNavigate, useParams, useOutletContext, useSearchParams } from "react-router"
 import { AnimatePresence } from "framer-motion"
 import { Eraser, Sparkles } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
@@ -78,6 +78,7 @@ import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getAllCodes } from "~/domain/data-blocks/callout/codes/selectors"
 import { DismissableWrap } from "~/ui/components/DismissableWrap"
+import { buildToolbar } from "~/ui/toolbars"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
 
@@ -204,6 +205,9 @@ const formatSelectionTitle = (count: number): string =>
 export default function ProjectLayout() {
   const params = useParams<{ projectId: string; fileId?: string; searchId?: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const toolbarMeta = Object.fromEntries(searchParams.entries())
+  const urlToolbar = buildToolbar(searchParams.get("toolbar") ?? "", toolbarMeta)
   const dismissSidebarRef = useRef<(() => void) | null>(null)
   const [activeNav, setActiveNav] = useState<ActiveNav>("documents")
   const [searchValue, setSearchValue] = useState("")
@@ -544,9 +548,10 @@ export default function ProjectLayout() {
 
   const handleSearchUnsure = (code: Code) => {
     const id = saveNewSearch({
-      title: `${code.id} (unsure)`,
-      description: `Unsure annotations for: ${code.id}`,
-      sql: `SELECT file, id, text, vote_filter_keep, vote_filter_remove FROM annotations WHERE code = '${code.id}' AND vote_filter_remove > 0`,
+      title: `${code.id} (flagged)`,
+      description: `Annotations flagged for review: ${code.id}`,
+      sql: `SELECT file, id, text, vote_review FROM annotations WHERE code = '${code.id}' AND vote_review IS NOT NULL AND vote_review != ''`,
+      meta: { toolbar: "code-refinement", codeId: code.id },
     })
     if (!id) return
     dismissSidebarRef.current?.()
@@ -682,7 +687,19 @@ export default function ProjectLayout() {
           onDismiss={fileImport.dismiss}
         />
         <AnimatePresence>
-          {isOnDocumentPage && hasSelectedCodes && (
+          {urlToolbar ? (
+            <FloatingActionBar
+              title={urlToolbar.title}
+              onClose={() =>
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev)
+                  next.delete("toolbar")
+                  return next
+                })
+              }
+              actions={urlToolbar.buttons}
+            />
+          ) : isOnDocumentPage && hasSelectedCodes ? (
             <FloatingActionBar
               title={
                 hasAllCodesSelected
@@ -696,7 +713,7 @@ export default function ProjectLayout() {
               onClose={clearSelectedCodes}
               actions={codeSelectionActions}
             />
-          )}
+          ) : null}
         </AnimatePresence>
       </div>
     </NabuProvider>

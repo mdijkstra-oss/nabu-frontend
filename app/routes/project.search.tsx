@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
-import { useParams, useNavigate } from "react-router"
+import { useParams, useNavigate, useSearchParams } from "react-router"
 import { useProject } from "./project"
 import { useSearchResults } from "~/ui/hooks/useSearchResults"
 import { SearchHeader } from "~/ui/components/search/SearchHeader"
@@ -101,10 +101,24 @@ export default function ProjectSearch() {
   const isDone = phase === "done"
 
   const searchDataRef = useRef({ search, results, files })
+  const [, setSearchParams] = useSearchParams()
 
   useEffect(() => {
     searchDataRef.current = { search, results, files }
   }, [search, results, files])
+
+  const searchId = params.searchId
+  useEffect(() => {
+    const meta = search?.meta
+    if (!meta) return
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      for (const [key, value] of Object.entries(meta)) {
+        next.set(key, value)
+      }
+      return next
+    })
+  }, [searchId])
 
   useEffect(() => {
     setPageContextOverride(() => {

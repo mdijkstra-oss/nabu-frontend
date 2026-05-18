@@ -28,6 +28,7 @@ export const SearchEntrySchema = z.object({
   sql: validSql,
   hydes: HydesCacheSchema.optional(),
   descriptionsHash: z.string().optional(),
+  meta: z.record(z.string(), z.string()).optional(),
 })
 
 export type SearchEntry = z.infer<typeof SearchEntrySchema>

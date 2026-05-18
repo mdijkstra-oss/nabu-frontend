@@ -12,6 +12,7 @@ export interface NewSearchData {
   sql: string
   hydes?: HydesCache
   descriptionsHash?: string
+  meta?: Record<string, string>
 }
 
 const MAX_UNSAVED = 3
@@ -58,7 +59,8 @@ const bumpExisting = (
   entries: SearchEntry[],
   sql: string,
   hydes?: HydesCache,
-  descriptionsHash?: string
+  descriptionsHash?: string,
+  meta?: Record<string, string>
 ): SearchEntry[] =>
   entries.map((e) =>
     e.sql === sql
@@ -67,6 +69,7 @@ const bumpExisting = (
           createdAt: Date.now(),
           ...(hydes && { hydes }),
           ...(descriptionsHash && { descriptionsHash }),
+          ...(meta && { meta }),
         }
       : e
   )
@@ -80,7 +83,8 @@ export const saveNewSearch = (data: NewSearchData): string => {
       settings.searches ?? [],
       data.sql,
       data.hydes,
-      data.descriptionsHash
+      data.descriptionsHash,
+      data.meta
     )
     updateSearchEntries(bumped)
     return existing.id
@@ -97,6 +101,7 @@ export const saveNewSearch = (data: NewSearchData): string => {
     sql: data.sql,
     ...(data.hydes && { hydes: data.hydes }),
     ...(data.descriptionsHash && { descriptionsHash: data.descriptionsHash }),
+    ...(data.meta && { meta: data.meta }),
   }
 
   const withNew = [...(settings.searches ?? []), entry]
