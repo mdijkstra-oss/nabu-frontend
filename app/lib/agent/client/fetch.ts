@@ -197,7 +197,6 @@ const LLM_CACHE_CAP = 10_000
 const UNCACHEABLE_ENDPOINTS = [
   "/qual-coder",
   "/semantic-filter",
-  "/write-answer",
   "/deep-analysis-find",
   "/deep-analysis-filter",
 ]

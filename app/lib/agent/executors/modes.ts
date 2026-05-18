@@ -19,10 +19,10 @@ import { cancel } from "../tools/cancel/def"
 // scoutTool — temporary, re-enable later
 import { planDeepAnalysisTool } from "../tools/plan-deep-analysis/def"
 import { applyDeepAnalysisTool } from "../tools/apply-deep-analysis/def"
+import { refineCodeTool } from "../tools/refine-code/def"
 import { startPlanTool } from "../tools/start-planning/def"
 import { completeStep } from "../tools/complete-step/def"
 import { askTool } from "../tools/ask/def"
-import { recordDecisionTool } from "../tools/record-decision/def"
 import { submitPlanTool } from "../tools/submit-plan/def"
 import { queryTool } from "../tools/query/def"
 import { searchTool } from "../tools/search/def"
@@ -70,9 +70,9 @@ const raw: Record<ModeName, ModeConfig> = {
       // scoutTool, // temporary — re-enable later
       planDeepAnalysisTool,
       applyDeepAnalysisTool,
+      refineCodeTool,
       startPlanTool,
       askTool,
-      recordDecisionTool,
     ],
     triggers: ["cancel"],
     nudges: [baselineNudge, memoryNudge, settingsNudge],
@@ -86,7 +86,6 @@ const raw: Record<ModeName, ModeConfig> = {
       submitPlanTool,
       cancel,
       askTool,
-      recordDecisionTool,
     ],
     triggers: [],
     prompt: "planning",
@@ -109,7 +108,6 @@ const raw: Record<ModeName, ModeConfig> = {
       completeStep,
       applyDeepAnalysisTool,
       askTool,
-      recordDecisionTool,
     ],
     triggers: ["submit_plan"],
     prompt: "execution",

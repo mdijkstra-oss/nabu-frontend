@@ -12,7 +12,6 @@ import "../tools/remove-file/handler"
 import "../tools/block-tools/register"
 import "../tools/run-local-shell/handler"
 import "../tools/ask/handler"
-import "../tools/record-decision/handler"
 import "../tools/submit-plan/handler"
 import "../tools/compact/handler"
 // temporary — re-enable later
@@ -22,6 +21,7 @@ import "../tools/apply-deep-analysis/handler"
 import "../tools/start-planning/handler"
 import "../tools/query/handler"
 import "../tools/search/handler"
+import "../tools/refine-code/handler"
 
 export type { ToolDeps }
 

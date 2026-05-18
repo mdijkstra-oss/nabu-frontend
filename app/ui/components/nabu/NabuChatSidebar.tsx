@@ -13,18 +13,7 @@ import {
 import { useNavigate, useParams } from "react-router"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import {
-  BookOpen,
-  Check,
-  ChevronRight,
-  Circle,
-  Loader2,
-  MessageCircle,
-  MessageSquare,
-  Send,
-  SlidersHorizontal,
-  X,
-} from "lucide-react"
+import { Check, ChevronRight, Circle, Loader2, MessageSquare, Send, X } from "lucide-react"
 import { Button } from "~/ui/components/Button"
 import { IconButton } from "~/ui/components/IconButton"
 import { TextFieldUnstyled } from "~/ui/components/TextFieldUnstyled"
@@ -45,31 +34,21 @@ import {
   type PlanStep,
   type StepStatus,
 } from "./group"
-import type {
-  AskMessage,
-  AskScope,
-  ScoutMessage,
-  ScoutFileStatus,
-  ScoutFileState,
-} from "./messages"
+import type { AskMessage, ScoutMessage, ScoutFileStatus, ScoutFileState } from "./messages"
 import { isWaitingForAsk } from "./messages"
 import { getSpinnerLabels, LABEL_ADVANCE_MS } from "./spinnerLabel"
 import { useFiles } from "~/ui/hooks/useFiles"
 import { preprocessStreaming } from "~/lib/markdown/sanitize/partial"
 import { AbortBox } from "~/ui/components/ai/StepsBlock"
 import { createEntityLinkComponents } from "~/ui/components/markdown/createEntityLinkComponents"
-import { linkifyEntityIds } from "~/lib/markdown/linkify/entities"
 import { linkifyTags } from "~/lib/markdown/linkify/tags"
-import { linkifyQuotes } from "~/lib/markdown/linkify/quotes"
-import { normalizeBacktickQuotes } from "~/lib/markdown/sanitize/normalize-backticks"
 import { fixMarkdownUrls } from "~/lib/markdown/sanitize/fix-urls"
 import { findTagDefinitionByLabel } from "~/domain/data-blocks/settings/tags/selectors"
 import { resolveEntityName } from "~/lib/files/selectors"
 import { truncateLabel, presentEntry } from "~/lib/mutation-history/presentation"
 import { useMutationHistory } from "~/lib/mutation-history/useMutationHistory"
 import type { HistoryEntry } from "~/lib/mutation-history/types"
-import { boldMissingFile } from "~/lib/files/filename"
-import { stripHiddenSuffix, stripEntityQuotes } from "~/lib/markdown/sanitize/strip-hidden"
+import { prepareEntityMarkdown } from "~/lib/markdown/prepare"
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
 import { autoGreetingDirective } from "~/lib/agent/actions/actions"
 import { buildFileContextBlocks } from "~/lib/agent/context-blocks"
@@ -135,14 +114,9 @@ const MessageContent = memo(
       >
         {fixMarkdownUrls(
           linkifyTags(
-            linkifyQuotes(
-              normalizeBacktickQuotes(
-                linkifyEntityIds(
-                  stripEntityQuotes(stripHiddenSuffix(content)),
-                  (id) => resolveAndTruncateName(files, id),
-                  boldMissingFile
-                )
-              ),
+            prepareEntityMarkdown(
+              content,
+              (id) => resolveAndTruncateName(files, id),
               currentFile,
               currentFileContent
             ),
@@ -349,36 +323,13 @@ interface AskRendererProps {
 }
 
 const isTypedAnswer = (message: AskMessage): boolean =>
-  message.selected !== null && !message.options.includes(message.selected)
-
-const scopeIcon: Record<AskScope, React.ComponentType<{ className?: string }>> = {
-  local: MessageCircle,
-  codebook: BookOpen,
-  preferences: SlidersHorizontal,
-}
-
-const scopeLabel: Record<AskScope, string> = {
-  local: "This conversation",
-  codebook: "Codebook",
-  preferences: "Preferences",
-}
-
-const ScopeBadge = ({ scope }: { scope: AskScope }) => {
-  const Icon = scopeIcon[scope]
-  return (
-    <span className="flex items-center gap-1 text-caption font-caption text-subtext-color">
-      <Icon className="w-3 h-3" />
-      <span>{scopeLabel[scope]}</span>
-    </span>
-  )
-}
+  message.selected !== null && !message.options.some((o) => o.label === message.selected)
 
 const hasOptions = (message: AskMessage): boolean => message.options.length > 0
 
 const askPropsEqual = (prev: AskRendererProps, next: AskRendererProps): boolean =>
   prev.message.question === next.message.question &&
   prev.message.selected === next.message.selected &&
-  prev.message.scope === next.message.scope &&
   prev.message.options.length === next.message.options.length &&
   prev.files === next.files &&
   prev.projectId === next.projectId &&
@@ -411,13 +362,13 @@ const AskRenderer = memo(
       {hasOptions(message) && (
         <div className="flex w-full flex-col gap-1.5 max-w-[95%]">
           {message.options.map((option) => {
-            const selected = message.selected === option
+            const selected = message.selected === option.label
             return (
               <OptionCard
-                key={option}
+                key={option.label}
                 selected={selected}
                 dimmed={message.selected !== null && !selected}
-                onClick={message.selected === null ? () => onSelect(option) : undefined}
+                onClick={message.selected === null ? () => onSelect(option.label) : undefined}
               >
                 <InlineMarkdown
                   files={files}
@@ -425,7 +376,7 @@ const AskRenderer = memo(
                   currentFile={currentFile}
                   currentFileContent={currentFileContent}
                 >
-                  {option}
+                  {option.label}
                 </InlineMarkdown>
               </OptionCard>
             )
@@ -444,7 +395,6 @@ const AskRenderer = memo(
           />
         </UserBubble>
       )}
-      <ScopeBadge scope={message.scope} />
     </div>
   ),
   askPropsEqual

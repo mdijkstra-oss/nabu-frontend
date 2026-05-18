@@ -1,7 +1,7 @@
 import type { Block } from "./client/blocks"
 import type { StepDef, StepDefObject } from "./derived"
 import { serializePlanBlock } from "./derived"
-import type { AskScope } from "./tools/ask/def"
+import type { AskOption } from "./tools/ask/def"
 
 let callIdCounter = 0
 const nextCallId = (): string => String(++callIdCounter)
@@ -72,31 +72,30 @@ export const submitPlanCallPending = (task: string, steps: StepInput[]): Block[]
   ]
 }
 
-export const askCallPending = (
-  question: string,
-  options: string[],
-  scope: AskScope = "local"
-): Block[] => {
+type AskOptionInput = string | AskOption
+
+const toAskOption = (input: AskOptionInput): AskOption =>
+  typeof input === "string" ? { label: input, expected: `${input} selected` } : input
+
+export const askCallPending = (question: string, options: AskOptionInput[]): Block[] => {
   const id = nextCallId()
   return [
     {
       type: "tool_call",
-      calls: [{ id, name: "ask", args: { question, options, scope } }],
+      calls: [{ id, name: "ask", args: { question, options: options.map(toAskOption) } }],
     },
   ]
 }
 
-export const askCall = (
-  question: string,
-  options: string[],
-  answer: string,
-  scope: AskScope = "local"
-): Block[] => {
+export const askCall = (question: string, options: AskOptionInput[], answer: string): Block[] => {
   const id = nextCallId()
+  const askOptions = options.map(toAskOption)
+  const matched = askOptions.find((o) => o.label === answer)
+  const output = matched?.expected ?? answer
   return [
-    { type: "tool_call", calls: [{ id, name: "ask", args: { question, options, scope } }] },
+    { type: "tool_call", calls: [{ id, name: "ask", args: { question, options: askOptions } }] },
     { type: "user" as const, content: answer },
-    { type: "tool_result", callId: id, result: { status: "ok", output: answer } },
+    { type: "tool_result", callId: id, result: { status: "ok", output } },
   ]
 }
 

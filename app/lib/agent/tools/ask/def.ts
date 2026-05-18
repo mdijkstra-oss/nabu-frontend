@@ -4,24 +4,23 @@ import type { AnyTool } from "../../executors/tool"
 export const AskArgs = z.object({
   question: z.string().describe("A focused question with enough context for the user to decide."),
   options: z
-    .array(z.string())
+    .array(
+      z.object({
+        label: z.string().describe("Short option text the user sees and clicks."),
+        expected: z
+          .string()
+          .describe("What you will do when this option is selected — returned as tool output."),
+      })
+    )
     .min(2)
-    .nullish()
-    .describe(
-      "Concrete, actionable choices. Omit for open-ended questions where the user types freely."
-    ),
-  scope: z
-    .enum(["local", "codebook", "preferences"])
-    .describe(
-      "local = this conversation only. codebook = answer shapes how analysis is done (codes, density, granularity, which speakers/sections to code, unit of analysis, inclusion criteria). preferences = lasting non-analytical decision (user name, language, output format)."
-    ),
+    .describe("Concrete, actionable choices."),
 })
 
-export type AskScope = z.infer<typeof AskArgs>["scope"]
+export type AskOption = z.infer<typeof AskArgs>["options"][number]
 
 export const askTool: AnyTool = {
   name: "ask",
   description:
-    "Ask the user a question. Every question must go through this tool — never ask in chat text. Provide options when discrete choices exist, omit for open-ended questions. Execution pauses until answered. Call once per question — earlier answers may shape later questions.\n\nparallel: no — blocks on user response",
+    "Ask the user a question. Every question must go through this tool — never ask in chat text. Always provide options. Execution pauses until answered. Call once per question — earlier answers may shape later questions.\n\nparallel: no — blocks on user response",
   schema: AskArgs,
 }

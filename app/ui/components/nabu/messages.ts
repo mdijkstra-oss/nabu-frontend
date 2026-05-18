@@ -2,7 +2,7 @@ import type { Block, ToolCall } from "~/lib/agent/client/blocks"
 import type { FileStore } from "~/lib/files/store"
 import { derive, findCall, type DerivedPlan } from "~/lib/agent/derived"
 import { isPlanMarker } from "~/lib/agent/derived/plan"
-import { AskArgs, type AskScope } from "~/lib/agent/tools/ask/def"
+import { AskArgs, type AskOption } from "~/lib/agent/tools/ask/def"
 import { ScoutArgs } from "~/lib/agent/tools/scout/def"
 import { PlanDeepAnalysisArgs } from "~/lib/agent/tools/plan-deep-analysis/def"
 
@@ -85,14 +85,13 @@ export const toRenderMessages = (history: Block[], files: FileStore = {}): Rende
   return indexed.sort(byIndex).map((item) => item.message)
 }
 
-export type { AskScope }
+export type { AskOption }
 
 export interface AskMessage {
   type: "ask"
   question: string
-  options: string[]
+  options: AskOption[]
   selected: string | null
-  scope: AskScope
 }
 
 interface AskExtraction {
@@ -106,16 +105,6 @@ const findAskCalls = (history: Block[]): { index: number; call: ToolCall }[] =>
     return call ? [{ index, call }] : []
   })
 
-const findToolResult = (history: Block[], callId: string): string | null => {
-  for (const block of history) {
-    if (block.type === "tool_result" && block.callId === callId) {
-      const result = block.result as { output?: string } | undefined
-      return result?.output ?? null
-    }
-  }
-  return null
-}
-
 const findConsumedUserIndices = (history: Block[], askIndex: number, callId: string): number[] => {
   const indices: number[] = []
   for (let i = askIndex + 1; i < history.length; i++) {
@@ -128,8 +117,7 @@ const findConsumedUserIndices = (history: Block[], askIndex: number, callId: str
 
 interface ParsedAskArgs {
   question: string
-  options: string[]
-  scope: AskScope
+  options: AskOption[]
 }
 
 const parseAskArgs = (args: Record<string, unknown>): ParsedAskArgs | null => {
@@ -137,8 +125,7 @@ const parseAskArgs = (args: Record<string, unknown>): ParsedAskArgs | null => {
   if (!parsed.success) return null
   return {
     question: parsed.data.question,
-    options: parsed.data.options ?? [],
-    scope: parsed.data.scope,
+    options: parsed.data.options,
   }
 }
 
@@ -154,10 +141,9 @@ const extractSingleAsk = (
   const userIndices = findConsumedUserIndices(history, index, call.id)
   userIndices.forEach((i) => consumed.add(i))
 
-  const resultOutput = findToolResult(history, call.id)
   const userAnswer =
     userIndices.length > 0 ? (history[userIndices[0]] as { content: string }).content : null
-  const selected = resultOutput ?? userAnswer
+  const selected = userAnswer
 
   return [
     {
@@ -167,7 +153,6 @@ const extractSingleAsk = (
         question: args.question,
         options: args.options,
         selected,
-        scope: args.scope,
       },
     },
   ]

@@ -196,7 +196,10 @@ describe("extractAskMessages", () => {
       check: (result: ReturnType<typeof extractAskMessages>) => {
         expect(result.messages).toHaveLength(1)
         expect(result.messages[0].message.question).toBe("Pick one")
-        expect(result.messages[0].message.options).toEqual(["A", "B"])
+        expect(result.messages[0].message.options).toEqual([
+          { label: "A", expected: "A selected" },
+          { label: "B", expected: "B selected" },
+        ])
         expect(result.messages[0].message.selected).toBeNull()
       },
     },
@@ -235,7 +238,17 @@ describe("extractAskMessages", () => {
           {
             type: "tool_call" as const,
             calls: [
-              { id, name: "ask", args: { question: "Pick", options: ["A", "B"], scope: "local" } },
+              {
+                id,
+                name: "ask",
+                args: {
+                  question: "Pick",
+                  options: [
+                    { label: "A", expected: "A expected" },
+                    { label: "B", expected: "B expected" },
+                  ],
+                },
+              },
             ],
           },
           { type: "user" as const, content: "A" },
