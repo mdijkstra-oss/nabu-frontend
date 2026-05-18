@@ -7,9 +7,10 @@ import { getPageContext, findLastContextMessage } from "~/lib/editor/chat-contex
 export interface TaskConfig {
   context: string
   userMessage: string
+  guidance?: string
 }
 
-const MODE_DIRECTIVE = /^<!-- (?:model|reasoning|verbosity|prompt): .+ -->$/
+const MODE_DIRECTIVE = /^<!-- (?:model|reasoning|verbosity|prompt|guidance): .+ -->$/
 
 const isModeDirective = (block: Block): boolean =>
   block.type === "system" && MODE_DIRECTIVE.test(block.content)
@@ -54,6 +55,12 @@ export const buildTaskBlocks = (config: TaskConfig, currentHistory: Block[]): Bl
 
   if (config.context) {
     blocks.push({ type: "system", content: config.context } satisfies SystemBlock)
+  }
+  if (config.guidance) {
+    blocks.push({
+      type: "system",
+      content: `<!-- guidance: ${config.guidance} -->`,
+    } satisfies SystemBlock)
   }
   blocks.push({ type: "user", content: config.userMessage })
 
