@@ -13,7 +13,7 @@ export const formatStepProgress = (plan: DerivedPlan): string =>
 
 const formatDirective = (plan: DerivedPlan, stepIndex: number): string => {
   const step = plan.steps[stepIndex]
-  return `Current step (${stepIndex + 1}): "${step.description}" — call complete-step when done.`
+  return `Current step (${stepIndex + 1}): "${step.description}" — call complete-step when done.\n\n${step.expected}`
 }
 
 const stepMarker = (stepIndex: number): string => `[step:${stepIndex + 1}]`
