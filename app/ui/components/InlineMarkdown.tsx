@@ -3,13 +3,8 @@
 import { useMemo, memo } from "react"
 import Markdown from "react-markdown"
 import { createEntityLinkComponents } from "~/ui/components/markdown/createEntityLinkComponents"
-import { linkifyEntityIds } from "~/lib/markdown/linkify/entities"
-import { linkifyQuotes } from "~/lib/markdown/linkify/quotes"
-import { normalizeBacktickQuotes } from "~/lib/markdown/sanitize/normalize-backticks"
 import { resolveEntityName } from "~/lib/files/selectors"
-import { boldMissingFile } from "~/lib/files/filename"
-import { stripHiddenSuffix, stripEntityQuotes } from "~/lib/markdown/sanitize/strip-hidden"
-import { stripEntityLinks } from "~/lib/markdown/sanitize/strip-entity-links"
+import { prepareEntityMarkdown } from "~/lib/markdown/prepare"
 
 const allowFileProtocol = (url: string) => url
 
@@ -42,14 +37,9 @@ export const InlineMarkdown = memo(
     )
     return (
       <Markdown components={components} urlTransform={allowFileProtocol}>
-        {linkifyQuotes(
-          normalizeBacktickQuotes(
-            linkifyEntityIds(
-              stripEntityLinks(stripEntityQuotes(stripHiddenSuffix(children))),
-              (id) => resolveEntityName(files, id),
-              boldMissingFile
-            )
-          ),
+        {prepareEntityMarkdown(
+          children,
+          (id) => resolveEntityName(files, id),
           currentFile,
           currentFileContent
         )}
