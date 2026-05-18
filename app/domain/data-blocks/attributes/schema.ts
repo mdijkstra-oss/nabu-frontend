@@ -33,7 +33,6 @@ const BaseAnnotationSchema = z.object({
   vote: z
     .object({
       find: z.object({ found: z.number().int(), missed: z.number().int() }),
-      filter: z.object({ keep: z.number().int(), remove: z.number().int() }),
       review: z.string().optional(),
     })
     .optional(),

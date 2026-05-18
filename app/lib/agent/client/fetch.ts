@@ -5,7 +5,7 @@ import { getLlmHost, getLlmHeaders } from "~/lib/agent/env"
 import { calculateBackoff } from "~/lib/utils/backoff"
 import { initialParseState, processLine, stateToBlocks, type ParseCallbacks } from "./parse"
 import type { InputItem, ResponseFormat } from "./convert"
-import { pushRawCall } from "./raw-store"
+import { startRawCall, completeRawCall } from "./raw-store"
 import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 
 const RETRYABLE_STATUS = [429, 502, 503]
@@ -231,6 +231,7 @@ export const callLlm = async (options: CallLlmOptions): Promise<Block[]> => {
     }
   }
 
+  const rawId = startRawCall(options.endpoint, body)
   const t0 = performance.now()
   let blocks!: Block[]
 
@@ -251,13 +252,7 @@ export const callLlm = async (options: CallLlmOptions): Promise<Block[]> => {
   }
 
   const duration = Math.round(performance.now() - t0)
-  pushRawCall({
-    endpoint: options.endpoint,
-    requestBody: body,
-    rawResponse: JSON.stringify(blocks),
-    timestamp: Date.now(),
-    duration,
-  })
+  completeRawCall(rawId, JSON.stringify(blocks), duration)
   console.debug(`[LLM ${options.endpoint}]`, {
     blocks: summarizeBlocks(blocks),
     preview: previewText(blocks),

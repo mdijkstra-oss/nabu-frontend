@@ -75,8 +75,10 @@ export const adjudicateAnnotations = async (
   for (const a of annotations) {
     const key = annotationKey(a)
     const entry = judgmentByKey.get(key)
-    if (!entry || entry.judgment === "keep") {
+    if (!entry) {
       surviving.push(a)
+    } else if (entry.judgment === "keep") {
+      surviving.push({ ...a, reason: entry.reason })
     } else if (entry.judgment === "remove") {
       removed.push(a)
     } else {

@@ -9,7 +9,6 @@ import type { Annotation } from "./types"
 
 export interface VoteRecord {
   find: { found: number; missed: number }
-  filter: { keep: number; remove: number }
   review?: string
 }
 
@@ -238,15 +237,9 @@ const countVotes = (votes: boolean[]): { found: number; missed: number } => {
   return { found, missed: votes.length - found }
 }
 
-const countFilter = (votes: boolean[]): { keep: number; remove: number } => {
-  const keep = votes.filter(Boolean).length
-  return { keep, remove: votes.length - keep }
-}
-
 const annotationToVoteRecord = (a: Annotation): VoteRecord => {
   const vote: VoteRecord = {
     find: countVotes(a.findVotes),
-    filter: countFilter(a.filterVotes),
   }
   if (a.review !== undefined) vote.review = a.review
   return vote

@@ -3,7 +3,6 @@ import type { FileEntry } from "../file-entry"
 import { labelSection } from "../scout-map"
 import { planDeepAnalysisTool, PlanDeepAnalysisArgs } from "./def"
 import { registerTool, tool } from "../../executors/tool"
-import { scoutFile, formatScoutEntry } from "../scout/api"
 import { presentContent } from "../scout/prose"
 import { getFileView } from "../file-view"
 import { getFile } from "~/lib/files/store"
@@ -30,26 +29,13 @@ const RECENCY_THRESHOLD = 15
 const findMissingFiles = (files: FileEntry[]): string[] =>
   files.filter((f) => getFile(f.path) === undefined).map((f) => f.path)
 
-const scoutSources = async (sourceFiles: SourceFileEntry[]): Promise<void> => {
-  const { failures } = await processPool(
-    sourceFiles,
-    async (file) => {
-      const content = getFileView(file.path)
-      if (content === undefined) throw new Error(`Cannot read: ${file.path}`)
-      const entry = await scoutFile(file.path, content, { forceScout: false })
-      return [entry]
-    },
-    (completed) => {
-      for (const entry of completed) {
-        pushBlocks([toSystemBlock(formatScoutEntry(entry))])
-      }
-    },
-    { concurrency: 10 }
-  )
+const formatSourceBlock = (path: string, content: string): string => `File: ${path}\n${content}`
 
-  if (failures.length > 0) {
-    const details = failures.map((f) => `${f.item.path}: ${errorMessage(f.error)}`)
-    throw new Error(`Scout failed:\n${details.join("\n")}`)
+const pushSourceBlocks = (sourceFiles: SourceFileEntry[]): void => {
+  for (const file of sourceFiles) {
+    const content = getFileView(file.path)
+    if (content === undefined) continue
+    pushBlocks([toSystemBlock(formatSourceBlock(file.path, content))])
   }
 }
 
@@ -230,12 +216,7 @@ registerTool(
       if (missing.length > 0)
         return { status: "error", output: `Files not found: ${missing.join(", ")}`, mutations: [] }
 
-      try {
-        await scoutSources(source_files)
-      } catch (e) {
-        return { status: "error", output: errorMessage(e), mutations: [] }
-      }
-
+      pushSourceBlocks(source_files)
       const framework = buildFramework(source_files)
 
       let labeled: LabeledTarget[]

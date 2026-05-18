@@ -3,7 +3,6 @@ export interface Annotation {
   end: number
   code: string
   findVotes: boolean[]
-  filterVotes: boolean[]
   review?: string
   reason: string
 }

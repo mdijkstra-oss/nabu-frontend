@@ -8,17 +8,17 @@
     {
       "type": "message",
       "role": "system",
-      "content": "# Governance\n\nCodes for governance mechanisms and public-facing steering: concrete rules/thresholds, shifting responsibility onto citizens, privacy/data-protection constraints, and metric-driven monitoring and intervention logic.\n\n<analysis id=\"callout-8icfq22d\">\n# Citizen-facing rules & thresholds\nCitizen-facing behavioral rules, thresholds, or concrete parameter guidance communicated to the public.\n\nInclusion criteria:\n- Apply when the speaker specifies a concrete behavioral rule/threshold/parameter.\n- Include when framed as an appeal/request as long as the content is a concrete rule.\n\nExclusion criteria:\n- Exclude government-internal policy commitments.\n- Exclude enforcement/penalty thresholds.\n</analysis>\n\n<analysis id=\"callout-2wnrt1n8\">\n# Responsibilization\nShifts responsibility for achieving a policy/collective outcome onto citizens' individual or collective behavior.\n\nInclusion criteria:\n- Apply when the speaker frames controlling COVID outcomes as dependent on citizens' compliance/behavior.\n\nExclusion criteria:\n- Exclude generic calls for unity/solidarity without an explicit responsibility shift.\n</analysis>\n\n<analysis id=\"callout-2n6xupou\">\n# Privacy & data protection\nPrivacy, data-protection, and data-minimization framing used to set constraints for digital governance tools.\n\nInclusion criteria:\n- Apply when the speaker sets privacy/data-protection conditions.\n\nExclusion criteria:\n- Exclude general IT/technical talk not tied to privacy.\n</analysis>\n\n<analysis id=\"callout-9w3ynj4i\">\n# Monitoring, metrics & steering\nUse of monitoring systems, indicators, dashboards to justify government intervention.\n\nInclusion criteria:\n- Apply when the speaker references dashboards/indicators/measurement as providing insight needed for decisions.\n\nExclusion criteria:\n- Exclude pure capacity talk unless emphasis is on indicators.\n</analysis>"
-    },
-    {
-      "type": "message",
-      "role": "system",
       "content": "<target>\n1: De minister-president kondigde vandaag nieuwe maatregelen aan.\n2: Burgers moeten anderhalve meter afstand houden.\n3: Restaurants blijven gesloten tot nader order.\n4: Het coronadashboard wordt verder uitgebreid.\n5: We vragen iedereen thuis te blijven bij klachten.\n</target>"
     },
     {
       "type": "message",
+      "role": "system",
+      "content": "# Governance\n\nCodes for governance mechanisms and public-facing steering: concrete rules/thresholds, shifting responsibility onto citizens, privacy/data-protection constraints, and metric-driven monitoring and intervention logic.\n\n<analysis id=\"callout-8icfq22d\">\n# Citizen-facing rules & thresholds\nCitizen-facing behavioral rules, thresholds, or concrete parameter guidance communicated to the public.\n\nInclusion criteria:\n- Apply when the speaker specifies a concrete behavioral rule/threshold/parameter.\n- Include when framed as an appeal/request as long as the content is a concrete rule.\n\nExclusion criteria:\n- Exclude government-internal policy commitments.\n- Exclude enforcement/penalty thresholds.\n</analysis>\n\n<analysis id=\"callout-2wnrt1n8\">\n# Responsibilization\nShifts responsibility for achieving a policy/collective outcome onto citizens' individual or collective behavior.\n\nInclusion criteria:\n- Apply when the speaker frames controlling COVID outcomes as dependent on citizens' compliance/behavior.\n\nExclusion criteria:\n- Exclude generic calls for unity/solidarity without an explicit responsibility shift.\n</analysis>\n\n<analysis id=\"callout-2n6xupou\">\n# Privacy & data protection\nPrivacy, data-protection, and data-minimization framing used to set constraints for digital governance tools.\n\nInclusion criteria:\n- Apply when the speaker sets privacy/data-protection conditions.\n\nExclusion criteria:\n- Exclude general IT/technical talk not tied to privacy.\n</analysis>\n\n<analysis id=\"callout-9w3ynj4i\">\n# Monitoring, metrics & steering\nUse of monitoring systems, indicators, dashboards to justify government intervention.\n\nInclusion criteria:\n- Apply when the speaker references dashboards/indicators/measurement as providing insight needed for decisions.\n\nExclusion criteria:\n- Exclude pure capacity talk unless emphasis is on indicators.\n</analysis>"
+    },
+    {
+      "type": "message",
       "role": "user",
-      "content": "Analyze the numbered sentences against the source definitions. Return matching spans as JSON."
+      "content": "Analyze the numbered sentences against the source definition. Return matching spans as JSON."
     }
   ],
   "response_format": {

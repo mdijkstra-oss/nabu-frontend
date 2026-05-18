@@ -7,7 +7,6 @@ const ann = (code: string, start: number): Annotation => ({
   end: start,
   code,
   findVotes: [],
-  filterVotes: [],
   reason: "",
 })
 

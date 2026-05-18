@@ -5,8 +5,12 @@ import { ChevronRight, ChevronDown, Copy, Check, ListX } from "lucide-react"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { getRawCalls, subscribeRawCalls, type RawLlmCall } from "~/lib/agent/client/raw-store"
 
-const formatDuration = (ms: number): string =>
-  ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
+const isPending = (call: RawLlmCall): boolean => call.duration === null
+
+const formatDuration = (ms: number | null): string => {
+  if (ms === null) return "pending…"
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
+}
 
 const prettyJson = (json: string): string => {
   try {
@@ -28,7 +32,7 @@ const toggleId = (set: Set<number>, id: number): Set<number> => {
 }
 
 const formatCallEntry = (call: RawLlmCall): string =>
-  `[${endpointLabel(call.endpoint)}] ${formatDuration(call.duration)}\n\n${call.rawResponse}`
+  `[${endpointLabel(call.endpoint)}] ${formatDuration(call.duration)}\n\n${call.rawResponse ?? "(pending)"}`
 
 const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false)
@@ -89,7 +93,12 @@ interface RawCallEntryProps {
   onToggleSelect: () => void
 }
 
+const PendingDot = () => (
+  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+)
+
 const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => {
+  const pending = isPending(call)
   const [expanded, setExpanded] = useState(false)
   const time = new Date(call.timestamp).toLocaleTimeString()
 
@@ -100,7 +109,7 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
 
   return (
     <div
-      className={`rounded border ${selected ? "border-neutral-400 bg-neutral-50" : "border-neutral-200"}`}
+      className={`rounded border ${pending ? "border-amber-200 bg-amber-50/30" : selected ? "border-neutral-400 bg-neutral-50" : "border-neutral-200"}`}
     >
       <button
         onClick={() => setExpanded(!expanded)}
@@ -119,6 +128,7 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
           ) : (
             <ChevronRight className="w-3 h-3 text-neutral-400" />
           )}
+          {pending && <PendingDot />}
           <span className="text-xs font-mono font-medium text-neutral-700">
             {endpointLabel(call.endpoint)}
           </span>
@@ -136,13 +146,15 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
             borderColor="border-blue-300"
             labelColor="text-blue-600"
           />
-          <Section
-            label="Output"
-            displayContent={prettyJson(call.rawResponse)}
-            copyContent={call.rawResponse}
-            borderColor="border-green-300"
-            labelColor="text-green-600"
-          />
+          {call.rawResponse !== null && (
+            <Section
+              label="Output"
+              displayContent={prettyJson(call.rawResponse)}
+              copyContent={call.rawResponse}
+              borderColor="border-green-300"
+              labelColor="text-green-600"
+            />
+          )}
         </div>
       )}
     </div>
@@ -155,7 +167,8 @@ const FILTER_DEBOUNCE_MS = 300
 const callMatchesFilter = (call: RawLlmCall, filter: string): boolean => {
   const lower = filter.toLowerCase()
   return (
-    call.requestBody.toLowerCase().includes(lower) || call.rawResponse.toLowerCase().includes(lower)
+    call.requestBody.toLowerCase().includes(lower) ||
+    (call.rawResponse?.toLowerCase().includes(lower) ?? false)
   )
 }
 

@@ -1,9 +1,11 @@
 import { parseCodeBlocks, type CodeBlock } from "./parse"
 import { CHARS_PER_TOKEN } from "~/lib/text/constants"
 
-export const CHUNK_TARGET_TOKENS = 10_000
+export const CHUNK_TARGET_TOKENS = 5_000
 export const CHUNK_TARGET_CHARS = CHUNK_TARGET_TOKENS * CHARS_PER_TOKEN
-export const CONTEXT_OVERLAP_CHARS = 700
+
+export const CONTEXT_OVERLAP_TOKENS = 800
+export const CONTEXT_OVERLAP_CHARS = CONTEXT_OVERLAP_TOKENS * CHARS_PER_TOKEN
 
 export interface LineChunk {
   startLine: number

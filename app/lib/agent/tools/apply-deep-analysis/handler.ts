@@ -28,8 +28,6 @@ import { buildSentenceSegmentMap, resolveSentenceIndex } from "~/lib/composite/s
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { type ContentResolver, partitionSources, buildCallList, expandDimensions } from "./messages"
 import { runAnalysisPipeline } from "./pipeline"
-import { processPool } from "~/lib/utils/pool"
-import { noop } from "~/lib/utils/noop"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
@@ -345,8 +343,7 @@ registerTool(
 
       const scoped = partitionSources(source_files)
       const resolve: ContentResolver = getFileView
-      const isAnnotate = post_action === "annotate_as_code" || post_action === "annotate_as_comment"
-      const calls = buildCallList(isAnnotate ? expandDimensions(scoped, resolve) : scoped)
+      const calls = buildCallList(expandDimensions(scoped, resolve))
       const enqueue = createKeyedQueue()
       const actions = buildPostActions(enqueue)
 
@@ -355,18 +352,19 @@ registerTool(
       const composites = packComposites(sorted, CHUNK_TARGET_CHARS, compositeSeparator)
 
       think(STARTING)
-      const { results: sectionResults } = await processPool<Composite, SectionResult[]>(
-        composites,
-        async (composite) => {
-          const name = composite.segments[0]?.path.split("/").pop() ?? "section"
-          thinkWithName(PICKING_UP, name)
-          return [await processComposite(composite, scoped, calls, resolve, actions[post_action])]
-        },
-        noop,
-        { concurrency: 5 }
-      )
-
-      const flat = sectionResults.flat()
+      const flat: SectionResult[] = []
+      for (const composite of composites) {
+        const name = composite.segments[0]?.path.split("/").pop() ?? "section"
+        thinkWithName(PICKING_UP, name)
+        const results = await processComposite(
+          composite,
+          scoped,
+          calls,
+          resolve,
+          actions[post_action]
+        )
+        flat.push(...results)
+      }
       if (flat.length === 1) return flat[0].result
 
       return mergeSectionResults(flat)

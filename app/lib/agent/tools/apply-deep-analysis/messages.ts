@@ -22,6 +22,16 @@ export interface ScopedSources {
   dimension: string[]
 }
 
+export const singleIdFindSchema = z.object({
+  results: z.array(
+    z.object({
+      start: z.number().int().min(1),
+      end: z.number().int().min(1),
+      reasonToKeep: z.string(),
+    })
+  ),
+})
+
 export const buildFindResultSchema = (validIds: string[]) =>
   z.object({
     results: z.array(
@@ -45,6 +55,8 @@ export const buildCallList = ({ framework, dimension }: ScopedSources): ScopedSo
     ? [{ framework, dimension: [] }]
     : dimension.map((p) => ({ framework, dimension: [p] }))
 
+export type ContentResolver = (path: string) => string | undefined
+
 const toCalloutPath = (id: string): string => `${id}${GENERATED_SUFFIX}`
 
 export const expandDimensions = (
@@ -67,8 +79,6 @@ export const expandDimensions = (
   }
   return { framework: sources.framework, dimension: expanded }
 }
-
-export type ContentResolver = (path: string) => string | undefined
 
 const SINGLETON_LANGUAGES = ["json-attributes", "json-annotations", "json-settings"]
 
@@ -110,14 +120,16 @@ export const buildSourceTitleMap = (
   return map
 }
 
-export const buildSourceMessages = (
-  { framework, dimension }: ScopedSources,
-  resolve: ContentResolver
-): Message[] =>
-  [...framework, ...dimension].reduce<Message[]>((msgs, path) => {
+const resolvePathMessages = (paths: string[], resolve: ContentResolver): Message[] =>
+  paths.reduce<Message[]>((msgs, path) => {
     const content = resolveSource(path, resolve)
     return content ? [...msgs, { type: "message", role: "system", content }] : msgs
   }, [])
+
+export const buildSourceMessages = (
+  { framework, dimension }: ScopedSources,
+  resolve: ContentResolver
+): Message[] => resolvePathMessages([...framework, ...dimension], resolve)
 
 export const buildCodeSourceMessages = (
   codeIds: ReadonlySet<string>,
@@ -145,14 +157,33 @@ const buildLeadingContextMessage = (context: string): string =>
 const buildTrailingContextMessage = (context: string): string =>
   `<context type="following">\n${context}\n</context>`
 
-const buildEnvelope = (
-  sourceMessages: Message[],
+const FIND_CTA =
+  "Analyze the numbered sentences against the source definition. Return matching spans as JSON."
+
+export const ADJUDICATE_CTA =
+  "For each coded section, judge whether the passage satisfies the code definitions. Return your judgment as JSON."
+
+export const buildAdjudicateSchema = (validCodes: string[]) =>
+  z.object({
+    results: z.array(
+      z.object({
+        id: z.number().int().min(1),
+        code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
+        judgment: z.enum(["remove", "keep", "ambiguous", "conflict"]),
+        reason: z.string(),
+      })
+    ),
+  })
+
+const buildFindEnvelope = (
+  frameworkMessages: Message[],
   section: string,
   leadingCtx: string,
   trailingCtx: string,
+  dimensionMessages: Message[],
   callToAction: string
 ): Message[] => {
-  const messages: Message[] = [...sourceMessages]
+  const messages: Message[] = [...frameworkMessages]
   if (leadingCtx) {
     messages.push({
       type: "message",
@@ -168,44 +199,10 @@ const buildEnvelope = (
       content: buildTrailingContextMessage(trailingCtx),
     })
   }
+  messages.push(...dimensionMessages)
   messages.push({ type: "message", role: "user", content: callToAction })
   return messages
 }
-
-const FIND_CTA =
-  "Analyze the numbered sentences against the source definitions. Return matching spans as JSON."
-
-export const REASON_CTA =
-  "For each coded section, provide a one-sentence reason why it matches the assigned code. Return results as JSON."
-
-export const FILTER_CTA =
-  "For each coded section, judge whether the passage satisfies the code definition. Return only items that fail. Return results as JSON."
-
-export const ADJUDICATE_CTA =
-  "For each coded section, judge whether the passage satisfies the code definition. Return your judgment as JSON."
-
-export const buildFilterSchema = (validCodes: string[]) =>
-  z.object({
-    results: z.array(
-      z.object({
-        id: z.number().int().min(1),
-        code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
-        removalJustification: z.string(),
-      })
-    ),
-  })
-
-export const buildAdjudicateSchema = (validCodes: string[]) =>
-  z.object({
-    results: z.array(
-      z.object({
-        id: z.number().int().min(1),
-        code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
-        judgment: z.enum(["remove", "keep", "ambiguous", "conflict"]),
-        reason: z.string(),
-      })
-    ),
-  })
 
 export const buildFindMessages = (
   numbered: string,
@@ -214,7 +211,43 @@ export const buildFindMessages = (
   trailingCtx: string,
   resolve: ContentResolver
 ): Message[] =>
-  buildEnvelope(buildSourceMessages(sources, resolve), numbered, leadingCtx, trailingCtx, FIND_CTA)
+  buildFindEnvelope(
+    resolvePathMessages(sources.framework, resolve),
+    numbered,
+    leadingCtx,
+    trailingCtx,
+    resolvePathMessages(sources.dimension, resolve),
+    FIND_CTA
+  )
+
+const buildSpanEnvelope = (
+  frameworkMessages: Message[],
+  section: string,
+  leadingCtx: string,
+  trailingCtx: string,
+  calloutMessages: Message[],
+  callToAction: string
+): Message[] => {
+  const messages: Message[] = [...frameworkMessages]
+  if (leadingCtx) {
+    messages.push({
+      type: "message",
+      role: "system",
+      content: buildLeadingContextMessage(leadingCtx),
+    })
+  }
+  messages.push({ type: "message", role: "system", content: buildSectionMessage(section) })
+  messages.push(...calloutMessages)
+  if (trailingCtx) {
+    messages.push({
+      type: "message",
+      role: "system",
+      content: buildTrailingContextMessage(trailingCtx),
+    })
+  }
+  messages.push({ type: "message", role: "user", content: callToAction })
+  return messages
+}
 
 export const buildSpanStepMessages = (
   presented: string,
@@ -225,11 +258,12 @@ export const buildSpanStepMessages = (
   resolve: ContentResolver,
   callToAction: string
 ): Message[] =>
-  buildEnvelope(
-    buildCodeSourceMessages(codeIds, sources, resolve),
+  buildSpanEnvelope(
+    resolvePathMessages(sources.framework, resolve),
     presented,
     leadingCtx,
     trailingCtx,
+    buildCodeSourceMessages(codeIds, { framework: [], dimension: sources.dimension }, resolve),
     callToAction
   )
 

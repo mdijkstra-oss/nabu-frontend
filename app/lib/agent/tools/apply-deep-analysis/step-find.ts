@@ -6,40 +6,32 @@ import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { think, FINDING, CONSENSUS } from "./thoughts"
-import { buildFindCall, buildFindResultSchema, extractSourceIds } from "./messages"
+import { buildFindCall, singleIdFindSchema, extractSourceIds } from "./messages"
 import { groupBySpan } from "./consensus"
-import { spanKey } from "./format"
-import { FIND_ENDPOINT, FIND_RUNS } from "./def"
+import { FIND_ENDPOINT, FIND_RUNS, FIND_CONCURRENCY } from "./def"
 
 export interface FindStepResult {
   annotations: Annotation[]
   errors: string[]
 }
 
-interface DedupedSpan {
+interface VotedSpan {
   span: FindResult
-  votes: boolean[]
+  runIdx: number
 }
 
-const deduplicateSpans = (runs: FindResult[][]): DedupedSpan[] => {
-  const map = new Map<string, DedupedSpan>()
-  for (let runIdx = 0; runIdx < runs.length; runIdx++) {
-    for (const s of runs[runIdx]) {
-      const key = spanKey(s.start, s.end, s.analysis_source_id)
-      const existing = map.get(key)
-      if (existing) {
-        existing.votes[runIdx] = true
-      } else {
-        const votes = Array.from({ length: runs.length }, () => false)
-        votes[runIdx] = true
-        map.set(key, { span: s, votes })
-      }
-    }
-  }
-  return [...map.values()]
+interface FindSlot {
+  callIdx: number
+  sources: ScopedSources
+  runIdx: number
 }
 
-const OVERLAP_THRESHOLD = 0.2
+interface SlotResult {
+  callIdx: number
+  spans: FindResult[]
+}
+
+const AGREEMENT_THRESHOLD = 0.8
 
 const spanLength = (s: FindResult): number => s.end - s.start + 1
 
@@ -49,120 +41,110 @@ const overlapCount = (a: FindResult, b: FindResult): number => {
   return end >= start ? end - start + 1 : 0
 }
 
-const isSignificantOverlap = (a: FindResult, b: FindResult): boolean => {
-  const overlap = overlapCount(a, b)
+const overlapRatio = (a: FindResult, b: FindResult): number => {
   const smaller = Math.min(spanLength(a), spanLength(b))
-  return overlap / smaller > OVERLAP_THRESHOLD
+  return smaller === 0 ? 0 : overlapCount(a, b) / smaller
 }
 
-const collapseOverlapping = (spans: DedupedSpan[]): DedupedSpan[] => {
-  const byCode = new Map<string, DedupedSpan[]>()
-  for (const d of spans) {
-    const group = byCode.get(d.span.analysis_source_id) ?? []
-    group.push(d)
-    byCode.set(d.span.analysis_source_id, group)
-  }
-
-  const result: DedupedSpan[] = []
-  for (const group of byCode.values()) {
-    const sorted = [...group].sort((a, b) => spanLength(a.span) - spanLength(b.span))
-    const accepted: DedupedSpan[] = []
-    for (const d of sorted) {
-      const dominated = accepted.some((a) => isSignificantOverlap(a.span, d.span))
-      if (!dominated) accepted.push(d)
-    }
-    result.push(...accepted)
-  }
-  return result
-}
-
-const dedupedToAnnotation = (d: DedupedSpan): Annotation => ({
-  start: d.span.start,
-  end: d.span.end,
-  code: d.span.analysis_source_id,
-  findVotes: d.votes,
-  filterVotes: [],
+const toAnnotation = (span: FindResult, votes: boolean[]): Annotation => ({
+  start: span.start,
+  end: span.end,
+  code: span.analysis_source_id,
+  findVotes: votes,
   reason: "",
 })
 
-const runFindRuns = async (
-  messages: { type: "message"; role: "system" | "user"; content: string }[],
-  schema: ReturnType<typeof buildFindResultSchema>
-): Promise<{ runs: FindResult[][]; errors: string[] }> => {
-  const errors: string[] = []
-  const findSlots = Array.from({ length: FIND_RUNS }, (_, i) => i)
-  const { results, failures } = await processPool<number, FindResult[]>(
-    findSlots,
-    async (slot) => {
-      const endpoint = `${FIND_ENDPOINT}?model=${slot % 2}`
-      const result = await callAndParse(endpoint, messages, schema)
-      if (!result.ok) {
-        errors.push(result.error)
-        return []
+const voteSpans = (runs: FindResult[][]): Annotation[] => {
+  const byCode = new Map<string, VotedSpan[]>()
+  for (let runIdx = 0; runIdx < runs.length; runIdx++) {
+    for (const span of runs[runIdx]) {
+      const group = byCode.get(span.analysis_source_id) ?? []
+      group.push({ span, runIdx })
+      byCode.set(span.analysis_source_id, group)
+    }
+  }
+
+  const annotations: Annotation[] = []
+
+  for (const [code, spans] of byCode) {
+    const perRun: VotedSpan[][] = Array.from({ length: runs.length }, () => [])
+    for (const vs of spans) perRun[vs.runIdx].push(vs)
+
+    const matchedSets = perRun.map(() => new Set<number>())
+
+    for (let ri = 0; ri < runs.length - 1; ri++) {
+      for (let i = 0; i < perRun[ri].length; i++) {
+        if (matchedSets[ri].has(i)) continue
+        for (let rj = ri + 1; rj < runs.length; rj++) {
+          let bestJ = -1
+          let bestOverlap = 0
+          for (let j = 0; j < perRun[rj].length; j++) {
+            if (matchedSets[rj].has(j)) continue
+            const ratio = overlapRatio(perRun[ri][i].span, perRun[rj][j].span)
+            if (ratio >= AGREEMENT_THRESHOLD && ratio > bestOverlap) {
+              bestOverlap = ratio
+              bestJ = j
+            }
+          }
+          if (bestJ >= 0) {
+            matchedSets[ri].add(i)
+            matchedSets[rj].add(bestJ)
+            const a = perRun[ri][i].span
+            const b = perRun[rj][bestJ].span
+            const smallest = spanLength(a) <= spanLength(b) ? a : b
+            const votes = Array.from({ length: runs.length }, () => false)
+            votes[ri] = true
+            votes[rj] = true
+            annotations.push(toAnnotation({ ...smallest, analysis_source_id: code }, votes))
+            break
+          }
+        }
       }
-      return [result.data.results]
-    },
-    noop,
-    { concurrency: 3, warmup: 2 }
-  )
-  for (const f of failures) errors.push(errorMessage(f.error))
-  return { runs: results, errors }
+    }
+
+    for (let ri = 0; ri < runs.length; ri++) {
+      for (let i = 0; i < perRun[ri].length; i++) {
+        if (matchedSets[ri].has(i)) continue
+        const votes = Array.from({ length: runs.length }, () => false)
+        votes[ri] = true
+        annotations.push(toAnnotation({ ...perRun[ri][i].span, analysis_source_id: code }, votes))
+      }
+    }
+  }
+
+  return annotations
 }
 
-export const findAnnotations = async (
-  sources: ScopedSources,
+const buildFindSlots = (calls: ScopedSources[]): FindSlot[] =>
+  calls.flatMap((sources, callIdx) =>
+    Array.from({ length: FIND_RUNS }, (_, runIdx) => ({ callIdx, sources, runIdx }))
+  )
+
+const groupSlotResults = (results: SlotResult[], callCount: number): FindResult[][][] =>
+  results.reduce<FindResult[][][]>(
+    (grouped, { callIdx, spans }) => {
+      grouped[callIdx].push(spans)
+      return grouped
+    },
+    Array.from({ length: callCount }, () => [])
+  )
+
+const executeFindSlot = async (
+  slot: FindSlot,
   rawTarget: string,
   leadingCtx: string,
   trailingCtx: string,
   resolve: ContentResolver
-): Promise<FindStepResult> => {
-  think(FINDING)
-
-  const { messages: findMessages } = buildFindCall(
-    rawTarget,
-    sources,
-    resolve,
-    leadingCtx,
-    trailingCtx
-  )
-
-  const validIds = extractSourceIds(sources, resolve)
-  const findSchema = buildFindResultSchema(validIds)
-
-  const { runs: findRuns, errors } = await runFindRuns(findMessages, findSchema)
-
-  const findPerRun = findRuns.map((run, i) => `run-${i}(m${i % 2}):${run.length}`).join(", ")
-  console.debug(`[deep-analysis] find runs: ${findPerRun}`)
-  const modelCounts = [0, 1].map((m) => {
-    const total = findRuns.reduce((sum, r, i) => sum + (i % 2 === m ? r.length : 0), 0)
-    const runCount = findRuns.filter((_, i) => i % 2 === m).length
-    return `m${m} ${total} sections (${runCount} runs)`
-  })
-  console.debug(`[deep-analysis] find models: ${modelCounts.join(", ")}`)
-
-  if (findRuns.length === 0) {
-    console.debug(`[deep-analysis] consensus: 0/${FIND_RUNS} runs — all failed`)
-    return { annotations: [], errors }
+): Promise<SlotResult> => {
+  const { messages } = buildFindCall(rawTarget, slot.sources, resolve, leadingCtx, trailingCtx)
+  const sourceId = extractSourceIds(slot.sources, resolve)[0] ?? ""
+  const endpoint = `${FIND_ENDPOINT}?model=${slot.runIdx % 2}`
+  const result = await callAndParse(endpoint, messages, singleIdFindSchema)
+  if (!result.ok) throw new Error(result.error)
+  return {
+    callIdx: slot.callIdx,
+    spans: result.data.results.map((r) => ({ ...r, analysis_source_id: sourceId })),
   }
-
-  if (findRuns.length < FIND_RUNS) {
-    console.debug(
-      `[deep-analysis] consensus: ${findRuns.length}/${FIND_RUNS} runs (${FIND_RUNS - findRuns.length} dropped)`
-    )
-  }
-
-  think(CONSENSUS)
-  const deduped = collapseOverlapping(deduplicateSpans(findRuns))
-
-  const codedSpans = groupBySpan(deduped.map((d) => d.span))
-  for (const cs of codedSpans) {
-    console.debug(`[deep-analysis]   [${cs.start}-${cs.end}] ${cs.codings.join(", ")}`)
-  }
-  console.debug(`[deep-analysis] find → next: ${deduped.length} spans`)
-
-  if (deduped.length === 0) return { annotations: [], errors }
-
-  return { annotations: deduped.map(dedupedToAnnotation), errors }
 }
 
 export const findAllDimensions = async (
@@ -172,21 +154,42 @@ export const findAllDimensions = async (
   trailingCtx: string,
   resolve: ContentResolver
 ): Promise<FindStepResult> => {
-  const { results: dimensionResults } = await processPool<ScopedSources, FindStepResult>(
-    calls,
-    async (sources) => [
-      await findAnnotations(sources, rawTarget, leadingCtx, trailingCtx, resolve),
-    ],
+  think(FINDING)
+
+  const slots = buildFindSlots(calls)
+
+  const { results: slotResults, failures } = await processPool<FindSlot, SlotResult>(
+    slots,
+    async (slot) => [await executeFindSlot(slot, rawTarget, leadingCtx, trailingCtx, resolve)],
     noop,
-    { concurrency: 5 }
+    { concurrency: FIND_CONCURRENCY, warmup: FIND_RUNS }
   )
 
+  const errors: string[] = []
+  for (const f of failures) errors.push(errorMessage(f.error))
+
+  const runsPerCall = groupSlotResults(slotResults, calls.length)
+
+  think(CONSENSUS)
   const allAnnotations: Annotation[] = []
-  const allErrors: string[] = []
-  for (const dr of dimensionResults) {
-    allAnnotations.push(...dr.annotations)
-    allErrors.push(...dr.errors)
+
+  for (let callIdx = 0; callIdx < runsPerCall.length; callIdx++) {
+    const runs = runsPerCall[callIdx]
+    const runSummary = runs.map((r, i) => `run-${i}(m${i % 2}):${r.length}`).join(", ")
+    console.debug(`[deep-analysis] call-${callIdx} find: ${runSummary}`)
+
+    if (runs.length === 0) continue
+
+    allAnnotations.push(...voteSpans(runs))
   }
 
-  return { annotations: allAnnotations, errors: allErrors }
+  const codedSpans = groupBySpan(
+    allAnnotations.map((a) => ({ start: a.start, end: a.end, analysis_source_id: a.code }))
+  )
+  for (const cs of codedSpans) {
+    console.debug(`[deep-analysis]   [${cs.start}-${cs.end}] ${cs.codings.join(", ")}`)
+  }
+  console.debug(`[deep-analysis] find → ${allAnnotations.length} annotations`)
+
+  return { annotations: allAnnotations, errors }
 }

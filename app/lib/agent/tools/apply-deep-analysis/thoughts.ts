@@ -42,32 +42,11 @@ export const REVISITING = [
   "Circling back to the findings…",
 ] as const
 
-export const FILTERING = [
-  "Separating signal from noise…",
-  "Deciding what really holds up…",
-  "Sifting through the candidates…",
-  "Keeping only what's substantive…",
-] as const
-
 export const ADJUDICATING = [
   "Reconsidering the borderline cases…",
   "Weighing the uncertain ones…",
   "Deliberating on the edge cases…",
   "Giving the ambiguous ones a harder look…",
-] as const
-
-export const GROUNDING = [
-  "Grounding each finding in the text…",
-  "Anchoring observations to the source…",
-  "Connecting evidence to criteria…",
-  "Tracing each match back to its origin…",
-] as const
-
-export const TRIMMING = [
-  "Tightening the boundaries…",
-  "Refining the edges…",
-  "Narrowing down the spans…",
-  "Sharpening the precision…",
 ] as const
 
 export const WRITING = [
