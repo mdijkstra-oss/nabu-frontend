@@ -113,17 +113,16 @@ const buildAllText = (parts: HunkPart[]): string =>
     .replace(/\n$/, "")
 
 const buildReplacement = (parts: HunkPart[], matchedText: string): string => {
-  const padded = matchedText + "\n"
-  let offset = 0
+  const matchedLines = matchedText.split("\n")
+  let lineIdx = 0
   const result: string[] = []
 
   for (const part of parts) {
     if (part.type === "context" || part.type === "remove") {
-      const len = part.content.length
       if (part.type === "context") {
-        result.push(padded.slice(offset, offset + len))
+        result.push(matchedLines[lineIdx] + "\n")
       }
-      offset += len
+      lineIdx++
     } else if (part.type === "add") {
       result.push(part.content)
     }
@@ -132,7 +131,7 @@ const buildReplacement = (parts: HunkPart[], matchedText: string): string => {
   return result.join("").replace(/\n$/, "")
 }
 
-const MIN_CONTEXT_LINES = 3
+const DEFAULT_MIN_CONTEXT_LINES = 3
 
 const countNonBlankLines = (text: string): number =>
   text.split("\n").filter((line) => !isBlankLine(line)).length
@@ -144,7 +143,7 @@ const formatNotFoundError = (matchText: string, content: string): string => {
     "───",
     matchText,
     "───",
-    `Include at least ${MIN_CONTEXT_LINES} non-blank context lines. Verify the text exists verbatim in the file.`,
+    `Include at least ${DEFAULT_MIN_CONTEXT_LINES} non-blank context lines. Verify the text exists verbatim in the file.`,
   ].join("\n")
 }
 
@@ -160,6 +159,7 @@ const expandSkipMarker = (parts: HunkPart[], content: string): ExpandResult => {
   if (skipIdx === -1) return { ok: true, parts }
 
   const skipType = parts[skipIdx].type as "context" | "remove"
+
   const before = parts.slice(0, skipIdx)
   const after = parts.slice(skipIdx + 1)
 
@@ -187,7 +187,7 @@ const expandSkipMarker = (parts: HunkPart[], content: string): ExpandResult => {
   return { ok: true, parts: [...before, ...gapParts, ...after] }
 }
 
-const applyHunk = (content: string, hunk: Hunk): DiffResult => {
+const applyHunk = (content: string, hunk: Hunk, minContextLines: number): DiffResult => {
   const expanded = expandSkipMarker(hunk.parts, content)
   if (!expanded.ok) return expanded
   const { parts } = expanded
@@ -206,10 +206,10 @@ const applyHunk = (content: string, hunk: Hunk): DiffResult => {
 
   if (matches.length === 0) {
     const nonBlank = countNonBlankLines(matchText)
-    if (nonBlank < MIN_CONTEXT_LINES) {
+    if (nonBlank < minContextLines) {
       return {
         ok: false,
-        error: `patch context too short: ${nonBlank} non-blank line(s). Include at least ${MIN_CONTEXT_LINES} non-blank context/remove lines for reliable matching.`,
+        error: `patch context too short: ${nonBlank} non-blank line(s). Include at least ${minContextLines} non-blank context/remove lines for reliable matching.`,
       }
     }
     return { ok: false, error: formatNotFoundError(matchText, content) }
@@ -224,10 +224,14 @@ const applyHunk = (content: string, hunk: Hunk): DiffResult => {
   return { ok: true, content: content.replace(matchedText, newText) }
 }
 
-export const applyHunks = (content: string, hunks: Hunk[]): DiffResult => {
+export const applyHunks = (
+  content: string,
+  hunks: Hunk[],
+  minContextLines: number = DEFAULT_MIN_CONTEXT_LINES
+): DiffResult => {
   let result = content
   for (const hunk of hunks) {
-    const applied = applyHunk(result, hunk)
+    const applied = applyHunk(result, hunk, minContextLines)
     if (!applied.ok) return applied
     result = applied.content
   }
@@ -240,7 +244,7 @@ export const applyDiff = (content: string, patch: string): DiffResult =>
 const normalizePartContent = (content: string): string =>
   normalizeLine(content.replace(/\n$/, "")) + "\n"
 
-const normalizeHunk = (hunk: Hunk): Hunk => ({
+export const normalizeHunk = (hunk: Hunk): Hunk => ({
   parts: collapseBlankParts(
     hunk.parts.map((p) => ({ ...p, content: normalizePartContent(p.content) }))
   ),
