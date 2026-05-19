@@ -281,6 +281,58 @@ line B
 +line D`,
       expected: { ok: false, error: "... anchors are adjacent, nothing to skip" },
     },
+    {
+      name: "prefix: explicit ... suffix resolves long context line",
+      content: [
+        "This is a very long paragraph that contains important information about the research methodology used in this particular study and extends well beyond two hundred characters easily",
+        "old target line",
+        "footer line",
+      ].join("\n"),
+      patch: [
+        "@@",
+        "This is a very long paragraph that contains important information about the research methodology used in this particular study...",
+        "-old target line",
+        "+new target line",
+        "footer line",
+      ].join("\n"),
+      expected: {
+        ok: true,
+        content: [
+          "This is a very long paragraph that contains important information about the research methodology used in this particular study and extends well beyond two hundred characters easily",
+          "new target line",
+          "footer line",
+        ].join("\n"),
+      },
+    },
+    {
+      name: "prefix: literal ... in file matches verbatim before prefix resolution",
+      content: "something here...\nold line\nfooter",
+      patch: "@@\nsomething here...\n-old line\n+new line\nfooter",
+      expected: { ok: true, content: "something here...\nnew line\nfooter" },
+    },
+    {
+      name: "prefix: implicit long line resolves without ... suffix",
+      content: [
+        "This is another very long paragraph that the language model attempted to reproduce verbatim but the model got the trailing portion wrong because it extends well beyond one hundred fifty zqjxkw vmrpnt bfydls gchano",
+        "remove me",
+        "keep this",
+      ].join("\n"),
+      patch: [
+        "@@",
+        "This is another very long paragraph that the language model attempted to reproduce verbatim but the model got the trailing portion wrong because it extends well beyond one hundred fifty absolutely different gibberish placeholder text ending",
+        "-remove me",
+        "+replaced",
+        "keep this",
+      ].join("\n"),
+      expected: {
+        ok: true,
+        content: [
+          "This is another very long paragraph that the language model attempted to reproduce verbatim but the model got the trailing portion wrong because it extends well beyond one hundred fifty zqjxkw vmrpnt bfydls gchano",
+          "replaced",
+          "keep this",
+        ].join("\n"),
+      },
+    },
   ]
 
   it.each(cases)("$name", ({ content, patch, expected }) => {

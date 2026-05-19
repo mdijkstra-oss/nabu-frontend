@@ -31,7 +31,7 @@ const tokenize = (text: string): Token[] => {
   return tokens
 }
 
-const tokenizeWords = (text: string): string[] => {
+export const tokenizeWords = (text: string): string[] => {
   const words: string[] = []
   let match: RegExpExecArray | null
   WORD_PATTERN.lastIndex = 0

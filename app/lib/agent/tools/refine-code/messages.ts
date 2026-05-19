@@ -83,33 +83,45 @@ export const REFINE_CTA =
   "Analyze this code definition against the flagged and clean passages. Identify patterns in the review flags, contrast with clean passages, and suggest how to sharpen the definition."
 
 export const buildRefineMessages = (
-  generalCodebook: string,
   codeDefinition: string,
   flagged: ReviewedAnnotation[],
-  clean: CodedAnnotation[]
-): Message[] => [
-  {
-    type: "message",
-    role: "system",
-    content: `<codebook-rules>\n${generalCodebook}\n</codebook-rules>`,
-  },
-  {
-    type: "message",
-    role: "system",
-    content: `<code-definition>\n${codeDefinition}\n</code-definition>`,
-  },
-  {
-    type: "message",
-    role: "system",
-    content: `<flagged-passages count="${flagged.length}">\n${formatFlaggedBlock(flagged)}\n</flagged-passages>`,
-  },
-  {
-    type: "message",
-    role: "system",
-    content: `<clean-passages count="${clean.length}">\n${formatCleanBlock(clean)}\n</clean-passages>`,
-  },
-  { type: "message", role: "user", content: REFINE_CTA },
-]
+  clean: CodedAnnotation[],
+  guidance?: string,
+  generalCodebook?: string
+): Message[] => {
+  const messages: Message[] = []
+
+  if (generalCodebook) {
+    messages.push({
+      type: "message",
+      role: "system",
+      content: `<codebook-rules>\n${generalCodebook}\n</codebook-rules>`,
+    })
+  }
+
+  messages.push(
+    {
+      type: "message",
+      role: "system",
+      content: `<code-definition>\n${codeDefinition}\n</code-definition>`,
+    },
+    {
+      type: "message",
+      role: "system",
+      content: `<flagged-passages count="${flagged.length}">\n${formatFlaggedBlock(flagged)}\n</flagged-passages>`,
+    },
+    {
+      type: "message",
+      role: "system",
+      content: `<clean-passages count="${clean.length}">\n${formatCleanBlock(clean)}\n</clean-passages>`,
+    }
+  )
+
+  const cta = guidance ? `${REFINE_CTA}\n\nAdditional guidance: ${guidance}` : REFINE_CTA
+  messages.push({ type: "message", role: "user", content: cta })
+
+  return messages
+}
 
 export const buildInstructionTail = (calloutId: string): string =>
   `---
@@ -118,7 +130,9 @@ export const buildInstructionTail = (calloutId: string): string =>
 
 Present these findings to the researcher. Be precise about which passages and criteria the analysis references — quote specifics, do not paraphrase.
 
-If the researcher wants to update the code definition:
+If the analysis suggests specific changes to the code definition, present them as options using the ask tool. Include one option per distinct change, an option to apply all changes together, and an option to discuss further. Do not apply changes without the researcher choosing.
+
+After the researcher selects changes:
 - Edit the code at \`${calloutId}.generated.hidden.md\` using patch_json_block
 - After updating, suggest re-coding affected sections with apply_deep_analysis
 `

@@ -76,6 +76,17 @@ describe("applyFieldDiff", () => {
       diff: "@@\nKeep start.\n-Drop A.\n-...\n-Drop C.\nKeep end.",
       expected: { ok: true, content: "Keep start.\nKeep end." },
     },
+    {
+      name: "prefix: explicit ... resolves truncated context in field diff",
+      value:
+        "This is a long field value paragraph that the language model truncated because it was too long to reproduce exactly and it keeps going\nold line\nend",
+      diff: "@@\nThis is a long field value paragraph that the language model truncated because it was too long...\n-old line\n+new line\nend",
+      expected: {
+        ok: true,
+        content:
+          "This is a long field value paragraph that the language model truncated because it was too long to reproduce exactly and it keeps going\nnew line\nend",
+      },
+    },
   ]
 
   it.each(cases)("$name", ({ value, diff, expected }) => {

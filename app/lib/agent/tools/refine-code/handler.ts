@@ -18,14 +18,17 @@ registerTool(
   tool({
     ...refineCodeTool,
     schema: RefineCodeArgs,
-    handler: async (_files, { general_codebook_file, callout_id }) => {
-      const generalContent = getFileView(general_codebook_file)
-      if (generalContent === undefined)
-        return {
-          status: "error",
-          output: `General codebook file not found: ${general_codebook_file}`,
-          mutations: [],
-        }
+    handler: async (_files, { callout_id, guidance, general_codebook_file }) => {
+      let generalContent: string | undefined
+      if (general_codebook_file) {
+        generalContent = getFileView(general_codebook_file)
+        if (generalContent === undefined)
+          return {
+            status: "error",
+            output: `General codebook file not found: ${general_codebook_file}`,
+            mutations: [],
+          }
+      }
 
       const hiddenPath = toHiddenPath(callout_id)
       const codeContent = getFileView(hiddenPath)
@@ -46,7 +49,7 @@ registerTool(
         }
 
       const clean = collectCleanAnnotations(files, callout_id, flagged.length)
-      const messages = buildRefineMessages(generalContent, codeContent, flagged, clean)
+      const messages = buildRefineMessages(codeContent, flagged, clean, guidance, generalContent)
 
       const blocks = await callLlm({ endpoint: REFINE_CODE_ENDPOINT, messages })
       const analysis = extractText(blocks)

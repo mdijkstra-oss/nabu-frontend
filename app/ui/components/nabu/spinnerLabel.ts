@@ -30,6 +30,12 @@ const toolLabels: Record<string, string[]> = {
   cancel: ["Cancelling", "Winding down", "Stepping back"],
   search: ["Looking around", "Searching documents", "Analyzing results"],
   query: ["Examining data", "Querying", "Processing results"],
+  refine_code: [
+    "Reviewing code",
+    "Comparing passages",
+    "Refining definition",
+    "Analyzing patterns",
+  ],
   ask: ["Asking", "Waiting for answer", "Checking in"],
   compacted: ["Summarizing conversation", "Compressing context", "Condensing"],
 }

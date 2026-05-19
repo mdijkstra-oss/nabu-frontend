@@ -72,7 +72,7 @@ const buildPatchDescription = (spec: TypedOpsSpec): string => {
 
   for (const field of spec.multilineFields) {
     ops.push(
-      `- patch_${field}: V4A diff against ${field} — prefer over set for substantial content`
+      `- patch_${field}: targeted V4A diff against ${field}. Format: context lines (no prefix), -removed, +added. Start each hunk with @@. Include only 2-3 surrounding lines for context — never dump the full field. Use ... to skip large unchanged sections between anchors. Long context lines: end with ... for prefix matching. Prefer over set for long content.`
     )
   }
 
@@ -137,24 +137,33 @@ const partitionFieldDiffOps = (
   return { regularOps, fieldDiffOps }
 }
 
-const applyFieldDiffOps = (
-  doc: Record<string, unknown>,
-  ops: FieldDiffOp[]
-): { ok: true; doc: Record<string, unknown> } | { ok: false; error: string } => {
+interface FieldDiffResult {
+  doc: Record<string, unknown>
+  applied: number
+  failures: string[]
+}
+
+const applyFieldDiffOps = (doc: Record<string, unknown>, ops: FieldDiffOp[]): FieldDiffResult => {
   let result = { ...doc }
+  let applied = 0
+  const failures: string[] = []
+
   for (const { field, diff } of ops) {
     const value = result[field]
     if (typeof value !== "string") {
-      return {
-        ok: false,
-        error: `patch_${field}: field "${field}" is not a string (got ${typeof value})`,
-      }
+      failures.push(`patch_${field}: field "${field}" is not a string (got ${typeof value})`)
+      continue
     }
     const diffResult = applyFieldDiff(value, diff)
-    if (!diffResult.ok) return { ok: false, error: `patch_${field}: ${diffResult.error}` }
+    if (!diffResult.ok) {
+      failures.push(`patch_${field}: ${diffResult.error}`)
+      continue
+    }
     result = { ...result, [field]: diffResult.content }
+    applied++
   }
-  return { ok: true, doc: result }
+
+  return { doc: result, applied, failures }
 }
 
 const pathSchema = (allowedFiles?: string[]): unknown =>
@@ -253,9 +262,9 @@ export const generatePatchTool = (language: string, config: BlockTypeConfig): An
 
         if (fieldDiffOps.length > 0) {
           const fieldResult = applyFieldDiffOps(patchedDoc as Record<string, unknown>, fieldDiffOps)
-          if (!fieldResult.ok) return err(`${file.path}: ${fieldResult.error}`)
           patchedDoc = fieldResult.doc
-          applied += fieldDiffOps.length
+          applied += fieldResult.applied
+          failures.push(...fieldResult.failures)
         }
 
         const rejectedMessage =

@@ -24,11 +24,36 @@ export const Section = z.object({
 
 export type Section = z.infer<typeof Section>
 
+export const FileSectionSchema = z.object({
+  type: z.literal("file"),
+  path: z.string().describe("File path"),
+  start_line: z
+    .number()
+    .int()
+    .min(1)
+    .describe("First line of the section (1-based, from scout map)"),
+  end_line: z.number().int().min(1).describe("Last line of the section (1-based, from scout map)"),
+})
+
+export const QuerySectionSchema = z.object({
+  type: z.literal("query"),
+  sql: z.string().min(1).describe("SQL query to find sections via search"),
+})
+
+export const SectionSourceSchema = z.discriminatedUnion("type", [
+  FileSectionSchema,
+  QuerySectionSchema,
+])
+
+export type SectionSourceInput = z.infer<typeof SectionSourceSchema>
+
 export const ApplyDeepAnalysisArgs = z.object({
   sections: z
-    .array(Section)
+    .array(SectionSourceSchema)
     .min(1)
-    .describe("Sections to analyze. Each section is a range within a file."),
+    .describe(
+      "Sections to analyze. Each is either an explicit file range (`type: 'file'`) or a SQL query that resolves to file ranges (`type: 'query'`)."
+    ),
   source_files: z
     .array(SourceFile)
     .min(1)

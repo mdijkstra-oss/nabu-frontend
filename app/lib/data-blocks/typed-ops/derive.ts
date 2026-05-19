@@ -155,7 +155,12 @@ const buildPatchFieldOpSchema = (fieldName: string): JsonSchema => ({
   type: "object",
   properties: {
     op: { type: "string", enum: [`patch_${fieldName}`] },
-    diff: { type: "string", minLength: 1 },
+    diff: {
+      type: "string",
+      minLength: 1,
+      description:
+        "V4A diff: context lines (no prefix), removed lines (- prefix), added lines (+ prefix). Start each hunk with @@. Include only 2-3 surrounding context lines per change — never reproduce the entire field. Use ... between anchors to skip large unchanged sections. Markdown list items starting with '- ' need double prefix: '+- item' to add, '-- item' to remove.",
+    },
   },
   required: ["op", "diff"],
   additionalProperties: false,
