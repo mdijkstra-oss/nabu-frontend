@@ -134,5 +134,5 @@ If the analysis suggests specific changes to the code definition, present them a
 
 After the researcher selects changes:
 - Edit the code at \`${calloutId}.generated.hidden.md\` using patch_json_block
-- After updating, suggest re-coding affected sections with apply_deep_analysis
+- After updating, suggest re-coding affected sections with apply_deep_analysis using a query section that finds annotations where vote_review exists for \`${calloutId}\`
 `
