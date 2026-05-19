@@ -4,9 +4,13 @@ import { useState, useRef, useLayoutEffect, useCallback, type ReactNode } from "
 import { ChevronDown } from "lucide-react"
 
 const SCROLL_THRESHOLD = 100
+const USER_SCROLL_UP_COOLDOWN_MS = 800
 
 const isNearBottom = (el: HTMLElement): boolean =>
   el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD
+
+const isWithinCooldown = (timestamp: number): boolean =>
+  Date.now() - timestamp < USER_SCROLL_UP_COOLDOWN_MS
 
 interface AutoScrollProps {
   children: ReactNode
@@ -28,23 +32,35 @@ const ScrollToBottomButton = ({ onClick }: { onClick: () => void }) => (
 export const AutoScroll = ({ children, className = "" }: AutoScrollProps) => {
   const scrollRef = useRef<HTMLDivElement>(null)
   const wasNearBottom = useRef(true)
+  const lastScrollTop = useRef(0)
+  const userScrolledUpAt = useRef(0)
   const [showScrollButton, setShowScrollButton] = useState(false)
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return
+    const currentTop = scrollRef.current.scrollTop
+    const isUpwardMotion = currentTop < lastScrollTop.current
+    lastScrollTop.current = currentTop
+
+    if (isUpwardMotion) {
+      userScrolledUpAt.current = Date.now()
+    }
+
     const nearBottom = isNearBottom(scrollRef.current)
     wasNearBottom.current = nearBottom
     setShowScrollButton(!nearBottom)
   }, [])
 
   const scrollToBottom = useCallback(() => {
+    userScrolledUpAt.current = 0
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
   }, [])
 
   useLayoutEffect(() => {
-    if (wasNearBottom.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    if (!scrollRef.current) return
+    if (!wasNearBottom.current) return
+    if (isWithinCooldown(userScrolledUpAt.current)) return
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [children])
 
   return (
