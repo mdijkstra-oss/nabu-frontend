@@ -18,6 +18,10 @@ interface ExpandedSlice {
 
 const stripMarks = (text: string): string => text.replace(/<\/?mark>/g, "")
 
+const META_BLOCK_RE = /\n?<meta>[\s\S]*?<\/meta>\n?/g
+
+const stripMeta = (text: string): string => text.replace(META_BLOCK_RE, "\n").trim()
+
 const findRange = (haystack: string, needle: string): Range | null => {
   const idx = haystack.indexOf(needle)
   if (idx === -1) return null
@@ -42,24 +46,36 @@ const parseAnnotations = (fileContent: string): Annotation[] =>
 const formatAnnotationsBlock = (annotations: Annotation[]): string =>
   "```json-annotations\n" + JSON.stringify({ annotations }) + "\n```"
 
+const filterByEntityId = (
+  overlapping: { annotation: Annotation; range: Range }[],
+  entityId: string | undefined
+): { annotation: Annotation; range: Range }[] => {
+  if (!entityId) return overlapping
+  const matched = overlapping.filter((o) => o.annotation.id === entityId)
+  return matched.length > 0 ? matched : overlapping
+}
+
 const expandSliceWithAnnotations = (
   sliceText: string,
   prose: string,
-  annotations: Annotation[]
+  annotations: Annotation[],
+  entityId?: string
 ): ExpandedSlice => {
-  const cleanSlice = stripMarks(sliceText)
+  const cleanSlice = stripMeta(stripMarks(sliceText))
   const sliceRange = findRange(prose, cleanSlice)
-  if (!sliceRange) return { text: sliceText, annotations: [] }
+  if (!sliceRange) return { text: cleanSlice, annotations: [] }
   if (annotations.length === 0) return { text: sliceText, annotations: [] }
 
-  const overlapping: { annotation: Annotation; range: Range }[] = []
+  const allOverlapping: { annotation: Annotation; range: Range }[] = []
   for (const ann of annotations) {
     const annRange = findRange(prose, ann.text)
     if (!annRange) continue
     if (rangesOverlap(sliceRange, annRange)) {
-      overlapping.push({ annotation: ann, range: annRange })
+      allOverlapping.push({ annotation: ann, range: annRange })
     }
   }
+
+  const overlapping = filterByEntityId(allOverlapping, entityId)
 
   if (overlapping.length === 0) return { text: sliceText, annotations: [] }
 
@@ -75,16 +91,17 @@ const expandSliceWithAnnotations = (
 
 export const extractSearchSlice = (hit: SearchHit, fileContent: string): string | null => {
   if (!hit.text) return null
-  if (!fileContent) return hit.text
+  if (!fileContent) return stripMeta(hit.text)
 
   const annotations = parseAnnotations(fileContent)
-  if (annotations.length === 0) return hit.text
+  if (annotations.length === 0) return stripMeta(hit.text)
 
   const prose = stripAttributesBlock(fileContent)
   const { text, annotations: overlapping } = expandSliceWithAnnotations(
     hit.text,
     prose,
-    annotations
+    annotations,
+    hit.id
   )
   if (overlapping.length === 0) return text
 
@@ -100,8 +117,22 @@ const growHit = (hit: SearchHit, files: FileStore): SearchHit => {
   return { ...hit, text: grown }
 }
 
+const hitDedupeKey = (hit: SearchHit): string | null =>
+  hit.text ? `${hit.file}\0${stripAnnotationsBlock(hit.text)}` : null
+
+const deduplicateHits = (hits: SearchHit[]): SearchHit[] => {
+  const seen = new Set<string>()
+  return hits.filter((hit) => {
+    const key = hitDedupeKey(hit)
+    if (!key) return true
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  hits.map((hit) => growHit(hit, files))
+  deduplicateHits(hits.map((hit) => growHit(hit, files)))
 
 const stripAnnotationsBlock = (raw: string): string =>
   stripBlocksByLanguage(raw, "json-annotations")
@@ -119,4 +150,4 @@ const regrowHit = (hit: SearchHit, files: FileStore): SearchHit => {
 }
 
 export const refreshHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  hits.filter((h) => isHitAlive(h, files)).map((h) => regrowHit(h, files))
+  deduplicateHits(hits.filter((h) => isHitAlive(h, files)).map((h) => regrowHit(h, files)))

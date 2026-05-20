@@ -7,7 +7,7 @@
 	"collapsed": false,
 	"id": "callout_a",
 	"title": "Fiscal state reporting",
-	"content": "Descriptive reporting about public finances.\nInclusion criteria:\n- Apply to fiscal figures.\n\nExclusion criteria:\n- Exclude policy justification.",
+	"content": "Descriptive reporting about public finances.\nInclusion criteria:\n- Apply to fiscal figures.\nExclusion criteria:\n- Exclude policy justification.",
 	"actor": "ai"
 }
 ```

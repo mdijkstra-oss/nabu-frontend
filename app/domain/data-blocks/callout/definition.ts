@@ -20,6 +20,7 @@ export const jsonCallout: BlockTypeConfig = {
   tableName: "callouts",
   labelKey: "title",
   multilineFields: ["content"],
+  normalizeAsFile: ["content"],
   idPaths: [{ path: "id", prefix: "callout" }],
   actorPaths: [{ path: "actor" }],
 }

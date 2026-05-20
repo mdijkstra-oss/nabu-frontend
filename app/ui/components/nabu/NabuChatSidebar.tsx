@@ -893,8 +893,11 @@ const TickLabel = ({ labels }: TickLabelProps) => {
 const findLastWriteEntry = (entries: HistoryEntry[]): HistoryEntry | null =>
   entries.length > 0 ? entries[entries.length - 1] : null
 
+const isFileOperation = (entry: HistoryEntry): boolean => entry.entityKind === "file"
+
 const formatLastWriteLabel = (entry: HistoryEntry, currentFile: string | null): string => {
   const { verbLabel, subtitle } = presentEntry(entry)
+  if (isFileOperation(entry)) return `${verbLabel}: ${subtitle}`
   const isCurrentFile = entry.path === currentFile
   return isCurrentFile ? `${verbLabel} in current file` : `${verbLabel} in ${subtitle}`
 }
@@ -970,7 +973,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
       ])
       runChat(getDeps())
     }
-  }, [appReady, history.length, runChat, getDeps])
+  }, [appReady, history.length, runChat, getDeps, files])
 
   const handleSend = useCallback(() => {
     if (!inputValue.trim()) return

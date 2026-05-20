@@ -1,5 +1,7 @@
 import { parseCodeBlocks, collapseBlankLines, formatBlock, type CodeBlock } from "./parse"
-import { isSingleton, getSingletonLanguages } from "./registry"
+import { isSingleton, getSingletonLanguages, getNormalizeAsFileFields } from "./registry"
+import { normalizeContent } from "~/lib/patch/diff/normalize"
+import { tryParseJson } from "./json"
 
 const isSingletonBlock = (block: CodeBlock): boolean => isSingleton(block.language)
 
@@ -33,4 +35,51 @@ export const normalizeSingletonOrder = (content: string): string => {
 
   const prose = stripBlocks(content, singletons)
   return appendInOrder(prose, singletons)
+}
+
+const normalizeFieldValues = (
+  parsed: Record<string, unknown>,
+  fields: string[]
+): Record<string, unknown> | null => {
+  let changed = false
+  const result = { ...parsed }
+
+  for (const field of fields) {
+    const value = parsed[field]
+    if (typeof value !== "string") continue
+    const normalized = normalizeContent(value)
+    if (normalized !== value) {
+      result[field] = normalized
+      changed = true
+    }
+  }
+
+  return changed ? result : null
+}
+
+export const normalizeBlockFields = (markdown: string): string => {
+  const blocks = parseCodeBlocks(markdown)
+  let result = markdown
+  let offset = 0
+
+  for (const block of blocks) {
+    const fields = getNormalizeAsFileFields(block.language)
+    if (fields.length === 0) continue
+
+    const parsed = tryParseJson(block.content)
+    if (!parsed) continue
+
+    const normalized = normalizeFieldValues(parsed, fields)
+    if (!normalized) continue
+
+    const newContent = JSON.stringify(normalized, null, "\t")
+    const header = `\`\`\`${block.language}\n`
+    const footer = `\n\`\`\``
+    const oldSection = result.slice(block.start + offset, block.end + offset)
+    const newSection = header + newContent + footer
+    result = result.slice(0, block.start + offset) + newSection + result.slice(block.end + offset)
+    offset += newSection.length - oldSection.length
+  }
+
+  return result
 }

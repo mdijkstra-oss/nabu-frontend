@@ -4,7 +4,7 @@ import type { ToolExecutor } from "../turn"
 import { pushBlocks, getAllBlocks, subscribeBlocks } from "../client/store"
 import { getFiles } from "~/lib/files/store"
 import { derive, lastPlan, guardCompleteStep } from "../derived"
-import { deriveMode, modeSystemBlocks } from "./modes"
+import { deriveMode, modeSystemBlocks, checkToolAvailability } from "./modes"
 
 type SpecialHandler = (call: { args: unknown }) => Promise<ToolResult<unknown>>
 
@@ -86,6 +86,10 @@ export const withModeAwareness =
       const guardResult = checkStepGuard(call)
       if (guardResult) return guardResult
     }
+
+    const mode = deriveMode(getAllBlocks())
+    const unavailable = checkToolAvailability(call.name, mode)
+    if (unavailable) return { status: "error", output: unavailable }
 
     return base(call)
   }

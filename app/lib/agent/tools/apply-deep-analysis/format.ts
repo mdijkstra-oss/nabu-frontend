@@ -43,6 +43,28 @@ export const extractSection = (content: string, startLine: number, endLine: numb
   return lines.slice(startLine - 1, endLine).join("\n")
 }
 
+export const extractSentenceContext = (
+  content: string,
+  startLine: number,
+  endLine: number,
+  n: number
+): { leading: string; trailing: string } => {
+  if (n <= 0) return { leading: "", trailing: "" }
+  const lines = content.split("\n")
+
+  const leadingRaw = lines.slice(0, startLine - 1).join("\n")
+  const leadingPrepared = prepareTargetContent(leadingRaw)
+  const leadingSentences = splitSentenceTexts(leadingPrepared).map((s) => s.text)
+  const leading = leadingSentences.slice(-n).join(" ")
+
+  const trailingRaw = lines.slice(endLine).join("\n")
+  const trailingPrepared = prepareTargetContent(trailingRaw)
+  const trailingSentences = splitSentenceTexts(trailingPrepared).map((s) => s.text)
+  const trailing = trailingSentences.slice(0, n).join(" ")
+
+  return { leading, trailing }
+}
+
 export const extractLeadingContext = (
   content: string,
   startLine: number,

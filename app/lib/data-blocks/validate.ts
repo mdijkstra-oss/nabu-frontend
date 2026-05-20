@@ -6,7 +6,7 @@ import {
   getAllowedFiles,
 } from "~/lib/data-blocks/registry"
 import type { AsyncValidationContext, ValidationContext } from "./definition"
-import { parseCodeBlocks, extractProse, type CodeBlock } from "./parse"
+import { parseCodeBlocks, type CodeBlock } from "./parse"
 import { tryParseJson } from "./json"
 import { recoverArrayItems } from "./query"
 import { validateFences, type FenceError } from "./validate-fences"
@@ -66,7 +66,6 @@ export const validateMarkdownBlocks = (
   errors.push(...validateSingletons(markdown))
 
   const context = options.context ?? {
-    documentProse: extractProse(markdown),
     availableCodes: [],
     availableTags: [],
   }

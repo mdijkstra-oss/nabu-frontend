@@ -11,7 +11,7 @@ import { useThrottledValue } from "~/ui/hooks/useThrottledValue"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
 import { findTagDefinitionById } from "~/domain/data-blocks/settings/tags/selectors"
-import { spotlightFromText, serializeSpotlight } from "~/lib/editor/spotlight/serialize"
+import { spotlightFromText, serializeSpotlightParam } from "~/lib/editor/spotlight/serialize"
 
 export interface SearchResultListProps {
   hits: SearchHit[]
@@ -51,7 +51,7 @@ const buildHitUrl = (projectId: string, hit: SearchHit): string => {
   if (hit.id) return `${base}?entity=${encodeURIComponent(hit.id)}`
   if (hit.text) {
     const spotlight = spotlightFromText(hit.text)
-    if (spotlight) return `${base}?spotlight=${encodeURIComponent(serializeSpotlight(spotlight))}`
+    if (spotlight) return `${base}?spotlight=${serializeSpotlightParam(spotlight)}`
   }
   return base
 }

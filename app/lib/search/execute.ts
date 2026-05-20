@@ -4,8 +4,9 @@ import type { Result } from "~/lib/fp/result"
 import type { HybridSearchPlan } from "./semantic"
 import type { ScoredChunk } from "./fusion"
 import { ok, err } from "~/lib/fp/result"
-import { buildCosineQuery } from "./semantic"
+import { buildCosineQuery, buildUncappedCosineQuery } from "./semantic"
 import { fuseCosineResults } from "./fusion"
+import { findRelevanceCutoff, judgeSnippets } from "./relevance-cutoff"
 
 type RawRow = Record<string, unknown>
 
@@ -50,24 +51,58 @@ const runScoredQuery = async (
   return ok(result.value.rows.map(toScoredChunk))
 }
 
-const chunkToHit = (chunk: ScoredChunk): SearchHit => ({
+export const chunkToHit = (chunk: ScoredChunk): SearchHit => ({
   file: chunk.file,
   ...(chunk.text !== undefined ? { text: chunk.text } : {}),
 })
 
-export const executeHybridLocal = async (
+type QueryBuilder = (baseSql: string, hyde: HybridSearchPlan["hydes"][number]) => string
+
+const fuseHydes = async (
   db: Database,
-  plan: HybridSearchPlan
-): Promise<Result<SearchHit[], DbError>> => {
+  plan: HybridSearchPlan,
+  buildQuery: QueryBuilder,
+  limit: number | undefined
+): Promise<Result<ScoredChunk[], DbError>> => {
   const cosinePerHyde: ScoredChunk[][] = []
 
   for (const hyde of plan.hydes) {
-    const sql = buildCosineQuery(plan.baseSql, hyde)
+    const sql = buildQuery(plan.baseSql, hyde)
     const result = await runScoredQuery(db, sql)
     if (!result.ok) return result
     cosinePerHyde.push(result.value)
   }
 
-  const fused = fuseCosineResults(cosinePerHyde, plan.limit)
-  return ok(fused.map(chunkToHit))
+  return ok(fuseCosineResults(cosinePerHyde, limit))
+}
+
+export const executeHybridLocal = async (
+  db: Database,
+  plan: HybridSearchPlan
+): Promise<Result<SearchHit[], DbError>> => {
+  const fused = await fuseHydes(db, plan, buildCosineQuery, plan.limit)
+  if (!fused.ok) return fused
+  return ok(fused.value.map(chunkToHit))
+}
+
+export const executeHybridUncapped = async (
+  db: Database,
+  plan: HybridSearchPlan
+): Promise<Result<ScoredChunk[], DbError>> =>
+  fuseHydes(db, plan, buildUncappedCosineQuery, undefined)
+
+export const executeHybridWithCutoff = async (
+  db: Database,
+  plan: HybridSearchPlan
+): Promise<Result<SearchHit[], DbError>> => {
+  const uncapped = await executeHybridUncapped(db, plan)
+  if (!uncapped.ok) return uncapped
+
+  const ranked = uncapped.value
+  if (ranked.length === 0) return ok([])
+
+  const cutoff = await findRelevanceCutoff(ranked, plan.intent, judgeSnippets)
+  const trimmed = ranked.slice(0, Math.max(cutoff, 1))
+
+  return ok(trimmed.map(chunkToHit))
 }

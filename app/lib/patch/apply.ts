@@ -3,7 +3,7 @@ import { expandRangeRefs, type FileReader } from "./resolve/range-expand"
 import { resolveFuzzyPatterns } from "./resolve/fuzzy-match"
 import { injectBoundaryComments, stripBoundaryComments } from "./resolve/json-boundary"
 import { stripPendingRefs } from "~/lib/files/pending-refs"
-import { parseCodeBlocks, extractProse, ensureFencesOnOwnLines } from "~/lib/data-blocks/parse"
+import { parseCodeBlocks, ensureFencesOnOwnLines } from "~/lib/data-blocks/parse"
 import { fillMissingIds, buildGeneratedIdsList, type GeneratedId } from "~/lib/data-blocks/uuid"
 import { validateMarkdownBlocks, type ValidationError } from "~/lib/data-blocks/validate"
 import { stampActors } from "~/lib/data-blocks/actor"
@@ -79,8 +79,7 @@ const repairJsonBlocks = (markdown: string): string => {
   return result
 }
 
-const buildValidationContext = (markdown: string): ValidationContext => ({
-  documentProse: extractProse(markdown),
+const buildValidationContext = (): ValidationContext => ({
   availableCodes: getAllCodes(getFiles()).map((c) => ({ id: c.id, name: c.title })),
   availableTags: getTagDefinitions(getFiles()).map((t) => ({ id: t.id, label: t.label })),
 })
@@ -148,7 +147,7 @@ export const finalizeContent = (
     : filledContent
   const sanitizedContent = ensureFencesOnOwnLines(stampedContent)
 
-  const context = buildValidationContext(sanitizedContent)
+  const context = buildValidationContext()
   const validation = validateMarkdownBlocks(sanitizedContent, {
     path,
     context,

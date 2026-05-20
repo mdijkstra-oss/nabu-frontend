@@ -11,7 +11,6 @@ export interface ActorPathConfig {
 }
 
 export interface ValidationContext {
-  documentProse: string
   availableCodes: { id: string; name: string }[]
   availableTags: { id: string; label: string }[]
 }
@@ -36,6 +35,7 @@ export interface BlockTypeConfig<T = unknown> {
   actorPaths?: ActorPathConfig[]
   fuzzyFields?: string[]
   multilineFields?: string[]
+  normalizeAsFile?: string[]
   patchSchema?: (schema: Record<string, unknown>) => Record<string, unknown>
   rowPath?: string
   asyncValidate?: (parsed: T, context: AsyncValidationContext) => Promise<ValidationError[]>

@@ -3,6 +3,7 @@ import {
   extractSection,
   extractLeadingContext,
   extractTrailingContext,
+  extractSentenceContext,
   numberSection,
   mapResults,
   toAnnotationOps,
@@ -106,6 +107,87 @@ describe("extractTrailingContext", () => {
   cases.forEach(({ name, endLine, maxChars, expected }) => {
     it(name, () => expect(extractTrailingContext(content, endLine, maxChars)).toBe(expected))
   })
+})
+
+describe("extractSentenceContext", () => {
+  const content = [
+    "First sentence here. Second sentence here.",
+    "Third sentence here. Fourth sentence here.",
+    "Fifth sentence here. Sixth sentence here.",
+    "Seventh sentence here. Eighth sentence here.",
+    "Ninth sentence here. Tenth sentence here.",
+  ].join("\n")
+
+  const cases = [
+    {
+      name: "extracts leading and trailing sentences",
+      startLine: 3,
+      endLine: 3,
+      n: 2,
+      leadingContains: "Third sentence here.",
+      trailingContains: "Seventh sentence here.",
+      leadingNotContains: "First sentence here.",
+      trailingNotContains: "Tenth sentence here.",
+    },
+    {
+      name: "returns empty when n is 0",
+      startLine: 3,
+      endLine: 3,
+      n: 0,
+      leadingContains: null,
+      trailingContains: null,
+      leadingNotContains: null,
+      trailingNotContains: null,
+    },
+    {
+      name: "returns empty leading at file start",
+      startLine: 1,
+      endLine: 1,
+      n: 3,
+      leadingContains: null,
+      trailingContains: "Third sentence here.",
+      leadingNotContains: null,
+      trailingNotContains: null,
+    },
+    {
+      name: "returns empty trailing at file end",
+      startLine: 5,
+      endLine: 5,
+      n: 3,
+      leadingContains: "Eighth sentence here.",
+      trailingContains: null,
+      leadingNotContains: null,
+      trailingNotContains: null,
+    },
+  ]
+
+  cases.forEach(
+    ({
+      name,
+      startLine,
+      endLine,
+      n,
+      leadingContains,
+      trailingContains,
+      leadingNotContains,
+      trailingNotContains,
+    }) => {
+      it(name, () => {
+        const ctx = extractSentenceContext(content, startLine, endLine, n)
+        if (n === 0) {
+          expect(ctx.leading).toBe("")
+          expect(ctx.trailing).toBe("")
+          return
+        }
+        if (leadingContains) expect(ctx.leading).toContain(leadingContains)
+        if (trailingContains) expect(ctx.trailing).toContain(trailingContains)
+        if (startLine === 1) expect(ctx.leading).toBe("")
+        if (endLine === 5) expect(ctx.trailing).toBe("")
+        if (leadingNotContains) expect(ctx.leading).not.toContain(leadingNotContains)
+        if (trailingNotContains) expect(ctx.trailing).not.toContain(trailingNotContains)
+      })
+    }
+  )
 })
 
 describe("numberSection", () => {

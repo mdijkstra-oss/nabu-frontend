@@ -76,6 +76,9 @@ export const getActorPaths = (language: string): ActorPathConfig[] =>
 export const getFuzzyFields = (language: string): string[] =>
   blockTypes[language]?.fuzzyFields ?? []
 
+export const getNormalizeAsFileFields = (language: string): string[] =>
+  blockTypes[language]?.normalizeAsFile ?? []
+
 export const getAllowedFiles = (language: string): string[] | undefined =>
   blockTypes[language]?.allowedFiles
 

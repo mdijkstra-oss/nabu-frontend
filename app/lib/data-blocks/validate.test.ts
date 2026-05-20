@@ -27,53 +27,6 @@ describe("extractProse", () => {
 })
 
 describe("validateMarkdownBlocks", () => {
-  describe("annotation text validation", () => {
-    const cases = [
-      {
-        name: "accepts annotation when text exists in prose",
-        markdown: `# Document
-
-This is some text about cats and dogs.
-
-\`\`\`json-annotations
-{"annotations": [{"text": "cats", "reason": "animal", "color": "red"}]}
-\`\`\``,
-        expectValid: true,
-      },
-      {
-        name: "rejects annotation when text not in prose",
-        markdown: `# Document
-
-This document has no animals.
-
-\`\`\`json-annotations
-{"annotations": [{"text": "cats", "reason": "animal", "color": "red"}]}
-\`\`\``,
-        expectValid: false,
-        expectErrorContains: "not found in document",
-      },
-      {
-        name: "text match is case insensitive",
-        markdown: `# Document
-
-CATS are great.
-
-\`\`\`json-annotations
-{"annotations": [{"text": "cats", "reason": "animal", "color": "red"}]}
-\`\`\``,
-        expectValid: true,
-      },
-    ]
-
-    it.each(cases)("$name", ({ markdown, expectValid, expectErrorContains }) => {
-      const result = validateMarkdownBlocks(markdown)
-      expect(result.valid).toBe(expectValid)
-      if (!expectValid && expectErrorContains) {
-        expect(result.errors.some((e) => e.message.includes(expectErrorContains))).toBe(true)
-      }
-    })
-  })
-
   describe("annotation code validation", () => {
     const cases = [
       {
@@ -84,7 +37,6 @@ CATS are great.
 {"annotations": [{"text": "test", "reason": "note", "code": "abc123"}]}
 \`\`\``,
         context: {
-          documentProse: "This is a test.",
           availableCodes: [{ id: "abc123", name: "Theme" }],
           availableTags: [],
         },
@@ -98,7 +50,6 @@ CATS are great.
 {"annotations": [{"text": "test", "reason": "note", "code": "nonexistent"}]}
 \`\`\``,
         context: {
-          documentProse: "This is a test.",
           availableCodes: [{ id: "abc123", name: "Theme" }],
           availableTags: [],
         },
@@ -130,7 +81,6 @@ CATS are great.
         name: "accepts tag when ID exists in settings",
         markdown: `# Doc\n\n\`\`\`json-attributes\n{"tags": ["tag-abc"]}\n\`\`\``,
         context: {
-          documentProse: "Doc",
           availableCodes: [],
           availableTags: [{ id: "tag-abc", label: "interview" }],
         },
@@ -140,7 +90,6 @@ CATS are great.
         name: "rejects tag when ID not in settings",
         markdown: `# Doc\n\n\`\`\`json-attributes\n{"tags": ["tag-unknown"]}\n\`\`\``,
         context: {
-          documentProse: "Doc",
           availableCodes: [],
           availableTags: [{ id: "tag-abc", label: "interview" }],
         },
@@ -152,7 +101,6 @@ CATS are great.
         name: "skips validation when no tags defined",
         markdown: `# Doc\n\n\`\`\`json-attributes\n{"tags": ["any-tag"]}\n\`\`\``,
         context: {
-          documentProse: "Doc",
           availableCodes: [],
           availableTags: [],
         },
@@ -194,16 +142,16 @@ CATS are great.
         original: `# Test
 
 \`\`\`json-annotations
-{"annotations": [{"text": "old one", "reason": "original", "color": "blue"}]}
+{"annotations": [{"text": "old one", "reason": "original", "code": "valid-code"}]}
 \`\`\``,
         patched: `# Test
 
 \`\`\`json-annotations
-{"annotations": [{"text": "nonexistent", "reason": "test", "color": "red"}]}
+{"annotations": [{"text": "new one", "reason": "test", "code": "bad-code"}]}
 \`\`\``,
         check: (r) => {
           expect(r.errors[0].currentBlock).toContain("old one")
-          expect(r.errors[0].currentBlock).not.toContain("nonexistent")
+          expect(r.errors[0].currentBlock).not.toContain("new one")
         },
       },
       {

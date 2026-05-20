@@ -20,7 +20,7 @@ describe("linkifyQuotes", () => {
       documentId: "notes.md",
       fileContent: FILE_CONTENT,
       expected:
-        "They said [the signup process takes too long](file://notes.md/the%20signup%20process%20takes%20too%20long) during the interview.",
+        "They said [the signup process takes too long](file://notes.md/the+signup+process+takes+too+long) during the interview.",
     },
     {
       name: "leaves quoted text unchanged when not found in file",
@@ -42,7 +42,7 @@ describe("linkifyQuotes", () => {
       documentId: "notes.md",
       fileContent: FILE_CONTENT,
       expected:
-        "They said [the signup process takes too long](file://notes.md/the%20signup%20process%20takes%20too%20long) during the interview.",
+        "They said [the signup process takes too long](file://notes.md/the+signup+process+takes+too+long) during the interview.",
     },
     {
       name: "resolves multiple quotes independently",
@@ -50,7 +50,7 @@ describe("linkifyQuotes", () => {
       documentId: "notes.md",
       fileContent: FILE_CONTENT,
       expected:
-        "Found [frustration with the onboarding flow](file://notes.md/frustration%20with%20the%20onboarding%20flow) and [usability issues with the navigation menu](file://notes.md/usability%20issues%20with%20the%20navigation%20menu) in the data.",
+        "Found [frustration with the onboarding flow](file://notes.md/frustration+with+the+onboarding+flow) and [usability issues with the navigation menu](file://notes.md/usability+issues+with+the+navigation+menu) in the data.",
     },
     {
       name: "returns unchanged when documentId is null",
@@ -107,23 +107,23 @@ describe("linkifyQuotes", () => {
       documentId: "notes.md",
       fileContent: FILE_CONTENT,
       expected:
-        'Look at "interviews.md" and [frustration with the onboarding flow](file://notes.md/frustration%20with%20the%20onboarding%20flow) together.',
+        'Look at "interviews.md" and [frustration with the onboarding flow](file://notes.md/frustration+with+the+onboarding+flow) together.',
     },
     {
       name: "skips quoted text that already contains a markdown link",
-      text: '"[the signup process takes too long](file://notes.md/the%20signup%20process%20takes%20too%20long)" was flagged.',
+      text: '"[the signup process takes too long](file://notes.md/the+signup+process+takes+too+long)" was flagged.',
       documentId: "notes.md",
       fileContent: FILE_CONTENT,
       expected:
-        '"[the signup process takes too long](file://notes.md/the%20signup%20process%20takes%20too%20long)" was flagged.',
+        '"[the signup process takes too long](file://notes.md/the+signup+process+takes+too+long)" was flagged.',
     },
     {
       name: "skips curly-quoted text that already contains a markdown link",
-      text: "\u201C[frustration with the onboarding flow](file://notes.md/frustration%20with%20the%20onboarding%20flow)\u201D is notable.",
+      text: "\u201C[frustration with the onboarding flow](file://notes.md/frustration+with+the+onboarding+flow)\u201D is notable.",
       documentId: "notes.md",
       fileContent: FILE_CONTENT,
       expected:
-        "\u201C[frustration with the onboarding flow](file://notes.md/frustration%20with%20the%20onboarding%20flow)\u201D is notable.",
+        "\u201C[frustration with the onboarding flow](file://notes.md/frustration+with+the+onboarding+flow)\u201D is notable.",
     },
   ]
 

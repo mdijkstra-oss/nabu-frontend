@@ -9,13 +9,13 @@ describe("findMatchOffset", () => {
     expected: { start: number; end: number } | null
   }[] = [
     {
-      name: "exact substring match",
+      name: "exact token match",
       content: "the quick brown fox jumps over the lazy dog",
       needle: "brown fox jumps",
       expected: { start: 10, end: 25 },
     },
     {
-      name: "case-insensitive exact match",
+      name: "case-insensitive token match",
       content: "The Quick Brown Fox",
       needle: "quick brown",
       expected: { start: 4, end: 15 },
@@ -27,28 +27,52 @@ describe("findMatchOffset", () => {
       expected: null,
     },
     {
-      name: "newlines flattened for exact match",
-      content: "hello\nworld\nfoo",
+      name: "token match ignores punctuation",
+      content: "Hello, world! How are you?",
       needle: "hello world",
-      expected: { start: 0, end: 11 },
+      expected: { start: 0, end: 13 },
     },
     {
-      name: "fuzzy match with reordered tokens",
+      name: "long needle with all tokens present matches at threshold 1",
       content: "alpha bravo charlie delta echo foxtrot golf hotel india",
       needle: "bravo charlie delta echo foxtrot golf",
       expected: { start: 6, end: 43 },
     },
     {
-      name: "short needle with no exact substring returns null",
-      content: "the quick brown fox",
-      needle: "zebra",
+      name: "short needle requires all tokens",
+      content: "the quick brown fox jumps over",
+      needle: "quick brown",
+      expected: { start: 4, end: 15 },
+    },
+    {
+      name: "short needle with missing token returns null",
+      content: "the quick brown fox jumps over",
+      needle: "quick zebra",
       expected: null,
     },
     {
-      name: "single char exact substring still matches",
+      name: "single token match",
       content: "the quick brown fox",
-      needle: "x",
-      expected: { start: 18, end: 19 },
+      needle: "brown",
+      expected: { start: 10, end: 15 },
+    },
+    {
+      name: "empty needle returns null",
+      content: "hello world",
+      needle: "",
+      expected: null,
+    },
+    {
+      name: "long needle degrades to 0.8 threshold",
+      content: "alpha bravo charlie delta echo foxtrot golf hotel india juliet",
+      needle: "alpha bravo REPLACED delta echo foxtrot golf hotel",
+      expected: { start: 0, end: 49 },
+    },
+    {
+      name: "long needle below 0.8 threshold returns null",
+      content: "alpha bravo charlie delta echo foxtrot golf hotel india juliet",
+      needle: "xxx yyy zzz aaa bbb ccc ddd hotel",
+      expected: null,
     },
   ]
 

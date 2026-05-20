@@ -1,4 +1,4 @@
-import { findMatchOffset, tokenizeWords } from "~/lib/text/find"
+import { findMatchOffset } from "~/lib/text/find"
 import { charOffsetToLine } from "~/lib/text/lines"
 
 export interface Match {
@@ -29,11 +29,8 @@ export const getMatchedText = (content: string, match: Match): string => {
   return lines.slice(match.start, match.end + 1).join("\n")
 }
 
-const SIMILARITY_THRESHOLD = 0.9
-const TOKEN_THRESHOLD = 0.8
-const MIN_TOKEN_WORDS = 4
-const MIN_PREFIX_LENGTH = 80
-const PREFIX_OVERLAP_THRESHOLD = 0.8
+const MIN_CONTIGUOUS_RUN = 2
+const CONTIGUOUS_RUN_RATIO = 0.5
 
 const toLines = (text: string): string[] => {
   const lines = text.split("\n")
@@ -43,41 +40,24 @@ const toLines = (text: string): string[] => {
   return lines
 }
 
-const toBigrams = (s: string): Map<string, number> => {
-  const grams = new Map<string, number>()
-  for (let i = 0; i < s.length - 1; i++) {
-    const pair = s.slice(i, i + 2)
-    grams.set(pair, (grams.get(pair) ?? 0) + 1)
-  }
-  return grams
-}
+const toTokens = (text: string): string[] => text.toLowerCase().match(/[a-z0-9]+/g) ?? []
 
-const bigramSimilarity = (a: string, b: string): number => {
-  if (a === b) return 1
-  const la = a.toLowerCase()
-  const lb = b.toLowerCase()
-  if (la === lb) return 1
-  if (la.length < 2 || lb.length < 2) return 0
-  const gramsA = toBigrams(la)
-  const gramsB = toBigrams(lb)
-  let intersection = 0
-  for (const [pair, countB] of gramsB) {
-    const countA = gramsA.get(pair) ?? 0
-    intersection += Math.min(countA, countB)
+const longestContiguousRun = (contentTokens: string[], needleTokens: string[]): number => {
+  let maxRun = 0
+  for (let i = 0; i < contentTokens.length; i++) {
+    for (let j = 0; j < needleTokens.length; j++) {
+      let run = 0
+      while (
+        i + run < contentTokens.length &&
+        j + run < needleTokens.length &&
+        contentTokens[i + run] === needleTokens[j + run]
+      ) {
+        run++
+      }
+      if (run > maxRun) maxRun = run
+    }
   }
-  return (2 * intersection) / (la.length - 1 + lb.length - 1)
-}
-
-const tokenSimilarity = (a: string, b: string): number => {
-  const wordsA = tokenizeWords(a)
-  const wordsB = tokenizeWords(b)
-  if (wordsA.length < MIN_TOKEN_WORDS || wordsB.length < MIN_TOKEN_WORDS) return 0
-  const setA = new Set(wordsA)
-  let hits = 0
-  for (const w of wordsB) {
-    if (setA.has(w)) hits++
-  }
-  return hits / wordsB.length
+  return maxRun
 }
 
 interface LineCandidate {
@@ -86,86 +66,34 @@ interface LineCandidate {
 }
 
 const findLineCandidates = (needleLine: string, contentLines: string[]): LineCandidate[] => {
+  const exactCandidates: LineCandidate[] = []
+
+  for (let i = 0; i < contentLines.length; i++) {
+    if (contentLines[i] === needleLine) {
+      exactCandidates.push({ index: i, exact: true })
+    }
+  }
+
+  if (exactCandidates.length > 0) return exactCandidates
+
   const candidates: LineCandidate[] = []
-  const matchedIndices = new Set<number>()
+  const needleTokens = toTokens(needleLine)
+
+  if (needleTokens.length === 0) return candidates
 
   for (let i = 0; i < contentLines.length; i++) {
-    const contentLine = contentLines[i]
+    const contentTokens = toTokens(contentLines[i])
+    const run = longestContiguousRun(contentTokens, needleTokens)
+    const isFullTokenMatch =
+      run === needleTokens.length && run / contentTokens.length >= CONTIGUOUS_RUN_RATIO
+    const isPartialTokenMatch =
+      run < needleTokens.length &&
+      run >= MIN_CONTIGUOUS_RUN &&
+      run / needleTokens.length >= CONTIGUOUS_RUN_RATIO
 
-    if (contentLine === needleLine) {
-      candidates.push({ index: i, exact: true })
-      matchedIndices.add(i)
-      continue
-    }
-
-    if (bigramSimilarity(contentLine, needleLine) >= SIMILARITY_THRESHOLD) {
+    if (isFullTokenMatch || isPartialTokenMatch) {
       candidates.push({ index: i, exact: false })
-      matchedIndices.add(i)
-      continue
     }
-
-    if (tokenSimilarity(contentLine, needleLine) >= TOKEN_THRESHOLD) {
-      candidates.push({ index: i, exact: false })
-      matchedIndices.add(i)
-      continue
-    }
-  }
-
-  for (const idx of findTokenPrefixCandidates(needleLine, contentLines, matchedIndices)) {
-    candidates.push({ index: idx, exact: false })
-  }
-
-  return candidates
-}
-
-const prefixOverlap = (
-  needleWords: string[],
-  contentWords: string[],
-  windowSize: number
-): number => {
-  const contentSet = new Set(contentWords.slice(0, windowSize))
-  const needleWindow = needleWords.slice(0, windowSize)
-  let hits = 0
-  for (const word of needleWindow) {
-    if (contentSet.has(word)) hits++
-  }
-  return hits / needleWindow.length
-}
-
-const findTokenPrefixCandidates = (
-  needleLine: string,
-  contentLines: string[],
-  excludeIndices: Set<number>
-): number[] => {
-  const stripped = needleLine.endsWith("...") ? needleLine.slice(0, -3) : needleLine
-  const needleWords = tokenizeWords(stripped)
-
-  if (needleWords.length === 0 || stripped.length < MIN_PREFIX_LENGTH) return []
-
-  const eligibleMap = new Map<number, string[]>()
-  for (let i = 0; i < contentLines.length; i++) {
-    if (excludeIndices.has(i)) continue
-    const contentWords = tokenizeWords(contentLines[i])
-    if (contentWords.length <= needleWords.length) continue
-    eligibleMap.set(i, contentWords)
-  }
-
-  if (eligibleMap.size === 0) return []
-
-  let candidates = [...eligibleMap.keys()]
-
-  for (let w = 1; w <= needleWords.length; w++) {
-    const narrowed = candidates.filter((idx) => {
-      const contentWords = eligibleMap.get(idx)
-      return (
-        contentWords !== undefined &&
-        prefixOverlap(needleWords, contentWords, w) >= PREFIX_OVERLAP_THRESHOLD
-      )
-    })
-
-    if (narrowed.length === 0) break
-    candidates = narrowed
-    if (candidates.length <= 1) break
   }
 
   return candidates

@@ -1,5 +1,5 @@
 import { findMatchOffset } from "~/lib/text/find"
-import { serializeSpotlight } from "~/lib/editor/spotlight/serialize"
+import { serializeSpotlightParam } from "~/lib/editor/spotlight/serialize"
 
 const QUOTE_PATTERN =
   /\[([^\]]*)\]\([^)]*\)|[\u201C\u201D""]([^"\u201C\u201D""]+?)[\u201C\u201D""]/g
@@ -9,7 +9,7 @@ const isSingleWord = (text: string): boolean => !text.trim().includes(" ")
 const containsMarkdownLink = (text: string): boolean => /\[[^\]]*\]\([^)]*\)/.test(text)
 
 const encodeSpotlightText = (text: string): string =>
-  encodeURIComponent(serializeSpotlight({ type: "single", text }))
+  serializeSpotlightParam({ type: "single", text })
 
 const buildSpotlightLink = (quoted: string, documentId: string): string =>
   `[${quoted}](file://${documentId}/${encodeSpotlightText(quoted)})`

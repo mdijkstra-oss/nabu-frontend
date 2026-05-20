@@ -1,5 +1,0 @@
-json-annotations.annotations.0: Text "this text does not exist in the document" not found in document. Use exact text from the document. If unsure, use FUZZY[[approximate text]] for fuzzy matching (e.g. "text": "FUZZY[[somthing like this]]").
-Current block:
-```json-annotations
-{"annotations": []}
-```

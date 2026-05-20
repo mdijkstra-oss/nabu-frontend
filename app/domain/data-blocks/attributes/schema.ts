@@ -14,9 +14,6 @@ export const radixColor = z.enum(BLOCK_COLORS as [string, ...string[]])
 const hasColorOrCode = (a: { color?: unknown; code?: unknown }) =>
   (a.color !== undefined) !== (a.code !== undefined)
 
-const textExistsInProse = (text: string, prose: string): boolean =>
-  prose.toLowerCase().includes(text.toLowerCase())
-
 const codeExists = (codeId: string, codes: { id: string }[]): boolean =>
   codes.some((c) => c.id === codeId)
 
@@ -45,12 +42,6 @@ export const annotationSchema = (ctx?: ValidationContext) => {
   )
   if (!ctx) return base
   return base.superRefine((a, ctx2) => {
-    if (!textExistsInProse(a.text, ctx.documentProse)) {
-      ctx2.addIssue({
-        code: "custom",
-        message: `Text "${a.text}" not found in document. Use exact text from the document. If unsure, use FUZZY[[approximate text]] for fuzzy matching (e.g. "text": "FUZZY[[somthing like this]]").`,
-      })
-    }
     if (a.code && !codeExists(a.code, ctx.availableCodes)) {
       ctx2.addIssue({
         code: "custom",

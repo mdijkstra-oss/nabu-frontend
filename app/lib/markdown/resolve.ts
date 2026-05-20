@@ -4,7 +4,7 @@ import type { ComponentType } from "react"
 import type { RadixColor } from "~/ui/theme/radix"
 import type { EntityKind, EntityRef } from "./linkify/types"
 import { parseEntityLink } from "./linkify/parse"
-import { serializeSpotlight } from "~/lib/editor/spotlight/serialize"
+import { serializeSpotlightParam } from "~/lib/editor/spotlight/serialize"
 import { BarChart, ChartLine, ChartPie, ChartScatter } from "lucide-react"
 import type { ChartType } from "~/lib/chart/types"
 import { calloutTypeIcons } from "~/domain/data-blocks/callout/schema"
@@ -85,7 +85,7 @@ const buildTextUrl = (
 ): string => {
   const base = `/project/${projectId}/file/${documentId}`
   if (!spotlight) return base
-  return `${base}?spotlight=${encodeURIComponent(serializeSpotlight(spotlight as Parameters<typeof serializeSpotlight>[0]))}`
+  return `${base}?spotlight=${serializeSpotlightParam(spotlight as Parameters<typeof serializeSpotlightParam>[0])}`
 }
 
 const resolveAnnotationRef = (

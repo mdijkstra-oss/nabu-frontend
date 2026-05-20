@@ -1,6 +1,76 @@
 import { describe, expect, it } from "vitest"
 import { block } from "./test-helpers"
-import { normalizeSingletonOrder } from "./normalize"
+import { normalizeSingletonOrder, normalizeBlockFields } from "./normalize"
+
+const calloutJson = (content: string): string =>
+  JSON.stringify({
+    id: "c1",
+    type: "codebook-code",
+    title: "Test",
+    content,
+    color: "blue",
+    collapsed: false,
+  })
+
+const calloutJsonPretty = (content: string): string =>
+  JSON.stringify(
+    {
+      id: "c1",
+      type: "codebook-code",
+      title: "Test",
+      content,
+      color: "blue",
+      collapsed: false,
+    },
+    null,
+    "\t"
+  )
+
+describe("normalizeBlockFields", () => {
+  const cases = [
+    {
+      name: "normalizes list markers in callout content",
+      input: `# Prose\n\n${block("json-callout", calloutJson("- first\n  - second"))}`,
+      expected: `# Prose\n\n${block("json-callout", calloutJsonPretty("* first\n\t* second"))}`,
+    },
+    {
+      name: "normalizes spaces to tabs in callout content",
+      input: block("json-callout", calloutJson("  indented\n    deeper")),
+      expected: block("json-callout", calloutJsonPretty("\tindented\n\t\tdeeper")),
+    },
+    {
+      name: "leaves non-callout blocks unchanged",
+      input: block("json-attributes", '{"type":"research","subject":"AI"}'),
+      expected: block("json-attributes", '{"type":"research","subject":"AI"}'),
+    },
+    {
+      name: "leaves already-normalized content unchanged",
+      input: block("json-callout", calloutJsonPretty("* item\n\t* child")),
+      expected: block("json-callout", calloutJsonPretty("* item\n\t* child")),
+    },
+    {
+      name: "preserves prose around blocks",
+      input: `# Title\n\nProse\n\n${block("json-callout", calloutJson("- item"))}\n\nMore prose`,
+      expected: `# Title\n\nProse\n\n${block("json-callout", calloutJsonPretty("* item"))}\n\nMore prose`,
+    },
+    {
+      name: "no blocks — unchanged",
+      input: "# Just prose",
+      expected: "# Just prose",
+    },
+  ]
+
+  it.each(cases)("$name", (c) => {
+    expect(normalizeBlockFields(c.input)).toBe(c.expected)
+  })
+
+  it("is idempotent", () => {
+    const input = block("json-callout", calloutJson("- first\n  - second"))
+    const once = normalizeBlockFields(input)
+    const twice = normalizeBlockFields(once)
+    expect(twice).toBe(once)
+  })
+})
 
 describe("normalizeSingletonOrder", () => {
   interface Case {

@@ -1,5 +1,7 @@
 import type { Annotation as StoredAnnotation } from "~/domain/data-blocks/attributes/schema"
+import type { CalloutBlock } from "~/domain/data-blocks/callout/schema"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
+import { getAllCodes } from "~/domain/data-blocks/callout/codes/selectors"
 import type { FileStore } from "~/lib/files/store"
 import { MAX_REVIEWED_ANNOTATIONS } from "./def"
 
@@ -79,6 +81,17 @@ const formatCleanBlock = (annotations: CodedAnnotation[]): string =>
     ? "No clean annotations found for this code."
     : annotations.map(formatCleanAnnotation).join("\n\n---\n\n")
 
+export const collectOtherCodes = (files: FileStore, calloutId: string): CalloutBlock[] =>
+  getAllCodes(files).filter((c) => c.id !== calloutId)
+
+const formatOtherCode = (code: CalloutBlock): string =>
+  `### ${code.title} (\`${code.id}\`)\n\n${code.content}`
+
+const formatOtherCodesBlock = (codes: CalloutBlock[]): string =>
+  codes.length === 0
+    ? "No other codes in the codebook."
+    : codes.map(formatOtherCode).join("\n\n---\n\n")
+
 export const REFINE_CTA =
   "Analyze this code definition against the flagged and clean passages. Identify patterns in the review flags, contrast with clean passages, and suggest how to sharpen the definition."
 
@@ -86,6 +99,7 @@ export const buildRefineMessages = (
   codeDefinition: string,
   flagged: ReviewedAnnotation[],
   clean: CodedAnnotation[],
+  otherCodes: CalloutBlock[],
   guidance?: string,
   generalCodebook?: string
 ): Message[] => {
@@ -100,6 +114,11 @@ export const buildRefineMessages = (
   }
 
   messages.push(
+    {
+      type: "message",
+      role: "system",
+      content: `<other-codes count="${otherCodes.length}">\nThese are the other codes in the codebook. Use them to identify boundary overlaps or suggest disambiguation, but do not redefine them.\n\n${formatOtherCodesBlock(otherCodes)}\n</other-codes>`,
+    },
     {
       type: "message",
       role: "system",
@@ -133,6 +152,8 @@ Present these findings to the researcher. Be precise about which passages and cr
 If the analysis suggests specific changes to the code definition, present them as options using the ask tool. Include one option per distinct change, an option to apply all changes together, and an option to discuss further. Do not apply changes without the researcher choosing.
 
 After the researcher selects changes:
-- Edit the code at \`${calloutId}.generated.hidden.md\` using patch_json_block
-- After updating, suggest re-coding affected sections with apply_deep_analysis using a query section that finds annotations where vote_review exists for \`${calloutId}\`
+1. Edit the code at \`${calloutId}.generated.hidden.md\` using patch_json_block
+2. Count existing annotations for \`${calloutId}\`: how many have a vote_review (reviewed) and how many do not (unreviewed)
+3. Report both counts and ask the researcher which set to recode (reviewed, unreviewed, both, or skip for now)
+4. For the chosen set, call apply_deep_analysis with sections of \`type: "query"\` — use a SQL query against the annotations table filtering by \`code = '${calloutId}'\` and the appropriate vote_review condition
 `

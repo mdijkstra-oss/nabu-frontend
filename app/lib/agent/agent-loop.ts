@@ -12,7 +12,7 @@ import { collect, isEmptyNudgeBlock } from "./steering/nudge-tools"
 import { getBlockSchemaDefinitions } from "~/lib/data-blocks/registry"
 import { getDatabaseSchema } from "~/domain/db/database"
 import { extractEntityIdCandidates } from "~/lib/markdown/linkify/extract"
-import { modes, deriveMode, rejectUnavailableTools, ENDPOINT } from "./executors/modes"
+import { modes, deriveMode, ENDPOINT } from "./executors/modes"
 import { getFiles } from "~/lib/files/store"
 import { resolveEntityName } from "~/lib/files/selectors"
 import { compactHistory, stepCompactHistory } from "./compact"
@@ -204,8 +204,7 @@ export const agentLoop = async (config: AgentLoopConfig): Promise<void> =>
         tools: modeConfig.tools,
         nudges: modeConfig.nudges,
         processBlocks: compactBlocks,
-        transformResponse: (blocks) =>
-          rejectDanglingEntityIds(rejectUnavailableTools(mode)(blocks)),
+        transformResponse: rejectDanglingEntityIds,
         blockSchemas: getBlockSchemaDefinitions(),
         databaseSchema: getDatabaseSchema(),
       }

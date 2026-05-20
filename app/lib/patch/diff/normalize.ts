@@ -1,6 +1,7 @@
 export const isBlankLine = (s: string): boolean => /^[ \t]*$/.test(s)
 
-export const normalizeLine = (line: string): string => spacesToTabs(trimTrailing(line))
+export const normalizeLine = (line: string): string =>
+  normalizeListMarkers(spacesToTabs(trimTrailing(line)))
 
 export const normalizeContent = (text: string): string =>
   trimTrailingBlanks(
@@ -38,6 +39,9 @@ const ensureHeadingSpacing = (lines: string[]): string[] => {
 
   return result
 }
+
+export const normalizeListMarkers = (text: string): string =>
+  text.replace(/^([ \t]*)[-+] /gm, "$1* ")
 
 const trimTrailing = (s: string): string => s.replace(/[ \t]+$/, "")
 

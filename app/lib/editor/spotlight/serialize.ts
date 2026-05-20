@@ -1,10 +1,14 @@
 import type { Spotlight } from "./types"
+import type { Segment } from "~/lib/text/types"
 import { exhaustive } from "~/lib/utils/exhaustive"
+import { stripBlocksByLanguage } from "~/lib/data-blocks/parse"
+import { splitMarkdownBySentences } from "~/lib/text/split"
+import { stripMarkdown } from "~/lib/text/strip"
+import { tokenizeWords } from "~/lib/text/find"
 
 const RANGE_DELIMITER = "..."
-const BOUNDARY_WORDS = 4
 
-export const serializeSpotlight = (spotlight: Spotlight): string => {
+const serializeSpotlight = (spotlight: Spotlight): string => {
   switch (spotlight.type) {
     case "single":
       return spotlight.text
@@ -15,17 +19,28 @@ export const serializeSpotlight = (spotlight: Spotlight): string => {
   }
 }
 
-const firstNWords = (words: string[], n: number): string => words.slice(0, n).join(" ")
-const lastNWords = (words: string[], n: number): string => words.slice(-n).join(" ")
+const toUrlParam = (text: string): string => text.replace(/ /g, "+")
+
+export const serializeSpotlightParam = (spotlight: Spotlight): string =>
+  toUrlParam(serializeSpotlight(spotlight))
+
+const longestSegment = (segments: Segment[]): Segment | null =>
+  segments.reduce<Segment | null>(
+    (best, seg) => (!best || seg.text.length > best.text.length ? seg : best),
+    null
+  )
+
+const stripAnnotations = (text: string): string => stripBlocksByLanguage(text, "json-annotations")
+
+const splitSentences = splitMarkdownBySentences()
 
 export const spotlightFromText = (text: string): Spotlight | null => {
-  const trimmed = text.trim()
-  if (!trimmed) return null
-  const words = trimmed.split(/\s+/)
-  if (words.length <= BOUNDARY_WORDS * 2) return { type: "single", text: trimmed }
-  return {
-    type: "range",
-    from: firstNWords(words, BOUNDARY_WORDS),
-    to: lastNWords(words, BOUNDARY_WORDS),
-  }
+  const prose = stripAnnotations(text)
+  const sentences = splitSentences(prose)
+  const longest = longestSegment(sentences)
+  if (!longest) return null
+  const clean = stripMarkdown(longest.text)
+  const tokens = tokenizeWords(clean)
+  if (tokens.length === 0) return null
+  return { type: "single", text: tokens.join(" ") }
 }

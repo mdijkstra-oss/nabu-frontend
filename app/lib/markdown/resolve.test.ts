@@ -139,7 +139,7 @@ describe("resolveEntityLink", () => {
           background: "var(--color-neutral-200)",
           backgroundHover: "var(--color-neutral-300)",
         },
-        url: "/project/proj1/file/my-doc?spotlight=hello%20world",
+        url: "/project/proj1/file/my-doc?spotlight=hello+world",
         label: "my-doc",
       },
     },

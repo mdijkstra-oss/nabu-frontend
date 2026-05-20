@@ -11,6 +11,7 @@ import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import {
   extractSection,
+  extractSentenceContext,
   prepareTargetContent,
   numberSectionWithPositions,
   mapAnnotations,
@@ -35,6 +36,7 @@ import { runAnalysisPipeline } from "./pipeline"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
+import { FIND_CONTEXT_SENTENCES } from "./def"
 import { think, thinkWithName, STARTING, PICKING_UP, READING_FRAMEWORK, WRITING } from "./thoughts"
 
 type Enqueue = <T>(key: string, fn: () => Promise<T>) => Promise<T>
@@ -206,6 +208,9 @@ const buildPostActions = (enqueue: Enqueue): Record<PostAction, PostActionFn> =>
   annotate_as_comment: handleAnnotation("annotate_as_comment", enqueue),
 })
 
+const isSingleFileComposite = (segments: readonly { path: string }[]): boolean =>
+  segments.length > 0 && segments.every((s) => s.path === segments[0].path)
+
 const compositeSeparator = (seg: Segment): string =>
   `\n\n# ${seg.path} [${seg.startLine}-${seg.endLine}]\n\n`
 
@@ -267,11 +272,27 @@ const processComposite = async (
   const name = composite.segments[0]?.path.split("/").pop() ?? "section"
   think(READING_FRAMEWORK)
 
+  const firstSeg = composite.segments[0]
+  const lastSeg = composite.segments[composite.segments.length - 1]
+  let leadingCtx = ""
+  let trailingCtx = ""
+  if (isSingleFileComposite(composite.segments) && firstSeg && lastSeg) {
+    const fullContent = resolve(firstSeg.path) ?? ""
+    const ctx = extractSentenceContext(
+      fullContent,
+      firstSeg.startLine,
+      lastSeg.endLine,
+      FIND_CONTEXT_SENTENCES
+    )
+    leadingCtx = ctx.leading
+    trailingCtx = ctx.trailing
+  }
+
   const pipelineResult = await runAnalysisPipeline(
     calls,
     composite.content,
-    "",
-    "",
+    leadingCtx,
+    trailingCtx,
     scoped,
     sentences,
     resolve

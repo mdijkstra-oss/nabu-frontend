@@ -5,9 +5,8 @@ export interface MatchOffset {
   end: number
 }
 
-const TOKEN_OVERLAP_THRESHOLD = 0.8
-const MIN_FUZZY_WORDS = 4
-const MIN_UNIQUE_FUZZY_WORDS = 2
+const PRECISION_THRESHOLDS = [1, 0.95, 0.9, 0.8]
+const MIN_FUZZY_TOKENS = 5
 
 interface Token {
   word: string
@@ -60,58 +59,40 @@ const scoreTokenWindow = (needleWords: Set<string>, windowTokens: Token[]): numb
   return hits / needleWords.size
 }
 
-const findUniqueTokenMatch = (
+const findFirstTokenMatch = (
   docTokens: Token[],
   needleSet: Set<string>,
-  windowSize: number
+  windowSize: number,
+  threshold: number
 ): MatchOffset | null => {
-  let found: MatchOffset | null = null
   for (let i = 0; i <= docTokens.length - windowSize; i++) {
     const window = docTokens.slice(i, i + windowSize)
-    if (scoreTokenWindow(needleSet, window) >= TOKEN_OVERLAP_THRESHOLD) {
-      if (found) return null
-      found = { start: window[0].start, end: window[window.length - 1].end }
-    }
-  }
-  return found
-}
-
-const findTokenMatchOffset = (docTokens: Token[], needleWords: string[]): MatchOffset | null => {
-  if (needleWords.length < MIN_UNIQUE_FUZZY_WORDS) return null
-
-  const needleSet = new Set(needleWords)
-  const windowSize = needleWords.length
-  const requireUnique = needleWords.length < MIN_FUZZY_WORDS
-
-  if (docTokens.length < windowSize) return null
-
-  if (requireUnique) return findUniqueTokenMatch(docTokens, needleSet, windowSize)
-
-  for (let i = 0; i <= docTokens.length - windowSize; i++) {
-    const window = docTokens.slice(i, i + windowSize)
-    if (scoreTokenWindow(needleSet, window) >= TOKEN_OVERLAP_THRESHOLD) {
+    if (scoreTokenWindow(needleSet, window) >= threshold) {
       return { start: window[0].start, end: window[window.length - 1].end }
     }
   }
-
   return null
 }
 
-const flattenNewlines = (text: string): string => text.replace(/[\r\n]/g, " ")
-
-const findExactOffset = (content: string, needle: string): MatchOffset | null => {
-  const idx = flattenNewlines(content).toLowerCase().indexOf(flattenNewlines(needle).toLowerCase())
-  if (idx < 0) return null
-  return { start: idx, end: idx + needle.length }
-}
+const selectThresholds = (tokenCount: number): number[] =>
+  tokenCount < MIN_FUZZY_TOKENS ? [1] : PRECISION_THRESHOLDS
 
 const findBestOffset = (content: string, needle: string): MatchOffset | null => {
-  const exact = findExactOffset(content, needle)
-  if (exact) return exact
+  const needleWords = tokenizeWords(needle)
+  if (needleWords.length === 0) return null
 
   const docTokens = getDocTokens(content)
-  const needleWords = tokenizeWords(needle)
-  return findTokenMatchOffset(docTokens, needleWords)
+  const needleSet = new Set(needleWords)
+  const windowSize = needleWords.length
+  if (docTokens.length < windowSize) return null
+
+  const thresholds = selectThresholds(needleWords.length)
+  for (const threshold of thresholds) {
+    const match = findFirstTokenMatch(docTokens, needleSet, windowSize, threshold)
+    if (match) return match
+  }
+
+  return null
 }
 
 export const findMatchOffset = (content: string, needle: string): MatchOffset | null =>

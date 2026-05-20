@@ -170,37 +170,19 @@ export const deactivatePlan = (): void => {
   pushBlocks([{ type: "system", content: "<!-- prompt: chat -->" }])
 }
 
+const allKnownToolNames = new Set<string>(
+  Object.values(modes).flatMap((m) => m.tools.map((t) => t.name))
+)
+
 const buildAvailableToolNames = (mode: ModeName): Set<string> => {
   const names = new Set(modes[mode].tools.map((t) => t.name))
   names.add("cancel")
   return names
 }
 
-const isAvailableCall = (name: string, available: Set<string>): boolean => available.has(name)
-
-const rejectBlock = (rejected: string[], mode: ModeName): Block => ({
-  type: "system",
-  content: `Ignored hallucinated tool call: ${rejected.join(", ")}. Not available in ${mode} mode. Continue with the current plan step.`,
-})
-
-export const rejectUnavailableTools =
-  (mode: ModeName) =>
-  (blocks: Block[]): Block[] => {
-    const available = buildAvailableToolNames(mode)
-    return blocks.flatMap((block) => {
-      if (block.type !== "tool_call") return [block]
-      const kept = block.calls.filter((c) => isAvailableCall(c.name, available))
-      const rejected = block.calls.filter((c) => !isAvailableCall(c.name, available))
-      if (rejected.length === 0) return [block]
-      console.log(
-        "[mode] rejecting hallucinated tools:",
-        rejected.map((c) => c.name)
-      )
-      const redirect = rejectBlock(
-        rejected.map((c) => c.name),
-        mode
-      )
-      if (kept.length === 0) return [redirect]
-      return [{ ...block, calls: kept }, redirect]
-    })
-  }
+export const checkToolAvailability = (toolName: string, mode: ModeName): string | null => {
+  const available = buildAvailableToolNames(mode)
+  if (available.has(toolName)) return null
+  if (allKnownToolNames.has(toolName)) return `Tool "${toolName}" is not available in ${mode} mode.`
+  return `Tool "${toolName}" does not exist. Available tools: ${[...available].sort().join(", ")}`
+}

@@ -8,6 +8,7 @@ import { extractText } from "../../client/convert"
 import {
   collectReviewedAnnotations,
   collectCleanAnnotations,
+  collectOtherCodes,
   buildRefineMessages,
   buildInstructionTail,
 } from "./messages"
@@ -49,7 +50,15 @@ registerTool(
         }
 
       const clean = collectCleanAnnotations(files, callout_id, flagged.length)
-      const messages = buildRefineMessages(codeContent, flagged, clean, guidance, generalContent)
+      const otherCodes = collectOtherCodes(files, callout_id)
+      const messages = buildRefineMessages(
+        codeContent,
+        flagged,
+        clean,
+        otherCodes,
+        guidance,
+        generalContent
+      )
 
       const blocks = await callLlm({ endpoint: REFINE_CODE_ENDPOINT, messages })
       const analysis = extractText(blocks)

@@ -151,16 +151,21 @@ const injectLanguageFilter = (sql: string, language: string): string => {
   return `${sql.slice(0, insertAt)} WHERE language = '${escaped}'${sql.slice(insertAt)}`
 }
 
-export const buildCosineQuery = (baseSql: string, hyde: HydeQuery): string => {
+const buildCosineBase = (baseSql: string, hyde: HydeQuery): string => {
   const vec = formatVector(hyde.cosineVector)
   const core = stripOrderByTail(stripPaging(baseSql))
   const withLanguage = injectLanguageFilter(core, hyde.language)
-  const withColumn = injectSelectColumn(
+  return injectSelectColumn(
     withLanguage,
     `list_cosine_similarity(embedding, ${vec}) AS ${SCORE_COLUMN}`
   )
-  return `${withColumn} ORDER BY ${SCORE_COLUMN} DESC LIMIT 200`
 }
+
+export const buildCosineQuery = (baseSql: string, hyde: HydeQuery): string =>
+  `${buildCosineBase(baseSql, hyde)} ORDER BY ${SCORE_COLUMN} DESC LIMIT 200`
+
+export const buildUncappedCosineQuery = (baseSql: string, hyde: HydeQuery): string =>
+  `${buildCosineBase(baseSql, hyde)} ORDER BY ${SCORE_COLUMN} DESC`
 
 export const buildHybridPlan = (
   sql: string,
