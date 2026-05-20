@@ -11,7 +11,8 @@ import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 const RETRYABLE_STATUS = [429, 502, 503]
 const MAX_RETRIES = 3
 const MAX_FILTER_RETRIES = 2
-const STALL_TIMEOUT_MS = 120_000
+const STALL_TIMEOUT_MS = 60_000
+const CONNECT_TIMEOUT_MS = 120_000
 
 const RETRYABLE_ERROR_TYPES = new Set(["SAFETY", "RECITATION", "content_filter"])
 
@@ -27,7 +28,17 @@ export class StallError extends Error {
   }
 }
 
+export class ConnectTimeoutError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "ConnectTimeoutError"
+  }
+}
+
 const isStallError = (err: unknown): err is StallError => err instanceof StallError
+
+const isConnectTimeout = (err: unknown): boolean =>
+  err instanceof DOMException && err.name === "AbortError"
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -39,19 +50,33 @@ interface FetchOptions {
   signal?: AbortSignal
 }
 
+const combineSignals = (signal?: AbortSignal): AbortSignal => {
+  const timeoutSignal = AbortSignal.timeout(CONNECT_TIMEOUT_MS)
+  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+}
+
 const fetchWithRetry = async ({ url, body, signal }: FetchOptions): Promise<Response> => {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: getLlmHeaders(),
-      body,
-      signal,
-    })
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: getLlmHeaders(),
+        body,
+        signal: combineSignals(signal),
+      })
 
-    if (response.ok) return response
+      if (response.ok) return response
 
-    if (!isRetryable(response.status) || attempt === MAX_RETRIES) {
-      throw new Error(`LLM request failed: ${response.status}`)
+      if (!isRetryable(response.status) || attempt === MAX_RETRIES) {
+        throw new Error(`LLM request failed: ${response.status}`)
+      }
+    } catch (err) {
+      if (isConnectTimeout(err) && !signal?.aborted) {
+        throw new ConnectTimeoutError(
+          `no response from backend within ${CONNECT_TIMEOUT_MS / 1000}s — model may be out of quota`
+        )
+      }
+      throw err
     }
 
     const delay = calculateBackoff(attempt, { maxDelay: 10000 })

@@ -7,7 +7,7 @@ import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { think, FINDING, CONSENSUS } from "./thoughts"
 import { buildFindCall, singleIdFindSchema, extractSourceIds } from "./messages"
-import { groupBySpan } from "./consensus"
+import { groupBySpan, filterContainedSpans } from "./consensus"
 import { FIND_ENDPOINT, FIND_RUNS, FIND_CONCURRENCY } from "./def"
 
 export interface FindStepResult {
@@ -183,13 +183,17 @@ export const findAllDimensions = async (
     allAnnotations.push(...voteSpans(runs))
   }
 
+  const filtered = filterContainedSpans(allAnnotations)
+
+  console.debug(`[deep-analysis] containment filter: ${allAnnotations.length} → ${filtered.length}`)
+
   const codedSpans = groupBySpan(
-    allAnnotations.map((a) => ({ start: a.start, end: a.end, analysis_source_id: a.code }))
+    filtered.map((a) => ({ start: a.start, end: a.end, analysis_source_id: a.code }))
   )
   for (const cs of codedSpans) {
     console.debug(`[deep-analysis]   [${cs.start}-${cs.end}] ${cs.codings.join(", ")}`)
   }
-  console.debug(`[deep-analysis] find → ${allAnnotations.length} annotations`)
+  console.debug(`[deep-analysis] find → ${filtered.length} annotations`)
 
-  return { annotations: allAnnotations, errors }
+  return { annotations: filtered, errors }
 }

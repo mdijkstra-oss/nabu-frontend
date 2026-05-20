@@ -77,21 +77,52 @@ const findFirstTokenMatch = (
 const selectThresholds = (tokenCount: number): number[] =>
   tokenCount < MIN_FUZZY_TOKENS ? [1] : PRECISION_THRESHOLDS
 
+const findOrderedMatch = (docTokens: Token[], needleWords: string[]): MatchOffset | null => {
+  const len = needleWords.length
+  for (let i = 0; i <= docTokens.length - len; i++) {
+    let match = true
+    for (let j = 0; j < len; j++) {
+      if (docTokens[i + j].word !== needleWords[j]) {
+        match = false
+        break
+      }
+    }
+    if (match) return { start: docTokens[i].start, end: docTokens[i + len - 1].end }
+  }
+  return null
+}
+
 const findBestOffset = (content: string, needle: string): MatchOffset | null => {
   const needleWords = tokenizeWords(needle)
   if (needleWords.length === 0) return null
 
   const docTokens = getDocTokens(content)
-  const needleSet = new Set(needleWords)
   const windowSize = needleWords.length
   if (docTokens.length < windowSize) return null
 
+  const ordered = findOrderedMatch(docTokens, needleWords)
+  if (ordered) {
+    console.debug(
+      `[deep-fuzzy] find: ordered match — needle ${needleWords.length} tokens → [${ordered.start},${ordered.end}]`
+    )
+    return ordered
+  }
+
+  const needleSet = new Set(needleWords)
   const thresholds = selectThresholds(needleWords.length)
   for (const threshold of thresholds) {
     const match = findFirstTokenMatch(docTokens, needleSet, windowSize, threshold)
-    if (match) return match
+    if (match) {
+      console.debug(
+        `[deep-fuzzy] find: threshold ${threshold} match — needle ${needleWords.length} tokens (${needleSet.size} unique) → [${match.start},${match.end}]`
+      )
+      return match
+    }
   }
 
+  console.debug(
+    `[deep-fuzzy] find: NO match — needle ${needleWords.length} tokens (${needleSet.size} unique), doc ${docTokens.length} tokens, needle: "${needle.slice(0, 80)}..."`
+  )
   return null
 }
 

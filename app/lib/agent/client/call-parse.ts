@@ -4,9 +4,22 @@ import { extractText, toResponseFormat } from "./convert"
 
 export type CallResult<T> = { ok: true; data: T } | { ok: false; error: string }
 
+export const cacheMarker = (): { type: "message"; role: "system"; content: string } => ({
+  type: "message",
+  role: "system",
+  content: "<!-- cache -->",
+})
+
+const CODE_FENCE_RE = /^```\w*\n([\s\S]*)\n```\s*$/
+
+const stripCodeFence = (text: string): string => {
+  const match = CODE_FENCE_RE.exec(text.trim())
+  return match ? match[1] : text
+}
+
 export const tryParseJson = (text: string): unknown | undefined => {
   try {
-    return JSON.parse(text)
+    return JSON.parse(stripCodeFence(text))
   } catch {
     return undefined
   }

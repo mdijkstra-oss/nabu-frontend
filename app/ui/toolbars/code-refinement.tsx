@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react"
+import { ScanSearch } from "lucide-react"
 import { dispatchTask } from "~/lib/agent/dispatch"
 import type { ToolbarFactory } from "./types"
 
@@ -12,7 +12,7 @@ export const codeRefinementToolbar: ToolbarFactory = (meta) => ({
   title: "What's the pattern?",
   buttons: [
     {
-      icon: <Sparkles />,
+      icon: <ScanSearch />,
       label: "Diagnose",
       onClick: () => dispatchTask(buildRefineTask(meta.codeId ?? "")),
       variant: "ai",

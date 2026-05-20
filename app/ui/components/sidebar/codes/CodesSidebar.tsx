@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useSyncExternalStore } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { CheckSquare } from "lucide-react"
+import { CheckSquare, ExternalLink } from "lucide-react"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { CheckableWrap } from "~/ui/components/CheckableWrap"
@@ -33,6 +33,7 @@ interface CodesSidebarProps {
   onCodeFile?: (code: Code) => void
   onFileSelect?: (fileId: string) => void
   onSearchCode?: (code: Code) => void
+  onSearchCodeInFile?: (code: Code) => void
   onSearchUnsure?: (code: Code) => void
 }
 
@@ -98,6 +99,7 @@ export const CodesSidebar = ({
   onEditCode,
   onFileSelect,
   onSearchCode,
+  onSearchCodeInFile,
   onSearchUnsure,
 }: CodesSidebarProps) => {
   const [searchValue, setSearchValue] = useState("")
@@ -154,7 +156,8 @@ export const CodesSidebar = ({
                   debugReview={debugReview}
                   highlighted={code.id === hoveredCode?.id}
                   onMouseEnter={() => setHoveredCode(code)}
-                  onClick={() => onEditCode?.(code)}
+                  onClick={() => toggleCode(code.id)}
+                  onCountClick={() => onSearchCodeInFile?.(code)}
                   onSearchUnsure={() => onSearchUnsure?.(code)}
                 />
               </CheckableWrap>
@@ -206,6 +209,14 @@ export const CodesSidebar = ({
                 globalCount={globalAnnotationCounts[hoveredCode.id]}
                 onClick={() => onSearchCode?.(hoveredCode)}
               />
+              <TooltipWrap text="Go to code definition">
+                <button
+                  className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-black/10"
+                  onClick={() => onEditCode?.(hoveredCode)}
+                >
+                  <ExternalLink className="h-3.5 w-3.5 text-subtext-color" />
+                </button>
+              </TooltipWrap>
             </div>
             <CodeDetail code={hoveredCode} />
           </motion.div>

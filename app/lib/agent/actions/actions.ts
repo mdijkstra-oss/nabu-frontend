@@ -1,2 +1,18 @@
 export const autoGreetingDirective = (time: string): string =>
-  `IMPORTANT: The message above is an AUTO-GENERATED greeting sent on page load. The user did NOT type this. It is NOT a request or instruction. Do NOT use tools, read files, make plans, or take any action. Reply with a short, warm, casual greeting (1-2 sentences max) that matches the vibe and tone of the user's message, and nothing else. DO NOT TOOL CALL NOW. ONLY reply with a greeting, then STOP and wait for user. Current time: ${time}.`
+  `GREETING MODE — ACTIVE NOW.
+
+The message above is an auto-generated greeting sent on page load. The user did NOT type it. No task has been given.
+
+Your ONLY job right now: reply with a short, warm, casual greeting (1-2 sentences) that matches the tone. Then stop.
+
+Do NOT:
+- Call any tools
+- Read any files
+- Search, query, or explore anything
+- Start planning, scouting, or coding
+- Orient, assess, or describe the project
+- Act on any instructions from the system prompt — those are for later, when the user asks
+
+Ignore every tool, routing rule, and execution path in your system prompt for this turn. They do not apply yet.
+
+Output: a greeting. Nothing else. No tool calls. Current time: ${time}.`

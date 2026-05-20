@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from "react"
 import { Outlet, useNavigate, useParams, useOutletContext, useSearchParams } from "react-router"
 import { AnimatePresence } from "framer-motion"
-import { Eraser, Sparkles } from "lucide-react"
+import { Eraser, FileText } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
 import { useFiles } from "~/ui/hooks/useFiles"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
@@ -76,7 +76,7 @@ import { FloatingActionBar, type ActionBarAction } from "~/ui/components/Floatin
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
-import { getAllCodes } from "~/domain/data-blocks/callout/codes/selectors"
+import { getAllCodes, findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
 import { DismissableWrap } from "~/ui/components/DismissableWrap"
 import { buildToolbar } from "~/ui/toolbars"
 
@@ -199,8 +199,8 @@ export interface ProjectContextValue {
 
 export const useProject = () => useOutletContext<ProjectContextValue>()
 
-const formatSelectionTitle = (count: number): string =>
-  `${count} code${count === 1 ? "" : "s"} selected`
+const formatSelectionTitle = (count: number, singleName?: string): string =>
+  count === 1 && singleName ? `${singleName} selected` : `${count} codes selected`
 
 export default function ProjectLayout() {
   const params = useParams<{ projectId: string; fileId?: string; searchId?: string }>()
@@ -526,7 +526,7 @@ export default function ProjectLayout() {
         disabled: !hasSelectedAnnotationsInFile,
       },
       {
-        icon: <Sparkles />,
+        icon: <FileText />,
         label: "Code file",
         onClick: handleCodeSelectedCodes,
         variant: "ai",
@@ -540,6 +540,18 @@ export default function ProjectLayout() {
       title: code.id,
       description: `Passages coded as: ${code.id}`,
       sql: `SELECT file, id, text FROM annotations WHERE code = '${code.id}'`,
+    })
+    if (!id) return
+    dismissSidebarRef.current?.()
+    navigate(`/project/${params.projectId}/search/${id}`)
+  }
+
+  const handleSearchCodeInFile = (code: Code) => {
+    if (!currentFile) return
+    const id = saveNewSearch({
+      title: `${code.id} in file`,
+      description: `Passages coded as: ${code.id} in ${currentFile}`,
+      sql: `SELECT file, id, text FROM annotations WHERE code = '${code.id}' AND file = '${currentFile}'`,
     })
     if (!id) return
     dismissSidebarRef.current?.()
@@ -613,6 +625,7 @@ export default function ProjectLayout() {
               onCodeFile={handleCodeFile}
               onFileSelect={handleDocumentSelect}
               onSearchCode={handleSearchCode}
+              onSearchCodeInFile={handleSearchCodeInFile}
               onSearchUnsure={handleSearchUnsure}
             />
           ),
@@ -704,7 +717,12 @@ export default function ProjectLayout() {
               title={
                 hasAllCodesSelected
                   ? "All codes selected"
-                  : formatSelectionTitle(selectedCodes.size)
+                  : formatSelectionTitle(
+                      selectedCodes.size,
+                      selectedCodes.size === 1
+                        ? findCodeById(files, [...selectedCodes][0])?.title
+                        : undefined
+                    )
               }
               titleAction={
                 hasAllCodesSelected ? undefined : { label: "Select all", onClick: selectAllCodes }

@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest"
-import { groupBySpan, type FindResult } from "./consensus"
+import { groupBySpan, filterContainedSpans, type FindResult } from "./consensus"
 
 const r = (start: number, end: number, analysis_source_id: string): FindResult => ({
   start,
   end,
   analysis_source_id,
 })
+
+const span = (code: string, start: number, end: number) => ({ code, start, end })
 
 describe("groupBySpan", () => {
   const cases = [
@@ -49,5 +51,54 @@ describe("groupBySpan", () => {
 
   cases.forEach(({ name, spans, expected }) => {
     it(name, () => expect(groupBySpan(spans)).toEqual(expected))
+  })
+})
+
+describe("filterContainedSpans", () => {
+  const cases = [
+    {
+      name: "empty input → empty result",
+      items: [],
+      expected: [],
+    },
+    {
+      name: "no overlap → all kept",
+      items: [span("X", 1, 3), span("X", 5, 7)],
+      expected: [span("X", 1, 3), span("X", 5, 7)],
+    },
+    {
+      name: "sentence inside paragraph same code → paragraph removed",
+      items: [span("X", 3, 10), span("X", 5, 5)],
+      expected: [span("X", 5, 5)],
+    },
+    {
+      name: "sentence inside paragraph different code → both kept",
+      items: [span("A", 3, 10), span("B", 5, 5)],
+      expected: [span("A", 3, 10), span("B", 5, 5)],
+    },
+    {
+      name: "exact same span → both kept (not strictly larger)",
+      items: [span("X", 3, 10), span("X", 3, 10)],
+      expected: [span("X", 3, 10), span("X", 3, 10)],
+    },
+    {
+      name: "multiple small inside one large → large removed",
+      items: [span("X", 1, 20), span("X", 3, 5), span("X", 10, 12)],
+      expected: [span("X", 3, 5), span("X", 10, 12)],
+    },
+    {
+      name: "nested containment → middle and outer removed",
+      items: [span("X", 1, 20), span("X", 5, 10), span("X", 7, 8)],
+      expected: [span("X", 7, 8)],
+    },
+    {
+      name: "partial overlap without containment → both kept",
+      items: [span("X", 1, 5), span("X", 3, 8)],
+      expected: [span("X", 1, 5), span("X", 3, 8)],
+    },
+  ]
+
+  cases.forEach(({ name, items, expected }) => {
+    it(name, () => expect(filterContainedSpans(items)).toEqual(expected))
   })
 })

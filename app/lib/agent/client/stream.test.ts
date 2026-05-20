@@ -452,7 +452,7 @@ describe("blocksToMessages", () => {
       ],
     },
     {
-      name: "skips reasoning without id",
+      name: "converts reasoning without id when extra_content present",
       blocks: [
         {
           type: "reasoning" as const,
@@ -460,7 +460,35 @@ describe("blocksToMessages", () => {
           extraContent: { google: { thought_signature: "dGVzdHNpZw==" } },
         },
       ],
-      expected: [],
+      expected: [
+        {
+          type: "reasoning",
+          id: "",
+          extra_content: { google: { thought_signature: "dGVzdHNpZw==" } },
+        },
+      ],
+    },
+    {
+      name: "converts anthropic reasoning with empty id and extra_content",
+      blocks: [
+        {
+          type: "reasoning" as const,
+          content: "deep thought",
+          id: "",
+          extraContent: {
+            anthropic: { thinking: "deep thought", signature: "encrypted_sig" },
+          },
+        },
+      ],
+      expected: [
+        {
+          type: "reasoning",
+          id: "",
+          extra_content: {
+            anthropic: { thinking: "deep thought", signature: "encrypted_sig" },
+          },
+        },
+      ],
     },
     {
       name: "converts mixed blocks in order",

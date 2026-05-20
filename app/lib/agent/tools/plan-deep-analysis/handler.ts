@@ -133,7 +133,10 @@ const filterAndLabelTarget = async (
   )
 
   if (failures.length > 0) {
-    throw new Error(`scout-filter labeling failed for ${path}: ${failures.length} chunk(s)`)
+    const details = failures.map((f) => errorMessage(f.error)).join("; ")
+    throw new Error(
+      `scout-filter labeling failed for ${path}: ${failures.length} chunk(s): ${details}`
+    )
   }
 
   return (results as { index: number; target: LabeledTarget }[])

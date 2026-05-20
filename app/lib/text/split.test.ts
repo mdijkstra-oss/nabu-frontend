@@ -146,6 +146,63 @@ Geachte aanwezigen en ook beste ondernemers die meekijken. In deze coronacrisis 
   })
 })
 
+describe("splitBySentences — dutch parliamentary transcript (Rutte)", () => {
+  const rutte = `RUTTE
+Wat je nu ziet is natuurlijk dat het virus zich nog uitbreidt, het aantal besmettingen. En denkbaar is dat ook mensen besmet zijn die we niet in beeld hebben nog. Dat kunnen ook huisgenoten zijn die niet getest zijn, omdat ze in dit moment in isolatie of quarantaine zijn bij hun partner. Op dit moment staat de teller op 804. En wat ik vooral wil benadrukken hier: hoe treurig we denk ik allemaal zijn en hoezeer we meeleven met ook de nabestaanden van de vijf mensen die vandaag moesten worden bericht ook zijn overleden sinds de vorige rapportage van gisteren, waarbij in totaal dus nu 10 corona patiënten zijn overleden. Dat zijn de aantallen. Dan is het zo dat wij op basis van de crisisorganisatie dagelijks kijken naar hoe zich dit ontwikkelt en zodra de deskundigen een aanleiding vinden om te zeggen: nu moet de dosis worden opgevoerd, de dosis medicijn, dan kan ik verzekeren dan liggen alle maatregelen klaar om dat ook te doen. Dat was wat we gisteren gedaan hebben vanwege de... het gaat niet alleen om de aantallen waar naar je kijkt, maar je moet ook kijken: hoe ontwikkelt het zich in Brabant, waar we in feite niet meer in de indamfase zitten, maar in de volgende fase. Je ziet ook een paar ontwikkelingen, wat ik gisteren ook in de Kamer geschetst, Jaap van Dissel, RIVM, heeft dat verteld. Een paar andere plekken waarvan je zegt 'dat roept extra bezorgdheid op' over die situatie. Aanleiding voor het OMT om dit uitgebreide pakket maatregelen te nemen.`
+
+  const langCases: { name: string; lang: string }[] = [
+    { name: "english segmenter", lang: "en" },
+    { name: "dutch segmenter", lang: "nl" },
+  ]
+
+  it.each(langCases)("$name — colons do not break sentence boundaries", ({ lang }) => {
+    const split = splitBySentences(lang)
+    const texts = split(rutte).map((s) => s.text)
+
+    expect(texts).toContain(
+      "En wat ik vooral wil benadrukken hier: hoe treurig we denk ik allemaal zijn en hoezeer we meeleven met ook de nabestaanden van de vijf mensen die vandaag moesten worden bericht ook zijn overleden sinds de vorige rapportage van gisteren, waarbij in totaal dus nu 10 corona patiënten zijn overleden."
+    )
+    expect(texts).toContain(
+      "Dan is het zo dat wij op basis van de crisisorganisatie dagelijks kijken naar hoe zich dit ontwikkelt en zodra de deskundigen een aanleiding vinden om te zeggen: nu moet de dosis worden opgevoerd, de dosis medicijn, dan kan ik verzekeren dan liggen alle maatregelen klaar om dat ook te doen."
+    )
+    expect(texts).toContain("Dat zijn de aantallen.")
+  })
+
+  it.each(langCases)("$name — offset correctness", ({ lang }) => {
+    const split = splitBySentences(lang)
+    for (const s of split(rutte)) {
+      expect(rutte.slice(s.start, s.end)).toBe(s.text)
+    }
+  })
+
+  it.each(langCases)("$name — no partial sentence starts or ends", ({ lang }) => {
+    const split = splitBySentences(lang)
+    const texts = split(rutte).map((s) => s.text)
+    for (const t of texts) {
+      expect(t.endsWith("dan kan")).toBe(false)
+      expect(t.startsWith("totaal dus nu")).toBe(false)
+    }
+  })
+
+  it("produces 12 sentences", () => {
+    const split = splitBySentences()
+    expect(split(rutte).map((s) => s.text)).toEqual([
+      "RUTTE",
+      "Wat je nu ziet is natuurlijk dat het virus zich nog uitbreidt, het aantal besmettingen.",
+      "En denkbaar is dat ook mensen besmet zijn die we niet in beeld hebben nog.",
+      "Dat kunnen ook huisgenoten zijn die niet getest zijn, omdat ze in dit moment in isolatie of quarantaine zijn bij hun partner.",
+      "Op dit moment staat de teller op 804.",
+      "En wat ik vooral wil benadrukken hier: hoe treurig we denk ik allemaal zijn en hoezeer we meeleven met ook de nabestaanden van de vijf mensen die vandaag moesten worden bericht ook zijn overleden sinds de vorige rapportage van gisteren, waarbij in totaal dus nu 10 corona patiënten zijn overleden.",
+      "Dat zijn de aantallen.",
+      "Dan is het zo dat wij op basis van de crisisorganisatie dagelijks kijken naar hoe zich dit ontwikkelt en zodra de deskundigen een aanleiding vinden om te zeggen: nu moet de dosis worden opgevoerd, de dosis medicijn, dan kan ik verzekeren dan liggen alle maatregelen klaar om dat ook te doen.",
+      "Dat was wat we gisteren gedaan hebben vanwege de... het gaat niet alleen om de aantallen waar naar je kijkt, maar je moet ook kijken: hoe ontwikkelt het zich in Brabant, waar we in feite niet meer in de indamfase zitten, maar in de volgende fase.",
+      "Je ziet ook een paar ontwikkelingen, wat ik gisteren ook in de Kamer geschetst, Jaap van Dissel, RIVM, heeft dat verteld.",
+      "Een paar andere plekken waarvan je zegt 'dat roept extra bezorgdheid op' over die situatie.",
+      "Aanleiding voor het OMT om dit uitgebreide pakket maatregelen te nemen.",
+    ])
+  })
+})
+
 describe("splitByLines", () => {
   const cases: { name: string; input: string; expected: string[] }[] = [
     {

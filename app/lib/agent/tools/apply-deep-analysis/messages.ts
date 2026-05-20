@@ -10,6 +10,7 @@ import { calloutToDeepSource } from "~/domain/data-blocks/callout/definition"
 import { getCallouts } from "~/domain/data-blocks/callout/selectors"
 import { GENERATED_SUFFIX } from "~/lib/files/filename"
 import { prepareTargetContent, numberSection } from "./format"
+import { cacheMarker } from "../../client/call-parse"
 
 interface Message {
   type: "message"
@@ -160,16 +161,16 @@ const buildTrailingContextMessage = (context: string): string =>
 const FIND_CTA =
   "Analyze the numbered sentences against the source definition. Return matching spans as JSON."
 
-export const ADJUDICATE_CTA =
+export const FILTER_CTA =
   "For each coded section, judge whether the passage satisfies the code definitions. Return your judgment as JSON."
 
-export const buildAdjudicateSchema = (validCodes: string[]) =>
+export const buildFilterSchema = (validCodes: string[]) =>
   z.object({
     results: z.array(
       z.object({
         id: z.number().int().min(1),
         code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
-        judgment: z.enum(["remove", "keep", "ambiguous", "conflict"]),
+        judgment: z.enum(["remove", "keep"]),
         reason: z.string(),
       })
     ),
@@ -184,6 +185,7 @@ const buildFindEnvelope = (
   callToAction: string
 ): Message[] => {
   const messages: Message[] = [...frameworkMessages]
+  messages.push(cacheMarker())
   if (leadingCtx) {
     messages.push({
       type: "message",
@@ -199,6 +201,7 @@ const buildFindEnvelope = (
       content: buildTrailingContextMessage(trailingCtx),
     })
   }
+  messages.push(cacheMarker())
   messages.push(...dimensionMessages)
   messages.push({ type: "message", role: "user", content: callToAction })
   return messages
@@ -229,6 +232,9 @@ const buildSpanEnvelope = (
   callToAction: string
 ): Message[] => {
   const messages: Message[] = [...frameworkMessages]
+  messages.push(cacheMarker())
+  messages.push(...calloutMessages)
+  messages.push(cacheMarker())
   if (leadingCtx) {
     messages.push({
       type: "message",
@@ -237,7 +243,6 @@ const buildSpanEnvelope = (
     })
   }
   messages.push({ type: "message", role: "system", content: buildSectionMessage(section) })
-  messages.push(...calloutMessages)
   if (trailingCtx) {
     messages.push({
       type: "message",

@@ -73,13 +73,12 @@ const blockToInputItem = (block: Block): InputItem | InputItem[] => {
     }
   }
   if (block.type === "reasoning") {
-    if (!block.id) return []
     const hasEncrypted = !!block.encryptedContent
     const hasExtra = !!block.extraContent
     if (!hasEncrypted && !hasExtra) return []
     return {
       type: "reasoning" as const,
-      id: block.id,
+      id: block.id ?? "",
       ...(hasEncrypted
         ? {
             summary: [{ type: "summary_text" as const, text: block.content }],

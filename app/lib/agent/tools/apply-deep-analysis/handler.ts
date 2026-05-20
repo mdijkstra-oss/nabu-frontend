@@ -125,7 +125,11 @@ const applyAnnotationsEager = async (
     return { status: "error", output: "patch_annotations handler not registered", mutations: [] }
 
   const files = getViewableFiles()
+  console.debug(`[deep-fuzzy] eager: ${ops.length} ops for ${path}`)
   const result = await handler(files, { path, operations: ops })
+  console.debug(
+    `[deep-fuzzy] eager: result=${result.status} — ${String(result.output).slice(0, 120)}`
+  )
 
   if (result.status === "error")
     return { status: "error", output: String(result.output), mutations: [] }

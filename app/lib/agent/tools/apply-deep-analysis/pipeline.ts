@@ -3,10 +3,10 @@ import type { ScopedSources, ContentResolver } from "./messages"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
-import { think, REVISITING, ADJUDICATING } from "./thoughts"
+import { think, REVISITING, FILTERING } from "./thoughts"
 import { batchByCode, BATCH_MAX_SIZE } from "./step-batch"
 import { findAllDimensions } from "./step-find"
-import { adjudicateAnnotations } from "./step-adjudicate"
+import { filterAnnotations } from "./step-filter"
 import { POST_FIND_CONCURRENCY } from "./def"
 
 export interface PipelineResult {
@@ -27,8 +27,8 @@ const processBatch = async (
   trailingCtx: string,
   resolve: ContentResolver
 ): Promise<BatchResult> => {
-  think(ADJUDICATING)
-  const adjResult = await adjudicateAnnotations(
+  think(FILTERING)
+  const filterResult = await filterAnnotations(
     annotations,
     sentences,
     sources,
@@ -36,7 +36,7 @@ const processBatch = async (
     trailingCtx,
     resolve
   )
-  return { annotations: adjResult.surviving, errors: adjResult.errors }
+  return { annotations: filterResult.surviving, errors: filterResult.errors }
 }
 
 export const runAnalysisPipeline = async (

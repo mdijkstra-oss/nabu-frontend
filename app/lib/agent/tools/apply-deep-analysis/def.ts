@@ -68,8 +68,9 @@ export const ApplyDeepAnalysisArgs = z.object({
 export type ApplyDeepAnalysisArgs = z.infer<typeof ApplyDeepAnalysisArgs>
 
 export const FIND_ENDPOINT = "/deep-analysis-find"
-export const ADJUDICATE_ENDPOINT = "/deep-analysis-adjudicate"
+export const FILTER_ENDPOINT = "/deep-analysis-filter"
 export const FIND_RUNS = 2
+export const FILTER_RUNS = 2
 export const FIND_CONCURRENCY = 10
 export const FIND_CONTEXT_SENTENCES = 6
 export const SPAN_STEP_CONTEXT_SENTENCES = 6

@@ -42,7 +42,7 @@ export const REVISITING = [
   "Circling back to the findings…",
 ] as const
 
-export const ADJUDICATING = [
+export const FILTERING = [
   "Reconsidering the borderline cases…",
   "Weighing the uncertain ones…",
   "Deliberating on the edge cases…",

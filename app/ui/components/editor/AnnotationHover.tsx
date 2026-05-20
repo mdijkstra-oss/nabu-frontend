@@ -159,7 +159,7 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
 
   const scheduleDismiss = useCallback(() => {
     cancelDismiss()
-    dismissTimerRef.current = setTimeout(dismiss, 50)
+    dismissTimerRef.current = setTimeout(dismiss, 20)
   }, [dismiss, cancelDismiss])
 
   useEffect(() => () => cancelDismiss(), [cancelDismiss])
@@ -181,11 +181,13 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
       if (!text) return
       cancelDismiss()
       setHover((prev) => {
+        const isDifferentAnnotation = prev !== null && prev.text !== text
+        if (isDifferentAnnotation) restoreAnnotations()
         const isSameAnnotation = prev !== null && prev.text === text
         return { text, element: target, clientX: isSameAnnotation ? prev.clientX : e.clientX }
       })
     },
-    [cancelDismiss]
+    [cancelDismiss, restoreAnnotations]
   )
 
   const handleMouseLeave = useCallback(
@@ -214,7 +216,8 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
 
     const handleMouseMove = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (isDecoration(target)) return
+      const isOwnDecoration = isDecoration(target) && containerRef.current?.contains(target)
+      if (isOwnDecoration) return
       if (isOnBridge(e)) return
       scheduleDismiss()
     }

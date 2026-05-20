@@ -2,7 +2,12 @@
 
 import { AlertTriangle } from "lucide-react"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
-import { solidBackground, elementBackground, hoveredElementBorder } from "~/ui/theme/radix"
+import {
+  solidBackground,
+  elementBackground,
+  hoveredElementBackground,
+  hoveredElementBorder,
+} from "~/ui/theme/radix"
 import type {
   ReviewStat,
   ReviewSeverity,
@@ -17,6 +22,7 @@ interface CodeItemProps {
   highlighted?: boolean
   onMouseEnter?: () => void
   onClick?: () => void
+  onCountClick?: () => void
   onSearchUnsure?: () => void
 }
 
@@ -72,9 +78,11 @@ const COMPACT_CLASSES: Record<"warning" | "danger", string> = {
 
 const ReviewBadgeCompact = ({
   severity,
+  color,
   onSearchUnsure,
 }: {
   severity: "warning" | "danger"
+  color: string
   onSearchUnsure?: () => void
 }) => (
   <TooltipWrap
@@ -83,8 +91,14 @@ const ReviewBadgeCompact = ({
     }
   >
     <button
-      className={`flex h-5 w-5 flex-none cursor-pointer items-center justify-center rounded transition-colors ${COMPACT_CLASSES[severity]}`}
+      className={`flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-full transition-colors ${COMPACT_CLASSES[severity]}`}
       onClick={stopAndCall(onSearchUnsure)}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = hoveredElementBackground(color)
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = "transparent"
+      }}
     >
       <AlertTriangle className="h-3.5 w-3.5" />
     </button>
@@ -99,6 +113,7 @@ export const CodeItem = ({
   highlighted = false,
   onMouseEnter,
   onClick,
+  onCountClick,
   onSearchUnsure,
 }: CodeItemProps) => (
   <div
@@ -119,16 +134,21 @@ export const CodeItem = ({
       <ReviewBadgeDebug stat={reviewStat} onSearchUnsure={onSearchUnsure} />
     )}
     {!debugReview && isReviewVisible(reviewStat) && (
-      <ReviewBadgeCompact severity={reviewStat.severity} onSearchUnsure={onSearchUnsure} />
+      <ReviewBadgeCompact
+        severity={reviewStat.severity}
+        color={code.color}
+        onSearchUnsure={onSearchUnsure}
+      />
     )}
     {count > 0 && (
       <TooltipWrap text={formatFileTooltip(count)}>
-        <span
-          className="flex h-5 min-w-5 flex-none items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none text-white"
+        <button
+          className="flex h-5 min-w-5 flex-none cursor-pointer items-center justify-center rounded-full border-none px-1.5 text-[11px] font-bold leading-none text-white"
           style={{ backgroundColor: solidBackground(code.color) }}
+          onClick={stopAndCall(onCountClick)}
         >
           {count}
-        </span>
+        </button>
       </TooltipWrap>
     )}
   </div>
