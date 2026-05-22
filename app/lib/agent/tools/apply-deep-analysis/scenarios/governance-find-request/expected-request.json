@@ -8,7 +8,17 @@
     {
       "type": "message",
       "role": "system",
+      "content": "<!-- cache -->"
+    },
+    {
+      "type": "message",
+      "role": "system",
       "content": "<target>\n1: De minister-president kondigde vandaag nieuwe maatregelen aan.\n2: Burgers moeten anderhalve meter afstand houden.\n3: Restaurants blijven gesloten tot nader order.\n4: Het coronadashboard wordt verder uitgebreid.\n5: We vragen iedereen thuis te blijven bij klachten.\n</target>"
+    },
+    {
+      "type": "message",
+      "role": "system",
+      "content": "<!-- cache -->"
     },
     {
       "type": "message",

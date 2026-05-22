@@ -6,7 +6,7 @@ De minister kondigde aan dat er stappen worden genomen.
 {
 	"annotations": [
 		{
-			"text": "De minister kondigde aan dat er stappen worden genomen",
+			"text": "De minister kondigde aan dat er stappen worden genomen.",
 			"reason": "key finding",
 			"color": "blue",
 			"id": "annotation-XXXXXXXX",

@@ -18,7 +18,7 @@ De minister kondigde aan dat er stappen worden genomen. Het tekort loopt op tot 
 			"color": "red"
 		},
 		{
-			"text": "68 miljard euro",
+			"text": "68 miljard euro.",
 			"reason": "fiscal figure",
 			"color": "green",
 			"id": "annotation-XXXXXXXX",

@@ -7,7 +7,7 @@
 	"collapsed": false,
 	"id": "callout_a",
 	"title": "New title",
-	"content": "Descriptive reporting about public finances.\nInclusion criteria:\n- Apply to fiscal figures.\n- Include evaluative adjectives.\nExclusion criteria:\n- Exclude policy justification.",
+	"content": "Descriptive reporting about public finances.\nInclusion criteria:\n* Apply to fiscal figures.\n* Include evaluative adjectives.\nExclusion criteria:\n* Exclude policy justification.",
 	"actor": "ai"
 }
 ```

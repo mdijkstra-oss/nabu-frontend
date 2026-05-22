@@ -79,7 +79,7 @@ describe("resolveFuzzyPatterns", () => {
         '{ "text": "FUZZY[[the organizational culture at her first hospital was particularly supportive]]" }',
       target: INTERVIEW_DOC,
       expectedPatch:
-        '{ "text": "the organizational culture at her first hospital was\nparticularly supportive" }',
+        '{ "text": "the organizational culture at her first hospital was\nparticularly supportive." }',
       expectedResolved: 1,
       expectedUnresolved: [],
     },
@@ -89,7 +89,7 @@ describe("resolveFuzzyPatterns", () => {
         '{ "text": "FUZZY[[felt that management was not adequately addressing the workload concerns]]" }',
       target: INTERVIEW_DOC,
       expectedPatch:
-        '{ "text": "colleagues. She felt that management was not adequately addressing the" }',
+        '{ "text": "She felt that management was not adequately addressing the workload" }',
       expectedResolved: 1,
       expectedUnresolved: [],
     },
@@ -99,7 +99,7 @@ describe("resolveFuzzyPatterns", () => {
         '{ "text": "FUZZY[[expressed concerns about staffing levels and burnout among her colleagues]]" }',
       target: INTERVIEW_DOC,
       expectedPatch:
-        '{ "text": "she expressed significant concerns about staffing levels and\nburnout among" }',
+        '{ "text": "expressed significant concerns about staffing levels and\nburnout among her" }',
       expectedResolved: 1,
       expectedUnresolved: [],
     },
@@ -107,7 +107,7 @@ describe("resolveFuzzyPatterns", () => {
       name: "exact substring match in large doc preserves case",
       patch: '{ "text": "FUZZY[[mentorship programs were critical to her development]]" }',
       target: INTERVIEW_DOC,
-      expectedPatch: '{ "text": "mentorship programs were critical to her development" }',
+      expectedPatch: '{ "text": "mentorship programs were critical to her development." }',
       expectedResolved: 1,
       expectedUnresolved: [],
     },
@@ -128,12 +128,12 @@ describe("resolveFuzzyPatterns", () => {
       expectedUnresolved: [],
     },
     {
-      name: "short needle ambiguous fuzzy match is unresolved",
+      name: "short needle ambiguous fuzzy match resolves first ordered occurrence",
       patch: '{ "text": "FUZZY[[said hello]]" }',
       target: "She said: hello and he said: hello again.",
-      expectedPatch: '{ "text": "FUZZY[[said hello]]" }',
-      expectedResolved: 0,
-      expectedUnresolved: ["said hello"],
+      expectedPatch: '{ "text": "said: hello" }',
+      expectedResolved: 1,
+      expectedUnresolved: [],
     },
     {
       name: "three-word needle unique fuzzy match",
