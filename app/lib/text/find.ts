@@ -5,7 +5,7 @@ export interface MatchOffset {
   end: number
 }
 
-const PRECISION_THRESHOLDS = [1, 0.95, 0.9, 0.8]
+const PRECISION_THRESHOLDS = [1, 0.95, 0.9, 0.85, 0.8]
 const MIN_FUZZY_TOKENS = 5
 
 interface Token {

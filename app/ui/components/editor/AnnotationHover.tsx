@@ -10,7 +10,7 @@ import { HighlightTooltip, type HighlightEntry } from "~/ui/components/Highlight
 import { elementBorder } from "~/ui/theme/radix"
 import { getCodeTitle } from "~/domain/data-blocks/callout/codes/selectors"
 import { getFiles } from "~/lib/files/store"
-import { patchBlock } from "~/lib/data-blocks/patch"
+import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { findAllTextRanges, proseTextContent } from "~/lib/editor/text"
 
 interface HoverState {
@@ -29,6 +29,17 @@ const TOOLTIP_GAP = 4
 const BRIDGE_UPWARD = 30
 const VIEWPORT_MARGIN = 24
 const ANNOTATIONS_LANGUAGE = "json-annotations"
+
+let activeInstance: (() => void) | null = null
+
+const claimActiveInstance = (dismissOther: () => void): void => {
+  if (activeInstance && activeInstance !== dismissOther) activeInstance()
+  activeInstance = dismissOther
+}
+
+const releaseActiveInstance = (dismissOther: () => void): void => {
+  if (activeInstance === dismissOther) activeInstance = null
+}
 
 const isDecoration = (el: HTMLElement): boolean =>
   el.style.background !== "" && el.style.background !== "none"
@@ -83,7 +94,7 @@ const removeAnnotationOp = (id: string) => [
 ]
 
 const buildDeleteCallback = (filePath: string, id: string) => () => {
-  patchBlock(filePath, ANNOTATIONS_LANGUAGE, removeAnnotationOp(id))
+  executeUxAction([{ path: filePath, language: ANNOTATIONS_LANGUAGE, ops: removeAnnotationOp(id) }])
 }
 
 const annotationToEntry =
@@ -145,10 +156,15 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
     }
   }, [getEditor, loading, annotations])
 
-  const dismiss = useCallback(() => {
+  const dismissImmediate = useCallback(() => {
     restoreAnnotations()
     setHover(null)
   }, [restoreAnnotations])
+
+  const dismiss = useCallback(() => {
+    releaseActiveInstance(dismissImmediate)
+    dismissImmediate()
+  }, [dismissImmediate])
 
   const cancelDismiss = useCallback(() => {
     if (dismissTimerRef.current) {
@@ -162,7 +178,13 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
     dismissTimerRef.current = setTimeout(dismiss, 20)
   }, [dismiss, cancelDismiss])
 
-  useEffect(() => () => cancelDismiss(), [cancelDismiss])
+  useEffect(
+    () => () => {
+      cancelDismiss()
+      releaseActiveInstance(dismissImmediate)
+    },
+    [cancelDismiss, dismissImmediate]
+  )
 
   const isOnBridge = useCallback((e: MouseEvent) => {
     const bridge = bridgeRef.current
@@ -180,6 +202,7 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
       const text = target.textContent ?? ""
       if (!text) return
       cancelDismiss()
+      claimActiveInstance(dismissImmediate)
       setHover((prev) => {
         const isDifferentAnnotation = prev !== null && prev.text !== text
         if (isDifferentAnnotation) restoreAnnotations()
@@ -187,7 +210,7 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
         return { text, element: target, clientX: isSameAnnotation ? prev.clientX : e.clientX }
       })
     },
-    [cancelDismiss, restoreAnnotations]
+    [cancelDismiss, dismissImmediate, restoreAnnotations]
   )
 
   const handleMouseLeave = useCallback(

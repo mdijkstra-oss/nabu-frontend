@@ -37,10 +37,7 @@ const annotationKey = (a: Annotation): string => spanKey(a.start, a.end, a.code)
 
 const isKeep = (j: Judgment): boolean => j.judgment === "keep"
 
-const deduplicateReasons = (reasons: string[]): string => {
-  const unique = [...new Set(reasons)]
-  return unique.length === 1 ? unique[0] : unique.map((r) => `- ${r}`).join("\n")
-}
+const pickReason = (reasons: string[]): string => reasons[0] ?? ""
 
 const mergeVotes = (votes: Judgment[]): MergedJudgment => {
   const keeps = votes.filter(isKeep)
@@ -49,7 +46,7 @@ const mergeVotes = (votes: Judgment[]): MergedJudgment => {
   if (removes.length === votes.length) return { outcome: "remove", reason: "" }
 
   if (keeps.length === votes.length) {
-    const reason = deduplicateReasons(keeps.map((k) => k.reason))
+    const reason = pickReason(keeps.map((k) => k.reason))
     return { outcome: "keep", reason }
   }
 

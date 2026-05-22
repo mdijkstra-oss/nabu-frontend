@@ -62,6 +62,7 @@ import { HIDDEN_TAG_ID, HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hi
 import { buildIdentifierResolver } from "~/lib/files/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import type { SearchEntry } from "~/domain/search/types"
+import { buildFlaggedAnnotationsSql } from "~/domain/search/queries"
 import { collectExhibits } from "~/domain/exhibits/selectors"
 import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
@@ -69,8 +70,8 @@ import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
 import { codeWithFiles } from "~/domain/actions/coding/actions"
 import { resolveCodingFiles } from "~/domain/actions/coding/selectors"
-import { clearCodingsAction } from "~/domain/actions/clear-codings/apply"
-import { executeFileAction } from "~/lib/data-blocks/file-action"
+import { clearCodingsPatches } from "~/domain/actions/clear-codings/apply"
+import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 import { FloatingActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
@@ -480,7 +481,7 @@ export default function ProjectLayout() {
 
   const handleClearCodings = useCallback(() => {
     if (!currentFile) return
-    executeFileAction(clearCodingsAction(currentFile, selectedCodes))
+    executeUxAction(clearCodingsPatches(currentFile, selectedCodes))
   }, [currentFile, selectedCodes])
 
   const handleCodeSelectedCodes = useCallback(() => {
@@ -562,7 +563,7 @@ export default function ProjectLayout() {
     const id = saveNewSearch({
       title: `${code.id} (flagged)`,
       description: `Annotations flagged for review: ${code.id}`,
-      sql: `SELECT file, id, text, vote_review FROM annotations WHERE code = '${code.id}' AND vote_review IS NOT NULL AND vote_review != ''`,
+      sql: buildFlaggedAnnotationsSql(code.id),
       meta: { toolbar: "code-refinement", codeId: code.id },
     })
     if (!id) return

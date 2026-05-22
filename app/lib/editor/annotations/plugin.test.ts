@@ -100,22 +100,22 @@ describe("textOffsetToPos", () => {
       {
         name: "offset at boundary between paragraphs",
         paragraphs: ["Hello", "World"],
-        offset: 5,
-        description: "textContent='HelloWorld', offset 5 is 'W'",
+        offset: 6,
+        description: "proseText='Hello\\nWorld', offset 6 is 'W'",
         expected: 8,
       },
       {
         name: "offset in second paragraph",
         paragraphs: ["Hello", "World"],
-        offset: 7,
-        description: "textContent='HelloWorld', offset 7 is 'r'",
+        offset: 8,
+        description: "proseText='Hello\\nWorld', offset 8 is 'r'",
         expected: 10,
       },
       {
         name: "three paragraphs - text in third",
         paragraphs: ["AAA", "BBB", "CCC"],
-        offset: 6,
-        description: "textContent='AAABBBCCC', offset 6 is first 'C'",
+        offset: 8,
+        description: "proseText='AAA\\nBBB\\nCCC', offset 8 is first 'C'",
         expected: 11,
       },
     ]
@@ -142,8 +142,8 @@ describe("textOffsetToPos", () => {
           expect(doc.textContent).toBe("ABCD")
           expect(textOffsetToPos(doc, 0)).toBe(1)
           expect(textOffsetToPos(doc, 1)).toBe(2)
-          expect(textOffsetToPos(doc, 2)).toBe(5)
-          expect(textOffsetToPos(doc, 3)).toBe(6)
+          expect(textOffsetToPos(doc, 3)).toBe(5)
+          expect(textOffsetToPos(doc, 4)).toBe(6)
         },
       },
     ]
@@ -160,7 +160,7 @@ describe("textOffsetToPos", () => {
           { code: '{"tags": ["interview"]}', language: "json-attributes" },
           "World",
         ] as BlockDef[],
-        expectedProseText: "HelloWorld",
+        expectedProseText: "Hello\nWorld",
       },
       {
         name: "proseTextContent with only hidden block returns empty",
@@ -170,7 +170,7 @@ describe("textOffsetToPos", () => {
       {
         name: "proseTextContent with hidden block between paragraphs",
         blocks: ["AAA", { code: "BBB", language: "json-attributes" }, "CCC"] as BlockDef[],
-        expectedProseText: "AAACCC",
+        expectedProseText: "AAA\nCCC",
       },
       {
         name: "proseTextContent includes non-hidden code block text",
@@ -179,12 +179,12 @@ describe("textOffsetToPos", () => {
           { code: "callout content", language: "json-callout" },
           "World",
         ] as BlockDef[],
-        expectedProseText: "Hellocallout contentWorld",
+        expectedProseText: "Hello\ncallout content\nWorld",
       },
       {
         name: "proseTextContent includes code block without language",
         blocks: ["Hello", { code: "plain code" }, "World"] as BlockDef[],
-        expectedProseText: "Helloplain codeWorld",
+        expectedProseText: "Hello\nplain code\nWorld",
       },
     ]
 
@@ -210,8 +210,8 @@ describe("textOffsetToPos", () => {
       {
         name: "offset after hidden block maps to second paragraph",
         blocks: ["Before", { code: "code content", language: "json-attributes" }, "After"],
-        expectedProseText: "BeforeAfter",
-        offset: "Before".length,
+        expectedProseText: "Before\nAfter",
+        offset: "Before\n".length,
         expectedResolved: "After",
       },
     ]

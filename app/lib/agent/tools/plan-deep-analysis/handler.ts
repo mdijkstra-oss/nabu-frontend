@@ -18,7 +18,7 @@ import { filterTarget } from "../scout-filter/api"
 import type { NumberedParagraph } from "../scout-filter/messages"
 import { packComposites, sortSegments } from "~/lib/composite/pack"
 import type { Segment } from "~/lib/composite/pack"
-import { CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
+import { chunkLines, CHUNK_TARGET_CHARS, type LineChunk } from "~/lib/data-blocks/chunk-lines"
 import type { SourceFileEntry } from "./def"
 
 const toSystemBlock = (content: string): Block => ({ type: "system", content })
@@ -48,7 +48,15 @@ const buildFramework = (sourceFiles: SourceFileEntry[]): string =>
 
 const paragraphSeparator = (): string => "\n\n"
 
-const groupConsecutiveRuns = (paragraphs: NumberedParagraph[]): NumberedParagraph[][] => {
+const isInSameChunk = (chunks: LineChunk[], lineA: number, lineB: number): boolean =>
+  chunks.some(
+    (c) => lineA >= c.startLine && lineA <= c.endLine && lineB >= c.startLine && lineB <= c.endLine
+  )
+
+const groupConsecutiveRuns = (
+  paragraphs: NumberedParagraph[],
+  chunks: LineChunk[]
+): NumberedParagraph[][] => {
   if (paragraphs.length === 0) return []
   const runs: NumberedParagraph[][] = [[paragraphs[0]]]
 
@@ -56,7 +64,9 @@ const groupConsecutiveRuns = (paragraphs: NumberedParagraph[]): NumberedParagrap
     const p = paragraphs[i]
     const currentRun = runs[runs.length - 1]
     const prev = currentRun[currentRun.length - 1]
-    if (p.index === prev.index + 1) {
+    const isConsecutive = p.index === prev.index + 1
+    const sameChunk = isInSameChunk(chunks, prev.startLine, p.startLine)
+    if (isConsecutive && sameChunk) {
       currentRun.push(p)
     } else {
       runs.push([p])
@@ -100,8 +110,10 @@ const chunkRun = (run: NumberedParagraph[], path: string, maxChars: number): Seg
 const mergeAndChunk = (
   paragraphs: NumberedParagraph[],
   path: string,
-  maxChars: number
-): Segment[] => groupConsecutiveRuns(paragraphs).flatMap((run) => chunkRun(run, path, maxChars))
+  maxChars: number,
+  chunks: LineChunk[]
+): Segment[] =>
+  groupConsecutiveRuns(paragraphs, chunks).flatMap((run) => chunkRun(run, path, maxChars))
 
 const filterAndLabelTarget = async (
   path: string,
@@ -112,7 +124,8 @@ const filterAndLabelTarget = async (
 
   if (surviving.length === 0) return []
 
-  const segments = mergeAndChunk(surviving, path, CHUNK_TARGET_CHARS)
+  const chunks = chunkLines(content, CHUNK_TARGET_CHARS)
+  const segments = mergeAndChunk(surviving, path, CHUNK_TARGET_CHARS, chunks)
 
   const sorted = sortSegments(segments)
   const composites = packComposites(sorted, CHUNK_TARGET_CHARS, paragraphSeparator)

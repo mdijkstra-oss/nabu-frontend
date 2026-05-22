@@ -13,15 +13,13 @@ import {
 import { useNavigate, useParams } from "react-router"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { Check, ChevronRight, Circle, Loader2, MessageSquare, Send, X } from "lucide-react"
-import { Button } from "~/ui/components/Button"
-import { IconButton } from "~/ui/components/IconButton"
+import { Check, ChevronRight, Circle, Loader2, MessageSquare, X } from "lucide-react"
 import { TextFieldUnstyled } from "~/ui/components/TextFieldUnstyled"
 import { AnimatePresence } from "framer-motion"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { AnimatedListItem } from "~/ui/components/AnimatedListItem"
 import { useChat } from "~/ui/hooks/useChat"
-import { derive } from "~/lib/agent/derived"
+import { derive, hasActivePlan } from "~/lib/agent/derived"
 import { pushBlocks } from "~/lib/agent/client/store"
 import {
   toGroupedMessages,
@@ -54,6 +52,7 @@ import { autoGreetingDirective } from "~/lib/agent/actions/actions"
 import { buildFileContextBlocks } from "~/lib/agent/context-blocks"
 import { pickGreeting } from "./greetings"
 import { exhaustive } from "~/lib/utils/exhaustive"
+import { ChatSendButton, deriveChatButtonMode } from "./ChatSendButton"
 
 const allowFileProtocol = (url: string): string => url
 
@@ -987,6 +986,17 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
     setInputValue("")
   }, [loading, waitingForInput, inputValue, send, respond, getDeps])
 
+  const handleSkipAsk = useCallback(() => {
+    respond("Let's do something else for now")
+  }, [respond])
+
+  const handleCancelPlan = useCallback(() => {
+    send("Let's do something else for now", getDeps())
+  }, [send, getDeps])
+
+  const inPlan = hasActivePlan(derived.plans)
+  const buttonMode = deriveChatButtonMode(loading, waitingForInput, inPlan)
+
   const markTyping = useCallback(() => {
     setIsTyping(true)
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
@@ -1082,7 +1092,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
       )}
 
       <div
-        className={`flex w-full items-end gap-2 border-t border-solid border-neutral-border px-4 py-3 ${loading && !waitingForInput ? "bg-neutral-50" : ""}`}
+        className={`flex w-full items-end gap-2 border-t border-solid border-neutral-border px-4 py-3 ${buttonMode === "cancel" ? "bg-neutral-50" : ""}`}
       >
         <TextFieldUnstyled className="grow min-h-5">
           <TextFieldUnstyled.Textarea
@@ -1093,19 +1103,14 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
             onKeyDown={handleKeyDown}
           />
         </TextFieldUnstyled>
-        {loading && !waitingForInput ? (
-          <Button variant="neutral-secondary" size="small" icon={<X />} onClick={cancel}>
-            Cancel
-          </Button>
-        ) : (
-          <IconButton
-            variant="brand-primary"
-            size="small"
-            icon={<Send />}
-            onClick={handleSend}
-            disabled={!inputValue.trim()}
-          />
-        )}
+        <ChatSendButton
+          mode={buttonMode}
+          disabled={buttonMode === "send" && !inputValue.trim()}
+          onSend={handleSend}
+          onSkipAsk={handleSkipAsk}
+          onCancel={cancel}
+          onCancelPlan={handleCancelPlan}
+        />
       </div>
     </div>
   )

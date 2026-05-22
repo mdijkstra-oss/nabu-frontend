@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useSyncExternalStore } from "react"
-import { ChevronRight, ChevronDown, Copy, Check, ListX } from "lucide-react"
+import { ChevronRight, ChevronDown, Copy, Check, ListX, ListChecks } from "lucide-react"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { getRawCalls, subscribeRawCalls, type RawLlmCall } from "~/lib/agent/client/raw-store"
 
@@ -28,6 +28,12 @@ const toggleId = (set: Set<number>, id: number): Set<number> => {
   const next = new Set(set)
   if (next.has(id)) next.delete(id)
   else next.add(id)
+  return next
+}
+
+const addAllIds = (set: Set<number>, ids: number[]): Set<number> => {
+  const next = new Set(set)
+  for (const id of ids) next.add(id)
   return next
 }
 
@@ -167,6 +173,7 @@ const FILTER_DEBOUNCE_MS = 300
 const callMatchesFilter = (call: RawLlmCall, filter: string): boolean => {
   const lower = filter.toLowerCase()
   return (
+    call.endpoint.toLowerCase().includes(lower) ||
     call.requestBody.toLowerCase().includes(lower) ||
     (call.rawResponse?.toLowerCase().includes(lower) ?? false)
   )
@@ -201,6 +208,14 @@ export const DebugRawTab = () => {
 
   const handleDeselectAll = () => setSelectedIds(new Set())
 
+  const handleSelectFiltered = () =>
+    setSelectedIds((prev) =>
+      addAllIds(
+        prev,
+        filteredCalls.map((c) => c.id)
+      )
+    )
+
   const handleCopySelected = () => {
     const toCopy = hasSelection ? calls.filter((c) => selectedIds.has(c.id)) : calls
     const content = toCopy.map(formatCallEntry).join("\n\n===\n\n")
@@ -233,10 +248,17 @@ export const DebugRawTab = () => {
           </span>
         )}
       </div>
-      {hasSelection && (
-        <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-1.5">
-          <span className="text-xs text-neutral-500">{selectedIds.size} selected</span>
-          <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-1.5">
+        <span className="text-xs text-neutral-500">{selectedIds.size} selected</span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleSelectFiltered}
+            className="p-1 text-neutral-400 hover:text-neutral-600"
+            title={`Select ${filteredCalls.length} visible`}
+          >
+            <ListChecks className="w-3.5 h-3.5" />
+          </button>
+          {hasSelection && (
             <button
               onClick={handleDeselectAll}
               className="p-1 text-neutral-400 hover:text-neutral-600"
@@ -244,20 +266,20 @@ export const DebugRawTab = () => {
             >
               <ListX className="w-3.5 h-3.5" />
             </button>
-            <button
-              onClick={handleCopySelected}
-              className="p-1 text-neutral-500 hover:text-neutral-700"
-              title={`Copy ${selectedIds.size} selected`}
-            >
-              {copiedAll ? (
-                <Check className="w-3.5 h-3.5 text-green-500" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )}
-            </button>
-          </div>
+          )}
+          <button
+            onClick={handleCopySelected}
+            className="p-1 text-neutral-500 hover:text-neutral-700"
+            title={hasSelection ? `Copy ${selectedIds.size} selected` : "Copy all"}
+          >
+            {copiedAll ? (
+              <Check className="w-3.5 h-3.5 text-green-500" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+          </button>
         </div>
-      )}
+      </div>
       <AutoScroll className="flex-1 overflow-y-auto flex flex-col gap-2 px-3 py-3">
         {filteredCalls.map((call) => (
           <RawCallEntry

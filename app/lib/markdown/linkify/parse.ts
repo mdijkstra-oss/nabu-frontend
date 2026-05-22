@@ -17,7 +17,7 @@ const parseTextRef = (path: string): EntityRef => {
   const slashIndex = path.indexOf("/")
   if (slashIndex === -1) return { kind: "text", documentId: path, spotlight: null }
   const documentId = path.slice(0, slashIndex)
-  const textPart = decodeURIComponent(path.slice(slashIndex + 1))
+  const textPart = decodeURIComponent(path.slice(slashIndex + 1).replace(/\+/g, " "))
   return { kind: "text", documentId, spotlight: parseSpotlightText(textPart) }
 }
 

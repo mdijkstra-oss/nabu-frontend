@@ -55,7 +55,7 @@ const formatSectionsArg = (m: SectionMatch): string =>
 
 const autoResult = "on result: write nothing. call complete_step immediately."
 const interactiveResult =
-  "on result: briefly summarize key findings. use ask tool to confirm whether to continue to the next section."
+  "on result: briefly summarize key findings. use ask tool to confirm whether to continue to the next section. if yes call complete_step FIRST - else discuss and once resolved call complete_step"
 
 const toSectionStep = (
   match: SectionMatch,

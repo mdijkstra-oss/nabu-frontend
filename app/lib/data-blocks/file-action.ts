@@ -16,6 +16,9 @@ export interface FileAction {
   skipPendingRefs?: boolean
 }
 
+export const executeUxAction = (patches: FilePatch[]): void =>
+  executeFileAction({ patches, immediate: true, skipPendingRefs: true })
+
 export const executeFileAction = (action: FileAction): void => {
   for (const patch of action.patches) {
     const original = getFileRaw(patch.path)
