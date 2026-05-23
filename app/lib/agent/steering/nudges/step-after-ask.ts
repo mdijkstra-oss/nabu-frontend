@@ -1,7 +1,9 @@
 import { afterToolResult, isLastToolResult, systemNudge, type Nudger } from "../nudge-tools"
 import type { FileStore } from "~/lib/files/store"
 import { derive, lastPlan, hasActivePlan } from "../../derived"
-import { formatDirective, formatStepProgress } from "./step-state"
+import { formatStepProgress } from "./step-state"
+
+const AFTER_ASK_DIRECTIVE = "User responded. Call complete_step now to proceed."
 
 export const createStepAfterAskNudge =
   (getFiles: () => FileStore): Nudger =>
@@ -15,7 +17,6 @@ export const createStepAfterAskNudge =
     const plan = lastPlan(d.plans)
     if (!plan || plan.currentStep === null) return null
 
-    const directive = formatDirective(plan, plan.currentStep)
     const progress = formatStepProgress(plan)
-    return systemNudge([directive, "", progress].join("\n"))
+    return systemNudge([AFTER_ASK_DIRECTIVE, "", progress].join("\n"))
   }

@@ -124,6 +124,12 @@ export const hasActivePlan = (plans: DerivedPlan[]): boolean => {
   return plan !== null && plan.currentStep !== null && !plan.aborted
 }
 
+export const isCurrentStepCheckpoint = (plans: DerivedPlan[]): boolean => {
+  const plan = lastPlan(plans)
+  if (!plan || plan.currentStep === null) return false
+  return plan.steps[plan.currentStep].checkpoint
+}
+
 export const updateLastPlan = (
   plans: DerivedPlan[],
   fn: (p: DerivedPlan) => DerivedPlan

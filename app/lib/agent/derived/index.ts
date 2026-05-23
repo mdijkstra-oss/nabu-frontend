@@ -141,6 +141,15 @@ export const isPlanPaused = (history: Block[]): boolean => {
 export const actionsSinceStepChange = (history: Block[]): number =>
   countActionsSinceBoundary(history, isStepBoundary)
 
+export const hasAskSinceStepChange = (history: Block[]): boolean => {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const block = history[i]
+    if (isStepBoundary(block)) return false
+    if (hasCall(block, "ask")) return true
+  }
+  return false
+}
+
 export const findLastUserContent = (blocks: Block[]): string => {
   for (let i = blocks.length - 1; i >= 0; i--) {
     if (blocks[i].type === "user") return (blocks[i] as { type: "user"; content: string }).content
@@ -156,6 +165,7 @@ export {
   serializePlanBlock,
   lastPlan,
   hasActivePlan,
+  isCurrentStepCheckpoint,
   guardCompleteStep,
   isLastStep,
 } from "./plan"

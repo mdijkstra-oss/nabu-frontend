@@ -1,5 +1,5 @@
 import { getAllBlocks } from "../../client/store"
-import { derive } from "../../derived"
+import { derive, hasAskSinceStepChange } from "../../derived"
 import { tool, registerTool } from "../../executors/tool"
 import { deactivatePlan } from "../../executors/modes"
 import { completeStep as def } from "./def"
@@ -7,11 +7,12 @@ import { completeStep as def } from "./def"
 type StepKind = "final" | "checkpoint" | "continue"
 
 const classifyStep = (): StepKind => {
-  const { plans } = derive(getAllBlocks())
+  const blocks = getAllBlocks()
+  const { plans } = derive(blocks)
   const plan = plans.at(-1)
   if (!plan || plan.currentStep === null) return "continue"
   if (plan.currentStep === plan.steps.length - 1) return "final"
-  if (plan.steps[plan.currentStep].checkpoint) return "checkpoint"
+  if (plan.steps[plan.currentStep].checkpoint && !hasAskSinceStepChange(blocks)) return "checkpoint"
   return "continue"
 }
 

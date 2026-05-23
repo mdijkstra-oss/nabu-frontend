@@ -8,13 +8,17 @@ import {
   isPlanPaused,
   guardCompleteStep,
   isLastStep,
+  hasAskSinceStepChange,
 } from "."
 import {
   submitPlanCall,
   completeStepCall,
   cancelCall,
+  askCall,
   textBlock,
   userBlock,
+  toolCallBlock,
+  toolResult,
   resetCallIdCounter,
 } from "../test-helpers"
 
@@ -382,6 +386,68 @@ describe("derived", () => {
     it.each(cases)("$name", ({ history, expected }) => {
       const plan = mustGet(lastPlan(derive(history()).plans))
       expect(isLastStep(plan)).toBe(expected)
+    })
+  })
+
+  describe("hasAskSinceStepChange", () => {
+    const cases = [
+      {
+        name: "no history — false",
+        history: () => [] as Block[],
+        expected: false,
+      },
+      {
+        name: "plan with no ask — false",
+        history: () => [
+          ...submitPlanCall("Task", [
+            { title: "Step 1", expected: "Done" },
+            { title: "Step 2", expected: "Done" },
+          ]),
+          toolCallBlock("apply_deep_analysis", "da1"),
+          toolResult("da1"),
+        ],
+        expected: false,
+      },
+      {
+        name: "ask in current step — true",
+        history: () => [
+          ...submitPlanCall("Task", [
+            { title: "Step 1", expected: "Done" },
+            { title: "Step 2", expected: "Done" },
+          ]),
+          ...askCall("Continue?", ["Yes", "No"], "Yes"),
+        ],
+        expected: true,
+      },
+      {
+        name: "ask in previous step — false",
+        history: () => [
+          ...submitPlanCall("Task", [
+            { title: "Step 1", expected: "Done" },
+            { title: "Step 2", expected: "Done" },
+          ]),
+          ...askCall("Continue?", ["Yes", "No"], "Yes"),
+          ...completeStepCall(),
+        ],
+        expected: false,
+      },
+      {
+        name: "ask in current step after previous step completed — true",
+        history: () => [
+          ...submitPlanCall("Task", [
+            { title: "Step 1", expected: "Done" },
+            { title: "Step 2", expected: "Done" },
+            { title: "Step 3", expected: "Done" },
+          ]),
+          ...completeStepCall(),
+          ...askCall("Continue?", ["Yes", "No"], "Yes"),
+        ],
+        expected: true,
+      },
+    ]
+
+    it.each(cases)("$name", ({ history, expected }) => {
+      expect(hasAskSinceStepChange(history())).toBe(expected)
     })
   })
 })

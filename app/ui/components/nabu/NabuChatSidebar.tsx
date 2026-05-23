@@ -19,7 +19,7 @@ import { AnimatePresence } from "framer-motion"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { AnimatedListItem } from "~/ui/components/AnimatedListItem"
 import { useChat } from "~/ui/hooks/useChat"
-import { derive, hasActivePlan } from "~/lib/agent/derived"
+import { derive, hasActivePlan, isCurrentStepCheckpoint } from "~/lib/agent/derived"
 import { pushBlocks } from "~/lib/agent/client/store"
 import {
   toGroupedMessages,
@@ -989,7 +989,8 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   }, [appReady, history.length, runChat, getDeps, files])
 
   const inPlan = hasActivePlan(derived.plans)
-  const isWaitingForContinue = inPlan && !loading && !waitingForInput
+  const isWaitingForContinue =
+    inPlan && !loading && !waitingForInput && isCurrentStepCheckpoint(derived.plans)
   const buttonMode = deriveChatButtonMode(loading, waitingForInput, inPlan)
 
   const handleSend = useCallback(() => {
