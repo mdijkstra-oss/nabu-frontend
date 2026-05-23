@@ -15,10 +15,10 @@ import { buildAutoSteps, buildExecRules, toSectionMatches, formatTargetFile } fr
 import type { LabeledTarget, SourceEntry } from "./format"
 import { errorMessage } from "~/lib/utils/error"
 import { filterTarget } from "../scout-filter/api"
-import type { NumberedParagraph } from "../scout-filter/messages"
 import { packComposites, sortSegments } from "~/lib/composite/pack"
-import type { Segment } from "~/lib/composite/pack"
-import { chunkLines, CHUNK_TARGET_CHARS, type LineChunk } from "~/lib/data-blocks/chunk-lines"
+import { mergeAndChunk, paragraphSeparator } from "~/lib/composite/merge"
+import { chunkLines, CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
+import { stripCodeBlockLines, remapRanges } from "~/lib/data-blocks/strip-lines"
 import type { SourceFileEntry } from "./def"
 
 const toSystemBlock = (content: string): Block => ({ type: "system", content })
@@ -46,85 +46,17 @@ const buildFramework = (sourceFiles: SourceFileEntry[]): string =>
     .filter((c) => c.length > 0)
     .join("\n\n")
 
-const paragraphSeparator = (): string => "\n\n"
-
-const isInSameChunk = (chunks: LineChunk[], lineA: number, lineB: number): boolean =>
-  chunks.some(
-    (c) => lineA >= c.startLine && lineA <= c.endLine && lineB >= c.startLine && lineB <= c.endLine
-  )
-
-const groupConsecutiveRuns = (
-  paragraphs: NumberedParagraph[],
-  chunks: LineChunk[]
-): NumberedParagraph[][] => {
-  if (paragraphs.length === 0) return []
-  const runs: NumberedParagraph[][] = [[paragraphs[0]]]
-
-  for (let i = 1; i < paragraphs.length; i++) {
-    const p = paragraphs[i]
-    const currentRun = runs[runs.length - 1]
-    const prev = currentRun[currentRun.length - 1]
-    const isConsecutive = p.index === prev.index + 1
-    const sameChunk = isInSameChunk(chunks, prev.startLine, p.startLine)
-    if (isConsecutive && sameChunk) {
-      currentRun.push(p)
-    } else {
-      runs.push([p])
-    }
-  }
-  return runs
-}
-
-const chunkRun = (run: NumberedParagraph[], path: string, maxChars: number): Segment[] => {
-  const segments: Segment[] = []
-  let chunk: NumberedParagraph[] = []
-  let chunkSize = 0
-
-  for (const p of run) {
-    const added = chunkSize > 0 ? p.text.length + 2 : p.text.length
-    if (chunkSize > 0 && chunkSize + added > maxChars) {
-      segments.push({
-        path,
-        startLine: chunk[0].startLine,
-        endLine: chunk[chunk.length - 1].endLine,
-        content: chunk.map((c) => c.text).join("\n\n"),
-      })
-      chunk = []
-      chunkSize = 0
-    }
-    chunk.push(p)
-    chunkSize += added
-  }
-
-  if (chunk.length > 0) {
-    segments.push({
-      path,
-      startLine: chunk[0].startLine,
-      endLine: chunk[chunk.length - 1].endLine,
-      content: chunk.map((c) => c.text).join("\n\n"),
-    })
-  }
-  return segments
-}
-
-const mergeAndChunk = (
-  paragraphs: NumberedParagraph[],
-  path: string,
-  maxChars: number,
-  chunks: LineChunk[]
-): Segment[] =>
-  groupConsecutiveRuns(paragraphs, chunks).flatMap((run) => chunkRun(run, path, maxChars))
-
 const filterAndLabelTarget = async (
   path: string,
   content: string,
   framework: string
 ): Promise<LabeledTarget[]> => {
-  const { surviving } = await filterTarget(framework, content)
+  const { content: stripped, lineMap } = stripCodeBlockLines(content)
+  const { surviving } = await filterTarget(framework, stripped)
 
   if (surviving.length === 0) return []
 
-  const chunks = chunkLines(content, CHUNK_TARGET_CHARS)
+  const chunks = chunkLines(stripped, CHUNK_TARGET_CHARS)
   const segments = mergeAndChunk(surviving, path, CHUNK_TARGET_CHARS, chunks)
 
   const sorted = sortSegments(segments)
@@ -137,7 +69,11 @@ const filterAndLabelTarget = async (
     async ({ index, composite }) => {
       const presented = presentContent(composite.content)
       const label = await labelSection(presented)
-      const ranges = composite.segments.map((s) => ({ startLine: s.startLine, endLine: s.endLine }))
+      const rawRanges = composite.segments.map((s) => ({
+        startLine: s.startLine,
+        endLine: s.endLine,
+      }))
+      const ranges = remapRanges(lineMap, rawRanges)
       const target: LabeledTarget = { path, label: label.label, desc: label.desc, ranges }
       return [{ index, target }]
     },

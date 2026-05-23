@@ -1,6 +1,6 @@
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs"
 import { chunkLines, CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
-import { parseCodeBlocks, parseBlockJson, type CodeBlock } from "~/lib/data-blocks/parse"
+import { parseCodeBlocks, parseBlockJson, isLineInsideBlock, type CodeBlock } from "~/lib/data-blocks/parse"
 import { splitBySentences } from "~/lib/text/split"
 import { formatNumberedPassage } from "~/lib/text/format"
 
@@ -25,9 +25,6 @@ const formatMarker = (block: CodeBlock): string => {
   return label ? `[embedded ${type}: "${label}"]` : `[embedded ${type}]`
 }
 
-const isWithinAny = (blocks: CodeBlock[], lineStart: number, lineEnd: number): boolean =>
-  blocks.some((b) => b.start <= lineStart && lineEnd <= b.end)
-
 const findBlockAt = (blocks: CodeBlock[], lineStart: number): CodeBlock | undefined =>
   blocks.find((b) => b.start === lineStart)
 
@@ -46,7 +43,7 @@ const presentContent = (content: string): string => {
       if (!SINGLETONS.has(opening.language)) {
         out.push(formatMarker(opening))
       }
-    } else if (!isWithinAny(blocks, lineStart, lineEnd)) {
+    } else if (!isLineInsideBlock(blocks, lineStart, lineEnd)) {
       out.push(line)
     }
 

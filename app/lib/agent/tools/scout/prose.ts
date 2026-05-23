@@ -1,5 +1,5 @@
 import type { ScoutMap, ScoutSection } from "../scout-map"
-import { parseCodeBlocks, type CodeBlock } from "~/lib/data-blocks/parse"
+import { parseCodeBlocks, isLineInsideBlock, type CodeBlock } from "~/lib/data-blocks/parse"
 import { isSingleton } from "~/lib/data-blocks/registry"
 import { resolveBlockLabel } from "~/lib/data-blocks/registry"
 import { parseBlockJson } from "~/lib/data-blocks/parse"
@@ -13,9 +13,6 @@ const formatEmbeddedMarker = (block: CodeBlock): string => {
   const label = parsed.ok ? resolveBlockLabel(block.language, parsed.data) : null
   return label ? `[embedded ${type}: "${label}"]` : `[embedded ${type}]`
 }
-
-const isWithinAny = (blocks: CodeBlock[], lineStart: number, lineEnd: number): boolean =>
-  blocks.some((b) => b.start <= lineStart && lineEnd <= b.end)
 
 const findBlockOpeningAt = (blocks: CodeBlock[], lineStart: number): CodeBlock | undefined =>
   blocks.find((b) => b.start === lineStart)
@@ -35,7 +32,7 @@ export const presentContent = (content: string): string => {
       if (!isSingleton(openingBlock.language)) {
         outputLines.push(formatEmbeddedMarker(openingBlock))
       }
-    } else if (!isWithinAny(blocks, lineStart, lineEnd)) {
+    } else if (!isLineInsideBlock(blocks, lineStart, lineEnd)) {
       outputLines.push(line)
     }
 

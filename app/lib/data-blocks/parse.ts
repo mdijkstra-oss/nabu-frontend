@@ -106,6 +106,12 @@ export const summarizeBlocks = (
     return [...acc, { id: parsed.data.id, label }]
   }, [])
 
+export const isLineInsideBlock = (
+  blocks: CodeBlock[],
+  lineStart: number,
+  lineEnd: number
+): boolean => blocks.some((b) => b.start <= lineStart && lineEnd <= b.end)
+
 export const formatBlock = (language: string, content: string): string =>
   `\`\`\`${language}\n${content}\n\`\`\``
 

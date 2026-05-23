@@ -1,4 +1,4 @@
-import { parseCodeBlocks, type CodeBlock } from "./parse"
+import { parseCodeBlocks, isLineInsideBlock } from "./parse"
 import { CHARS_PER_TOKEN } from "~/lib/text/constants"
 
 export const CHUNK_TARGET_TOKENS = 5_000
@@ -11,9 +11,6 @@ export interface LineChunk {
   startLine: number
   endLine: number
 }
-
-const isInsideBlock = (blocks: CodeBlock[], lineStart: number, lineEnd: number): boolean =>
-  blocks.some((b) => b.start <= lineStart && lineEnd <= b.end)
 
 interface Acc {
   chunks: LineChunk[]
@@ -41,7 +38,7 @@ export const chunkLines = (content: string, targetSize: number): LineChunk[] => 
     const lineNum = i + 1
     const lineStart = offset
     const lineEnd = offset + line.length
-    const inBlock = isInsideBlock(blocks, lineStart, lineEnd)
+    const inBlock = isLineInsideBlock(blocks, lineStart, lineEnd)
 
     if (!inBlock) {
       acc = { ...acc, size: acc.size + line.length }
