@@ -32,6 +32,17 @@ export const completeRawCall = (id: number, rawResponse: string, duration: numbe
 
 export const getRawCalls = (): RawLlmCall[] => calls
 
+const CANCELED_RESPONSE = JSON.stringify([{ type: "error", content: "Canceled by user" }])
+
+export const cancelPendingCalls = (): void => {
+  const hasPending = calls.some((c) => c.rawResponse === null)
+  if (!hasPending) return
+  calls = calls.map((c) =>
+    c.rawResponse === null ? { ...c, rawResponse: CANCELED_RESPONSE, duration: -1 } : c
+  )
+  notify()
+}
+
 export const clearRawCalls = (): void => {
   calls = []
   nextId = 1

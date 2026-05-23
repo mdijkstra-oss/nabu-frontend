@@ -17,10 +17,24 @@ const logToolResult = (call: ToolCall, res: ToolResult<unknown>): void => {
   log(`[TOOL ${call.name}]`, { call, ...res })
 }
 
+const CANCELED_MESSAGE = "Canceled by user"
+
+const toCanceledResult = (): ToolResult<unknown> => ({
+  status: "error",
+  output: CANCELED_MESSAGE,
+})
+
 const toErrorResult = (e: unknown): ToolResult<unknown> => {
-  if (isAbortError(e)) throw e
+  if (isAbortError(e)) return toCanceledResult()
   return { status: "error", output: e instanceof Error ? e.message : String(e) }
 }
+
+export const canceledToolResult = (call: ToolCall): ToolResultBlock => ({
+  type: "tool_result",
+  callId: call.id,
+  toolName: call.name,
+  result: toCanceledResult(),
+})
 
 export const executeTool = async (
   call: ToolCall,

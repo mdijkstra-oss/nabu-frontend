@@ -6,9 +6,11 @@ import { AutoScroll } from "~/ui/components/AutoScroll"
 import { getRawCalls, subscribeRawCalls, type RawLlmCall } from "~/lib/agent/client/raw-store"
 
 const isPending = (call: RawLlmCall): boolean => call.duration === null
+const isCanceled = (call: RawLlmCall): boolean => call.duration === -1
 
 const formatDuration = (ms: number | null): string => {
   if (ms === null) return "pending…"
+  if (ms === -1) return "canceled"
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
@@ -103,8 +105,11 @@ const PendingDot = () => (
   <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
 )
 
+const CanceledDot = () => <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400" />
+
 const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => {
   const pending = isPending(call)
+  const canceled = isCanceled(call)
   const [expanded, setExpanded] = useState(false)
   const time = new Date(call.timestamp).toLocaleTimeString()
 
@@ -115,7 +120,7 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
 
   return (
     <div
-      className={`rounded border ${pending ? "border-amber-200 bg-amber-50/30" : selected ? "border-neutral-400 bg-neutral-50" : "border-neutral-200"}`}
+      className={`rounded border ${canceled ? "border-red-200 bg-red-50/30" : pending ? "border-amber-200 bg-amber-50/30" : selected ? "border-neutral-400 bg-neutral-50" : "border-neutral-200"}`}
     >
       <button
         onClick={() => setExpanded(!expanded)}
@@ -134,6 +139,7 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
           ) : (
             <ChevronRight className="w-3 h-3 text-neutral-400" />
           )}
+          {canceled && <CanceledDot />}
           {pending && <PendingDot />}
           <span className="text-xs font-mono font-medium text-neutral-700">
             {endpointLabel(call.endpoint)}

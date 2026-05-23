@@ -51,6 +51,22 @@ export const partitionSources = (files: SourceFile[]): ScopedSources => ({
   dimension: files.filter((f) => f.scope === "dimension").map((f) => f.path),
 })
 
+export const validateFrameworkNoCallouts = (
+  frameworkPaths: string[],
+  resolve: ContentResolver
+): string | null => {
+  for (const path of frameworkPaths) {
+    const raw = resolve(path)
+    if (!raw) continue
+    const callouts = getCallouts(raw)
+    if (callouts.length > 0) {
+      const ids = callouts.map((c) => c.id).join(", ")
+      return `Framework file mismatch: ${path} contains callout IDs [${ids}] — framework files must not contain callout blocks when annotating as code. Check which files should be framework vs dimension.`
+    }
+  }
+  return null
+}
+
 export const buildCallList = ({ framework, dimension }: ScopedSources): ScopedSources[] =>
   dimension.length === 0
     ? [{ framework, dimension: [] }]

@@ -103,10 +103,11 @@ const annotationToEntry =
   (annotation: Annotation, index: number): HighlightEntry => {
     const id = annotation.id
     const canMutate = !!filePath && !!id
+    const code = annotation.code
     return {
       id: id ?? String(index),
       color: elementBorder(annotation.color),
-      title: annotation.code ? getCodeTitle(files, annotation.code) : undefined,
+      title: code ? getCodeTitle(files, code) : undefined,
       description: annotation.reason,
       review: annotation.vote?.review ? [annotation.vote.review] : undefined,
       onDelete: canMutate ? buildUxCallback(filePath, removeAnnotationOp(id)) : undefined,
@@ -114,8 +115,7 @@ const annotationToEntry =
         canMutate && hasReview(annotation)
           ? buildUxCallback(filePath, resolveReviewOp(id))
           : undefined,
-      onTitleClick:
-        annotation.code && onNavigateToCode ? () => onNavigateToCode(annotation.code) : undefined,
+      onTitleClick: code && onNavigateToCode ? () => onNavigateToCode(code) : undefined,
     }
   }
 

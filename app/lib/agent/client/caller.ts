@@ -5,7 +5,7 @@ import type { ResponseFormat } from "./convert"
 import { callLlm } from "./fetch"
 import { blocksToMessages } from "./convert"
 import { pushBlocks } from "./store"
-import { executeTool, trimErrorOutput, type ToolExecutor } from "../turn"
+import { executeTool, canceledToolResult, trimErrorOutput, type ToolExecutor } from "../turn"
 import { formatZodError, type ToolDefinition } from "../executors/tool"
 import type { BlockSchemaDefinition } from "~/lib/data-blocks/json-schema"
 import { isToolCallBlock } from "../derived"
@@ -30,13 +30,18 @@ type Caller = (signal?: AbortSignal) => Promise<Block[]>
 
 const executeToolCalls = async (
   calls: ToolCall[],
-  execute: ToolExecutor
+  execute: ToolExecutor,
+  signal?: AbortSignal
 ): Promise<ToolResultBlock[]> => {
   setPendingRefsSuppressed(true)
   try {
     const results: ToolResultBlock[] = []
-    for (const call of calls) {
-      results.push(await executeTool(call, execute))
+    for (let i = 0; i < calls.length; i++) {
+      if (signal?.aborted) {
+        for (let j = i; j < calls.length; j++) results.push(canceledToolResult(calls[j]))
+        break
+      }
+      results.push(await executeTool(calls[i], execute))
       await yieldToBrowser()
     }
     return results
@@ -128,7 +133,7 @@ export const buildCaller =
     const validationErrors = committed.filter((b): b is ToolResultBlock => b.type === "tool_result")
 
     if (validCalls.length > 0 && config.execute) {
-      const results = await executeToolCalls(validCalls, config.execute)
+      const results = await executeToolCalls(validCalls, config.execute, signal)
       pushBlocks(results, source)
       return [...blocks, ...validationErrors, ...results]
     }

@@ -38,6 +38,7 @@ import {
   buildCallList,
   expandDimensions,
   extractDimensionIds,
+  validateFrameworkNoCallouts,
 } from "./messages"
 import { runAnalysisPipeline } from "./pipeline"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
@@ -445,6 +446,12 @@ registerTool(
 
       const scoped = partitionSources(source_files)
       const resolve: ContentResolver = getFileView
+
+      if (post_action === "annotate_as_code") {
+        const mismatch = validateFrameworkNoCallouts(scoped.framework, resolve)
+        if (mismatch) return { status: "error", output: mismatch, mutations: [] }
+      }
+
       const calls = buildCallList(expandDimensions(scoped, resolve))
       const enqueue = createKeyedQueue()
       const actions = buildPostActions(enqueue)

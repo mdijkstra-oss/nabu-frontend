@@ -2,6 +2,7 @@ import type { Block, ErrorBlock } from "./blocks"
 import type { ToolDefinition } from "../executors/tool"
 import type { BlockSchemaDefinition } from "~/lib/data-blocks/json-schema"
 import { getLlmHost, getLlmHeaders } from "~/lib/agent/env"
+import { getActiveSignal } from "~/lib/utils/signal"
 import { calculateBackoff } from "~/lib/utils/backoff"
 import { initialParseState, processLine, stateToBlocks, type ParseCallbacks } from "./parse"
 import type { InputItem, ResponseFormat } from "./convert"
@@ -37,8 +38,11 @@ export class ConnectTimeoutError extends Error {
 
 const isStallError = (err: unknown): err is StallError => err instanceof StallError
 
-const isConnectTimeout = (err: unknown): boolean =>
+const isAbortLike = (err: unknown): boolean =>
   err instanceof DOMException && err.name === "AbortError"
+
+const isUserAbort = (signal?: AbortSignal): boolean =>
+  signal?.aborted === true || getActiveSignal()?.aborted === true
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -50,9 +54,13 @@ interface FetchOptions {
   signal?: AbortSignal
 }
 
+const isSignal = (s: AbortSignal | null | undefined): s is AbortSignal => s != null
+
 const combineSignals = (signal?: AbortSignal): AbortSignal => {
-  const timeoutSignal = AbortSignal.timeout(CONNECT_TIMEOUT_MS)
-  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+  const signals = [AbortSignal.timeout(CONNECT_TIMEOUT_MS), signal, getActiveSignal()].filter(
+    isSignal
+  )
+  return AbortSignal.any(signals)
 }
 
 const fetchWithRetry = async ({ url, body, signal }: FetchOptions): Promise<Response> => {
@@ -71,7 +79,7 @@ const fetchWithRetry = async ({ url, body, signal }: FetchOptions): Promise<Resp
         throw new Error(`LLM request failed: ${response.status}`)
       }
     } catch (err) {
-      if (isConnectTimeout(err) && !signal?.aborted) {
+      if (isAbortLike(err) && !isUserAbort(signal)) {
         throw new ConnectTimeoutError(
           `no response from backend within ${CONNECT_TIMEOUT_MS / 1000}s — model may be out of quota`
         )

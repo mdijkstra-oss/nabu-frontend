@@ -1,3 +1,5 @@
+import { getActiveSignal } from "~/lib/utils/signal"
+
 const DEFAULT_CONCURRENCY = 4
 
 export interface PoolFailure<T> {
@@ -25,6 +27,7 @@ export const processPool = <T, R>(
   opts: PoolOptions
 ): Promise<PoolResult<T, R>> => {
   const { concurrency = DEFAULT_CONCURRENCY, target, warmup = 0, onItemComplete } = opts
+  const signal = getActiveSignal()
   const all: R[] = []
   const failed: PoolFailure<T>[] = []
   let cursor = 0
@@ -33,7 +36,9 @@ export const processPool = <T, R>(
   let done = false
 
   return new Promise<PoolResult<T, R>>((resolve) => {
-    const isComplete = (): boolean => done || (cursor >= items.length && inFlight === 0)
+    const isAborted = (): boolean => signal?.aborted === true
+    const isComplete = (): boolean =>
+      done || (inFlight === 0 && (cursor >= items.length || isAborted()))
     const hasReachedTarget = (): boolean => target !== undefined && all.length >= target
 
     const settle = () => {
@@ -46,7 +51,7 @@ export const processPool = <T, R>(
     const activeConcurrency = (): number => (warmup > 0 && completed < warmup ? 1 : concurrency)
 
     const next = () => {
-      while (inFlight < activeConcurrency() && cursor < items.length && !done) {
+      while (inFlight < activeConcurrency() && cursor < items.length && !done && !isAborted()) {
         const item = items[cursor++]
         inFlight++
 
@@ -90,10 +95,18 @@ export const processPool = <T, R>(
       if (isComplete()) settle()
     }
 
-    if (items.length === 0) {
+    if (items.length === 0 || isAborted()) {
       settle()
       return
     }
+
+    signal?.addEventListener(
+      "abort",
+      () => {
+        if (inFlight === 0) settle()
+      },
+      { once: true }
+    )
 
     next()
   })

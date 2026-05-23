@@ -20,6 +20,7 @@ import { mergeAndChunk, paragraphSeparator } from "~/lib/composite/merge"
 import { chunkLines, CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
 import { stripCodeBlockLines, remapRanges } from "~/lib/data-blocks/strip-lines"
 import type { SourceFileEntry } from "./def"
+import { validateFrameworkNoCallouts } from "../apply-deep-analysis/messages"
 
 const toSystemBlock = (content: string): Block => ({ type: "system", content })
 
@@ -167,6 +168,14 @@ registerTool(
       const missing = findMissingFiles([...source_files, ...target_files])
       if (missing.length > 0)
         return { status: "error", output: `Files not found: ${missing.join(", ")}`, mutations: [] }
+
+      if (post_action === "annotate_as_code") {
+        const frameworkPaths = source_files
+          .filter((f) => f.group === "framework")
+          .map((f) => f.path)
+        const mismatch = validateFrameworkNoCallouts(frameworkPaths, getFileView)
+        if (mismatch) return { status: "error", output: mismatch, mutations: [] }
+      }
 
       pushSourceBlocks(source_files)
       const framework = buildFramework(source_files)

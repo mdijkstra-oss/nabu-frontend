@@ -4,13 +4,16 @@ import {
   setDraft,
   getDraft,
   clearStreaming,
+  showProgress,
   pushBlocks,
   setLoading,
 } from "~/lib/agent/client/store"
+import { cancelPendingCalls } from "~/lib/agent/client/raw-store"
 import { agentLoop } from "~/lib/agent/agent-loop"
 import { waitForUser } from "~/lib/agent/executors/delegation"
 import { modeSystemBlocks, DEFAULT_MODE } from "~/lib/agent/executors/modes"
 import { isAbortError, errorMessage } from "~/lib/utils/error"
+import { setActiveSignal } from "~/lib/utils/signal"
 
 export type RunnerDeps = ToolDeps
 
@@ -68,17 +71,26 @@ const buildCallbacks = () => {
 
 const runAgent = async (deps: RunnerDeps): Promise<void> => {
   controller = new AbortController()
+  setActiveSignal(controller.signal)
   const executor = createToolExecutor(deps)
   const callbacks = buildCallbacks()
   pushBlocks(modeSystemBlocks(DEFAULT_MODE))
   setLoading(true)
 
   while (true) {
-    await agentLoop({
-      executor,
-      callbacks,
-      signal: controller.signal,
-    })
+    try {
+      await agentLoop({
+        executor,
+        callbacks,
+        signal: controller.signal,
+      })
+    } catch (e) {
+      if (!isAbortError(e)) throw e
+      controller = new AbortController()
+      setActiveSignal(controller.signal)
+      clearStreaming()
+      continue
+    }
     stop()
     await waitForUser(controller.signal)
     setLoading(true)
@@ -98,11 +110,14 @@ export const run = async (deps: RunnerDeps = {}): Promise<void> => {
   } finally {
     active = false
     controller = null
+    setActiveSignal(null)
     stop()
   }
 }
 
 export const cancel = (): void => {
   if (!active) return
+  showProgress("Cancelling…")
   controller?.abort()
+  cancelPendingCalls()
 }
