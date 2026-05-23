@@ -1,17 +1,20 @@
 "use client"
 
-import { useCallback, useRef, useEffect, useLayoutEffect, useState } from "react"
+import { useCallback, useMemo, useRef, useEffect, useLayoutEffect, useState } from "react"
 import { createPortal } from "react-dom"
+import { useNavigate, useParams } from "react-router"
 import { useInstance } from "@milkdown/react"
 import { editorViewCtx } from "@milkdown/kit/core"
 import { annotationsMeta } from "~/lib/editor/annotations/plugin"
-import type { Annotation } from "~/domain/data-blocks/attributes/annotations/selectors"
+import { hasReview, type Annotation } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { HighlightTooltip, type HighlightEntry } from "~/ui/components/HighlightTooltip"
 import { elementBorder } from "~/ui/theme/radix"
 import { getCodeTitle } from "~/domain/data-blocks/callout/codes/selectors"
+import { findDocumentForCallout } from "~/domain/data-blocks/callout/selectors"
 import { getFiles } from "~/lib/files/store"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
-import { findAllTextRanges, proseTextContent } from "~/lib/editor/text"
+import { findTextRange, proseTextContent, type TextRange } from "~/lib/editor/text"
+import { findMatchOffset } from "~/lib/text/find"
 
 interface HoverState {
   text: string
@@ -48,12 +51,7 @@ const isWithinRect = (x: number, y: number, rect: DOMRect): boolean =>
   x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
 
 const findMatchingAnnotations = (annotations: Annotation[], text: string): Annotation[] =>
-  annotations.filter((a) => a.text.includes(text))
-
-interface TextRange {
-  from: number
-  to: number
-}
+  annotations.filter((a) => findMatchOffset(a.text, text, true) !== null)
 
 const rangesOverlap = (a: TextRange, b: TextRange): boolean => a.from < b.to && b.from < a.to
 
@@ -73,14 +71,13 @@ const findOverlappingAnnotations = (
       const view = ctx.get(editorViewCtx)
       const doc = view.state.doc
       const docText = proseTextContent(doc)
-      const targetRanges = findAllTextRanges(doc, target.text, docText)
-      if (targetRanges.length === 0) return
+      const targetRange = findTextRange(doc, target.text, docText)
+      if (!targetRange) return
 
       for (const a of annotations) {
         if (a.id === target.id) continue
-        const aRanges = findAllTextRanges(doc, a.text, docText)
-        const touches = aRanges.some((ar) => targetRanges.some((tr) => rangesOverlap(ar, tr)))
-        if (touches) overlapping.add(a.id ?? "")
+        const aRange = findTextRange(doc, a.text, docText)
+        if (aRange && rangesOverlap(aRange, targetRange)) overlapping.add(a.id ?? "")
       }
     })
   } catch {
@@ -93,12 +90,16 @@ const removeAnnotationOp = (id: string) => [
   { op: "remove" as const, path: `/annotations[id=${id}]` },
 ]
 
-const buildDeleteCallback = (filePath: string, id: string) => () => {
-  executeUxAction([{ path: filePath, language: ANNOTATIONS_LANGUAGE, ops: removeAnnotationOp(id) }])
+const resolveReviewOp = (id: string) => [
+  { op: "remove" as const, path: `/annotations[id=${id}]/vote/review` },
+]
+
+const buildUxCallback = (filePath: string, ops: { op: "remove"; path: string }[]) => () => {
+  executeUxAction([{ path: filePath, language: ANNOTATIONS_LANGUAGE, ops }])
 }
 
 const annotationToEntry =
-  (files: Record<string, string>, filePath?: string) =>
+  (files: Record<string, string>, filePath?: string, onNavigateToCode?: (codeId: string) => void) =>
   (annotation: Annotation, index: number): HighlightEntry => {
     const id = annotation.id
     const canMutate = !!filePath && !!id
@@ -108,7 +109,13 @@ const annotationToEntry =
       title: annotation.code ? getCodeTitle(files, annotation.code) : undefined,
       description: annotation.reason,
       review: annotation.vote?.review ? [annotation.vote.review] : undefined,
-      onDelete: canMutate ? buildDeleteCallback(filePath, id) : undefined,
+      onDelete: canMutate ? buildUxCallback(filePath, removeAnnotationOp(id)) : undefined,
+      onResolve:
+        canMutate && hasReview(annotation)
+          ? buildUxCallback(filePath, resolveReviewOp(id))
+          : undefined,
+      onTitleClick:
+        annotation.code && onNavigateToCode ? () => onNavigateToCode(annotation.code) : undefined,
     }
   }
 
@@ -148,6 +155,8 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
   const [hover, setHover] = useState<HoverState | null>(null)
   const [loading, getEditor] = useInstance()
   const isolatedRef = useRef(false)
+  const navigate = useNavigate()
+  const params = useParams()
 
   const restoreAnnotations = useCallback(() => {
     if (isolatedRef.current) {
@@ -249,7 +258,10 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
     return () => document.removeEventListener("mousemove", handleMouseMove)
   }, [hover, isOnBridge, scheduleDismiss])
 
-  const matchingAnnotations = hover ? findMatchingAnnotations(annotations, hover.text) : []
+  const matchingAnnotations = useMemo(
+    () => (hover ? findMatchingAnnotations(annotations, hover.text) : []),
+    [hover, annotations]
+  )
   const files = getFiles()
 
   const handleEntryHover = useCallback(
@@ -264,7 +276,19 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
     [annotations, matchingAnnotations, getEditor, loading]
   )
 
-  const entries = matchingAnnotations.map(annotationToEntry(files, filePath))
+  const navigateToCode = useCallback(
+    (codeId: string) => {
+      if (!params.projectId) return
+      const documentId = findDocumentForCallout(files, codeId)
+      if (!documentId) return
+      navigate(
+        `/project/${params.projectId}/file/${encodeURIComponent(documentId)}?entity=${codeId}`
+      )
+    },
+    [files, navigate, params.projectId]
+  )
+
+  const entries = matchingAnnotations.map(annotationToEntry(files, filePath, navigateToCode))
 
   useLayoutEffect(() => {
     const bridge = bridgeRef.current

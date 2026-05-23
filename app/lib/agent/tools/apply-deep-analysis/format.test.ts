@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
+  SECTION_MARKER,
   extractSection,
   extractLeadingContext,
   extractTrailingContext,
@@ -11,6 +12,7 @@ import {
   buildRemovalOps,
   formatReturnOutput,
   formatAnnotateOutput,
+  formatCoverage,
   isAnnotateAction,
   ABSENCE_HINT,
   type MappedResult,
@@ -209,15 +211,32 @@ describe("numberSection", () => {
       text: "",
       expectedCount: 0,
       numberedContains: null,
+      numberedNotContains: null,
+    },
+    {
+      name: "excludes section markers from sentences but keeps as context",
+      text: `First sentence. Second sentence.\n\n${SECTION_MARKER}file.md [10-10]\n\nThird sentence.`,
+      expectedCount: 3,
+      numberedContains: "3: Third sentence.",
+      numberedNotContains: "4:",
     },
   ]
 
-  cases.forEach(({ name, text, expectedCount, numberedContains }) => {
+  cases.forEach(({ name, text, expectedCount, numberedContains, numberedNotContains }) => {
     it(name, () => {
       const result = numberSection(text)
       expect(result.sentences).toHaveLength(expectedCount)
       if (numberedContains) expect(result.numbered).toContain(numberedContains)
+      if (numberedNotContains) expect(result.numbered).not.toContain(numberedNotContains)
     })
+  })
+
+  it("marker lines appear unnumbered in output", () => {
+    const marker = `${SECTION_MARKER}file.md [5-5]`
+    const text = `Hello world.\n\n${marker}\n\nGoodbye world.`
+    const result = numberSection(text)
+    expect(result.numbered).toContain(marker)
+    expect(result.sentences).not.toContain(marker)
   })
 })
 
@@ -299,10 +318,11 @@ describe("formatReturnOutput", () => {
   const cases = [
     {
       name: "no results includes line range and absence hint",
-      results: [],
+      results: [] as MappedResult[],
       startLine: 10,
       endLine: 50,
-      warnings: [],
+      sectionTextLength: 0,
+      warnings: [] as string[],
       expected: `Lines 10-50 analyzed. No matches found.${ABSENCE_HINT}`,
     },
     {
@@ -313,7 +333,8 @@ describe("formatReturnOutput", () => {
       ],
       startLine: 1,
       endLine: 10,
-      warnings: [],
+      sectionTextLength: 0,
+      warnings: [] as string[],
       expected: '- [code_1] "Some text": because\n- [code_2] "Other text": also',
     },
     {
@@ -321,22 +342,41 @@ describe("formatReturnOutput", () => {
       results: [{ text: "Some text", analysis_source_id: "code_1", reason: "because" }],
       startLine: 1,
       endLine: 10,
+      sectionTextLength: 0,
       warnings: ["find: LLM returned no text response"],
       expected:
         '- [code_1] "Some text": because\n\n⚠ Degraded: 1 model call(s) failed and were dropped. Results are based on fewer voters.\n- find: LLM returned no text response',
     },
     {
       name: "appends warnings to absence output",
-      results: [],
+      results: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
+      sectionTextLength: 0,
       warnings: ["filter: connection dropped"],
       expected: `Lines 5-20 analyzed. No matches found.${ABSENCE_HINT}\n\n⚠ Degraded: 1 model call(s) failed and were dropped. Results are based on fewer voters.\n- filter: connection dropped`,
     },
+    {
+      name: "prepends coverage when sectionTextLength provided",
+      results: [
+        { text: "Some text", analysis_source_id: "code_1", reason: "because" },
+        { text: "Other text", analysis_source_id: "code_2", reason: "also" },
+      ],
+      startLine: 1,
+      endLine: 10,
+      sectionTextLength: 100,
+      warnings: [] as string[],
+      expected:
+        'Coverage: 19% of text — code_1: 9%, code_2: 10%\n\n- [code_1] "Some text": because\n- [code_2] "Other text": also',
+    },
   ]
 
-  cases.forEach(({ name, results, startLine, endLine, warnings, expected }) => {
-    it(name, () => expect(formatReturnOutput(results, startLine, endLine, warnings)).toBe(expected))
+  cases.forEach(({ name, results, startLine, endLine, sectionTextLength, warnings, expected }) => {
+    it(name, () =>
+      expect(formatReturnOutput(results, startLine, endLine, sectionTextLength, warnings)).toBe(
+        expected
+      )
+    )
   })
 })
 
@@ -350,27 +390,30 @@ describe("formatAnnotateOutput", () => {
     {
       name: "empty results for code includes absence hint",
       action: "annotate_as_code" as const,
-      input: [],
+      input: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
+      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "Lines 5-20 analyzed. No matches found. No annotations written.",
     },
     {
       name: "empty results for comment includes absence hint",
       action: "annotate_as_comment" as const,
-      input: [],
+      input: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
+      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "Lines 5-20 analyzed. No matches found. No annotations written.",
     },
     {
       name: "empty results include absence hint text",
       action: "annotate_as_code" as const,
-      input: [],
+      input: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
+      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "Absence is data.",
     },
@@ -380,6 +423,7 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
+      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "2 code annotation(s) written. Do not re-apply these.",
     },
@@ -389,6 +433,7 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
+      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "2 comment annotation(s) written. Do not re-apply these.",
     },
@@ -398,6 +443,7 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
+      sectionTextLength: 0,
       warnings: [] as string[],
       contains: '- [code_1] "Some text": because',
     },
@@ -407,24 +453,85 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
+      sectionTextLength: 0,
       warnings: ["find: timeout"],
       contains: "Degraded: 1 model call(s) failed",
     },
     {
       name: "warnings appended to empty annotation output",
       action: "annotate_as_code" as const,
-      input: [],
+      input: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
+      sectionTextLength: 0,
       warnings: ["filter: connection reset"],
       contains: "filter: connection reset",
     },
+    {
+      name: "coverage prepended when sectionTextLength provided",
+      action: "annotate_as_code" as const,
+      input: results,
+      startLine: 1,
+      endLine: 10,
+      sectionTextLength: 100,
+      warnings: [] as string[],
+      contains: "Coverage: 19% of text — code_1: 9%, code_2: 10%",
+    },
   ]
 
-  cases.forEach(({ name, action, input, startLine, endLine, warnings, contains }) => {
-    it(name, () =>
-      expect(formatAnnotateOutput(input, action, startLine, endLine, warnings)).toContain(contains)
-    )
+  cases.forEach(
+    ({ name, action, input, startLine, endLine, sectionTextLength, warnings, contains }) => {
+      it(name, () =>
+        expect(
+          formatAnnotateOutput(input, action, startLine, endLine, sectionTextLength, warnings)
+        ).toContain(contains)
+      )
+    }
+  )
+})
+
+describe("formatCoverage", () => {
+  const cases = [
+    {
+      name: "empty results returns empty",
+      results: [] as MappedResult[],
+      sectionTextLength: 100,
+      expected: "",
+    },
+    {
+      name: "zero section length returns empty",
+      results: [{ text: "Some text", analysis_source_id: "code_1", reason: "r" }],
+      sectionTextLength: 0,
+      expected: "",
+    },
+    {
+      name: "single code computes percentage",
+      results: [{ text: "Hello world", analysis_source_id: "code_1", reason: "r" }],
+      sectionTextLength: 100,
+      expected: "Coverage: 11% of text — code_1: 11%",
+    },
+    {
+      name: "multiple codes with breakdown",
+      results: [
+        { text: "Hello world", analysis_source_id: "code_1", reason: "r" },
+        { text: "Goodbye", analysis_source_id: "code_2", reason: "r" },
+      ],
+      sectionTextLength: 100,
+      expected: "Coverage: 18% of text — code_1: 11%, code_2: 7%",
+    },
+    {
+      name: "same code aggregates char lengths",
+      results: [
+        { text: "Hello", analysis_source_id: "code_1", reason: "r1" },
+        { text: "World", analysis_source_id: "code_1", reason: "r2" },
+      ],
+      sectionTextLength: 100,
+      expected: "Coverage: 10% of text — code_1: 10%",
+    },
+  ]
+
+  cases.forEach(({ name, results, sectionTextLength, expected }) => {
+    it(name, () => expect(formatCoverage(results, sectionTextLength)).toBe(expected))
   })
 })
 

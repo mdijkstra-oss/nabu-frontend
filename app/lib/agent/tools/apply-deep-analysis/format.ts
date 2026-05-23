@@ -1,5 +1,4 @@
 import { splitBySentences } from "~/lib/text/split"
-import { formatNumberedPassage } from "~/lib/text/format"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { stripMarkdown } from "~/lib/text/strip"
 import { findMatches } from "~/lib/patch/diff/search"
@@ -103,23 +102,47 @@ export const extractTrailingContext = (
   return following.join("\n").trim()
 }
 
+export const SECTION_MARKER = "§§ "
+
 export const prepareTargetContent = (raw: string): string =>
   stripMarkdown(extractProse(raw), { keepHeadings: true })
 
 const splitSentenceTexts = splitBySentences()
 
+const isSectionMarker = (text: string): boolean => text.startsWith(SECTION_MARKER)
+
 export const numberSection = (text: string): { sentences: string[]; numbered: string } => {
-  const sentences = splitSentenceTexts(text).map((s) => s.text)
-  return { sentences, numbered: formatNumberedPassage(sentences) }
+  const all = splitSentenceTexts(text)
+  const sentences: string[] = []
+  const lines: string[] = []
+  for (const s of all) {
+    if (isSectionMarker(s.text)) {
+      lines.push(s.text)
+    } else {
+      sentences.push(s.text)
+      lines.push(`${sentences.length}: ${s.text}`)
+    }
+  }
+  return { sentences, numbered: lines.join("\n") }
 }
 
 export const numberSectionWithPositions = (
   text: string
 ): { sentences: string[]; numbered: string; positions: { start: number }[] } => {
-  const segments = splitSentenceTexts(text)
-  const sentences = segments.map((s) => s.text)
-  const positions = segments.map((s) => ({ start: s.start }))
-  return { sentences, numbered: formatNumberedPassage(sentences), positions }
+  const all = splitSentenceTexts(text)
+  const sentences: string[] = []
+  const positions: { start: number }[] = []
+  const lines: string[] = []
+  for (const s of all) {
+    if (isSectionMarker(s.text)) {
+      lines.push(s.text)
+    } else {
+      sentences.push(s.text)
+      positions.push({ start: s.start })
+      lines.push(`${sentences.length}: ${s.text}`)
+    }
+  }
+  return { sentences, numbered: lines.join("\n"), positions }
 }
 
 export const mapResults = (sentences: string[], results: AnalysisResult[]): MappedResult[] =>
@@ -223,14 +246,43 @@ const formatWarnings = (warnings: string[]): string =>
     ? ""
     : `\n\n⚠ Degraded: ${warnings.length} model call(s) failed and were dropped. Results are based on fewer voters.\n${warnings.map((w) => `- ${w}`).join("\n")}`
 
+interface CodeCoverage {
+  code: string
+  chars: number
+}
+
+const computeCodeCoverages = (results: MappedResult[]): CodeCoverage[] => {
+  const byCode = new Map<string, number>()
+  for (const r of results) {
+    const prev = byCode.get(r.analysis_source_id) ?? 0
+    byCode.set(r.analysis_source_id, prev + r.text.length)
+  }
+  return Array.from(byCode, ([code, chars]) => ({ code, chars }))
+}
+
+const formatPct = (chars: number, total: number): string => `${Math.round((chars / total) * 100)}%`
+
+export const formatCoverage = (results: MappedResult[], sectionTextLength: number): string => {
+  if (results.length === 0 || sectionTextLength === 0) return ""
+  const coverages = computeCodeCoverages(results)
+  const totalChars = coverages.reduce((sum, c) => sum + c.chars, 0)
+  const breakdown = coverages
+    .map((c) => `${c.code}: ${formatPct(c.chars, sectionTextLength)}`)
+    .join(", ")
+  return `Coverage: ${formatPct(totalChars, sectionTextLength)} of text — ${breakdown}`
+}
+
 export const formatReturnOutput = (
   results: MappedResult[],
   startLine: number,
   endLine: number,
+  sectionTextLength: number,
   warnings: string[] = []
 ): string => {
+  const coverage = formatCoverage(results, sectionTextLength)
   const base = results.length === 0 ? formatAbsence(startLine, endLine, "") : formatResults(results)
-  return base + formatWarnings(warnings)
+  const withCoverage = coverage ? `${coverage}\n\n${base}` : base
+  return withCoverage + formatWarnings(warnings)
 }
 
 export const formatAnnotateOutput = (
@@ -238,12 +290,17 @@ export const formatAnnotateOutput = (
   action: "annotate_as_code" | "annotate_as_comment",
   startLine: number,
   endLine: number,
+  sectionTextLength: number,
   warnings: string[] = []
 ): string => {
   if (results.length === 0)
     return formatAbsence(startLine, endLine, " No annotations written.") + formatWarnings(warnings)
+  const coverage = formatCoverage(results, sectionTextLength)
   const kind = action === "annotate_as_code" ? "code" : "comment"
-  return `${results.length} ${kind} annotation(s) written. Do not re-apply these.\n\n${formatResults(results)}${formatWarnings(warnings)}`
+  const header = `${results.length} ${kind} annotation(s) written. Do not re-apply these.`
+  const body = formatResults(results)
+  const withCoverage = coverage ? `${coverage}\n\n${header}\n\n${body}` : `${header}\n\n${body}`
+  return withCoverage + formatWarnings(warnings)
 }
 
 export const isAnnotateAction = (

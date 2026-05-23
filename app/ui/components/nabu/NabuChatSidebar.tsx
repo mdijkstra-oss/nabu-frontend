@@ -615,7 +615,6 @@ const PlanHeaderRenderer = ({
         navigate={navigate}
       />
     </div>
-    {header.aborted && <AbortBox />}
   </div>
 )
 
@@ -767,6 +766,14 @@ const CollapsedStepsIndicator = ({ count }: { count: number }) => (
   </span>
 )
 
+const PlanContinuePrompt = ({ onContinue }: { onContinue: () => void }) => (
+  <div className="flex w-full flex-col gap-1.5 max-w-[95%]">
+    <OptionCard selected={false} dimmed={false} onClick={onContinue}>
+      Continue to next step
+    </OptionCard>
+  </div>
+)
+
 const isPendingPlanStep = (item: PlanMessage): boolean =>
   item.type === "plan-item" && isPlanStep(item.child) && item.child.status === "pending"
 
@@ -799,6 +806,9 @@ interface PlanSegmentRendererProps {
 }
 
 type SegmentRun = { type: "single"; item: PlanMessage } | { type: "nested"; items: PlanMessage[] }
+
+const isAbortedPlan = (items: PlanMessage[]): boolean =>
+  items.some((item) => item.type === "plan-header" && item.aborted)
 
 const isNestedPlanItem = (item: PlanMessage): boolean =>
   item.type === "plan-item" && item.child.type === "plan-step" && item.child.nested
@@ -861,7 +871,11 @@ const PlanSegmentRenderer = ({
           </div>
         )
       )}
-      {pendingCount > 0 && <CollapsedStepsIndicator count={pendingCount} />}
+      {isAbortedPlan(items) ? (
+        <AbortBox />
+      ) : (
+        pendingCount > 0 && <CollapsedStepsIndicator count={pendingCount} />
+      )}
     </div>
   )
 }
@@ -974,9 +988,13 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
     }
   }, [appReady, history.length, runChat, getDeps, files])
 
+  const inPlan = hasActivePlan(derived.plans)
+  const isWaitingForContinue = inPlan && !loading && !waitingForInput
+  const buttonMode = deriveChatButtonMode(loading, waitingForInput, inPlan)
+
   const handleSend = useCallback(() => {
     if (!inputValue.trim()) return
-    if (waitingForInput) {
+    if (waitingForInput || isWaitingForContinue) {
       respond(inputValue.trim())
       setInputValue("")
       return
@@ -984,7 +1002,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
     if (loading) return
     send(inputValue.trim(), getDeps())
     setInputValue("")
-  }, [loading, waitingForInput, inputValue, send, respond, getDeps])
+  }, [loading, waitingForInput, isWaitingForContinue, inputValue, send, respond, getDeps])
 
   const handleSkipAsk = useCallback(() => {
     respond("Let's do something else for now")
@@ -994,8 +1012,9 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
     send("Let's do something else for now", getDeps())
   }, [send, getDeps])
 
-  const inPlan = hasActivePlan(derived.plans)
-  const buttonMode = deriveChatButtonMode(loading, waitingForInput, inPlan)
+  const handleContinue = useCallback(() => {
+    respond("Continue to next step")
+  }, [respond])
 
   const markTyping = useCallback(() => {
     setIsTyping(true)
@@ -1078,6 +1097,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
             </AnimatedListItem>
           ))}
         </AnimatePresence>
+        {isWaitingForContinue && <PlanContinuePrompt onContinue={handleContinue} />}
         {!waitingForInput && spinnerLabels && (
           <TickLabel key={spinnerLabels.join()} labels={spinnerLabels} />
         )}
@@ -1097,7 +1117,11 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
         <TextFieldUnstyled className="grow min-h-5">
           <TextFieldUnstyled.Textarea
             ref={inputRef}
-            placeholder={waitingForInput ? "Or type your own answer..." : "Message Nabu..."}
+            placeholder={
+              waitingForInput || isWaitingForContinue
+                ? "Or type your own answer..."
+                : "Message Nabu..."
+            }
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}

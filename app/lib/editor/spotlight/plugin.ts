@@ -4,7 +4,7 @@ import type { Node } from "prosemirror-model"
 import type { Spotlight } from "./types"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import { getBlockConfig } from "~/lib/data-blocks/registry"
-import { proseTextContent, textOffsetToPos } from "~/lib/editor/text"
+import { findTextRange, proseTextContent, textOffsetToPos } from "~/lib/editor/text"
 import type { TextRange } from "~/lib/editor/text"
 import { findMatchOffset } from "~/lib/text/find"
 
@@ -14,12 +14,8 @@ export const spotlightMeta = pluginKey
 
 const SPOTLIGHT_STYLE = "border-bottom: 2px solid var(--color-brand-600) !important;"
 
-const resolveSpotlightSingle = (doc: Node, text: string): TextRange | null => {
-  const content = proseTextContent(doc)
-  const offset = findMatchOffset(content, text)
-  if (!offset) return null
-  return { from: textOffsetToPos(doc, offset.start), to: textOffsetToPos(doc, offset.end) }
-}
+const resolveSpotlightSingle = (doc: Node, text: string): TextRange | null =>
+  findTextRange(doc, text)
 
 const resolveSpotlightRange = (doc: Node, from: string, to: string): TextRange | null => {
   const content = proseTextContent(doc)

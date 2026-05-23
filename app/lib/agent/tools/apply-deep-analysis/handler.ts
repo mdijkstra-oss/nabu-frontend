@@ -10,6 +10,7 @@ import { getDatabase } from "~/domain/db/database"
 import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import {
+  SECTION_MARKER,
   extractSection,
   extractSentenceContext,
   prepareTargetContent,
@@ -31,7 +32,13 @@ import {
 } from "~/lib/composite/pack"
 import { buildSentenceSegmentMap, resolveSentenceIndex } from "~/lib/composite/sentence-map"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
-import { type ContentResolver, partitionSources, buildCallList, expandDimensions } from "./messages"
+import {
+  type ContentResolver,
+  partitionSources,
+  buildCallList,
+  expandDimensions,
+  extractDimensionIds,
+} from "./messages"
 import { runAnalysisPipeline } from "./pipeline"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
@@ -46,7 +53,9 @@ interface PostActionCtx {
   path: string
   startLine: number
   endLine: number
+  sectionTextLength: number
   warnings: string[]
+  analyzedCodes: ReadonlySet<string>
 }
 
 interface SectionResult {
@@ -155,10 +164,11 @@ const handleReturn = async ({
   mapped,
   startLine,
   endLine,
+  sectionTextLength,
   warnings,
 }: PostActionCtx): Promise<HandlerResult<string>> => ({
   status: "ok",
-  output: formatReturnOutput(mapped, startLine, endLine, warnings),
+  output: formatReturnOutput(mapped, startLine, endLine, sectionTextLength, warnings),
   mutations: [],
 })
 
@@ -169,40 +179,53 @@ const handleAnnotation =
     path,
     startLine,
     endLine,
+    sectionTextLength,
     warnings,
-  }: PostActionCtx): Promise<HandlerResult<string>> => {
-    if (mapped.length === 0)
-      return {
-        status: "ok",
-        output: formatAnnotateOutput(mapped, action, startLine, endLine, warnings),
-        mutations: [],
-      }
-
-    return enqueue(path, async () => {
+    analyzedCodes,
+  }: PostActionCtx): Promise<HandlerResult<string>> =>
+    enqueue(path, async () => {
       const freshContent = getFileView(path) ?? ""
       const addOps = toAnnotationOps(mapped, action)
-      const newCodes = new Set(mapped.map((r) => r.analysis_source_id))
       const removeOps =
         action === "annotate_as_code"
           ? buildRemovalOps(
               getStoredAnnotations(freshContent),
               freshContent,
-              newCodes,
+              analyzedCodes,
               startLine,
               endLine
             )
           : []
       const ops = [...removeOps, ...addOps]
+      if (ops.length === 0)
+        return {
+          status: "ok" as const,
+          output: formatAnnotateOutput(
+            mapped,
+            action,
+            startLine,
+            endLine,
+            sectionTextLength,
+            warnings
+          ),
+          mutations: [],
+        }
       const annotationResult = await applyAnnotationsEager(path, ops)
       if (annotationResult.status === "error") return annotationResult
 
       return {
         status: annotationResult.status,
-        output: formatAnnotateOutput(mapped, action, startLine, endLine, warnings),
+        output: formatAnnotateOutput(
+          mapped,
+          action,
+          startLine,
+          endLine,
+          sectionTextLength,
+          warnings
+        ),
         mutations: [],
       }
     })
-  }
 
 type PostActionFn = (ctx: PostActionCtx) => Promise<HandlerResult<string>>
 
@@ -216,7 +239,7 @@ const isSingleFileComposite = (segments: readonly { path: string }[]): boolean =
   segments.length > 0 && segments.every((s) => s.path === segments[0].path)
 
 const compositeSeparator = (seg: Segment): string =>
-  `\n\n# ${seg.path} [${seg.startLine}-${seg.endLine}]\n\n`
+  `\n\n${SECTION_MARKER}${seg.path} [${seg.startLine}-${seg.endLine}]\n\n`
 
 const toSegments = (sections: Section[]): Segment[] =>
   sections.flatMap((s) => {
@@ -257,6 +280,14 @@ const processComposite = async (
   const prepared = prepareTargetContent(composite.content)
   const { sentences, positions } = numberSectionWithPositions(prepared)
 
+  const segmentSummary = composite.segments
+    .map((s) => `${s.path} [${s.startLine}-${s.endLine}]`)
+    .join(", ")
+  console.debug(`[deep-analysis-format] composite segments: ${segmentSummary}`)
+  console.debug(
+    `[deep-analysis-format] numbered sentences (${sentences.length}):\n${sentences.map((s, i) => `  ${i + 1}: ${s}`).join("\n")}`
+  )
+
   if (sentences.length === 0) {
     return composite.segments.map((seg) => ({
       section: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
@@ -292,6 +323,8 @@ const processComposite = async (
     trailingCtx = ctx.trailing
   }
 
+  const analyzedCodes = new Set(extractDimensionIds(calls, resolve))
+
   const pipelineResult = await runAnalysisPipeline(
     calls,
     composite.content,
@@ -307,13 +340,10 @@ const processComposite = async (
     warnings.push(...pipelineResult.errors)
   }
 
-  if (pipelineResult.annotations.length === 0) {
+  if (pipelineResult.annotations.length === 0 && pipelineResult.errors.length > 0) {
     return composite.segments.map((seg) => ({
       section: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
-      result:
-        pipelineResult.errors.length > 0
-          ? { status: "error" as const, output: pipelineResult.errors.join("; "), mutations: [] }
-          : { status: "ok" as const, output: "Lines analyzed. No matches found.", mutations: [] },
+      result: { status: "error" as const, output: pipelineResult.errors.join("; "), mutations: [] },
     }))
   }
 
@@ -331,13 +361,17 @@ const processComposite = async (
   for (const seg of composite.segments) {
     const segAnnotations = grouped.get(seg) ?? []
     const mapped = mapAnnotations(sentences, segAnnotations)
+    const segContent = composite.content.slice(seg.charStart, seg.charEnd)
+    const sectionTextLength = prepareTargetContent(segContent).length
     const section: Section = { path: seg.path, start_line: seg.startLine, end_line: seg.endLine }
     const result = await postAction({
       mapped,
       path: seg.path,
       startLine: seg.startLine,
       endLine: seg.endLine,
+      sectionTextLength,
       warnings,
+      analyzedCodes,
     })
     sectionResults.push({ section, result })
   }

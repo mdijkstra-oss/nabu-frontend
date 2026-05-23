@@ -1,5 +1,6 @@
 import type { Node } from "prosemirror-model"
 import { isHiddenRenderer } from "~/lib/data-blocks/registry"
+import { findMatchOffset } from "~/lib/text/find"
 
 export interface TextRange {
   from: number
@@ -73,21 +74,9 @@ const offsetToPos = (doc: Node, offset: number, shouldSkip: NodeFilter): number 
 export const textOffsetToPos = (doc: Node, offset: number): number =>
   offsetToPos(doc, offset, isHiddenCodeBlock)
 
-export const findAllTextRanges = (
-  doc: Node,
-  searchText: string,
-  cachedText?: string
-): TextRange[] => {
-  const docText = cachedText ?? proseTextContent(doc)
-  const ranges: TextRange[] = []
-  let start = 0
-  while (true) {
-    const offset = docText.indexOf(searchText, start)
-    if (offset === -1) return ranges
-    ranges.push({
-      from: textOffsetToPos(doc, offset),
-      to: textOffsetToPos(doc, offset + searchText.length),
-    })
-    start = offset + 1
-  }
+export const findTextRange = (doc: Node, needle: string, cachedText?: string): TextRange | null => {
+  const content = cachedText ?? proseTextContent(doc)
+  const offset = findMatchOffset(content, needle)
+  if (!offset) return null
+  return { from: textOffsetToPos(doc, offset.start), to: textOffsetToPos(doc, offset.end) }
 }

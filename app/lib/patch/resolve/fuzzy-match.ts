@@ -1,4 +1,5 @@
 import { findMatchOffset } from "~/lib/text/find"
+import { stripMarkdown } from "~/lib/text/strip"
 
 const FUZZY_PATTERN = /FUZZY\[\[([\s\S]+?)\]\]/g
 
@@ -10,7 +11,7 @@ interface FuzzyMatch {
 
 const findBestMatch = (content: string, needle: string): string | null => {
   const offset = findMatchOffset(content, needle)
-  return offset ? content.slice(offset.start, offset.end) : null
+  return offset ? stripMarkdown(content.slice(offset.start, offset.end)) : null
 }
 
 const collectFuzzyPatterns = (patch: string): FuzzyMatch[] => {

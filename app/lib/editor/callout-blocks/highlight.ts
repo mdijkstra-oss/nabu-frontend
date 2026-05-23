@@ -1,3 +1,5 @@
+import { findMatchOffset } from "~/lib/text/find"
+
 interface TextNode {
   node: Text
   startInFull: number
@@ -35,27 +37,11 @@ const toRanges = (nodes: TextNode[], from: number, to: number): Range[] => {
   return ranges
 }
 
-const stripInlineMarkdown = (text: string): string =>
-  text
-    .replace(/\*\*(.+?)\*\*/g, "$1")
-    .replace(/__(.+?)__/g, "$1")
-    .replace(/\*(.+?)\*/g, "$1")
-    .replace(/_(.+?)_/g, "$1")
-    .replace(/`(.+?)`/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-
 const findTextRangesInDOM = (container: HTMLElement, text: string): Range[] => {
   const { nodes, fullText } = collectTextNodes(container)
-  const searchText = stripInlineMarkdown(text)
-  const ranges: Range[] = []
-  let start = 0
-
-  while (true) {
-    const idx = fullText.indexOf(searchText, start)
-    if (idx === -1) return ranges
-    ranges.push(...toRanges(nodes, idx, idx + searchText.length))
-    start = idx + 1
-  }
+  const offset = findMatchOffset(fullText, text)
+  if (!offset) return []
+  return toRanges(nodes, offset.start, offset.end)
 }
 
 const supportsHighlightAPI = (): boolean => typeof CSS !== "undefined" && "highlights" in CSS

@@ -5,37 +5,38 @@ import { hasReview, type Annotation } from "~/domain/data-blocks/attributes/anno
 import type { ResolvedAnnotation } from "./types"
 import { segmentByOverlap } from "./overlap"
 import { createDecorationSet, createMarkerDecorations } from "./decorations"
-import { findAllTextRanges, proseTextContent } from "~/lib/editor/text"
+import { findTextRange, proseTextContent } from "~/lib/editor/text"
 
 const pluginKey = new PluginKey("annotations")
 
 export const annotationsMeta = pluginKey
 
-const toResolvedAnnotations = (
+const toResolvedAnnotation = (
   a: Annotation,
   doc: Node,
   docText: string,
-  startIndex: number
-): ResolvedAnnotation[] =>
-  findAllTextRanges(doc, a.text, docText).map((range, i) => {
-    const resolved: ResolvedAnnotation = {
-      index: startIndex + i,
-      from: range.from,
-      to: range.to,
-      color: a.color,
-    }
-    if (a.id) resolved.id = a.id
-    if (hasReview(a)) resolved.review = true
-    return resolved
-  })
+  index: number
+): ResolvedAnnotation | null => {
+  const range = findTextRange(doc, a.text, docText)
+  if (!range) return null
+  const resolved: ResolvedAnnotation = {
+    index,
+    from: range.from,
+    to: range.to,
+    color: a.color,
+  }
+  if (a.id) resolved.id = a.id
+  if (hasReview(a)) resolved.review = true
+  return resolved
+}
 
 const resolveAnnotations = (doc: Node, annotations: Annotation[]): ResolvedAnnotation[] => {
   const docText = proseTextContent(doc)
   let index = 0
   return annotations.flatMap((a) => {
-    const resolved = toResolvedAnnotations(a, doc, docText, index)
-    index += Math.max(resolved.length, 1)
-    return resolved
+    const resolved = toResolvedAnnotation(a, doc, docText, index)
+    index++
+    return resolved ? [resolved] : []
   })
 }
 

@@ -1,4 +1,4 @@
-import { X, Trash2, AlertTriangle } from "lucide-react"
+import { X, Trash2, MessageSquareWarning, Eraser } from "lucide-react"
 import { SwapButton } from "~/ui/components/SwapButton"
 
 export interface HighlightEntry {
@@ -8,6 +8,8 @@ export interface HighlightEntry {
   description?: string
   review?: string[]
   onDelete?: () => void
+  onResolve?: () => void
+  onTitleClick?: () => void
 }
 
 interface HighlightTooltipProps {
@@ -18,13 +20,6 @@ interface HighlightTooltipProps {
 
 const Divider = () => <div className="h-px w-full bg-neutral-border" />
 
-const ReviewBlock = ({ justifications }: { justifications: string[] }) => (
-  <div className="mt-1 flex items-start gap-1.5 rounded bg-amber-200/70 px-2 py-1.5 w-full">
-    <AlertTriangle className="h-3 w-3 flex-none mt-0.5 text-amber-700" />
-    <span className="text-caption font-caption text-amber-900">{justifications.join(" ")}</span>
-  </div>
-)
-
 const createHeaderBackground = (colors: string[]): string => {
   if (colors.length === 0) return "transparent"
   if (colors.length === 1) return colors[0]
@@ -33,27 +28,52 @@ const createHeaderBackground = (colors: string[]): string => {
 }
 
 const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
-  <div className="flex w-full items-start gap-2">
-    <div
-      className="flex h-3 w-3 flex-none rounded-full mt-0.5"
-      style={{ backgroundColor: entry.color }}
-    />
-    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
-      {entry.title && (
-        <span className="text-body-bold font-body-bold text-default-font">{entry.title}</span>
-      )}
-      {entry.description && (
-        <span className="text-caption font-caption text-subtext-color">{entry.description}</span>
-      )}
-      {entry.review && entry.review.length > 0 && <ReviewBlock justifications={entry.review} />}
-    </div>
-    {entry.onDelete && (
-      <SwapButton
-        idle={<X className="text-body text-neutral-700" />}
-        active={<Trash2 className="text-body text-error-600" />}
-        activeTooltip="Remove annotation"
-        onClick={entry.onDelete}
+  <div className="flex w-full flex-col">
+    <div className="flex w-full items-start gap-2">
+      <div
+        className="flex h-3 w-3 flex-none rounded-full mt-0.5"
+        style={{ backgroundColor: entry.color }}
       />
+      <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+        {entry.title &&
+          (entry.onTitleClick ? (
+            <button
+              className="text-body-bold font-body-bold text-default-font cursor-pointer border-none bg-transparent p-0 text-left hover:underline"
+              onClick={entry.onTitleClick}
+            >
+              {entry.title}
+            </button>
+          ) : (
+            <span className="text-body-bold font-body-bold text-default-font">{entry.title}</span>
+          ))}
+        {entry.description && (
+          <span className="text-caption font-caption text-subtext-color">{entry.description}</span>
+        )}
+      </div>
+      {entry.onDelete && (
+        <SwapButton
+          idle={<X className="text-body text-neutral-700" />}
+          active={<Trash2 className="text-body text-error-600" />}
+          activeTooltip="Remove annotation"
+          onClick={entry.onDelete}
+        />
+      )}
+    </div>
+    {entry.review && entry.review.length > 0 && (
+      <div className="mt-1 flex w-full items-start gap-2">
+        <div className="w-3 flex-none" />
+        <div className="flex grow min-w-0 items-start rounded bg-amber-200/70 px-2 py-1.5">
+          <span className="text-caption font-caption text-amber-900">{entry.review.join(" ")}</span>
+        </div>
+        {entry.onResolve && (
+          <SwapButton
+            idle={<MessageSquareWarning className="text-body text-amber-600" />}
+            active={<Eraser className="text-body text-green-600" />}
+            activeTooltip="Clear review"
+            onClick={entry.onResolve}
+          />
+        )}
+      </div>
     )}
   </div>
 )

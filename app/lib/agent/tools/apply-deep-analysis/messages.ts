@@ -109,6 +109,17 @@ export const extractSourceIds = (
     return raw ? getCallouts(raw).map((c) => c.id) : []
   })
 
+export const extractDimensionIds = (
+  calls: readonly ScopedSources[],
+  resolve: ContentResolver
+): string[] =>
+  calls.flatMap(({ dimension }) =>
+    dimension.flatMap((path) => {
+      const raw = resolve(path)
+      return raw ? getCallouts(raw).map((c) => c.id) : []
+    })
+  )
+
 export const buildSourceTitleMap = (
   { framework, dimension }: ScopedSources,
   resolve: ContentResolver

@@ -155,5 +155,5 @@ After the researcher selects changes:
 1. Edit the code at \`${calloutId}.generated.hidden.md\` using patch_json_block
 2. Count existing annotations for \`${calloutId}\`: how many have a vote_review (reviewed) and how many do not (unreviewed)
 3. Report both counts and ask the researcher which set to recode (reviewed, unreviewed, both, or skip for now)
-4. For the chosen set, call apply_deep_analysis with sections of \`type: "query"\` — use a SQL query against the annotations table filtering by \`code = '${calloutId}'\` and the appropriate vote_review condition
+4. For the chosen set, call apply_deep_analysis with sections of \`type: "query"\` — use a SQL query against the annotations table filtering by \`code = '${calloutId}'\` and the appropriate vote_review condition. Use \`source_files: [{ path: "${calloutId}.generated.hidden.md", scope: "dimension" }]\` — this is the only dimension needed
 `
