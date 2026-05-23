@@ -1,7 +1,6 @@
 import { splitBySentences } from "~/lib/text/split"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { stripMarkdown } from "~/lib/text/strip"
-import { findMatches } from "~/lib/patch/diff/search"
 import type { PostAction } from "./def"
 import type { FindResult } from "./consensus"
 import type { Annotation } from "./types"
@@ -24,17 +23,6 @@ export interface MappedResult {
   analysis_source_id: string
   reason: string
   vote?: VoteRecord
-}
-
-export interface AnnotationRef {
-  id?: string
-  code?: string
-  text: string
-}
-
-export interface RemoveAnnotationOp {
-  op: "remove_annotation"
-  match: { id: string }
 }
 
 export const extractSection = (content: string, startLine: number, endLine: number): string => {
@@ -204,27 +192,6 @@ export const toAnnotationOps = (
   results: MappedResult[],
   action: "annotate_as_code" | "annotate_as_comment"
 ): AddAnnotationOp[] => results.map(annotationBuilders[action])
-
-const rangesOverlap = (aStart: number, aEnd: number, bStart: number, bEnd: number): boolean =>
-  aStart <= bEnd && bStart <= aEnd
-
-export const buildRemovalOps = (
-  annotations: readonly AnnotationRef[],
-  content: string,
-  codes: ReadonlySet<string>,
-  startLine: number,
-  endLine: number
-): RemoveAnnotationOp[] => {
-  const sectionStart = startLine - 1
-  const sectionEnd = endLine - 1
-  return annotations.flatMap((a) => {
-    if (!a.id || !a.code || !codes.has(a.code)) return []
-    const matches = findMatches(content, a.text)
-    if (matches.length === 0) return []
-    const overlaps = matches.some((m) => rangesOverlap(m.start, m.end, sectionStart, sectionEnd))
-    return overlaps ? [{ op: "remove_annotation" as const, match: { id: a.id } }] : []
-  })
-}
 
 const formatResult = (r: MappedResult): string =>
   `- [${r.analysis_source_id}] "${r.text}": ${r.reason}`

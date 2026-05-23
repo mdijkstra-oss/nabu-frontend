@@ -9,16 +9,15 @@ import {
   mapResults,
   toAnnotationOps,
   toAnalysisResults,
-  buildRemovalOps,
   formatReturnOutput,
   formatAnnotateOutput,
   formatCoverage,
   isAnnotateAction,
   ABSENCE_HINT,
   type MappedResult,
-  type AnnotationRef,
   type VoteRecord,
 } from "./format"
+import { buildRemovalOps, type AnnotationRef } from "./step-clear"
 
 describe("extractSection", () => {
   const content = "line1\nline2\nline3\nline4\nline5"
@@ -591,7 +590,7 @@ describe("buildRemovalOps", () => {
       expected: [],
     },
     {
-      name: "removes annotation straddling section end boundary",
+      name: "removes annotation straddling section end via expanded blob",
       annotations: [{ id: "ann-1", code: "code-a", text: "Section end here.\nAfter the section." }],
       codes: new Set(["code-a"]),
       startLine: 3,
@@ -599,7 +598,7 @@ describe("buildRemovalOps", () => {
       expected: [{ op: "remove_annotation", match: { id: "ann-1" } }],
     },
     {
-      name: "removes annotation straddling section start boundary",
+      name: "removes annotation straddling section start via expanded blob",
       annotations: [
         { id: "ann-1", code: "code-a", text: "Preamble line two.\nSection start here." },
       ],
@@ -670,6 +669,87 @@ describe("buildRemovalOps", () => {
   cases.forEach(({ name, annotations, codes, startLine, endLine, expected }) => {
     it(name, () =>
       expect(buildRemovalOps(annotations, content, codes, startLine, endLine)).toEqual(expected)
+    )
+  })
+})
+
+describe("buildRemovalOps expanded blob", () => {
+  const expandedContent = [
+    "Far above one.",
+    "Far above two.",
+    "Far above three.",
+    "Far above four.",
+    "Far above five.",
+    "Pad before one.",
+    "Pad before two.",
+    "Pad before three.",
+    "Pad before four.",
+    "Section alpha.",
+    "Section beta.",
+    "Section gamma.",
+    "Pad after one.",
+    "Pad after two.",
+    "Pad after three.",
+    "Pad after four.",
+    "Far below one.",
+    "Far below two.",
+  ].join("\n")
+
+  const expandedCases: {
+    name: string
+    annotations: AnnotationRef[]
+    codes: Set<string>
+    startLine: number
+    endLine: number
+    expected: { op: "remove_annotation"; match: { id: string } }[]
+  }[] = [
+    {
+      name: "removes annotation straddling section end into padding",
+      annotations: [{ id: "ann-1", code: "code-a", text: "Section gamma. Pad after one." }],
+      codes: new Set(["code-a"]),
+      startLine: 10,
+      endLine: 12,
+      expected: [{ op: "remove_annotation", match: { id: "ann-1" } }],
+    },
+    {
+      name: "removes annotation straddling section start from padding",
+      annotations: [{ id: "ann-1", code: "code-a", text: "Pad before four. Section alpha." }],
+      codes: new Set(["code-a"]),
+      startLine: 10,
+      endLine: 12,
+      expected: [{ op: "remove_annotation", match: { id: "ann-1" } }],
+    },
+    {
+      name: "keeps annotation entirely in padding before section",
+      annotations: [{ id: "ann-1", code: "code-a", text: "Pad before one." }],
+      codes: new Set(["code-a"]),
+      startLine: 10,
+      endLine: 12,
+      expected: [],
+    },
+    {
+      name: "keeps annotation entirely in padding after section",
+      annotations: [{ id: "ann-1", code: "code-a", text: "Pad after four." }],
+      codes: new Set(["code-a"]),
+      startLine: 10,
+      endLine: 12,
+      expected: [],
+    },
+    {
+      name: "keeps annotation beyond expansion range",
+      annotations: [{ id: "ann-1", code: "code-a", text: "Far above one." }],
+      codes: new Set(["code-a"]),
+      startLine: 10,
+      endLine: 12,
+      expected: [],
+    },
+  ]
+
+  expandedCases.forEach(({ name, annotations, codes, startLine, endLine, expected }) => {
+    it(name, () =>
+      expect(buildRemovalOps(annotations, expandedContent, codes, startLine, endLine)).toEqual(
+        expected
+      )
     )
   })
 })

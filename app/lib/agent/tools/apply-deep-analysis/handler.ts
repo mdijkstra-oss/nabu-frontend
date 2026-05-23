@@ -17,7 +17,6 @@ import {
   numberSectionWithPositions,
   mapAnnotations,
   toAnnotationOps,
-  buildRemovalOps,
   formatReturnOutput,
   formatAnnotateOutput,
   type MappedResult,
@@ -40,6 +39,7 @@ import {
   extractDimensionIds,
   validateFrameworkNoCallouts,
 } from "./messages"
+import { clearAnnotationsOnSection } from "./step-clear"
 import { runAnalysisPipeline } from "./pipeline"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
@@ -186,18 +186,25 @@ const handleAnnotation =
   }: PostActionCtx): Promise<HandlerResult<string>> =>
     enqueue(path, async () => {
       const freshContent = getFileView(path) ?? ""
-      const addOps = toAnnotationOps(mapped, action)
-      const removeOps =
+
+      const clearResult =
         action === "annotate_as_code"
-          ? buildRemovalOps(
+          ? clearAnnotationsOnSection(
               getStoredAnnotations(freshContent),
               freshContent,
               analyzedCodes,
+              path,
               startLine,
               endLine
             )
-          : []
-      const ops = [...removeOps, ...addOps]
+          : { ops: [] }
+
+      const addOps = toAnnotationOps(mapped, action)
+      console.debug(
+        `[deep-analysis-replace] write: ${addOps.length} to add on ${path} [${startLine}-${endLine}]`
+      )
+
+      const ops = [...clearResult.ops, ...addOps]
       if (ops.length === 0)
         return {
           status: "ok" as const,

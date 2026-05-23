@@ -63,10 +63,10 @@ describe("findMatchOffset", () => {
       expected: null,
     },
     {
-      name: "long needle degrades to 0.8 threshold",
+      name: "long needle with one replaced token below 0.9 threshold returns null",
       content: "alpha bravo charlie delta echo foxtrot golf hotel india juliet",
       needle: "alpha bravo REPLACED delta echo foxtrot golf hotel",
-      expected: { start: 0, end: 49 },
+      expected: null,
     },
     {
       name: "long needle below 0.8 threshold returns null",

@@ -5,7 +5,7 @@ export interface MatchOffset {
   end: number
 }
 
-const PRECISION_THRESHOLDS = [1, 0.95, 0.9, 0.85, 0.8]
+const PRECISION_THRESHOLDS = [1, 0.95, 0.9]
 const MIN_FUZZY_TOKENS = 5
 
 interface Token {
@@ -51,23 +51,31 @@ const getDocTokens = (content: string): Token[] => {
   return tokens
 }
 
-const scoreTokenWindow = (needleWords: Set<string>, windowTokens: Token[]): number => {
-  let hits = 0
-  for (const token of windowTokens) {
-    if (needleWords.has(token.word)) hits++
+const scoreOrderedSubsequence = (needleWords: string[], windowTokens: Token[]): number => {
+  let matched = 0
+  let windowIdx = 0
+  for (const word of needleWords) {
+    while (windowIdx < windowTokens.length) {
+      if (windowTokens[windowIdx].word === word) {
+        matched++
+        windowIdx++
+        break
+      }
+      windowIdx++
+    }
   }
-  return hits / needleWords.size
+  return matched / needleWords.length
 }
 
 const findFirstTokenMatch = (
   docTokens: Token[],
-  needleSet: Set<string>,
+  needleWords: string[],
   windowSize: number,
   threshold: number
 ): MatchOffset | null => {
   for (let i = 0; i <= docTokens.length - windowSize; i++) {
     const window = docTokens.slice(i, i + windowSize)
-    if (scoreTokenWindow(needleSet, window) >= threshold) {
+    if (scoreOrderedSubsequence(needleWords, window) >= threshold) {
       return { start: window[0].start, end: window[window.length - 1].end }
     }
   }
@@ -107,10 +115,9 @@ export const findMatchOffset = (
   if (ordered) return ordered
   if (strict) return null
 
-  const needleSet = new Set(needleWords)
   const thresholds = selectThresholds(needleWords.length)
   for (const threshold of thresholds) {
-    const match = findFirstTokenMatch(docTokens, needleSet, needleWords.length, threshold)
+    const match = findFirstTokenMatch(docTokens, needleWords, needleWords.length, threshold)
     if (match) return match
   }
   return null
