@@ -7,8 +7,10 @@ export interface HighlightEntry {
   title?: string
   description?: string
   review?: string[]
+  reviewCount?: number
   onDelete?: () => void
   onResolve?: () => void
+  onReviewCountClick?: () => void
   onTitleClick?: () => void
 }
 
@@ -65,14 +67,25 @@ const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
         <div className="flex grow min-w-0 items-start rounded bg-amber-200/70 px-2 py-1.5">
           <span className="text-caption font-caption text-amber-900">{entry.review.join(" ")}</span>
         </div>
-        {entry.onResolve && (
-          <SwapButton
-            idle={<MessageSquareWarning className="text-body text-amber-600" />}
-            active={<Eraser className="text-body text-green-600" />}
-            activeTooltip="Clear review"
-            onClick={entry.onResolve}
-          />
-        )}
+        <div className="flex flex-none flex-col items-center gap-1">
+          {entry.onResolve && (
+            <SwapButton
+              idle={<MessageSquareWarning className="text-body text-amber-600" />}
+              active={<Eraser className="text-body text-green-600" />}
+              activeTooltip="Clear review"
+              onClick={entry.onResolve}
+            />
+          )}
+          {entry.reviewCount != null && entry.reviewCount > 1 && (
+            <button
+              className="flex h-4 min-w-4 cursor-pointer items-center justify-center rounded-full border border-solid border-amber-600 bg-transparent px-1 text-[10px] font-bold leading-none text-amber-600 hover:bg-amber-600 hover:text-white"
+              title={`${entry.reviewCount - 1} other flagged annotations for this code`}
+              onClick={entry.onReviewCountClick}
+            >
+              {entry.reviewCount - 1}
+            </button>
+          )}
+        </div>
       </div>
     )}
   </div>

@@ -62,7 +62,7 @@ import { HIDDEN_TAG_ID, HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hi
 import { buildIdentifierResolver } from "~/lib/files/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import type { SearchEntry } from "~/domain/search/types"
-import { buildFlaggedAnnotationsSql } from "~/domain/search/queries"
+import { buildFlaggedSearch } from "~/domain/search/queries"
 import { collectExhibits } from "~/domain/exhibits/selectors"
 import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
@@ -560,12 +560,7 @@ export default function ProjectLayout() {
   }
 
   const handleSearchUnsure = (code: Code) => {
-    const id = saveNewSearch({
-      title: `${code.id} (flagged)`,
-      description: `Annotations flagged for review: ${code.id}`,
-      sql: buildFlaggedAnnotationsSql(code.id),
-      meta: { toolbar: "code-refinement", codeId: code.id },
-    })
+    const id = saveNewSearch(buildFlaggedSearch(code.id, code.id))
     if (!id) return
     dismissSidebarRef.current?.()
     navigate(`/project/${params.projectId}/search/${id}`)

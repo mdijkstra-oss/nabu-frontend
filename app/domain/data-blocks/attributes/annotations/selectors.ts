@@ -4,7 +4,7 @@ import { getBlock } from "~/lib/data-blocks/query"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
 import type { FileStore } from "~/lib/files/store"
 import { findIn, findFileFor } from "~/lib/files/collect"
-import { wilsonUpperBound } from "~/lib/utils/wilson"
+import { wilsonUpperBound, wilsonLowerBound } from "~/lib/utils/wilson"
 
 export type Annotation = Omit<StoredAnnotation, "color"> & { color: string }
 
@@ -90,7 +90,7 @@ const collectReviewTallies = (
   const reviewed: Record<string, number> = {}
   for (const raw of Object.values(files)) {
     for (const a of getStoredAnnotations(raw)) {
-      if (!a.code) continue
+      if (!a.code || !a.vote) continue
       totals[a.code] = (totals[a.code] ?? 0) + 1
       if (hasStoredReview(a)) reviewed[a.code] = (reviewed[a.code] ?? 0) + 1
     }
@@ -114,11 +114,11 @@ const isReviewOutlier = (
   )
 
   const baselineUpper = wilsonUpperBound(otherReviewed, otherTotal)
-  const codeRatio = codeReviewed / codeTotal
-  const above = codeRatio > baselineUpper
+  const codeLower = wilsonLowerBound(codeReviewed, codeTotal)
+  const above = codeLower > baselineUpper
 
   console.debug(
-    `[wilson] ${code}: total=${codeTotal} reviewed=${codeReviewed} ratio=${codeRatio.toFixed(2)} wilson=${baselineUpper.toFixed(3)} self=${codeRatio.toFixed(3)} above=${above}`
+    `[wilson] ${code}: total=${codeTotal} reviewed=${codeReviewed} lower=${codeLower.toFixed(3)} baseline=${baselineUpper.toFixed(3)} above=${above}`
   )
 
   return above
@@ -129,6 +129,17 @@ const LOW_CONFIDENCE_THRESHOLD = 5
 const toSeverity = (outlier: boolean, total: number): ReviewSeverity => {
   if (!outlier) return "normal"
   return total < LOW_CONFIDENCE_THRESHOLD ? "warning" : "danger"
+}
+
+export const getReviewedCountsByCode = (files: FileStore): Record<string, number> => {
+  const result: Record<string, number> = {}
+  for (const raw of Object.values(files)) {
+    for (const a of getStoredAnnotations(raw)) {
+      if (!a.code || !hasStoredReview(a)) continue
+      result[a.code] = (result[a.code] ?? 0) + 1
+    }
+  }
+  return result
 }
 
 export const getReviewStatsByCode = (files: FileStore): Record<string, ReviewStat> => {

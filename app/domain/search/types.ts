@@ -32,3 +32,13 @@ export const SearchEntrySchema = z.object({
 })
 
 export type SearchEntry = z.infer<typeof SearchEntrySchema>
+
+export interface NewSearchData {
+  title: string
+  description: string
+  highlight?: string
+  sql: string
+  hydes?: HydesCache
+  descriptionsHash?: string
+  meta?: Record<string, string>
+}

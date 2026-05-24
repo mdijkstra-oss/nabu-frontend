@@ -3,17 +3,9 @@ import { executeFileAction } from "~/lib/data-blocks/file-action"
 import type { Settings } from "~/domain/data-blocks/settings/schema"
 import { getSettings } from "~/domain/data-blocks/settings/selectors"
 import { SETTINGS_FILE } from "~/lib/files/filename"
-import type { SearchEntry, HydesCache } from "~/domain/search/types"
+import type { SearchEntry, HydesCache, NewSearchData } from "~/domain/search/types"
 
-export interface NewSearchData {
-  title: string
-  description: string
-  highlight?: string
-  sql: string
-  hydes?: HydesCache
-  descriptionsHash?: string
-  meta?: Record<string, string>
-}
+export type { NewSearchData }
 
 const MAX_UNSAVED = 3
 

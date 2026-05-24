@@ -6,7 +6,11 @@ import { useNavigate, useParams } from "react-router"
 import { useInstance } from "@milkdown/react"
 import { editorViewCtx } from "@milkdown/kit/core"
 import { annotationsMeta } from "~/lib/editor/annotations/plugin"
-import { hasReview, type Annotation } from "~/domain/data-blocks/attributes/annotations/selectors"
+import {
+  hasReview,
+  getReviewedCountsByCode,
+  type Annotation,
+} from "~/domain/data-blocks/attributes/annotations/selectors"
 import { HighlightTooltip, type HighlightEntry } from "~/ui/components/HighlightTooltip"
 import { elementBorder } from "~/ui/theme/radix"
 import { getCodeTitle } from "~/domain/data-blocks/callout/codes/selectors"
@@ -15,6 +19,8 @@ import { getFiles } from "~/lib/files/store"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { findTextRange, proseTextContent, type TextRange } from "~/lib/editor/text"
 import { findMatchOffset } from "~/lib/text/find"
+import { buildFlaggedSearch } from "~/domain/search/queries"
+import { saveNewSearch } from "~/lib/agent/tools/search/settings"
 
 interface HoverState {
   text: string
@@ -99,22 +105,32 @@ const buildUxCallback = (filePath: string, ops: { op: "remove"; path: string }[]
 }
 
 const annotationToEntry =
-  (files: Record<string, string>, filePath?: string, onNavigateToCode?: (codeId: string) => void) =>
+  (
+    files: Record<string, string>,
+    reviewCounts: Record<string, number>,
+    filePath?: string,
+    onNavigateToCode?: (codeId: string) => void,
+    onSearchFlagged?: (codeId: string) => void
+  ) =>
   (annotation: Annotation, index: number): HighlightEntry => {
     const id = annotation.id
     const canMutate = !!filePath && !!id
     const code = annotation.code
+    const codeReviewCount = code ? (reviewCounts[code] ?? 0) : 0
     return {
       id: id ?? String(index),
       color: elementBorder(annotation.color),
       title: code ? getCodeTitle(files, code) : undefined,
       description: annotation.reason,
       review: annotation.vote?.review ? [annotation.vote.review] : undefined,
+      reviewCount: codeReviewCount > 0 ? codeReviewCount : undefined,
       onDelete: canMutate ? buildUxCallback(filePath, removeAnnotationOp(id)) : undefined,
       onResolve:
         canMutate && hasReview(annotation)
           ? buildUxCallback(filePath, resolveReviewOp(id))
           : undefined,
+      onReviewCountClick:
+        code && codeReviewCount > 0 && onSearchFlagged ? () => onSearchFlagged(code) : undefined,
       onTitleClick: code && onNavigateToCode ? () => onNavigateToCode(code) : undefined,
     }
   }
@@ -288,7 +304,21 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
     [files, navigate, params.projectId]
   )
 
-  const entries = matchingAnnotations.map(annotationToEntry(files, filePath, navigateToCode))
+  const searchFlagged = useCallback(
+    (codeId: string) => {
+      if (!params.projectId) return
+      const title = getCodeTitle(files, codeId) ?? codeId
+      const id = saveNewSearch(buildFlaggedSearch(codeId, title))
+      if (!id) return
+      navigate(`/project/${params.projectId}/search/${id}`)
+    },
+    [files, navigate, params.projectId]
+  )
+
+  const reviewCounts = useMemo(() => getReviewedCountsByCode(files), [files])
+  const entries = matchingAnnotations.map(
+    annotationToEntry(files, reviewCounts, filePath, navigateToCode, searchFlagged)
+  )
 
   useLayoutEffect(() => {
     const bridge = bridgeRef.current
