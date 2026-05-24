@@ -70,6 +70,7 @@ const writeClassificationToAttributes = (
         ],
       },
     ],
+    skipPendingRefs: true,
   })
 }
 
@@ -118,7 +119,7 @@ const processTopics = async (changedFiles: string[], deps: CorpusSyncDeps): Prom
   deps.onProgress?.(0, items.length)
 
   await processPool(items, classifyFile(existing, deps), () => undefined, {
-    concurrency: 1,
+    concurrency: 10,
     onItemComplete: (completed, total) => deps.onProgress?.(completed, total),
   })
 

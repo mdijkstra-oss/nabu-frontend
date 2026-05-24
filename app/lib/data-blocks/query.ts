@@ -1,5 +1,6 @@
 import type { z } from "zod"
 import { findSingletonBlock, findBlocksByLanguage } from "~/lib/data-blocks/parse"
+import { stripPendingRefs } from "~/lib/files/pending-refs"
 import { createCappedCache } from "~/lib/utils/cache"
 
 export const recoverArrayItems = <T>(
@@ -62,7 +63,7 @@ const parseWithCache = <T>(language: string, content: string, schema: z.ZodType<
   if (cache.has(key)) return cache.get(key) as T | null
 
   try {
-    const json = JSON.parse(stripBoundaryLines(content))
+    const json = JSON.parse(stripPendingRefs(stripBoundaryLines(content)))
     const result = schema.safeParse(json)
     if (result.success) {
       cache.set(key, result.data)

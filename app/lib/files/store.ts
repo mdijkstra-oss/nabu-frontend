@@ -73,7 +73,7 @@ const persistWrite = (path: string): void => {
   persistDebounce.call(path, async () => {
     const content = files[path]
     if (content === undefined) return
-    await sendCommand(pid, { action: "WriteFile", path, content })
+    await sendCommand(pid, { action: "WriteFile", path, content: stripPendingRefs(content) })
   })
 }
 
@@ -107,7 +107,10 @@ export const getFileLineCount = (filename: string): number => countLines(getFile
 
 export const setFiles = (newFiles: FileStore): void => {
   console.debug(`[store] setFiles: ${Object.keys(newFiles).length} files`, Object.keys(newFiles))
-  files = Object.fromEntries(Object.entries(newFiles).map(([k, v]) => [k, normalizeFile(v)]))
+  // strip pending refs leaked to disk before persistWrite was fixed to strip on write
+  files = Object.fromEntries(
+    Object.entries(newFiles).map(([k, v]) => [k, normalizeFile(stripPendingRefs(v))])
+  )
   rebuildDefinitionIndex(files)
   notify()
 }
