@@ -154,7 +154,7 @@ const rejectDanglingBlock = (block: Block): Block => {
   if (dangling.length === 0) return block
   return {
     type: "system",
-    content: `${REJECTION_PREFIX} These entity IDs do not exist: ${dangling.join(", ")}\nYour message was:\n${block.content}\nOnly reference entity IDs that exist in the current documents.`,
+    content: `${REJECTION_PREFIX} Your last message was rejected because these entity IDs do not exist: ${dangling.join(", ")}\nIn your next message DO NOT restate any of these identifiers. Continue without them.`,
   }
 }
 

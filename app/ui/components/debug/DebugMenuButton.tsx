@@ -13,6 +13,11 @@ interface DebugMenuButtonProps {
   onRequestCompaction: () => void
 }
 
+const DEBUG_NOTICES: string[] = [
+  "refine-code ignores annotations without vote block (pre-vote format)",
+  "user-created annotations don't write vote yet",
+]
+
 const isActive = (options: DebugOptions, key: string): boolean => options[key] ?? false
 
 const renderToggleItem = (
@@ -50,7 +55,19 @@ export const DebugMenuButton = ({
     </SubframeCore.DropdownMenu.Trigger>
     <SubframeCore.DropdownMenu.Portal>
       <SubframeCore.DropdownMenu.Content side="right" align="end" sideOffset={4} asChild>
-        <DropdownMenu>
+        <DropdownMenu className="max-w-[320px]">
+          {DEBUG_NOTICES.length > 0 && (
+            <>
+              <div className="flex w-full flex-col gap-0.5 px-3 py-1.5">
+                {DEBUG_NOTICES.map((notice, i) => (
+                  <span key={i} className="text-caption font-caption text-error-700">
+                    • {notice}
+                  </span>
+                ))}
+              </div>
+              <DropdownMenu.DropdownDivider />
+            </>
+          )}
           {DEBUG_TOGGLES.map((t) =>
             renderToggleItem(t.key, t.label, t.icon, isActive(debugOptions, t.key), onToggleOption)
           )}

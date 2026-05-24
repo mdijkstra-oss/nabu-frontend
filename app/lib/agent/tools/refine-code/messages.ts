@@ -24,6 +24,7 @@ interface ReviewedAnnotation extends CodedAnnotation {
 const isForCode = (calloutId: string) => (a: StoredAnnotation) => a.code === calloutId
 
 const hasReviewNote = (a: StoredAnnotation): boolean => a.vote?.review !== undefined
+const hasVoteBlock = (a: StoredAnnotation): boolean => a.vote !== undefined
 
 const toReviewedAnnotation = (a: StoredAnnotation, file: string): ReviewedAnnotation => ({
   text: a.text,
@@ -57,7 +58,7 @@ export const collectCleanAnnotations = (
   const result: CodedAnnotation[] = []
   for (const [path, raw] of Object.entries(files)) {
     for (const a of getStoredAnnotations(raw)) {
-      if (!matchesCode(a) || hasReviewNote(a)) continue
+      if (!matchesCode(a) || !hasVoteBlock(a) || hasReviewNote(a)) continue
       result.push({ text: a.text, reason: a.reason, file: path })
       if (result.length >= limit) return result
     }
