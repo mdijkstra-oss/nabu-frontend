@@ -21,16 +21,16 @@ Do NOT question these next steps, they come DIRECTLY from user. Do every step in
 
 const buildRecodeTask = (codeId: string) => ({
   context: `
-Important: Do not analyze, interpret, or evaluate annotations yourself. apply_deep_analysis handles all analytical work.
+Important: Do not analyze, interpret, or evaluate annotations yourself. plan_deep_analysis handles all analytical work.
 
 Do NOT question these next steps, they come DIRECTLY from user. Do every step in order NOW.
 
 1. Use ls --show-tags to find the general codebook file (group: "framework").
-2. Call apply_deep_analysis with:
-   - source_files: [{ path: codebook from step 1, scope: "framework" }, { path: "${codeId}.generated.hidden.md", scope: "dimension" }]
-   - sections: [{ type: "query", sql: "${buildFlaggedAnnotationsSql(codeId)}" }]
+2. Call plan_deep_analysis with:
+   - target_files: [{ type: "query", sql: "${buildFlaggedAnnotationsSql(codeId)}" }]
+   - source_files: [{ path: codebook from step 1, group: "framework" }, { path: "${codeId}.generated.hidden.md", group: "dimension" }]
    - post_action: "annotate_as_code"
-3. Present its results to the researcher.
+   - interactive: false
 
 Do not call refine_code.
 `,

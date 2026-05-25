@@ -69,7 +69,6 @@ const raw: Record<ModeName, ModeConfig> = {
       removeFile,
       // scoutTool, // temporary — re-enable later
       planDeepAnalysisTool,
-      applyDeepAnalysisTool,
       refineCodeTool,
       startPlanTool,
       askTool,

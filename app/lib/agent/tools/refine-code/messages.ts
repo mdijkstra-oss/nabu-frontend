@@ -249,25 +249,35 @@ export const buildAnnotationIndex = (
 export const buildInstructionTail = (calloutId: string): string =>
   `---
 
-## Presenting the findings
+## Your task: turn each finding into a decision the researcher rules on
 
-Present these findings to the researcher. When you reference a passage or another code, emit its \`id\` only — in the marked form the chat resolves to a link — and do not quote, retype, or paraphrase its text alongside it. The link resolves to the exact passage on its own, so a retyped quote only duplicates it and is the one place text can drift; your own one-line analysis after the link is fine, since that is your words, not the passage. Relay every reference by the exact \`id\` the analysis used; do not rename a code, resolve a name to a different code, or substitute one reference for another. If the analysis names a code only loosely with no callout id, present it as stated and flag the target as unconfirmed — do not pick a code yourself. If the analysis suggests specific changes to the code definition, present them as options using the ask tool: one option per distinct change, an option to apply all changes together, and an option to discuss further. Do not apply changes without the researcher choosing.
+The researcher has already read the analysis above. Do not restate, summarize, or re-narrate it, and do not quote passages or name codes from it. Your job is to put the decision in front of them — not a menu of fixes to approve.
 
-## Applying the definition change
+For each finding, use the ask tool to pose the underlying question the finding raises, with the possible rulings as the options. The option the researcher picks is their ruling on the substance; you turn that ruling into definition wording afterward. A boundary-ambiguity finding becomes something like:
 
-After the researcher selects changes, edit the code at \`${calloutId}.generated.hidden.md\` using patch_json_block. Apply only the changes the researcher selected.
+> Does naming an existing rule count as specifying it?
+>
+> - No — require stating the rule's content (would reclassify these N, incl. the clean one)
+> - Yes — naming counts; the definition stands
+> - Discuss
+
+### Building these:
+
+- One question per finding. Do not bundle findings into a single "apply all" option — separate findings are separate rulings.
+- Frame the options as the competing answers to the question (which way the boundary goes), not as fixes ("sharpen the boundary"). The researcher decides the substance; the wording is your job, not theirs.
+- The question and the rulings come from the finding itself — do not invent a decision the analysis did not raise, or drop one it did.
+- Where a ruling has a consequence, state it briefly in the option (what it would reclassify or exclude, including any clean passage).
+- Always include a "Discuss" option.
+
+Do not apply anything until the researcher rules.
+
+## Applying the ruling
+
+Once the researcher has ruled, translate the ruling into the edit: edit the code at \`${calloutId}.generated.hidden.md\` using patch_json_block. Apply only what their ruling entails.
 
 When a change adds or replaces an example or counter-example, write the annotation \`id\` the analysis referenced — not passage text. The system expands the id to the annotation's exact text, so do not author, complete, normalize, paraphrase, or retype any passage text. If a proposed example is not backed by an annotation id in the analysis, do not invent one — return to the researcher.
 
-Once the edit is applied, confirm what was changed. You are done.
+Once the edit is applied, confirm what was changed. You are done — stop there.
 
-Do not count annotations, propose recoding, or suggest re-running the code. Editing the definition and recoding the corpus are separate actions — recoding is the researcher's call, made when they choose, and is never a default consequence of an edit. Not every change needs a run.
-
-## If the researcher asks to recode
-
-Only when the researcher explicitly requests it, follow these rules:
-
-1. Count existing annotations for \`${calloutId}\`: how many have a vote_review (reviewed) and how many do not (unreviewed).
-2. Report both counts and confirm which set to recode: reviewed, unreviewed, or both. For the chosen set, this code's existing annotations are cleared — the codings around each coded passage (e.g. on the same line) — and the coder runs over those spots again against the updated definition. Each spot may come back coded or not, depending on the new definition and normal run-to-run variation, so the set's annotations for this code are whatever the fresh pass produces.
-3. For the chosen set, call apply_deep_analysis with sections of \`type: "query"\` — use a SQL query against the annotations table filtering by \`code = '${calloutId}'\` and the appropriate vote_review condition. Use \`source_files: [{ path: "${calloutId}.generated.hidden.md", scope: "dimension" }]\` — this is the only dimension needed.
+Do not mention, offer, propose, or ask about recoding or re-running the code, even in passing, and do not initiate it yourself or count/inspect annotations. Recoding is a separate step the researcher takes deliberately and elsewhere, once they have finished refining; raising it here would pull them into that loop too early, so leave it unsaid.
 `

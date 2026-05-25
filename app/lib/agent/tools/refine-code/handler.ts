@@ -5,6 +5,7 @@ import { getFiles } from "~/lib/files/store"
 import { GENERATED_SUFFIX } from "~/lib/files/filename"
 import { callLlm } from "../../client/fetch"
 import { extractText } from "../../client/convert"
+import { pushBlocks, buildStreamingCallbacks } from "../../client/store"
 import {
   collectReviewedAnnotations,
   collectCleanAnnotations,
@@ -63,7 +64,13 @@ registerTool(
         generalContent
       )
 
-      const blocks = await callLlm({ endpoint: REFINE_CODE_ENDPOINT, messages })
+      const heading = `## Refinement Analysis for \`${callout_id}\`\n\n`
+      const callbacks = buildStreamingCallbacks(heading)
+      const blocks = await callLlm({
+        endpoint: REFINE_CODE_ENDPOINT,
+        messages,
+        callbacks,
+      })
       const analysis = extractText(blocks)
 
       if (!analysis)
@@ -72,9 +79,14 @@ registerTool(
       const index = buildAnnotationIndex(flagged, clean)
       const tail = buildInstructionTail(callout_id)
 
+      pushBlocks([
+        { type: "text", content: `${heading}${analysis}` },
+        { type: "system", content: `${index}\n\n${tail}` },
+      ])
+
       return {
         status: "ok",
-        output: `## Refinement Analysis for \`${callout_id}\`\n\n${analysis}\n\n${index}\n\n${tail}`,
+        output: "Refinement analysis streamed above.",
         mutations: [],
       }
     },

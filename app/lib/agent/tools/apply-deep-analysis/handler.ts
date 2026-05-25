@@ -1,14 +1,10 @@
 import type { HandlerResult, Operation } from "../../types"
-import type { PostAction, Section, SourceFile, SectionSourceInput } from "./def"
+import type { PostAction, Section, SourceFile } from "./def"
 import { ApplyDeepAnalysisArgs, applyDeepAnalysisTool } from "./def"
 import { registerTool, tool, getToolHandlers } from "../../executors/tool"
 import { getFileView, getViewableFiles } from "../file-view"
 import { getFile, getFileRaw } from "~/lib/files/store"
 import { CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
-import { resolveSectionSources, type ResolvedSection } from "~/lib/search/resolve-sections"
-import { getDatabase } from "~/domain/db/database"
-import { getLlmHost } from "~/lib/agent/env"
-import { buildSemanticContext } from "~/domain/corpus/init"
 import {
   SECTION_MARKER,
   extractSection,
@@ -32,7 +28,6 @@ import {
 import { buildSentenceSegmentMap, resolveSentenceIndex } from "~/lib/composite/sentence-map"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import {
-  type ContentResolver,
   partitionSources,
   buildCallList,
   expandDimensions,
@@ -64,24 +59,12 @@ interface SectionResult {
   result: HandlerResult<string>
 }
 
-const isFileSection = (s: SectionSourceInput): s is SectionSourceInput & { type: "file" } =>
-  s.type === "file"
-
-const hasQuerySections = (sources: SectionSourceInput[]): boolean =>
-  sources.some((s) => s.type === "query")
-
-const resolvedToSection = (r: ResolvedSection): Section => ({
-  path: r.path,
-  start_line: r.startLine,
-  end_line: r.endLine,
-})
-
 const validateFileSections = (
-  sections: SectionSourceInput[],
+  sections: Section[],
   sourceFiles: SourceFile[]
 ): HandlerResult<string> | null => {
-  const filePaths = sections.filter(isFileSection).map((s) => s.path)
-  const missingTargets = [...new Set(filePaths)].filter((p) => getFile(p) === undefined)
+  const filePaths = sections.map((s) => s.path)
+  const missingTargets = [...new Set(filePaths)].filter((p) => getFileView(p) === undefined)
   if (missingTargets.length > 0)
     return {
       status: "error",
@@ -282,7 +265,6 @@ const processComposite = async (
   composite: Composite,
   scoped: ReturnType<typeof partitionSources>,
   calls: ReturnType<typeof buildCallList>,
-  resolve: ContentResolver,
   postAction: PostActionFn
 ): Promise<SectionResult[]> => {
   const prepared = prepareTargetContent(composite.content)
@@ -308,7 +290,7 @@ const processComposite = async (
   }
 
   for (const seg of composite.segments) {
-    const content = resolve(seg.path)
+    const content = getFileView(seg.path)
     if (content) logSectionBounds(seg.path, seg.startLine, seg.endLine, content.split("\n"))
   }
 
@@ -320,7 +302,7 @@ const processComposite = async (
   let leadingCtx = ""
   let trailingCtx = ""
   if (isSingleFileComposite(composite.segments) && firstSeg && lastSeg) {
-    const fullContent = resolve(firstSeg.path) ?? ""
+    const fullContent = getFileView(firstSeg.path) ?? ""
     const ctx = extractSentenceContext(
       fullContent,
       firstSeg.startLine,
@@ -331,7 +313,7 @@ const processComposite = async (
     trailingCtx = ctx.trailing
   }
 
-  const analyzedCodes = new Set(extractDimensionIds(calls, resolve))
+  const analyzedCodes = new Set(extractDimensionIds(calls, getFileView))
 
   const pipelineResult = await runAnalysisPipeline(
     calls,
@@ -340,7 +322,7 @@ const processComposite = async (
     trailingCtx,
     scoped,
     sentences,
-    resolve
+    getFileView
   )
 
   const warnings: string[] = []
@@ -419,47 +401,18 @@ registerTool(
   tool({
     ...applyDeepAnalysisTool,
     schema: ApplyDeepAnalysisArgs,
-    handler: async (_files, { sections: sectionSources, source_files, post_action }) => {
-      const validationError = validateFileSections(sectionSources, source_files)
+    handler: async (_files, { sections, source_files, post_action }) => {
+      const validationError = validateFileSections(sections, source_files)
       if (validationError) return validationError
 
-      let sections: Section[]
-
-      if (hasQuerySections(sectionSources)) {
-        const db = getDatabase()
-        if (!db)
-          return {
-            status: "error",
-            output: "Database not ready. Try again shortly.",
-            mutations: [],
-          }
-        const ctx = await buildSemanticContext(db, getLlmHost())
-        const resolved = await resolveSectionSources(sectionSources, ctx, getFileView)
-        if (!resolved.ok) return { status: "error", output: resolved.error, mutations: [] }
-        if (resolved.value.length === 0)
-          return {
-            status: "error",
-            output: "Query sections resolved to no file ranges.",
-            mutations: [],
-          }
-        sections = resolved.value.map(resolvedToSection)
-      } else {
-        sections = sectionSources.filter(isFileSection).map((s) => ({
-          path: s.path,
-          start_line: s.start_line,
-          end_line: s.end_line,
-        }))
-      }
-
       const scoped = partitionSources(source_files)
-      const resolve: ContentResolver = getFileView
 
       if (post_action === "annotate_as_code") {
-        const mismatch = validateFrameworkNoCallouts(scoped.framework, resolve)
+        const mismatch = validateFrameworkNoCallouts(scoped.framework, getFileView)
         if (mismatch) return { status: "error", output: mismatch, mutations: [] }
       }
 
-      const calls = buildCallList(expandDimensions(scoped, resolve))
+      const calls = buildCallList(expandDimensions(scoped, getFileView))
       const enqueue = createKeyedQueue()
       const actions = buildPostActions(enqueue)
 
@@ -472,13 +425,7 @@ registerTool(
       for (const composite of composites) {
         const name = composite.segments[0]?.path.split("/").pop() ?? "section"
         thinkWithName(PICKING_UP, name)
-        const results = await processComposite(
-          composite,
-          scoped,
-          calls,
-          resolve,
-          actions[post_action]
-        )
+        const results = await processComposite(composite, scoped, calls, actions[post_action])
         flat.push(...results)
       }
       if (flat.length === 1) return flat[0].result

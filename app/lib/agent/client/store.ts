@@ -1,4 +1,5 @@
 import type { Block } from "./blocks"
+import type { ParseCallbacks } from "./parse"
 import { getActiveSignal } from "~/lib/utils/signal"
 
 export const isDraft = (block: Block): boolean => "draft" in block && block.draft === true
@@ -88,6 +89,19 @@ export const clearBlocks = (): void => {
 export const showProgress = (label: string): void => {
   if (getActiveSignal()?.aborted) return
   setDraft({ type: "progress", label })
+}
+
+export const buildStreamingCallbacks = (prefix: string): ParseCallbacks => {
+  let textContent = ""
+  return {
+    onChunk: (chunk: string) => {
+      textContent += chunk
+      setDraft({ type: "text", content: prefix + textContent })
+    },
+    onStreamEnd: () => {
+      textContent = ""
+    },
+  }
 }
 
 export const clearPauseBlocks = (): void => {

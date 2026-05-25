@@ -24,36 +24,11 @@ export const Section = z.object({
 
 export type Section = z.infer<typeof Section>
 
-export const FileSectionSchema = z.object({
-  type: z.literal("file"),
-  path: z.string().describe("File path"),
-  start_line: z
-    .number()
-    .int()
-    .min(1)
-    .describe("First line of the section (1-based, from scout map)"),
-  end_line: z.number().int().min(1).describe("Last line of the section (1-based, from scout map)"),
-})
-
-export const QuerySectionSchema = z.object({
-  type: z.literal("query"),
-  sql: z.string().min(1).describe("SQL query to find sections via search"),
-})
-
-export const SectionSourceSchema = z.discriminatedUnion("type", [
-  FileSectionSchema,
-  QuerySectionSchema,
-])
-
-export type SectionSourceInput = z.infer<typeof SectionSourceSchema>
-
 export const ApplyDeepAnalysisArgs = z.object({
   sections: z
-    .array(SectionSourceSchema)
+    .array(Section)
     .min(1)
-    .describe(
-      "Sections to analyze. Each is either an explicit file range (`type: 'file'`) or a SQL query that resolves to file ranges (`type: 'query'`)."
-    ),
+    .describe("Sections to analyze. Each is a file range with path, start_line, and end_line."),
   source_files: z
     .array(SourceFile)
     .min(1)
@@ -61,7 +36,7 @@ export const ApplyDeepAnalysisArgs = z.object({
       "Files with criteria to apply. `framework` = general rules/protocol applied as common context to every evaluation. `dimension` = discrete angle of the framework, evaluated on its own. Mark as `framework` anything that applies across dimensions; mark as `dimension` only the actual items being judged. Misclassifying framework rules as dimensions causes redundant evaluations without improving quality."
     ),
   post_action: PostAction.describe(
-    "return: get results. annotate_as_code: write code annotations (analysis_source_id = code id). annotate_as_comment: write comment annotations."
+    "return: get results only. annotate_as_code: clears existing annotations for the dimension's code IDs within the analyzed sections, then writes fresh code annotations from the analysis results. annotate_as_comment: writes comment annotations without clearing existing ones."
   ),
 })
 

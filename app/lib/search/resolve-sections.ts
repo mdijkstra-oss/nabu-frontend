@@ -95,7 +95,7 @@ const resolveFileSection = (source: FileSection): ResolvedSection => ({
   endLine: source.end_line,
 })
 
-const resolveQueryHits = (
+export const resolveQueryHits = (
   hits: SearchHit[],
   getContent: (path: string) => string | undefined
 ): ResolvedSection[] =>
@@ -108,7 +108,7 @@ const resolveQueryHits = (
     return [{ ...resolved, path: hit.file }]
   })
 
-const executeResolvedQuery = async (
+export const executeResolvedQuery = async (
   sql: string,
   ctx: SemanticContext
 ): Promise<Result<SearchHit[], string>> => {

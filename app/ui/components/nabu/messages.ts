@@ -240,14 +240,19 @@ const parseScoutCallFiles = (
 
   const deepParsed = PlanDeepAnalysisArgs.safeParse(call.args)
   if (deepParsed.success) {
-    const allFiles = [...deepParsed.data.source_files, ...deepParsed.data.target_files]
-    return {
-      files: allFiles.map((f) => ({
+    const sourceEntries = deepParsed.data.source_files.map((f) => ({
+      path: f.path,
+      group: f.group,
+      status: deriveFileState(f.path, doneFiles, toolFinished),
+    }))
+    const targetEntries = deepParsed.data.target_files
+      .filter((f): f is { path: string; group: string } => "path" in f)
+      .map((f) => ({
         path: f.path,
         group: f.group,
         status: deriveFileState(f.path, doneFiles, toolFinished),
-      })),
-    }
+      }))
+    return { files: [...sourceEntries, ...targetEntries] }
   }
 
   return null
