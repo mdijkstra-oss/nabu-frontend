@@ -7,6 +7,7 @@ export interface ParseCallbacks {
   onBlock?: (block: Block) => void
   onToolName?: (name: string) => void
   onToolCall?: (call: ToolCall) => void
+  onStateSnapshot?: (blocks: Block[]) => void
   onStreamEnd?: () => void
 }
 

@@ -3,6 +3,7 @@ export interface RawLlmCall {
   endpoint: string
   requestBody: string
   rawResponse: string | null
+  streamingContent: string
   timestamp: number
   duration: number | null
 }
@@ -10,17 +11,39 @@ export interface RawLlmCall {
 let calls: RawLlmCall[] = []
 let nextId = 1
 let listeners: (() => void)[] = []
+let pendingFrame: ReturnType<typeof requestAnimationFrame> | null = null
 
 const notify = (): void => listeners.forEach((l) => l())
+
+const notifyThrottled = (): void => {
+  if (pendingFrame !== null) return
+  pendingFrame = requestAnimationFrame(() => {
+    pendingFrame = null
+    notify()
+  })
+}
 
 export const startRawCall = (endpoint: string, requestBody: string): number => {
   const id = nextId++
   calls = [
     ...calls,
-    { id, endpoint, requestBody, rawResponse: null, timestamp: Date.now(), duration: null },
+    {
+      id,
+      endpoint,
+      requestBody,
+      rawResponse: null,
+      streamingContent: "",
+      timestamp: Date.now(),
+      duration: null,
+    },
   ]
   notify()
   return id
+}
+
+export const updateRawCallStream = (id: number, content: string): void => {
+  calls = calls.map((c) => (c.id === id ? { ...c, streamingContent: content } : c))
+  notifyThrottled()
 }
 
 export const completeRawCall = (id: number, rawResponse: string, duration: number): void => {

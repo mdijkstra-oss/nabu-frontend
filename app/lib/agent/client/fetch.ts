@@ -6,7 +6,7 @@ import { getActiveSignal } from "~/lib/utils/signal"
 import { calculateBackoff } from "~/lib/utils/backoff"
 import { initialParseState, processLine, stateToBlocks, type ParseCallbacks } from "./parse"
 import type { InputItem, ResponseFormat } from "./convert"
-import { startRawCall, completeRawCall } from "./raw-store"
+import { startRawCall, completeRawCall, updateRawCallStream } from "./raw-store"
 import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 
 const RETRYABLE_STATUS = [429, 502, 503]
@@ -133,11 +133,13 @@ const streamToBlocks = async (response: Response, callbacks: ParseCallbacks): Pr
       for (const line of lines) {
         if (!line.trim()) continue
         state = processLine(line, state, callbacks)
+        callbacks.onStateSnapshot?.(stateToBlocks(state))
       }
     }
 
     if (buffer.trim()) {
       state = processLine(buffer, state, callbacks)
+      callbacks.onStateSnapshot?.(stateToBlocks(state))
     }
   } finally {
     await reader.cancel()
@@ -241,13 +243,26 @@ const isCacheable = (options: CallLlmOptions): boolean =>
 
 const hasErrorBlock = (blocks: Block[]): boolean => blocks.some((b) => b.type === "error")
 
-const executeLlmCall = async (options: CallLlmOptions, body: string): Promise<Block[]> => {
+const withStreamSnapshot = (callbacks: ParseCallbacks, rawId: number): ParseCallbacks => ({
+  ...callbacks,
+  onStateSnapshot: (blocks: Block[]) => {
+    callbacks.onStateSnapshot?.(blocks)
+    updateRawCallStream(rawId, JSON.stringify(blocks))
+  },
+})
+
+const executeLlmCall = async (
+  options: CallLlmOptions,
+  body: string,
+  rawId: number
+): Promise<Block[]> => {
   const response = await fetchWithRetry({
     url: buildUrl(options.endpoint, options.temperature),
     body,
     signal: options.signal,
   })
-  return streamToBlocks(response, options.callbacks ?? {})
+  const callbacks = withStreamSnapshot(options.callbacks ?? {}, rawId)
+  return streamToBlocks(response, callbacks)
 }
 
 export const callLlm = async (options: CallLlmOptions): Promise<Block[]> => {
@@ -269,7 +284,7 @@ export const callLlm = async (options: CallLlmOptions): Promise<Block[]> => {
 
   for (let attempt = 0; attempt <= MAX_FILTER_RETRIES; attempt++) {
     try {
-      blocks = await executeLlmCall(options, body)
+      blocks = await executeLlmCall(options, body, rawId)
     } catch (err) {
       if (!isStallError(err) || attempt === MAX_FILTER_RETRIES) throw err
       console.warn(`[LLM ${options.endpoint}] stall detected, retry ${attempt + 1}`)

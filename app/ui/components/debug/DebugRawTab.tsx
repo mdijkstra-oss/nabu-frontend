@@ -40,7 +40,7 @@ const addAllIds = (set: Set<number>, ids: number[]): Set<number> => {
 }
 
 const formatCallEntry = (call: RawLlmCall): string =>
-  `[${endpointLabel(call.endpoint)}] ${formatDuration(call.duration)}\n\n${call.rawResponse ?? "(pending)"}`
+  `[${endpointLabel(call.endpoint)}] ${formatDuration(call.duration)}\n\n${call.rawResponse ?? (call.streamingContent || "(pending)")}`
 
 const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false)
@@ -63,10 +63,18 @@ interface SectionProps {
   copyContent: string
   borderColor: string
   labelColor: string
+  defaultExpanded?: boolean
 }
 
-const Section = ({ label, displayContent, copyContent, borderColor, labelColor }: SectionProps) => {
-  const [expanded, setExpanded] = useState(false)
+const Section = ({
+  label,
+  displayContent,
+  copyContent,
+  borderColor,
+  labelColor,
+  defaultExpanded = false,
+}: SectionProps) => {
+  const [expanded, setExpanded] = useState(defaultExpanded)
 
   return (
     <div className={`border-l-2 ${borderColor} pl-2`}>
@@ -158,7 +166,7 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
             borderColor="border-blue-300"
             labelColor="text-blue-600"
           />
-          {call.rawResponse !== null && (
+          {call.rawResponse !== null ? (
             <Section
               label="Output"
               displayContent={prettyJson(call.rawResponse)}
@@ -166,7 +174,16 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
               borderColor="border-green-300"
               labelColor="text-green-600"
             />
-          )}
+          ) : call.streamingContent ? (
+            <Section
+              label="Output (streaming)"
+              displayContent={call.streamingContent}
+              copyContent={call.streamingContent}
+              borderColor="border-amber-300"
+              labelColor="text-amber-600"
+              defaultExpanded
+            />
+          ) : null}
         </div>
       )}
     </div>
@@ -181,7 +198,8 @@ const callMatchesFilter = (call: RawLlmCall, filter: string): boolean => {
   return (
     call.endpoint.toLowerCase().includes(lower) ||
     call.requestBody.toLowerCase().includes(lower) ||
-    (call.rawResponse?.toLowerCase().includes(lower) ?? false)
+    (call.rawResponse?.toLowerCase().includes(lower) ?? false) ||
+    call.streamingContent.toLowerCase().includes(lower)
   )
 }
 
