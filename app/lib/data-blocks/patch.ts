@@ -26,7 +26,7 @@ const isSingletonLanguage = (language: string): boolean =>
 const findBlock = (content: string, language: string, blockId?: string): ResolvedBlock => {
   if (isSingletonLanguage(language)) {
     const block = findSingletonBlock(content, language)
-    if (!block) return { ok: false, error: `No ${language} block found` }
+    if (!block) return { ok: true, json: {}, block: null }
     const parsed = parseBlockJson(block)
     if (!parsed.ok) return { ok: false, error: parsed.error }
     return { ok: true, json: parsed.data, block }

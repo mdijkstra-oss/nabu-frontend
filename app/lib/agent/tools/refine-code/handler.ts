@@ -10,6 +10,7 @@ import {
   collectCleanAnnotations,
   collectOtherCodes,
   buildRefineMessages,
+  buildAnnotationIndex,
   buildInstructionTail,
 } from "./messages"
 
@@ -56,6 +57,8 @@ registerTool(
         flagged,
         clean,
         otherCodes,
+        callout_id,
+        files,
         guidance,
         generalContent
       )
@@ -66,11 +69,12 @@ registerTool(
       if (!analysis)
         return { status: "error", output: "Refine agent returned no response", mutations: [] }
 
+      const index = buildAnnotationIndex(flagged, clean)
       const tail = buildInstructionTail(callout_id)
 
       return {
         status: "ok",
-        output: `## Refinement Analysis for \`${callout_id}\`\n\n${analysis}\n\n${tail}`,
+        output: `## Refinement Analysis for \`${callout_id}\`\n\n${analysis}\n\n${index}\n\n${tail}`,
         mutations: [],
       }
     },

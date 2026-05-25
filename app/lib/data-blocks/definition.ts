@@ -10,6 +10,12 @@ export interface ActorPathConfig {
   path: string
 }
 
+export interface IdRefExpansion {
+  field: string
+  prefix: string
+  replaceWith: string
+}
+
 export interface ValidationContext {
   availableCodes: { id: string; name: string }[]
   availableTags: { id: string; label: string }[]
@@ -38,5 +44,6 @@ export interface BlockTypeConfig<T = unknown> {
   normalizeAsFile?: string[]
   patchSchema?: (schema: Record<string, unknown>) => Record<string, unknown>
   rowPath?: string
+  expandIdRefs?: IdRefExpansion[]
   asyncValidate?: (parsed: T, context: AsyncValidationContext) => Promise<ValidationError[]>
 }

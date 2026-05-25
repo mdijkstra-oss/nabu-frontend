@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { block } from "./test-helpers"
-import { normalizeSingletonOrder, normalizeBlockFields } from "./normalize"
+import { normalizeSingletonOrder, normalizeBlockFields, expandBlockIdRefs } from "./normalize"
 
 const calloutJson = (content: string): string =>
   JSON.stringify({
@@ -146,6 +146,133 @@ describe("normalizeSingletonOrder", () => {
     const input = `${annotations}\n\n# Title\n\n${attrs}\n\nProse`
     const once = normalizeSingletonOrder(input)
     const twice = normalizeSingletonOrder(once)
+    expect(twice).toBe(once)
+  })
+})
+
+describe("expandBlockIdRefs", () => {
+  const annotationsBlock = (entries: { id: string; text: string }[]): string =>
+    block("json-annotations", JSON.stringify({ annotations: entries }, null, "\t"))
+
+  const calloutBlock = (content: string): string =>
+    block(
+      "json-callout",
+      JSON.stringify(
+        {
+          id: "callout-1abc23d4",
+          type: "codebook-code",
+          title: "Test",
+          content,
+          color: "blue",
+          collapsed: false,
+        },
+        null,
+        "\t"
+      )
+    )
+
+  const expandedCallout = (content: string): string =>
+    block(
+      "json-callout",
+      JSON.stringify(
+        {
+          id: "callout-1abc23d4",
+          type: "codebook-code",
+          title: "Test",
+          content,
+          color: "blue",
+          collapsed: false,
+        },
+        null,
+        "\t"
+      )
+    )
+
+  const cases = [
+    {
+      name: "replaces annotation ID with annotation text",
+      input: [
+        calloutBlock("See annotation-1abc23d4 for details"),
+        annotationsBlock([{ id: "annotation-1abc23d4", text: "important finding" }]),
+      ].join("\n\n"),
+      expected: [
+        expandedCallout("See important finding for details"),
+        annotationsBlock([{ id: "annotation-1abc23d4", text: "important finding" }]),
+      ].join("\n\n"),
+    },
+    {
+      name: "replaces multiple annotation IDs",
+      input: [
+        calloutBlock("First: annotation-1abc23d4, second: annotation-9xyz56e7"),
+        annotationsBlock([
+          { id: "annotation-1abc23d4", text: "alpha" },
+          { id: "annotation-9xyz56e7", text: "beta" },
+        ]),
+      ].join("\n\n"),
+      expected: [
+        expandedCallout("First: alpha, second: beta"),
+        annotationsBlock([
+          { id: "annotation-1abc23d4", text: "alpha" },
+          { id: "annotation-9xyz56e7", text: "beta" },
+        ]),
+      ].join("\n\n"),
+    },
+    {
+      name: "leaves unknown annotation ID as-is",
+      input: [
+        calloutBlock("See annotation-9unknown1 here"),
+        annotationsBlock([{ id: "annotation-1abc23d4", text: "known" }]),
+      ].join("\n\n"),
+      expected: [
+        calloutBlock("See annotation-9unknown1 here"),
+        annotationsBlock([{ id: "annotation-1abc23d4", text: "known" }]),
+      ].join("\n\n"),
+    },
+    {
+      name: "no annotations block — IDs left as-is",
+      input: calloutBlock("See annotation-1abc23d4"),
+      expected: calloutBlock("See annotation-1abc23d4"),
+    },
+    {
+      name: "non-callout block — unchanged",
+      input: [
+        block("json-attributes", '{"type":"research","subject":"annotation-1abc23d4"}'),
+        annotationsBlock([{ id: "annotation-1abc23d4", text: "found" }]),
+      ].join("\n\n"),
+      expected: [
+        block("json-attributes", '{"type":"research","subject":"annotation-1abc23d4"}'),
+        annotationsBlock([{ id: "annotation-1abc23d4", text: "found" }]),
+      ].join("\n\n"),
+    },
+    {
+      name: "already-expanded content (no IDs) — unchanged",
+      input: [
+        calloutBlock("See important finding for details"),
+        annotationsBlock([{ id: "annotation-1abc23d4", text: "important finding" }]),
+      ].join("\n\n"),
+      expected: [
+        calloutBlock("See important finding for details"),
+        annotationsBlock([{ id: "annotation-1abc23d4", text: "important finding" }]),
+      ].join("\n\n"),
+    },
+    {
+      name: "no blocks — unchanged",
+      input: "# Just prose",
+      expected: "# Just prose",
+    },
+  ]
+
+  it.each(cases)("$name", (c) => {
+    expect(expandBlockIdRefs(c.input)).toBe(c.expected)
+  })
+
+  it("is idempotent", () => {
+    const input = [
+      calloutBlock("See annotation-1abc23d4 for details"),
+      annotationsBlock([{ id: "annotation-1abc23d4", text: "important finding" }]),
+    ].join("\n\n")
+    const once = expandBlockIdRefs(input)
+    const twice = expandBlockIdRefs(once)
     expect(twice).toBe(once)
   })
 })

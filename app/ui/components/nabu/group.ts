@@ -253,9 +253,9 @@ export const toGroupedMessages = (history: Block[], derived: Derived): KeyedMess
   }))
 
   const planKeyed: KeyedEntry[] = planRanges.flatMap((range, planIdx) =>
-    buildPlanEntries(range, planLeaves.get(planIdx) ?? [], history).map((e) => ({
+    buildPlanEntries(range, planLeaves.get(planIdx) ?? [], history).map((e, entryIdx) => ({
       sortIndex: e.blockIndex,
-      key: `plan-${planIdx}`,
+      key: `plan-${planIdx}-${entryIdx}`,
       item: e.item,
     }))
   )

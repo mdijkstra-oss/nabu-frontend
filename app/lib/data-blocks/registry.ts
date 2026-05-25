@@ -1,4 +1,4 @@
-import type { BlockTypeConfig, ActorPathConfig, IdPathConfig } from "./definition"
+import type { BlockTypeConfig, ActorPathConfig, IdPathConfig, IdRefExpansion } from "./definition"
 import { toBlockSchema, type BlockSchemaDefinition } from "./json-schema"
 import { getByPath } from "./json"
 import { stripBlocksByLanguage } from "./parse"
@@ -81,6 +81,18 @@ export const getNormalizeAsFileFields = (language: string): string[] =>
 
 export const getAllowedFiles = (language: string): string[] | undefined =>
   blockTypes[language]?.allowedFiles
+
+export const getExpandIdRefs = (language: string): IdRefExpansion[] =>
+  blockTypes[language]?.expandIdRefs ?? []
+
+export const findBlockConfigByPrefix = (
+  prefix: string
+): { language: string; config: AnyBlockConfig } | undefined => {
+  const entry = Object.entries(blockTypes).find(([, config]) =>
+    config.idPaths?.some((p) => p.prefix === prefix)
+  )
+  return entry ? { language: entry[0], config: entry[1] } : undefined
+}
 
 export const getEntityPrefixes = (): string[] => [
   ...new Set(Object.values(blockTypes).flatMap((c) => c.idPaths?.map((p) => p.prefix) ?? [])),

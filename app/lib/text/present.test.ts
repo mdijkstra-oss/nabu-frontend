@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest"
 import {
   formatCodedSection,
+  formatTaggedSection,
   buildVisibleRanges,
+  locateTextInSentences,
   type CodedItem,
   type VisibleRange,
 } from "./present"
@@ -106,6 +108,33 @@ describe("formatCodedSection", () => {
       expect(result.text).toBe(expectedLines.join("\n"))
       expect(result.mapping).toHaveLength(expectedMappingCount)
     })
+  })
+
+  it("uses annotation id as label when present", () => {
+    const items: CodedItem[] = [
+      { start: 2, end: 2, codings: ["crisis-framing"], id: "annotation-8obi83xh" },
+      { start: 4, end: 5, codings: ["crisis-framing"], id: "annotation-1m921a6o" },
+    ]
+    const result = formatCodedSection(sentences, items)
+    expect(result.text).toBe(
+      [
+        "The prime minister opened the press conference.",
+        "annotation-8obi83xh: [crisis-framing] He stated that measures would be extended.",
+        "This was met with mixed reactions.",
+        "annotation-1m921a6o: [crisis-framing] De Jonge presented the figures. The system was under pressure.",
+        "The prime minister concluded by urging patience.",
+      ].join("\n")
+    )
+  })
+
+  it("falls back to numeric index when id is absent", () => {
+    const items: CodedItem[] = [
+      { start: 2, end: 2, codings: ["A"], id: "annotation-abc" },
+      { start: 5, end: 5, codings: ["B"] },
+    ]
+    const result = formatCodedSection(sentences, items)
+    expect(result.text).toContain("annotation-abc: [A]")
+    expect(result.text).toContain("2: [B]")
   })
 
   it("mapping links index to original span", () => {
@@ -293,5 +322,138 @@ describe("buildVisibleRanges", () => {
 
   cases.forEach(({ name, items, sentenceCount, context, expected }) => {
     it(name, () => expect(buildVisibleRanges(items, sentenceCount, context)).toEqual(expected))
+  })
+})
+
+describe("locateTextInSentences", () => {
+  const sentences = [
+    "The prime minister opened the press conference.",
+    "He stated that measures would be extended.",
+    "This was met with mixed reactions.",
+    "De Jonge presented the figures.",
+    "The system was under pressure.",
+    "The prime minister concluded by urging patience.",
+  ]
+
+  const cases: {
+    name: string
+    needle: string
+    expected: { start: number; end: number } | null
+  }[] = [
+    {
+      name: "exact single sentence",
+      needle: "He stated that measures would be extended.",
+      expected: { start: 2, end: 2 },
+    },
+    {
+      name: "exact multi-sentence span",
+      needle: "De Jonge presented the figures. The system was under pressure.",
+      expected: { start: 4, end: 5 },
+    },
+    {
+      name: "partial match within sentence",
+      needle: "measures would be extended",
+      expected: { start: 2, end: 2 },
+    },
+    {
+      name: "no match returns null",
+      needle: "completely unrelated text about quantum physics",
+      expected: null,
+    },
+    {
+      name: "empty needle returns null",
+      needle: "",
+      expected: null,
+    },
+    {
+      name: "first sentence",
+      needle: "The prime minister opened the press conference.",
+      expected: { start: 1, end: 1 },
+    },
+    {
+      name: "last sentence",
+      needle: "The prime minister concluded by urging patience.",
+      expected: { start: 6, end: 6 },
+    },
+  ]
+
+  cases.forEach(({ name, needle, expected }) => {
+    it(name, () => {
+      expect(locateTextInSentences(sentences, needle)).toEqual(expected)
+    })
+  })
+})
+
+describe("formatTaggedSection", () => {
+  const sentences = [
+    "The prime minister opened the press conference.",
+    "He stated that measures would be extended.",
+    "This was met with mixed reactions.",
+    "De Jonge presented the figures.",
+    "The system was under pressure.",
+    "The prime minister concluded by urging patience.",
+  ]
+
+  const cases: {
+    name: string
+    items: CodedItem[]
+    context?: number
+    expected: string
+  }[] = [
+    {
+      name: "wraps context and annotation in tags",
+      items: [{ start: 2, end: 2, codings: ["crisis-framing"], id: "annotation-abc" }],
+      expected: [
+        "<context>The prime minister opened the press conference.</context>",
+        '<annotation id="annotation-abc" code="crisis-framing">He stated that measures would be extended.</annotation>',
+        "<context>This was met with mixed reactions. De Jonge presented the figures. The system was under pressure. The prime minister concluded by urging patience.</context>",
+      ].join("\n"),
+    },
+    {
+      name: "context trimming with tags",
+      items: [{ start: 3, end: 3, codings: ["X"], id: "annotation-123" }],
+      context: 1,
+      expected: [
+        "...",
+        "<context>He stated that measures would be extended.</context>",
+        '<annotation id="annotation-123" code="X">This was met with mixed reactions.</annotation>',
+        "<context>De Jonge presented the figures.</context>",
+        "...",
+      ].join("\n"),
+    },
+    {
+      name: "multiple annotations merge context between",
+      items: [
+        { start: 2, end: 2, codings: ["A"], id: "annotation-aaa" },
+        { start: 4, end: 4, codings: ["B"], id: "annotation-bbb" },
+      ],
+      expected: [
+        "<context>The prime minister opened the press conference.</context>",
+        '<annotation id="annotation-aaa" code="A">He stated that measures would be extended.</annotation>',
+        "<context>This was met with mixed reactions.</context>",
+        '<annotation id="annotation-bbb" code="B">De Jonge presented the figures.</annotation>',
+        "<context>The system was under pressure. The prime minister concluded by urging patience.</context>",
+      ].join("\n"),
+    },
+    {
+      name: "annotation without id omits id attr",
+      items: [{ start: 2, end: 2, codings: ["X"] }],
+      expected: [
+        "<context>The prime minister opened the press conference.</context>",
+        '<annotation code="X">He stated that measures would be extended.</annotation>',
+        "<context>This was met with mixed reactions. De Jonge presented the figures. The system was under pressure. The prime minister concluded by urging patience.</context>",
+      ].join("\n"),
+    },
+    {
+      name: "all context when no items",
+      items: [],
+      expected: `<context>${sentences.join(" ")}</context>`,
+    },
+  ]
+
+  cases.forEach(({ name, items, context, expected }) => {
+    it(name, () => {
+      expect(formatTaggedSection(sentences, items, context)).toBe(expected)
+    })
   })
 })

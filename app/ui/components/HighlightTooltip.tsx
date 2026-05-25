@@ -76,13 +76,13 @@ const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
               onClick={entry.onResolve}
             />
           )}
-          {entry.reviewCount != null && entry.reviewCount > 1 && (
+          {entry.reviewCount != null && entry.reviewCount > 0 && (
             <button
               className="flex h-4 min-w-4 cursor-pointer items-center justify-center rounded-full border border-solid border-amber-600 bg-transparent px-1 text-[10px] font-bold leading-none text-amber-600 hover:bg-amber-600 hover:text-white"
-              title={`${entry.reviewCount - 1} other flagged annotations for this code`}
+              title={`${entry.reviewCount} flagged annotations for this code`}
               onClick={entry.onReviewCountClick}
             >
-              {entry.reviewCount - 1}
+              {entry.reviewCount}
             </button>
           )}
         </div>

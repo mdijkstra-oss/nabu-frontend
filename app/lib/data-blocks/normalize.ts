@@ -1,7 +1,20 @@
-import { parseCodeBlocks, collapseBlankLines, formatBlock, type CodeBlock } from "./parse"
-import { isSingleton, getSingletonLanguages, getNormalizeAsFileFields } from "./registry"
+import {
+  parseCodeBlocks,
+  findBlocksByLanguage,
+  collapseBlankLines,
+  formatBlock,
+  type CodeBlock,
+} from "./parse"
+import {
+  isSingleton,
+  getSingletonLanguages,
+  getNormalizeAsFileFields,
+  getExpandIdRefs,
+  findBlockConfigByPrefix,
+} from "./registry"
 import { normalizeContent } from "~/lib/patch/diff/normalize"
-import { tryParseJson } from "./json"
+import { tryParseJson, parsePath, isObject } from "./json"
+import type { IdRefExpansion } from "./definition"
 
 const isSingletonBlock = (block: CodeBlock): boolean => isSingleton(block.language)
 
@@ -73,6 +86,135 @@ export const normalizeBlockFields = (markdown: string): string => {
     if (!normalized) continue
 
     const newContent = JSON.stringify(normalized, null, "\t")
+    const header = `\`\`\`${block.language}\n`
+    const footer = `\n\`\`\``
+    const oldSection = result.slice(block.start + offset, block.end + offset)
+    const newSection = header + newContent + footer
+    result = result.slice(0, block.start + offset) + newSection + result.slice(block.end + offset)
+    offset += newSection.length - oldSection.length
+  }
+
+  return result
+}
+
+const SYSTEM_ID_SUFFIX = "(?=[a-z0-9]*\\d)[a-z0-9]{6,10}"
+
+const buildIdRegex = (prefix: string): RegExp =>
+  new RegExp(`\\b${prefix}-${SYSTEM_ID_SUFFIX}\\b`, "g")
+
+const buildEntityLookup = (
+  sourceBlock: CodeBlock,
+  idPath: string,
+  replaceWith: string
+): Map<string, string> => {
+  const lookup = new Map<string, string>()
+  const parsed = tryParseJson(sourceBlock.content)
+  if (!parsed) return lookup
+
+  const pathInfo = parsePath(idPath)
+  if (!pathInfo) return lookup
+
+  if (pathInfo.type === "array") {
+    const arr = parsed[pathInfo.arrayField]
+    if (!Array.isArray(arr)) return lookup
+    for (const item of arr) {
+      if (!isObject(item)) continue
+      const id = item[pathInfo.itemField]
+      const text = item[replaceWith]
+      if (typeof id === "string" && typeof text === "string") {
+        lookup.set(id, text)
+      }
+    }
+  } else if (pathInfo.type === "root-array") {
+    if (!Array.isArray(parsed)) return lookup
+    for (const item of parsed as unknown[]) {
+      if (!isObject(item)) continue
+      const id = item[pathInfo.itemField]
+      const text = item[replaceWith]
+      if (typeof id === "string" && typeof text === "string") {
+        lookup.set(id, text)
+      }
+    }
+  } else {
+    const id = parsed[pathInfo.field]
+    const text = parsed[replaceWith]
+    if (typeof id === "string" && typeof text === "string") {
+      lookup.set(id, text)
+    }
+  }
+
+  return lookup
+}
+
+const expandField = (
+  value: string,
+  expansion: IdRefExpansion,
+  lookup: Map<string, string>
+): string => {
+  const regex = buildIdRegex(expansion.prefix)
+  return value.replace(regex, (match) => lookup.get(match) ?? match)
+}
+
+const expandBlockFields = (
+  parsed: Record<string, unknown>,
+  expansions: IdRefExpansion[],
+  markdown: string
+): Record<string, unknown> | null => {
+  let changed = false
+  const result = { ...parsed }
+
+  for (const expansion of expansions) {
+    const value = result[expansion.field]
+    if (typeof value !== "string") continue
+
+    const sourceConfig = findBlockConfigByPrefix(expansion.prefix)
+    if (!sourceConfig) continue
+
+    const idPathConfig = sourceConfig.config.idPaths?.find((p) => p.prefix === expansion.prefix)
+    if (!idPathConfig) continue
+
+    const sourceBlocks = findBlocksByLanguage(markdown, sourceConfig.language)
+    if (sourceBlocks.length === 0) continue
+
+    const lookup = new Map<string, string>()
+    for (const sourceBlock of sourceBlocks) {
+      for (const [k, v] of buildEntityLookup(
+        sourceBlock,
+        idPathConfig.path,
+        expansion.replaceWith
+      )) {
+        lookup.set(k, v)
+      }
+    }
+
+    if (lookup.size === 0) continue
+
+    const expanded = expandField(value, expansion, lookup)
+    if (expanded !== value) {
+      result[expansion.field] = expanded
+      changed = true
+    }
+  }
+
+  return changed ? result : null
+}
+
+export const expandBlockIdRefs = (markdown: string): string => {
+  const blocks = parseCodeBlocks(markdown)
+  let result = markdown
+  let offset = 0
+
+  for (const block of blocks) {
+    const expansions = getExpandIdRefs(block.language)
+    if (expansions.length === 0) continue
+
+    const parsed = tryParseJson(block.content)
+    if (!parsed) continue
+
+    const expanded = expandBlockFields(parsed, expansions, markdown)
+    if (!expanded) continue
+
+    const newContent = JSON.stringify(expanded, null, "\t")
     const header = `\`\`\`${block.language}\n`
     const footer = `\n\`\`\``
     const oldSection = result.slice(block.start + offset, block.end + offset)

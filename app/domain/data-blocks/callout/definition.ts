@@ -21,6 +21,7 @@ export const jsonCallout: BlockTypeConfig = {
   labelKey: "title",
   multilineFields: ["content"],
   normalizeAsFile: ["content"],
+  expandIdRefs: [{ field: "content", prefix: "annotation", replaceWith: "text" }],
   idPaths: [{ path: "id", prefix: "callout" }],
   actorPaths: [{ path: "actor" }],
 }
