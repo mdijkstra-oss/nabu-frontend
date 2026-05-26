@@ -39,8 +39,50 @@ const isContentBlock = (b: Block): b is { type: "user" | "text" | "error"; conte
 
 const hasDraft = (b: Block): boolean => "draft" in b && b.draft === true
 
-export const textMessagesIndexed = (history: Block[]): Indexed<TextMessage>[] =>
-  history
+interface SuppressionRule {
+  afterResult: string
+  untilCall: string
+}
+
+const SUPPRESSION_RULES: readonly SuppressionRule[] = [
+  { afterResult: "refine_code", untilCall: "ask" },
+]
+
+const isResultOf = (block: Block, toolName: string): boolean =>
+  block.type === "tool_result" && block.toolName === toolName
+
+const findMatchingRule = (block: Block): SuppressionRule | null => {
+  for (const rule of SUPPRESSION_RULES) {
+    if (isResultOf(block, rule.afterResult)) return rule
+  }
+  return null
+}
+
+const isResumeBlock = (block: Block, rule: SuppressionRule): boolean =>
+  findCall(block, rule.untilCall) !== undefined
+
+const findSuppressedIndices = (history: Block[]): Set<number> => {
+  const suppressed = new Set<number>()
+  let activeRule: SuppressionRule | null = null
+  for (let i = 0; i < history.length; i++) {
+    const block = history[i]
+    if (activeRule && isResumeBlock(block, activeRule)) {
+      activeRule = null
+      continue
+    }
+    if (!activeRule) {
+      const match = findMatchingRule(block)
+      if (match) activeRule = match
+      continue
+    }
+    suppressed.add(i)
+  }
+  return suppressed
+}
+
+export const textMessagesIndexed = (history: Block[]): Indexed<TextMessage>[] => {
+  const suppressed = findSuppressedIndices(history)
+  return history
     .map((b, i) => ({ block: b, index: i }))
     .filter(
       (
@@ -50,6 +92,7 @@ export const textMessagesIndexed = (history: Block[]): Indexed<TextMessage>[] =>
         hasContent(item.block.content) &&
         !isLlmNoise(item.block.content)
     )
+    .filter(({ block, index }) => block.type === "user" || !suppressed.has(index))
     .map(({ block, index }) => ({
       index,
       message: {
@@ -59,6 +102,7 @@ export const textMessagesIndexed = (history: Block[]): Indexed<TextMessage>[] =>
         ...(hasDraft(history[index]) && { draft: true as const }),
       },
     }))
+}
 
 export const findPlanBlockIndices = (history: Block[]): number[] =>
   history
