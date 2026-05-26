@@ -46,4 +46,5 @@ export interface BlockTypeConfig<T = unknown> {
   rowPath?: string
   expandIdRefs?: IdRefExpansion[]
   asyncValidate?: (parsed: T, context: AsyncValidationContext) => Promise<ValidationError[]>
+  normalize?: (oldDoc: unknown, newDoc: unknown) => unknown
 }

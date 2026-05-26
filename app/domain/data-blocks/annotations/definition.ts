@@ -1,6 +1,7 @@
 import { annotationsBlockSchema, type AnnotationsBlock } from "./schema"
 import type { BlockTypeConfig } from "~/lib/data-blocks/definition"
 import { patchAnnotationRequired } from "~/domain/data-blocks/attributes/schema"
+import { normalizeAnnotations } from "./normalize"
 
 export const jsonAnnotations: BlockTypeConfig<AnnotationsBlock> = {
   schema: annotationsBlockSchema,
@@ -18,4 +19,5 @@ export const jsonAnnotations: BlockTypeConfig<AnnotationsBlock> = {
   actorPaths: [{ path: "annotations.*.actor" }],
   fuzzyFields: ["annotations.*.text"],
   patchSchema: patchAnnotationRequired,
+  normalize: normalizeAnnotations,
 }

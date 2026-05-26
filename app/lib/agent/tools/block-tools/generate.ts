@@ -267,6 +267,10 @@ export const generatePatchTool = (language: string, config: BlockTypeConfig): An
           failures.push(...fieldResult.failures)
         }
 
+        if (config.normalize) {
+          patchedDoc = config.normalize(resolved.json, patchedDoc)
+        }
+
         const rejectedMessage =
           rejectedPaths.length > 0
             ? `Rejected ${rejectedPaths.length} op(s) with numeric indices (use selectors instead): ${rejectedPaths.join(", ")}`
