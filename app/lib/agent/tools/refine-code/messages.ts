@@ -8,7 +8,7 @@ import { extractProse } from "~/lib/data-blocks/parse"
 import { stripMarkdown } from "~/lib/text/strip"
 import { splitBySentences } from "~/lib/text/split"
 import { formatTaggedSection, locateTextInSentences, type CodedItem } from "~/lib/text/present"
-import { MAX_REVIEWED_ANNOTATIONS } from "./def"
+import { ANNOTATION_SAMPLE_SIZE } from "./def"
 
 interface Message {
   type: "message"
@@ -50,24 +50,20 @@ export const collectReviewedAnnotations = (
     for (const a of getStoredAnnotations(raw)) {
       if (!matchesCode(a) || !hasReviewNote(a)) continue
       result.push(toReviewedAnnotation(a, path))
-      if (result.length >= MAX_REVIEWED_ANNOTATIONS) return result
+      if (result.length >= ANNOTATION_SAMPLE_SIZE) return result
     }
   }
   return result
 }
 
-export const collectCleanAnnotations = (
-  files: FileStore,
-  calloutId: string,
-  limit: number
-): CodedAnnotation[] => {
+export const collectCleanAnnotations = (files: FileStore, calloutId: string): CodedAnnotation[] => {
   const matchesCode = isForCode(calloutId)
   const result: CodedAnnotation[] = []
   for (const [path, raw] of Object.entries(files)) {
     for (const a of getStoredAnnotations(raw)) {
       if (!matchesCode(a) || !hasVoteBlock(a) || hasReviewNote(a)) continue
       result.push({ id: a.id, text: a.text, reason: a.reason, file: path })
-      if (result.length >= limit) return result
+      if (result.length >= ANNOTATION_SAMPLE_SIZE) return result
     }
   }
   return result

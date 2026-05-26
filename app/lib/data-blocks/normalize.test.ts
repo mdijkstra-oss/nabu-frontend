@@ -275,4 +275,24 @@ describe("expandBlockIdRefs", () => {
     const twice = expandBlockIdRefs(once)
     expect(twice).toBe(once)
   })
+
+  it("resolves cross-file IDs via resolveId fallback", () => {
+    const input = calloutBlock("See annotation-1abc23d4 for details")
+    const resolveId = (id: string) =>
+      id === "annotation-1abc23d4" ? "important finding" : undefined
+    expect(expandBlockIdRefs(input, resolveId)).toBe(
+      expandedCallout("See important finding for details")
+    )
+  })
+
+  it("prefers same-file lookup over resolveId", () => {
+    const input = [
+      calloutBlock("See annotation-1abc23d4 for details"),
+      annotationsBlock([{ id: "annotation-1abc23d4", text: "local text" }]),
+    ].join("\n\n")
+    const resolveId = () => "remote text"
+    const result = expandBlockIdRefs(input, resolveId)
+    expect(result).toContain("local text")
+    expect(result).not.toContain("remote text")
+  })
 })

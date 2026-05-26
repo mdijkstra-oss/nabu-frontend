@@ -12,8 +12,8 @@ import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 const RETRYABLE_STATUS = [429, 502, 503]
 const MAX_RETRIES = 3
 const MAX_FILTER_RETRIES = 2
-const STALL_TIMEOUT_MS = 60_000
-const CONNECT_TIMEOUT_MS = 120_000
+const STALL_TIMEOUT_MS = 120_000
+const CONNECT_TIMEOUT_MS = 30_000
 
 const RETRYABLE_ERROR_TYPES = new Set(["SAFETY", "RECITATION", "content_filter"])
 
@@ -38,9 +38,6 @@ export class ConnectTimeoutError extends Error {
 
 const isStallError = (err: unknown): err is StallError => err instanceof StallError
 
-const isAbortLike = (err: unknown): boolean =>
-  err instanceof DOMException && err.name === "AbortError"
-
 const isUserAbort = (signal?: AbortSignal): boolean =>
   signal?.aborted === true || getActiveSignal()?.aborted === true
 
@@ -56,22 +53,21 @@ interface FetchOptions {
 
 const isSignal = (s: AbortSignal | null | undefined): s is AbortSignal => s != null
 
-const combineSignals = (signal?: AbortSignal): AbortSignal => {
-  const signals = [AbortSignal.timeout(CONNECT_TIMEOUT_MS), signal, getActiveSignal()].filter(
-    isSignal
-  )
-  return AbortSignal.any(signals)
-}
+const combineSignals = (...signals: (AbortSignal | null | undefined)[]): AbortSignal =>
+  AbortSignal.any(signals.filter(isSignal))
 
 const fetchWithRetry = async ({ url, body, signal }: FetchOptions): Promise<Response> => {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const connectController = new AbortController()
+    const timer = setTimeout(() => connectController.abort(), CONNECT_TIMEOUT_MS)
     try {
       const response = await fetch(url, {
         method: "POST",
         headers: getLlmHeaders(),
         body,
-        signal: combineSignals(signal),
+        signal: combineSignals(connectController.signal, signal, getActiveSignal()),
       })
+      clearTimeout(timer)
 
       if (response.ok) return response
 
@@ -79,7 +75,8 @@ const fetchWithRetry = async ({ url, body, signal }: FetchOptions): Promise<Resp
         throw new Error(`LLM request failed: ${response.status}`)
       }
     } catch (err) {
-      if (isAbortLike(err) && !isUserAbort(signal)) {
+      clearTimeout(timer)
+      if (connectController.signal.aborted && !isUserAbort(signal)) {
         throw new ConnectTimeoutError(
           `no response from backend within ${CONNECT_TIMEOUT_MS / 1000}s — model may be out of quota`
         )

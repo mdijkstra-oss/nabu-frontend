@@ -20,10 +20,13 @@ import {
   normalizeSingletonOrder,
   normalizeBlockFields,
   expandBlockIdRefs,
+  type IdResolver,
 } from "~/lib/data-blocks/normalize"
+import { findAnnotationById } from "~/domain/data-blocks/attributes/annotations/selectors"
 
-const normalizeFile = (text: string): string =>
-  normalizeSingletonOrder(expandBlockIdRefs(normalizeBlockFields(normalize(text)))) + "\n"
+const normalizeFile = (text: string, resolveId?: IdResolver): string =>
+  normalizeSingletonOrder(expandBlockIdRefs(normalizeBlockFields(normalize(text)), resolveId)) +
+  "\n"
 import { memoByRef } from "~/lib/utils/memo"
 
 export type FileStore = Record<string, string>
@@ -111,9 +114,9 @@ export const getFileLineCount = (filename: string): number => countLines(getFile
 
 export const setFiles = (newFiles: FileStore): void => {
   console.debug(`[store] setFiles: ${Object.keys(newFiles).length} files`, Object.keys(newFiles))
-  // strip pending refs leaked to disk before persistWrite was fixed to strip on write
+  const resolveId: IdResolver = (id) => findAnnotationById(newFiles, id)?.text
   files = Object.fromEntries(
-    Object.entries(newFiles).map(([k, v]) => [k, normalizeFile(stripPendingRefs(v))])
+    Object.entries(newFiles).map(([k, v]) => [k, normalizeFile(stripPendingRefs(v), resolveId)])
   )
   rebuildDefinitionIndex(files)
   notify()
@@ -130,7 +133,8 @@ export interface UpdateFileOptions {
 }
 
 export const updateFileRaw = (filename: string, raw: string, options?: UpdateFileOptions): void => {
-  const normalized = normalizeFile(raw)
+  const resolveId: IdResolver = (id) => findAnnotationById(files, id)?.text
+  const normalized = normalizeFile(raw, resolveId)
   if (normalized === files[filename]) return
   const isNew = !(filename in files)
   console.debug(

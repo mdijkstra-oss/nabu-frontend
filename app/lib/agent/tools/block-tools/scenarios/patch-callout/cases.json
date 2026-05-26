@@ -36,40 +36,6 @@
     "expected": { "status": "error", "outputMatch": "invalid.*json-callout" }
   },
   {
-    "name": "patch_content applies field diff",
-    "fixture": "callout-three-lines.md",
-    "storePath": "codebook.md",
-    "tool": "patch_callout",
-    "args": {
-      "path": "codebook.md",
-      "block_id": "callout_a",
-      "operations": [
-        {
-          "op": "patch_content",
-          "diff": "@@\nLine one.\n-Line two.\n+Line two updated.\nLine three."
-        }
-      ]
-    },
-    "expected": { "status": "ok", "outputMatch": "Patched.*json-callout" },
-    "expectedFile": "field-diff.expected.md"
-  },
-  {
-    "name": "patch_content with set in same batch",
-    "fixture": "callout-original-content.md",
-    "storePath": "codebook.md",
-    "tool": "patch_callout",
-    "args": {
-      "path": "codebook.md",
-      "block_id": "callout_a",
-      "operations": [
-        { "op": "set", "fields": { "color": "red" } },
-        { "op": "patch_content", "diff": "@@\n-Original content.\n+Updated content." }
-      ]
-    },
-    "expected": { "status": "ok", "outputMatch": "Patched.*json-callout" },
-    "expectedFile": "field-diff-with-set.expected.md"
-  },
-  {
     "name": "set: update title",
     "fixture": "callouts-multiline.md",
     "storePath": "codebook.md",
@@ -133,91 +99,6 @@
     },
     "expected": { "status": "ok", "outputMatch": "Patched", "contentMatch": "New title" },
     "expectedFile": "multiple-fields.expected.md"
-  },
-  {
-    "name": "patch_content: modify a line",
-    "fixture": "callouts-multiline.md",
-    "storePath": "codebook.md",
-    "tool": "patch_callout",
-    "args": {
-      "path": "codebook.md",
-      "block_id": "callout_a",
-      "operations": [
-        {
-          "op": "patch_content",
-          "diff": "@@\n- Apply to fiscal figures.\n+ Apply to macro-fiscal figures and trajectories."
-        }
-      ]
-    },
-    "expected": {
-      "status": "ok",
-      "outputMatch": "Patched",
-      "contentMatch": "macro-fiscal figures and trajectories"
-    },
-    "expectedFile": "patch-modify-line.expected.md"
-  },
-  {
-    "name": "patch_content: add a line",
-    "fixture": "callouts-multiline.md",
-    "storePath": "codebook.md",
-    "tool": "patch_callout",
-    "args": {
-      "path": "codebook.md",
-      "block_id": "callout_a",
-      "operations": [
-        {
-          "op": "patch_content",
-          "diff": "@@\n- Include evaluative adjectives.\n+ Include evaluative adjectives.\n+ Include scale comparisons."
-        }
-      ]
-    },
-    "expected": {
-      "status": "ok",
-      "outputMatch": "Patched",
-      "contentMatch": "Include scale comparisons"
-    },
-    "expectedFile": "patch-add-line.expected.md"
-  },
-  {
-    "name": "patch_content: remove a line",
-    "fixture": "callouts-multiline.md",
-    "storePath": "codebook.md",
-    "tool": "patch_callout",
-    "args": {
-      "path": "codebook.md",
-      "block_id": "callout_a",
-      "operations": [
-        {
-          "op": "patch_content",
-          "diff": "@@\n- Include evaluative adjectives.\nExclusion criteria:"
-        }
-      ]
-    },
-    "expected": {
-      "status": "ok",
-      "outputMatch": "Patched",
-      "contentNotMatch": "Include evaluative adjectives"
-    },
-    "expectedFile": "patch-remove-line.expected.md"
-  },
-  {
-    "name": "patch_content + set in same batch (multiline)",
-    "fixture": "callouts-multiline.md",
-    "storePath": "codebook.md",
-    "tool": "patch_callout",
-    "args": {
-      "path": "codebook.md",
-      "block_id": "callout_a",
-      "operations": [
-        { "op": "set", "fields": { "color": "red" } },
-        {
-          "op": "patch_content",
-          "diff": "@@\n-Descriptive reporting about public finances.\n+Descriptive reporting about state finances."
-        }
-      ]
-    },
-    "expected": { "status": "ok", "outputMatch": "Patched", "contentMatch": "state finances" },
-    "expectedFile": "patch-plus-set.expected.md"
   },
   {
     "name": "error on invalid color (multiline)",

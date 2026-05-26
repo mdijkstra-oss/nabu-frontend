@@ -44,14 +44,7 @@ registerTool(
 
       const files = getFiles()
       const flagged = collectReviewedAnnotations(files, callout_id)
-      if (flagged.length === 0)
-        return {
-          status: "ok",
-          output: `No reviewed annotations found for code ${callout_id}. Nothing to refine against — run apply_deep_analysis first to generate codings with review feedback.`,
-          mutations: [],
-        }
-
-      const clean = collectCleanAnnotations(files, callout_id, flagged.length)
+      const clean = collectCleanAnnotations(files, callout_id)
       const otherCodes = collectSiblingCodes(files, callout_id)
       const messages = buildRefineMessages(
         codeContent,

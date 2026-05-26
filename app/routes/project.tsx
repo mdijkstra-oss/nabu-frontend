@@ -541,6 +541,7 @@ export default function ProjectLayout() {
       title: code.id,
       description: `Passages coded as: ${code.id}`,
       sql: `SELECT file, id, text FROM annotations WHERE code = '${code.id}'`,
+      meta: { toolbar: "code-refinement", codeId: code.id },
     })
     if (!id) return
     dismissSidebarRef.current?.()
@@ -553,6 +554,7 @@ export default function ProjectLayout() {
       title: `${code.id} in file`,
       description: `Passages coded as: ${code.id} in ${currentFile}`,
       sql: `SELECT file, id, text FROM annotations WHERE code = '${code.id}' AND file = '${currentFile}'`,
+      meta: { toolbar: "code-refinement", codeId: code.id },
     })
     if (!id) return
     dismissSidebarRef.current?.()

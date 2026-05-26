@@ -16,6 +16,8 @@ import { normalizeContent } from "~/lib/patch/diff/normalize"
 import { tryParseJson, parsePath, isObject } from "./json"
 import type { IdRefExpansion } from "./definition"
 
+export type IdResolver = (id: string) => string | undefined
+
 const isSingletonBlock = (block: CodeBlock): boolean => isSingleton(block.language)
 
 const stripBlocks = (content: string, blocks: CodeBlock[]): string => {
@@ -149,16 +151,18 @@ const buildEntityLookup = (
 const expandField = (
   value: string,
   expansion: IdRefExpansion,
-  lookup: Map<string, string>
+  lookup: Map<string, string>,
+  resolveId?: IdResolver
 ): string => {
   const regex = buildIdRegex(expansion.prefix)
-  return value.replace(regex, (match) => lookup.get(match) ?? match)
+  return value.replace(regex, (match) => lookup.get(match) ?? resolveId?.(match) ?? match)
 }
 
 const expandBlockFields = (
   parsed: Record<string, unknown>,
   expansions: IdRefExpansion[],
-  markdown: string
+  markdown: string,
+  resolveId?: IdResolver
 ): Record<string, unknown> | null => {
   let changed = false
   const result = { ...parsed }
@@ -174,7 +178,6 @@ const expandBlockFields = (
     if (!idPathConfig) continue
 
     const sourceBlocks = findBlocksByLanguage(markdown, sourceConfig.language)
-    if (sourceBlocks.length === 0) continue
 
     const lookup = new Map<string, string>()
     for (const sourceBlock of sourceBlocks) {
@@ -187,9 +190,9 @@ const expandBlockFields = (
       }
     }
 
-    if (lookup.size === 0) continue
+    if (lookup.size === 0 && !resolveId) continue
 
-    const expanded = expandField(value, expansion, lookup)
+    const expanded = expandField(value, expansion, lookup, resolveId)
     if (expanded !== value) {
       result[expansion.field] = expanded
       changed = true
@@ -199,7 +202,7 @@ const expandBlockFields = (
   return changed ? result : null
 }
 
-export const expandBlockIdRefs = (markdown: string): string => {
+export const expandBlockIdRefs = (markdown: string, resolveId?: IdResolver): string => {
   const blocks = parseCodeBlocks(markdown)
   let result = markdown
   let offset = 0
@@ -211,7 +214,7 @@ export const expandBlockIdRefs = (markdown: string): string => {
     const parsed = tryParseJson(block.content)
     if (!parsed) continue
 
-    const expanded = expandBlockFields(parsed, expansions, markdown)
+    const expanded = expandBlockFields(parsed, expansions, markdown, resolveId)
     if (!expanded) continue
 
     const newContent = JSON.stringify(expanded, null, "\t")

@@ -115,6 +115,14 @@ const copyAnnotation = (annotation: Annotation) => () => {
   navigator.clipboard.writeText(formatAnnotationClipboard(annotation))
 }
 
+const setReasonOp = (id: string, value: string) => [
+  { op: "add" as const, path: `/annotations[id=${id}]/reason`, value },
+]
+
+const setReviewOp = (id: string, value: string) => [
+  { op: "add" as const, path: `/annotations[id=${id}]/vote/review`, value },
+]
+
 const annotationToEntry =
   (
     files: Record<string, string>,
@@ -133,7 +141,7 @@ const annotationToEntry =
       color: elementBorder(annotation.color),
       title: code ? getCodeTitle(files, code) : undefined,
       description: annotation.reason,
-      review: annotation.vote?.review ? [annotation.vote.review] : undefined,
+      review: annotation.vote?.review,
       reviewCount: codeReviewCount > 0 ? codeReviewCount : undefined,
       onCopy: copyAnnotation(annotation),
       onDelete: canMutate ? buildUxCallback(filePath, removeAnnotationOp(id)) : undefined,
@@ -141,6 +149,18 @@ const annotationToEntry =
         canMutate && hasReview(annotation)
           ? buildUxCallback(filePath, resolveReviewOp(id))
           : undefined,
+      onDescriptionChange: canMutate
+        ? (value: string) =>
+            executeUxAction([
+              { path: filePath, language: ANNOTATIONS_LANGUAGE, ops: setReasonOp(id, value) },
+            ])
+        : undefined,
+      onReviewChange: canMutate
+        ? (value: string) =>
+            executeUxAction([
+              { path: filePath, language: ANNOTATIONS_LANGUAGE, ops: setReviewOp(id, value) },
+            ])
+        : undefined,
       onReviewCountClick:
         code && codeReviewCount > 0 && onSearchFlagged ? () => onSearchFlagged(code) : undefined,
       onTitleClick: code && onNavigateToCode ? () => onNavigateToCode(code) : undefined,
