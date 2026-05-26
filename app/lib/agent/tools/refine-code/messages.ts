@@ -1,7 +1,8 @@
 import type { Annotation as StoredAnnotation } from "~/domain/data-blocks/attributes/schema"
 import type { CalloutBlock } from "~/domain/data-blocks/callout/schema"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
-import { getAllCodes } from "~/domain/data-blocks/callout/codes/selectors"
+import { getCodes } from "~/domain/data-blocks/callout/codes/selectors"
+import { findDocumentForCallout } from "~/domain/data-blocks/callout/selectors"
 import type { FileStore } from "~/lib/files/store"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { stripMarkdown } from "~/lib/text/strip"
@@ -168,8 +169,11 @@ const formatCleanBlock = (
     .join("\n\n---\n\n")
 }
 
-export const collectOtherCodes = (files: FileStore, calloutId: string): CalloutBlock[] =>
-  getAllCodes(files).filter((c) => c.id !== calloutId)
+export const collectSiblingCodes = (files: FileStore, calloutId: string): CalloutBlock[] => {
+  const sourceFile = findDocumentForCallout(files, calloutId)
+  if (!sourceFile) return []
+  return getCodes(files[sourceFile]).filter((c) => c.id !== calloutId)
+}
 
 const formatOtherCode = (code: CalloutBlock): string =>
   `### ${code.title} (\`${code.id}\`)\n\n${code.content}`
@@ -275,7 +279,33 @@ Do not apply anything until the researcher rules.
 
 Once the researcher has ruled, translate the ruling into the edit: edit the code at \`${calloutId}.generated.hidden.md\` using patch_json_block. Apply only what their ruling entails.
 
-When a change adds or replaces an example or counter-example, write the annotation \`id\` the analysis referenced — not passage text. The system expands the id to the annotation's exact text, so do not author, complete, normalize, paraphrase, or retype any passage text. If a proposed example is not backed by an annotation id in the analysis, do not invent one — return to the researcher.
+### Writing the edit
+
+- Place new constraints inside the existing inclusion or exclusion
+  bullet lists. Never add a standalone paragraph after the criteria —
+  coders treat the bullet lists as their checklist and read past
+  anything below them.
+- One distinct criterion per bullet. Never merge unrelated conditions
+  into a single bullet — a coder reads the first clause, matches or
+  not, and moves on without seeing conditions buried later in the
+  same line. If an existing bullet already packs multiple unrelated
+  criteria together, split them into separate bullets while applying
+  the edit — even if the analysis did not flag it.
+- Use the analysis's proposed rule as the starting point for wording,
+  adapted to the researcher's ruling. Do not write from scratch.
+- Write each rule as a testable condition — an if/then that a coder
+  can check and get a clear yes or no — not a description of what the
+  code "should" capture.
+- When a new bullet absorbs a constraint that was previously stated
+  elsewhere in the definition (a standalone paragraph, a weaker or
+  vaguer bullet), remove the redundant version. Do not leave the old
+  wording alongside the new.
+- When a change adds or replaces an example or counter-example, write
+  the annotation \`id\` the analysis referenced — not passage text.
+  The system expands the id to the annotation's exact text, so do not
+  author, complete, normalize, paraphrase, or retype any passage text.
+  If a proposed example is not backed by an annotation id in the
+  analysis, do not invent one — return to the researcher.
 
 Once the edit is applied, confirm what was changed. You are done — stop there.
 

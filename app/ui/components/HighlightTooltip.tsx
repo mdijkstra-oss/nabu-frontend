@@ -1,4 +1,4 @@
-import { X, Trash2, MessageSquareWarning, Eraser } from "lucide-react"
+import { X, Trash2, MessageSquareWarning, Eraser, Copy } from "lucide-react"
 import { SwapButton } from "~/ui/components/SwapButton"
 
 export interface HighlightEntry {
@@ -8,6 +8,7 @@ export interface HighlightEntry {
   description?: string
   review?: string[]
   reviewCount?: number
+  onCopy?: () => void
   onDelete?: () => void
   onResolve?: () => void
   onReviewCountClick?: () => void
@@ -31,27 +32,34 @@ const createHeaderBackground = (colors: string[]): string => {
 
 const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
   <div className="flex w-full flex-col">
-    <div className="flex w-full items-start gap-2">
+    <div className="flex w-full items-center gap-2">
       <div
-        className="flex h-3 w-3 flex-none rounded-full mt-0.5"
+        className="flex h-3 w-3 flex-none rounded-full"
         style={{ backgroundColor: entry.color }}
       />
-      <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+      <div className="flex min-w-0 grow items-center">
         {entry.title &&
           (entry.onTitleClick ? (
             <button
-              className="text-body-bold font-body-bold text-default-font cursor-pointer border-none bg-transparent p-0 text-left hover:underline"
+              className="text-body-bold font-body-bold text-default-font cursor-pointer truncate border-none bg-transparent p-0 text-left hover:underline"
               onClick={entry.onTitleClick}
             >
               {entry.title}
             </button>
           ) : (
-            <span className="text-body-bold font-body-bold text-default-font">{entry.title}</span>
+            <span className="text-body-bold font-body-bold text-default-font truncate">
+              {entry.title}
+            </span>
           ))}
-        {entry.description && (
-          <span className="text-caption font-caption text-subtext-color">{entry.description}</span>
-        )}
       </div>
+      {entry.onCopy && (
+        <SwapButton
+          idle={<Copy className="text-body text-neutral-700" />}
+          active={<Copy className="text-body text-neutral-900" />}
+          activeTooltip="Copy annotation"
+          onClick={entry.onCopy}
+        />
+      )}
       {entry.onDelete && (
         <SwapButton
           idle={<X className="text-body text-neutral-700" />}
@@ -61,6 +69,12 @@ const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
         />
       )}
     </div>
+    {entry.description && (
+      <div className="flex w-full items-start gap-2 mt-1">
+        <div className="w-3 flex-none" />
+        <span className="text-caption font-caption text-subtext-color">{entry.description}</span>
+      </div>
+    )}
     {entry.review && entry.review.length > 0 && (
       <div className="mt-1 flex w-full items-start gap-2">
         <div className="w-3 flex-none" />

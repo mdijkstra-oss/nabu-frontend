@@ -11,7 +11,6 @@ import {
 } from "~/lib/data-blocks/typed-ops/derive"
 import { translateOps } from "~/lib/data-blocks/typed-ops/translate"
 import { fillDocIds } from "~/lib/data-blocks/uuid"
-import { applyFieldDiff } from "~/lib/patch/diff/field-diff"
 import { insertBlockAtAnchor, moveBlockToAnchor } from "~/lib/data-blocks/anchor"
 import {
   resolveFile,

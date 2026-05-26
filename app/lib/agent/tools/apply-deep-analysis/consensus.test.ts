@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { groupBySpan, filterContainedSpans, type FindResult } from "./consensus"
+import { groupBySpan, filterOverlappingSpans, type FindResult } from "./consensus"
 
 const r = (start: number, end: number, analysis_source_id: string): FindResult => ({
   start,
@@ -54,7 +54,7 @@ describe("groupBySpan", () => {
   })
 })
 
-describe("filterContainedSpans", () => {
+describe("filterOverlappingSpans", () => {
   const cases = [
     {
       name: "empty input → empty result",
@@ -67,38 +67,58 @@ describe("filterContainedSpans", () => {
       expected: [span("X", 1, 3), span("X", 5, 7)],
     },
     {
-      name: "sentence inside paragraph same code → paragraph removed",
+      name: "containment same code → smaller kept",
       items: [span("X", 3, 10), span("X", 5, 5)],
       expected: [span("X", 5, 5)],
     },
     {
-      name: "sentence inside paragraph different code → both kept",
+      name: "containment different code → both kept",
       items: [span("A", 3, 10), span("B", 5, 5)],
       expected: [span("A", 3, 10), span("B", 5, 5)],
     },
     {
-      name: "exact same span → both kept (not strictly larger)",
+      name: "exact same span → first kept",
       items: [span("X", 3, 10), span("X", 3, 10)],
-      expected: [span("X", 3, 10), span("X", 3, 10)],
+      expected: [span("X", 3, 10)],
     },
     {
-      name: "multiple small inside one large → large removed",
+      name: "multiple small inside one large → small ones kept",
       items: [span("X", 1, 20), span("X", 3, 5), span("X", 10, 12)],
       expected: [span("X", 3, 5), span("X", 10, 12)],
     },
     {
-      name: "nested containment → middle and outer removed",
+      name: "nested containment → innermost kept",
       items: [span("X", 1, 20), span("X", 5, 10), span("X", 7, 8)],
       expected: [span("X", 7, 8)],
     },
     {
-      name: "partial overlap without containment → both kept",
+      name: "partial overlap same code → smaller kept",
       items: [span("X", 1, 5), span("X", 3, 8)],
-      expected: [span("X", 1, 5), span("X", 3, 8)],
+      expected: [span("X", 1, 5)],
+    },
+    {
+      name: "partial overlap same size → earlier start kept",
+      items: [span("X", 3, 5), span("X", 4, 6)],
+      expected: [span("X", 3, 5)],
+    },
+    {
+      name: "partial overlap different codes → both kept",
+      items: [span("A", 1, 5), span("B", 3, 8)],
+      expected: [span("A", 1, 5), span("B", 3, 8)],
+    },
+    {
+      name: "chain of overlaps → non-overlapping smallest survive",
+      items: [span("X", 1, 4), span("X", 3, 6), span("X", 5, 8)],
+      expected: [span("X", 1, 4), span("X", 5, 8)],
+    },
+    {
+      name: "preserves input order in output",
+      items: [span("X", 10, 12), span("X", 1, 3), span("X", 5, 7)],
+      expected: [span("X", 10, 12), span("X", 1, 3), span("X", 5, 7)],
     },
   ]
 
   cases.forEach(({ name, items, expected }) => {
-    it(name, () => expect(filterContainedSpans(items)).toEqual(expected))
+    it(name, () => expect(filterOverlappingSpans(items)).toEqual(expected))
   })
 })

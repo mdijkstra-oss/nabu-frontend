@@ -7,7 +7,7 @@ import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { think, FINDING, CONSENSUS } from "./thoughts"
 import { buildFindCall, singleIdFindSchema, extractSourceIds } from "./messages"
-import { groupBySpan, filterContainedSpans } from "./consensus"
+import { groupBySpan, filterOverlappingSpans } from "./consensus"
 import { FIND_ENDPOINT, FIND_RUNS, FIND_CONCURRENCY } from "./def"
 
 export interface FindStepResult {
@@ -183,7 +183,7 @@ export const findAllDimensions = async (
     allAnnotations.push(...voteSpans(runs))
   }
 
-  const filtered = filterContainedSpans(allAnnotations)
+  const filtered = filterOverlappingSpans(allAnnotations)
 
   console.debug(`[deep-analysis] containment filter: ${allAnnotations.length} → ${filtered.length}`)
 

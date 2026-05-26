@@ -104,6 +104,17 @@ const buildUxCallback = (filePath: string, ops: { op: "remove"; path: string }[]
   executeUxAction([{ path: filePath, language: ANNOTATIONS_LANGUAGE, ops }])
 }
 
+const formatAnnotationClipboard = (annotation: Annotation): string => {
+  const parts = [annotation.text]
+  if (annotation.reason) parts.push(`Reason: ${annotation.reason}`)
+  if (annotation.vote?.review) parts.push(`Review: ${annotation.vote.review}`)
+  return parts.join("\n\n")
+}
+
+const copyAnnotation = (annotation: Annotation) => () => {
+  navigator.clipboard.writeText(formatAnnotationClipboard(annotation))
+}
+
 const annotationToEntry =
   (
     files: Record<string, string>,
@@ -124,6 +135,7 @@ const annotationToEntry =
       description: annotation.reason,
       review: annotation.vote?.review ? [annotation.vote.review] : undefined,
       reviewCount: codeReviewCount > 0 ? codeReviewCount : undefined,
+      onCopy: copyAnnotation(annotation),
       onDelete: canMutate ? buildUxCallback(filePath, removeAnnotationOp(id)) : undefined,
       onResolve:
         canMutate && hasReview(annotation)

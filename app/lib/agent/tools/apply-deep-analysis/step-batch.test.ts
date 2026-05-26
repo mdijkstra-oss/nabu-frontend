@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { batchByCode } from "./step-batch"
+import { groupByCode } from "./step-batch"
 import type { Annotation } from "./types"
 
 const ann = (code: string, start: number): Annotation => ({
@@ -10,78 +10,52 @@ const ann = (code: string, start: number): Annotation => ({
   reason: "",
 })
 
-describe("batchByCode", () => {
+describe("groupByCode", () => {
   const cases = [
-    {
-      name: "single code exceeds max — splits into multiple batches",
-      annotations: Array.from({ length: 5 }, (_, i) => ann("a", i + 1)),
-      maxSize: 3,
-      check: (batches: Annotation[][]) => {
-        expect(batches).toHaveLength(2)
-        expect(batches[0]).toHaveLength(3)
-        expect(batches[1]).toHaveLength(2)
-        expect(batches[0].every((a) => a.code === "a")).toBe(true)
-      },
-    },
-    {
-      name: "small codes combine into one batch",
-      annotations: [ann("a", 1), ann("b", 2), ann("c", 3)],
-      maxSize: 5,
-      check: (batches: Annotation[][]) => {
-        expect(batches).toHaveLength(1)
-        expect(batches[0]).toHaveLength(3)
-      },
-    },
-    {
-      name: "largest code fills its own batch, smaller codes combine",
-      annotations: [
-        ...Array.from({ length: 4 }, (_, i) => ann("big", i + 1)),
-        ann("small1", 10),
-        ann("small2", 11),
-      ],
-      maxSize: 4,
-      check: (batches: Annotation[][]) => {
-        expect(batches).toHaveLength(2)
-        expect(batches[0].every((a) => a.code === "big")).toBe(true)
-        expect(batches[0]).toHaveLength(4)
-        expect(batches[1]).toHaveLength(2)
-      },
-    },
-    {
-      name: "codes sorted by count — largest first",
-      annotations: [ann("few", 1), ...Array.from({ length: 3 }, (_, i) => ann("many", i + 10))],
-      maxSize: 3,
-      check: (batches: Annotation[][]) => {
-        expect(batches).toHaveLength(2)
-        expect(batches[0].every((a) => a.code === "many")).toBe(true)
-        expect(batches[1][0].code).toBe("few")
-      },
-    },
     {
       name: "empty input returns empty",
       annotations: [],
-      maxSize: 10,
-      check: (batches: Annotation[][]) => {
-        expect(batches).toHaveLength(0)
+      check: (groups: Annotation[][]) => {
+        expect(groups).toHaveLength(0)
       },
     },
     {
-      name: "partial fill from large code combines with smaller",
-      annotations: [
-        ...Array.from({ length: 7 }, (_, i) => ann("big", i + 1)),
-        ...Array.from({ length: 2 }, (_, i) => ann("small", i + 20)),
-      ],
-      maxSize: 5,
-      check: (batches: Annotation[][]) => {
-        expect(batches).toHaveLength(2)
-        expect(batches[0]).toHaveLength(5)
-        expect(batches[0].every((a) => a.code === "big")).toBe(true)
-        expect(batches[1]).toHaveLength(4)
+      name: "single code produces one group",
+      annotations: Array.from({ length: 5 }, (_, i) => ann("a", i + 1)),
+      check: (groups: Annotation[][]) => {
+        expect(groups).toHaveLength(1)
+        expect(groups[0]).toHaveLength(5)
+        expect(groups[0].every((a) => a.code === "a")).toBe(true)
+      },
+    },
+    {
+      name: "multiple codes produce one group per code",
+      annotations: [ann("a", 1), ann("b", 2), ann("a", 3), ann("c", 4), ann("b", 5)],
+      check: (groups: Annotation[][]) => {
+        expect(groups).toHaveLength(3)
+        const codes = groups.map((g) => g[0].code)
+        expect(codes).toContain("a")
+        expect(codes).toContain("b")
+        expect(codes).toContain("c")
+        const findGroup = (code: string) => groups.find((g) => g[0].code === code)
+        expect(findGroup("a")).toHaveLength(2)
+        expect(findGroup("b")).toHaveLength(2)
+        expect(findGroup("c")).toHaveLength(1)
+      },
+    },
+    {
+      name: "each group contains only its code",
+      annotations: [ann("x", 1), ann("y", 2), ann("x", 3)],
+      check: (groups: Annotation[][]) => {
+        for (const group of groups) {
+          const code = group[0].code
+          expect(group.every((a) => a.code === code)).toBe(true)
+        }
       },
     },
   ]
 
-  cases.forEach(({ name, annotations, maxSize, check }) => {
-    it(name, () => check(batchByCode(annotations, maxSize)))
+  cases.forEach(({ name, annotations, check }) => {
+    it(name, () => check(groupByCode(annotations)))
   })
 })

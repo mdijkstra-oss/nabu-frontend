@@ -9,7 +9,7 @@ import { pushBlocks, buildStreamingCallbacks } from "../../client/store"
 import {
   collectReviewedAnnotations,
   collectCleanAnnotations,
-  collectOtherCodes,
+  collectSiblingCodes,
   buildRefineMessages,
   buildAnnotationIndex,
   buildInstructionTail,
@@ -52,7 +52,7 @@ registerTool(
         }
 
       const clean = collectCleanAnnotations(files, callout_id, flagged.length)
-      const otherCodes = collectOtherCodes(files, callout_id)
+      const otherCodes = collectSiblingCodes(files, callout_id)
       const messages = buildRefineMessages(
         codeContent,
         flagged,

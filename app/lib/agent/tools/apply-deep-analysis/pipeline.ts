@@ -4,7 +4,7 @@ import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { think, REVISITING, FILTERING } from "./thoughts"
-import { batchByCode, BATCH_MAX_SIZE } from "./step-batch"
+import { groupByCode } from "./step-batch"
 import { findAllDimensions } from "./step-find"
 import { filterAnnotations } from "./step-filter"
 import { POST_FIND_CONCURRENCY } from "./def"
@@ -54,7 +54,7 @@ export const runAnalysisPipeline = async (
     return { annotations: [], errors: findResult.errors }
   }
 
-  const batches = batchByCode(findResult.annotations, BATCH_MAX_SIZE)
+  const batches = groupByCode(findResult.annotations)
 
   console.debug(`[deep-analysis] batches: ${batches.length}`)
 

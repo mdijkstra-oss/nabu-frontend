@@ -19,7 +19,6 @@ export const jsonCallout: BlockTypeConfig = {
   projected: true,
   tableName: "callouts",
   labelKey: "title",
-  multilineFields: ["content"],
   normalizeAsFile: ["content"],
   expandIdRefs: [{ field: "content", prefix: "annotation", replaceWith: "text" }],
   idPaths: [{ path: "id", prefix: "callout" }],

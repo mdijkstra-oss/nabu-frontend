@@ -34,18 +34,33 @@ interface Spanned {
 
 const spanSize = (s: Spanned): number => s.end - s.start
 
-const strictlyContains = (outer: Spanned, inner: Spanned): boolean =>
-  outer.start <= inner.start && inner.end <= outer.end && spanSize(outer) > spanSize(inner)
+const overlaps = (a: Spanned, b: Spanned): boolean => a.start <= b.end && b.start <= a.end
 
-const hasSmallerContained = <T extends Spanned>(outer: T, group: T[]): boolean =>
-  group.some((inner) => inner !== outer && strictlyContains(outer, inner))
+const bySmallestThenEarliest = (a: Spanned, b: Spanned): number => {
+  const sizeDiff = spanSize(a) - spanSize(b)
+  return sizeDiff !== 0 ? sizeDiff : a.start - b.start
+}
 
-export const filterContainedSpans = <T extends Spanned>(items: T[]): T[] => {
+export const filterOverlappingSpans = <T extends Spanned>(items: T[]): T[] => {
   const byCode = new Map<string, T[]>()
   for (const item of items) {
     const group = byCode.get(item.code) ?? []
     group.push(item)
     byCode.set(item.code, group)
   }
-  return items.filter((item) => !hasSmallerContained(item, byCode.get(item.code) ?? []))
+
+  const kept = new Set<T>()
+  for (const group of byCode.values()) {
+    const sorted = [...group].sort(bySmallestThenEarliest)
+    const accepted: T[] = []
+    for (const span of sorted) {
+      const hasOverlap = accepted.some((a) => overlaps(a, span))
+      if (!hasOverlap) {
+        accepted.push(span)
+        kept.add(span)
+      }
+    }
+  }
+
+  return items.filter((item) => kept.has(item))
 }
