@@ -1,5 +1,4 @@
 import { getApiUrl } from "../env"
-import { gzipBody } from "./gzip"
 import type { Command, CommandResult } from "./types"
 
 interface ErrorResponse {
@@ -19,11 +18,17 @@ export const sendCommand = async (projectId: string, command: Command): Promise<
   const url = getApiUrl(`/commands/${projectId}`)
 
   try {
-    const compressed = await gzipBody(JSON.stringify(command))
+    // const compressed = await gzipBody(JSON.stringify(command))
+    // const response = await fetch(url, {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json", "Content-Encoding": "gzip" },
+    //   body: compressed,
+    // })
+
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Content-Encoding": "gzip" },
-      body: compressed,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(command),
     })
 
     if (!response.ok) {

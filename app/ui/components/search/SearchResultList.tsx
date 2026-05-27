@@ -11,7 +11,14 @@ import { useThrottledValue } from "~/ui/hooks/useThrottledValue"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
 import { findTagDefinitionById } from "~/domain/data-blocks/settings/tags/selectors"
-import { spotlightFromText, serializeSpotlightParam } from "~/lib/editor/spotlight/serialize"
+import {
+  spotlightFromText,
+  spotlightFromMatches,
+  serializeSpotlightParam,
+} from "~/lib/editor/spotlight/serialize"
+import type { Spotlight } from "~/lib/editor/spotlight/types"
+import { trimAroundMatches, normalizeMatchWhitespace } from "~/lib/text/trim-around"
+import { splitSentences } from "~/lib/search/filter-hits"
 
 export interface SearchResultListProps {
   hits: SearchHit[]
@@ -49,44 +56,65 @@ const buildFileUrl = (projectId: string, file: string): string =>
 const buildHitUrl = (projectId: string, hit: SearchHit): string => {
   const base = buildFileUrl(projectId, hit.file)
   if (hit.id) return `${base}?entity=${encodeURIComponent(hit.id)}`
-  if (hit.text) {
-    const spotlight = spotlightFromText(hit.text)
-    if (spotlight) return `${base}?spotlight=${serializeSpotlightParam(spotlight)}`
-  }
+  const spotlight = hit.matches
+    ? spotlightFromMatches(hit.matches)
+    : hit.text
+      ? spotlightFromText(hit.text)
+      : null
+  if (spotlight) return `${base}?spotlight=${serializeSpotlightParam(spotlight)}`
   return base
 }
 
 const GUTTER = "w-10 shrink-0 flex items-center justify-center"
 
+const matchToSpotlights = (text: string): Spotlight[] => {
+  const normalized = normalizeMatchWhitespace(text)
+  const sentences = splitSentences(normalized)
+  if (sentences.length <= 1) return [{ type: "single" as const, text: normalized }]
+  return sentences.map((s) => ({ type: "single" as const, text: s }))
+}
+
+const matchesToSpotlights = (matches: string[]): Spotlight[] => matches.flatMap(matchToSpotlights)
+
 const SearchSlicePreview = ({
   text,
   filePath,
+  matches,
   onNavigate,
 }: {
   text: string
   filePath: string
+  matches?: string[]
   onNavigate?: () => void
-}) => (
-  <div className="group/hit flex w-full items-center">
-    <div className={GUTTER} />
-    <div className="min-w-0 grow rounded-md border border-solid border-neutral-200 px-4 py-3">
-      <MilkdownEditor content={text} readOnly filePath={filePath} />
+}) => {
+  const trimmed = matches ? trimAroundMatches(text, matches) : text
+  return (
+    <div className="group/hit flex w-full items-center">
+      <div className={GUTTER} />
+      <div className="min-w-0 grow rounded-md border border-solid border-neutral-200 px-4 py-3">
+        <MilkdownEditor
+          content={trimmed}
+          readOnly
+          filePath={filePath}
+          spotlight={matches ? matchesToSpotlights(matches) : null}
+        />
+      </div>
+      <div className={GUTTER}>
+        {onNavigate && (
+          <TooltipWrap text="Show in file">
+            <IconButton
+              size="small"
+              variant="brand-tertiary"
+              icon={<Search />}
+              onClick={onNavigate}
+              className="bg-white border border-solid border-neutral-border hover:border-brand-200 opacity-0 transition-opacity group-hover/hit:opacity-100"
+            />
+          </TooltipWrap>
+        )}
+      </div>
     </div>
-    <div className={GUTTER}>
-      {onNavigate && (
-        <TooltipWrap text="Show in file">
-          <IconButton
-            size="small"
-            variant="brand-tertiary"
-            icon={<Search />}
-            onClick={onNavigate}
-            className="bg-white border border-solid border-neutral-border hover:border-brand-200 opacity-0 transition-opacity group-hover/hit:opacity-100"
-          />
-        </TooltipWrap>
-      )}
-    </div>
-  </div>
-)
+  )
+}
 
 const RunGroupCard = ({
   group,
@@ -137,6 +165,7 @@ const RunGroupCard = ({
               key={hitKey(hit, i)}
               text={hit.text}
               filePath={hit.file}
+              matches={hit.matches}
               onNavigate={() => onNavigate?.(buildHitUrl(projectId, hit))}
             />
           ) : null

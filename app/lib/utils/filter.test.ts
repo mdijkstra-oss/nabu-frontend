@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { matchesFilter, matchesAny, matchesAllWords } from "./filter"
+import { matchesFilter, matchesAny, matchesAllWords, matchesWordsInOrder } from "./filter"
 
 describe("matchesFilter", () => {
   const cases = [
@@ -95,5 +95,56 @@ describe("matchesAllWords", () => {
 
   it.each(cases)("$name", ({ query, texts, expected }) => {
     expect(matchesAllWords(query, texts)).toBe(expected)
+  })
+})
+
+describe("matchesWordsInOrder", () => {
+  const cases = [
+    { query: "", texts: ["foo"], expected: true, name: "empty query matches all" },
+    { query: "  ", texts: ["foo"], expected: true, name: "whitespace query matches all" },
+    { query: "foo", texts: ["foobar"], expected: true, name: "single word partial match" },
+    {
+      query: "foo bar",
+      texts: ["foobar bazbar"],
+      expected: true,
+      name: "words in order within single text",
+    },
+    {
+      query: "bar foo",
+      texts: ["foobar bazbar"],
+      expected: false,
+      name: "words out of order rejected",
+    },
+    {
+      query: "foo baz",
+      texts: ["foobar", "bazbar"],
+      expected: true,
+      name: "words in order across texts",
+    },
+    {
+      query: "baz foo",
+      texts: ["foobar", "bazbar"],
+      expected: false,
+      name: "words reversed across texts rejected",
+    },
+    {
+      query: "CORPUS desc",
+      texts: ["corpus-describer endpoint"],
+      expected: true,
+      name: "case insensitive with separator normalization",
+    },
+    { query: "a b c", texts: ["a x b x c"], expected: true, name: "three words in order" },
+    { query: "a c b", texts: ["a x b x c"], expected: false, name: "three words out of order" },
+    { query: "foo", texts: [], expected: false, name: "empty texts no match" },
+    {
+      query: "policy report",
+      texts: ["policy-commitment report"],
+      expected: true,
+      name: "hyphen normalized to space preserves order",
+    },
+  ]
+
+  it.each(cases)("$name", ({ query, texts, expected }) => {
+    expect(matchesWordsInOrder(query, texts)).toBe(expected)
   })
 })

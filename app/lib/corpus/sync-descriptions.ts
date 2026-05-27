@@ -117,7 +117,7 @@ const removeStale = (
   return existing.filter((d) => activeKeys.has(descriptionKey(d)))
 }
 
-const writeDescriptions = (descriptions: CorpusDescription[]): void => {
+export const writeDescriptions = (descriptions: CorpusDescription[]): void => {
   executeFileAction({
     patches: [
       {

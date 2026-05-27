@@ -5,6 +5,8 @@ export const SearchHitSchema = z.object({
   file: z.string(),
   id: z.string().optional(),
   text: z.string().optional(),
+  score: z.number().optional(),
+  matches: z.array(z.string()).optional(),
 })
 
 export type SearchHit = z.infer<typeof SearchHitSchema>

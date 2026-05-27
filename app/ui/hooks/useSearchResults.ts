@@ -6,7 +6,7 @@ import { getDatabase } from "~/domain/db/database"
 import { executeSearch, executeHybridLocal } from "~/lib/search/execute"
 import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
 import { sanitizeSemanticError, sqlQueriesFilesTable } from "~/lib/search/semantic"
-import { filterAndGrow, FILTER_BATCH_SIZE } from "~/lib/search/filter-hits"
+import { filterParallel, FILTER_BATCH_SIZE } from "~/lib/search/filter-hits"
 import { growHits } from "~/lib/search/slices"
 import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
@@ -44,10 +44,12 @@ export interface SearchResults {
   loadMore: () => void
 }
 
+const sortByScore = (hits: SearchHit[]): SearchHit[] =>
+  [...hits].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+
 interface FilterState {
   rawHits: SearchHit[]
   cursor: number
-  pageCount: number
   highlight: string
   loading: boolean
   cancelled: boolean
@@ -68,24 +70,29 @@ export const useSearchResults = (
     if (!state || state.loading || state.cancelled || state.cursor >= state.rawHits.length) return
 
     state.loading = true
-    state.pageCount = 0
     setSettled((prev) => ({ ...prev, phase: "filtering" }))
 
-    while (state.pageCount < FILTER_BATCH_SIZE && state.cursor < state.rawHits.length) {
-      const chunk = state.rawHits.slice(state.cursor, state.cursor + FILTER_BATCH_SIZE)
-      state.cursor += chunk.length
-
-      try {
-        const hits = await filterAndGrow(chunk, state.highlight, getFiles())
-        if (state.cancelled) return
-        state.pageCount += hits.length
-        setSettled((prev) => ({ ...prev, results: [...prev.results, ...hits] }))
-      } catch {
-        if (state.cancelled) return
-      }
+    const remaining = state.rawHits.slice(state.cursor)
+    const appendHits = (hits: SearchHit[]) => {
+      if (state.cancelled) return
+      setSettled((prev) => ({
+        ...prev,
+        results: sortByScore([...prev.results, ...hits]),
+      }))
     }
 
+    const { consumed } = await filterParallel(
+      remaining,
+      state.highlight,
+      getFiles(),
+      appendHits,
+      FILTER_BATCH_SIZE
+    )
+
+    state.cursor += Math.min(consumed * FILTER_BATCH_SIZE, remaining.length)
     state.loading = false
+
+    if (state.cancelled) return
 
     const hasMore = state.cursor < state.rawHits.length
     setSettled((prev) => ({ ...prev, phase: hasMore ? "idle" : "done", hasMore }))
@@ -176,7 +183,6 @@ export const useSearchResults = (
       filterRef.current = {
         rawHits: rawHits.value,
         cursor: 0,
-        pageCount: 0,
         highlight: search.highlight,
         loading: false,
         cancelled,

@@ -6,7 +6,11 @@ import { getDatabase } from "~/domain/db/database"
 import { getFiles, subscribe } from "~/lib/files/store"
 import { getCorpusDescriptions } from "~/domain/corpus/selectors"
 import { toCorpusKey } from "~/domain/corpus/types"
-import { fetchLanguageStats, type LanguageStatsRow } from "~/lib/search/resolve-semantic"
+import {
+  fetchLanguageStats,
+  filterSignificantLanguages,
+  type LanguageStatsRow,
+} from "~/lib/search/resolve-semantic"
 import {
   collectClassifications,
   groupByCorpus,
@@ -16,7 +20,11 @@ import {
   collectSubjectCounts,
 } from "~/lib/corpus/tree"
 import { groupNearbyLabels, buildRemaps } from "~/lib/corpus/cluster"
-import { DEFAULT_CLUSTER_THRESHOLD } from "~/lib/corpus/sync-descriptions"
+import {
+  DEFAULT_CLUSTER_THRESHOLD,
+  writeDescriptions,
+  processDescriptionSync,
+} from "~/lib/corpus/sync-descriptions"
 import { getLlmHost } from "~/lib/agent/env"
 import type { CorpusDescription } from "~/domain/corpus/types"
 import type { GroupedClassification, FileClassification } from "~/lib/corpus/tree"
@@ -187,10 +195,29 @@ const useCorpora = (): CorporaResult & { remapped: { key: string; count: number 
   return state
 }
 
+type RegenState = "idle" | "running" | "done" | "error"
+
+const regenerateDescriptions = async (): Promise<void> => {
+  const db = getDatabase()
+  if (!db) return
+  const rows = await fetchLanguageStats(db)
+  const languages = filterSignificantLanguages(rows)
+  writeDescriptions([])
+  await processDescriptionSync(() => getFiles(), languages, getLlmHost())
+}
+
 export const DebugStatsTab = () => {
   const stats = useCorpusStats()
   const corpora = useCorpora()
   const [corporaOpen, setCorporaOpen] = useState(false)
+  const [regenState, setRegenState] = useState<RegenState>("idle")
+
+  const handleRegenerate = () => {
+    setRegenState("running")
+    regenerateDescriptions()
+      .then(() => setRegenState("done"))
+      .catch(() => setRegenState("error"))
+  }
 
   const significantRows = corpora.significant.map((key) => {
     const found = corpora.remapped.find((r) => r.key === key)
@@ -204,7 +231,17 @@ export const DebugStatsTab = () => {
         <LanguageTable rows={stats.languages} />
       </div>
       <div className="flex flex-col gap-2">
-        <SectionLabel>Corpus Descriptions</SectionLabel>
+        <div className="flex items-center justify-between">
+          <SectionLabel>Corpus Descriptions</SectionLabel>
+          <button
+            type="button"
+            disabled={regenState === "running"}
+            onClick={handleRegenerate}
+            className="text-xs font-medium text-orange-500 hover:text-orange-600 disabled:opacity-40"
+          >
+            {regenState === "running" ? "Regenerating…" : "Regenerate"}
+          </button>
+        </div>
         <DescriptionsTable descriptions={stats.descriptions} />
       </div>
       <div className="flex flex-col gap-2">

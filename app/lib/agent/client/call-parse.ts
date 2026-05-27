@@ -25,20 +25,9 @@ export const tryParseJson = (text: string): unknown | undefined => {
   }
 }
 
-export const callAndParse = async <T>(
-  endpoint: string,
-  messages: { type: "message"; role: "system" | "user"; content: string }[],
-  schema: z.ZodType<T>
-): Promise<CallResult<T>> => {
-  const blocks = await callLlm({
-    endpoint,
-    messages,
-    responseFormat: toResponseFormat(schema),
-  })
+const PARSE_RETRIES = 1
 
-  const text = extractText(blocks)
-  if (!text) return { ok: false, error: "LLM returned no text response" }
-
+const attemptParse = <T>(text: string, schema: z.ZodType<T>): CallResult<T> => {
   const raw = tryParseJson(text)
   if (raw === undefined) return { ok: false, error: "LLM returned invalid JSON" }
 
@@ -47,4 +36,30 @@ export const callAndParse = async <T>(
     return { ok: false, error: `Schema validation failed: ${parsed.error.message}` }
 
   return { ok: true, data: parsed.data }
+}
+
+export const callAndParse = async <T>(
+  endpoint: string,
+  messages: { type: "message"; role: "system" | "user"; content: string }[],
+  schema: z.ZodType<T>
+): Promise<CallResult<T>> => {
+  const responseFormat = toResponseFormat(schema)
+
+  for (let attempt = 0; attempt <= PARSE_RETRIES; attempt++) {
+    const blocks = await callLlm({ endpoint, messages, responseFormat })
+    const text = extractText(blocks)
+    if (!text) return { ok: false, error: "LLM returned no text response" }
+
+    const result = attemptParse(text, schema)
+    if (result.ok) return result
+
+    if (attempt < PARSE_RETRIES) {
+      console.warn(`[callAndParse ${endpoint}] ${result.error}, retry ${attempt + 1}`)
+      continue
+    }
+
+    return result
+  }
+
+  return { ok: false, error: "unreachable" }
 }

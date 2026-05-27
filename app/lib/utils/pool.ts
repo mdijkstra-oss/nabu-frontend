@@ -14,7 +14,7 @@ interface PoolOptions {
   onItemComplete?: (completed: number, total: number) => void
 }
 
-interface PoolResult<T, R> {
+export interface PoolResult<T, R> {
   results: R[]
   failures: PoolFailure<T>[]
   consumed: number

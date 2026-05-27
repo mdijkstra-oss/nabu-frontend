@@ -1,16 +1,18 @@
 import { z } from "zod"
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
-import { callLlm } from "~/lib/agent/client/fetch"
-import { extractText, toResponseFormat } from "~/lib/agent/client/convert"
+import type { PoolResult } from "~/lib/utils/pool"
+import { callAndParse } from "~/lib/agent/client/call-parse"
 import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 import { splitBySentences } from "~/lib/text/split"
 import { formatNumberedPassage } from "~/lib/text/format"
+import { processPool } from "~/lib/utils/pool"
 import { growHits } from "./slices"
 
 export { formatNumberedPassage } from "~/lib/text/format"
 
 export const FILTER_BATCH_SIZE = 10
+export const FILTER_CONCURRENCY = 5
 
 const SEMANTIC_FILTER_ENDPOINT = "/semantic-filter"
 const MIN_WORD_COUNT = 3
@@ -18,14 +20,8 @@ const WORD_SPLIT_RE = /\s+/
 
 const hasEnoughWords = (text: string): boolean => text.split(WORD_SPLIT_RE).length >= MIN_WORD_COUNT
 
-const toSystem = (content: string) => ({
-  type: "message" as const,
-  role: "system" as const,
-  content,
-})
-
 const FILTER_CALL_TO_ACTION =
-  "Return the 1-based sentence numbers that match the intent, grouped into contiguous sequences."
+  "Return matching sentence ranges as an array of { id, start, end } where id is the passage letter and start/end are 1-based sentence numbers."
 
 const splitSentenceTexts = splitBySentences()
 
@@ -42,23 +38,16 @@ export const toLetter = (index: number): string => {
   return result
 }
 
-export const reconstructHits = (
-  sentences: string[],
-  groups: number[][],
-  file: string,
-  id?: string
-): SearchHit[] => {
-  const hits: SearchHit[] = []
-  for (const indices of groups) {
-    const text = indices
-      .filter((i) => i >= 1 && i <= sentences.length)
-      .map((i) => sentences[i - 1])
-      .join(" ")
-      .trim()
-    if (hasEnoughWords(text)) hits.push({ file, ...(id !== undefined ? { id } : {}), text })
-  }
-  return hits
-}
+export const extractMatchTexts = (sentences: string[], groups: number[][]): string[] =>
+  groups
+    .map((indices) =>
+      indices
+        .filter((i) => i >= 1 && i <= sentences.length)
+        .map((i) => sentences[i - 1])
+        .join(" ")
+        .trim()
+    )
+    .filter(hasEnoughWords)
 
 interface PreparedHit {
   hit: SearchHit
@@ -73,38 +62,52 @@ const prepareHit = (hit: SearchHit): PreparedHit | null => {
   return { hit, sentences, numbered: formatNumberedPassage(sentences) }
 }
 
-const buildBatchSchema = (labels: string[]) =>
-  z.object(
-    Object.fromEntries(labels.map((label) => [label, z.array(z.array(z.number().int().min(1)))]))
-  )
+const FilterMatchSchema = z.object({
+  id: z.string(),
+  start: z.number().int().min(1),
+  end: z.number().int().min(1),
+})
+
+const FilterResponseSchema = z.array(FilterMatchSchema)
+
+const expandRange = (start: number, end: number): number[] => {
+  const indices: number[] = []
+  for (let i = start; i <= end; i++) indices.push(i)
+  return indices
+}
+
+const groupMatchesByLabel = (
+  matches: z.infer<typeof FilterResponseSchema>,
+  labels: string[]
+): number[][][] => {
+  const groups = new Map<string, number[][]>(labels.map((l) => [l, []]))
+  for (const m of matches) {
+    const bucket = groups.get(m.id)
+    if (bucket) bucket.push(expandRange(m.start, m.end))
+  }
+  return labels.map((l) => groups.get(l) ?? [])
+}
 
 const formatBatchPassage = (prepared: PreparedHit[], labels: string[]): string =>
   prepared.map((p, i) => `[${labels[i]}]\n${p.numbered}`).join("\n\n")
+
+const toSystemMessage = (content: string) => ({ type: "message", role: "system", content }) as const
 
 const callSemanticFilterBatch = async (
   intent: string,
   prepared: PreparedHit[]
 ): Promise<number[][][]> => {
   const labels = prepared.map((_, i) => toLetter(i))
-  const schema = buildBatchSchema(labels)
+  const messages = [
+    toSystemMessage(`<search_intent>${intent}</search_intent>`),
+    toSystemMessage(formatBatchPassage(prepared, labels)),
+    toSystemMessage(FILTER_CALL_TO_ACTION),
+  ]
 
-  const blocks = await callLlm({
-    endpoint: SEMANTIC_FILTER_ENDPOINT,
-    messages: [
-      toSystem(intent),
-      toSystem(formatBatchPassage(prepared, labels)),
-      toSystem(FILTER_CALL_TO_ACTION),
-    ],
-    responseFormat: toResponseFormat(schema),
-  })
+  const result = await callAndParse(SEMANTIC_FILTER_ENDPOINT, messages, FilterResponseSchema)
+  if (!result.ok) return prepared.map(() => [])
 
-  const text = extractText(blocks)
-  if (!text) return prepared.map(() => [])
-
-  const parsed = schema.safeParse(JSON.parse(text))
-  if (!parsed.success) return prepared.map(() => [])
-
-  return labels.map((label) => parsed.data[label] ?? [])
+  return groupMatchesByLabel(result.data, labels)
 }
 
 const FILTER_CACHE_PREFIX = "filter"
@@ -153,7 +156,9 @@ const reconstructBatchHits = (prepared: PreparedHit[], results: number[][][]): S
   prepared.flatMap((p, i) => {
     const groups = results[i]
     if (!groups || groups.length === 0) return []
-    return reconstructHits(p.sentences, groups, p.hit.file, p.hit.id)
+    const matches = extractMatchTexts(p.sentences, groups)
+    if (matches.length === 0) return []
+    return [{ ...p.hit, matches }]
   })
 
 const filterBatch = async (hits: SearchHit[], intent: string): Promise<SearchHit[]> => {
@@ -170,7 +175,15 @@ const filterBatch = async (hits: SearchHit[], intent: string): Promise<SearchHit
   }
 }
 
-export const filterAndGrow = async (
+const chunkHits = (hits: SearchHit[]): SearchHit[][] => {
+  const chunks: SearchHit[][] = []
+  for (let i = 0; i < hits.length; i += FILTER_BATCH_SIZE) {
+    chunks.push(hits.slice(i, i + FILTER_BATCH_SIZE))
+  }
+  return chunks
+}
+
+const filterAndGrowBatch = async (
   hits: SearchHit[],
   intent: string,
   files: FileStore
@@ -178,3 +191,15 @@ export const filterAndGrow = async (
   const filtered = await filterBatch(hits, intent)
   return growHits(filtered, files)
 }
+
+export const filterParallel = (
+  hits: SearchHit[],
+  intent: string,
+  files: FileStore,
+  onResults: (results: SearchHit[]) => void,
+  target?: number
+): Promise<PoolResult<SearchHit[], SearchHit>> =>
+  processPool(chunkHits(hits), (chunk) => filterAndGrowBatch(chunk, intent, files), onResults, {
+    concurrency: FILTER_CONCURRENCY,
+    target,
+  })

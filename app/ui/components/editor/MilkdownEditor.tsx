@@ -46,11 +46,14 @@ const createReadOnlyPlugin = () =>
     props: { editable: () => false },
   })
 
+const normalizeSpotlights = (s: Spotlight | Spotlight[] | null | undefined): Spotlight[] =>
+  s == null ? [] : Array.isArray(s) ? s : [s]
+
 interface MilkdownEditorCoreProps {
   defaultValue: string
   debugMode: boolean
   readOnly: boolean
-  spotlight: Spotlight | null
+  spotlight: Spotlight | Spotlight[] | null
   filePath?: string
 }
 
@@ -116,11 +119,12 @@ const MilkdownEditorCore = ({
     if (contentChanged) {
       editor.action(replaceAll(defaultValue))
     }
+    const spotlights = normalizeSpotlights(spotlight)
     editor.action((ctx) => {
       const view = ctx.get(editorViewCtx)
       const tr = view.state.tr
         .setMeta(annotationsMeta, annotations)
-        .setMeta(spotlightMeta, spotlight)
+        .setMeta(spotlightMeta, spotlights)
       view.dispatch(tr)
     })
   }, [loading, getEditor, defaultValue, annotations, spotlight])
@@ -137,7 +141,7 @@ interface MilkdownEditorProps {
   debugMode?: boolean
   debugOptions?: DebugOptions
   readOnly?: boolean
-  spotlight?: Spotlight | null
+  spotlight?: Spotlight | Spotlight[] | null
   filePath?: string
 }
 

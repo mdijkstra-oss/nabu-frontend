@@ -4,9 +4,8 @@ import type { Result } from "~/lib/fp/result"
 import type { HybridSearchPlan } from "./semantic"
 import type { ScoredChunk } from "./fusion"
 import { ok, err } from "~/lib/fp/result"
-import { buildCosineQuery, buildUncappedCosineQuery } from "./semantic"
+import { buildCosineQuery } from "./semantic"
 import { fuseCosineResults } from "./fusion"
-import { findRelevanceCutoff, judgeSnippets } from "./relevance-cutoff"
 
 type RawRow = Record<string, unknown>
 
@@ -54,6 +53,7 @@ const runScoredQuery = async (
 export const chunkToHit = (chunk: ScoredChunk): SearchHit => ({
   file: chunk.file,
   ...(chunk.text !== undefined ? { text: chunk.text } : {}),
+  score: chunk.score,
 })
 
 type QueryBuilder = (baseSql: string, hyde: HybridSearchPlan["hydes"][number]) => string
@@ -83,26 +83,4 @@ export const executeHybridLocal = async (
   const fused = await fuseHydes(db, plan, buildCosineQuery, plan.limit)
   if (!fused.ok) return fused
   return ok(fused.value.map(chunkToHit))
-}
-
-export const executeHybridUncapped = async (
-  db: Database,
-  plan: HybridSearchPlan
-): Promise<Result<ScoredChunk[], DbError>> =>
-  fuseHydes(db, plan, buildUncappedCosineQuery, undefined)
-
-export const executeHybridWithCutoff = async (
-  db: Database,
-  plan: HybridSearchPlan
-): Promise<Result<SearchHit[], DbError>> => {
-  const uncapped = await executeHybridUncapped(db, plan)
-  if (!uncapped.ok) return uncapped
-
-  const ranked = uncapped.value
-  if (ranked.length === 0) return ok([])
-
-  const cutoff = await findRelevanceCutoff(ranked, plan.intent, judgeSnippets)
-  const trimmed = ranked.slice(0, Math.max(cutoff, 1))
-
-  return ok(trimmed.map(chunkToHit))
 }

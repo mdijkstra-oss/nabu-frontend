@@ -12,7 +12,7 @@ const pluginKey = new PluginKey("spotlight")
 
 export const spotlightMeta = pluginKey
 
-const SPOTLIGHT_STYLE = "border-bottom: 2px solid var(--color-brand-600) !important;"
+const SPOTLIGHT_STYLE = "border-bottom: 2px solid var(--orange-9) !important;"
 
 const resolveSpotlightSingle = (doc: Node, text: string): TextRange | null =>
   findTextRange(doc, text)
@@ -64,31 +64,32 @@ const findContainingCallout = (doc: Node, from: number, to: number): NodeSpan | 
   return null
 }
 
-const toDecorationSet = (doc: Node, range: TextRange): DecorationSet => {
+const toDecorations = (doc: Node, range: TextRange): Decoration[] => {
   const callout = findContainingCallout(doc, range.from, range.to)
   if (callout) {
-    return DecorationSet.create(doc, [
+    return [
       Decoration.node(callout.nodePos, callout.nodeEnd, { "data-spotlight": "true" }),
       Decoration.inline(range.from, range.to, {}, { spotlight: true }),
-    ])
+    ]
   }
-  return DecorationSet.create(doc, [
+  return [
     Decoration.inline(range.from, range.to, {
       style: SPOTLIGHT_STYLE,
       "data-spotlight": "true",
     }),
-  ])
+  ]
 }
 
-const computeDecorations = (doc: Node, spotlight: Spotlight | null): DecorationSet => {
-  if (!spotlight) return DecorationSet.empty
-  const range = resolveSpotlight(doc, spotlight)
-  if (!range) return DecorationSet.empty
-  return toDecorationSet(doc, range)
+const computeDecorations = (doc: Node, spotlights: Spotlight[]): DecorationSet => {
+  const decorations = spotlights.flatMap((s) => {
+    const range = resolveSpotlight(doc, s)
+    return range ? toDecorations(doc, range) : []
+  })
+  return decorations.length > 0 ? DecorationSet.create(doc, decorations) : DecorationSet.empty
 }
 
 interface PluginState {
-  spotlight: Spotlight | null
+  spotlights: Spotlight[]
   decorations: DecorationSet
 }
 
@@ -96,19 +97,19 @@ export const createSpotlightPlugin = (): Plugin =>
   new Plugin({
     key: pluginKey,
     state: {
-      init: (): PluginState => ({ spotlight: null, decorations: DecorationSet.empty }),
+      init: (): PluginState => ({ spotlights: [], decorations: DecorationSet.empty }),
       apply: (tr, pluginState, _oldState, newState) => {
-        const newSpotlight = tr.getMeta(pluginKey) as Spotlight | null | undefined
-        if (newSpotlight !== undefined) {
+        const meta = tr.getMeta(pluginKey) as Spotlight[] | undefined
+        if (meta !== undefined) {
           return {
-            spotlight: newSpotlight,
-            decorations: computeDecorations(newState.doc, newSpotlight),
+            spotlights: meta,
+            decorations: computeDecorations(newState.doc, meta),
           }
         }
         if (!tr.docChanged) return pluginState
         return {
-          spotlight: pluginState.spotlight,
-          decorations: computeDecorations(newState.doc, pluginState.spotlight),
+          spotlights: pluginState.spotlights,
+          decorations: computeDecorations(newState.doc, pluginState.spotlights),
         }
       },
     },

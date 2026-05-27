@@ -34,13 +34,26 @@ const stripAnnotations = (text: string): string => stripBlocksByLanguage(text, "
 
 const splitSentences = splitMarkdownBySentences()
 
+const toSpotlight = (raw: string): Spotlight | null => {
+  const clean = stripMarkdown(raw)
+  const tokens = tokenizeWords(clean)
+  if (tokens.length === 0) return null
+  return { type: "single", text: tokens.join(" ") }
+}
+
 export const spotlightFromText = (text: string): Spotlight | null => {
   const prose = stripAnnotations(text)
   const sentences = splitSentences(prose)
   const longest = longestSegment(sentences)
   if (!longest) return null
-  const clean = stripMarkdown(longest.text)
-  const tokens = tokenizeWords(clean)
-  if (tokens.length === 0) return null
-  return { type: "single", text: tokens.join(" ") }
+  return toSpotlight(longest.text)
+}
+
+const longestString = (strings: string[]): string | null =>
+  strings.reduce<string | null>((best, s) => (!best || s.length > best.length ? s : best), null)
+
+export const spotlightFromMatches = (matches: string[]): Spotlight | null => {
+  const longest = longestString(matches)
+  if (!longest) return null
+  return toSpotlight(longest)
 }

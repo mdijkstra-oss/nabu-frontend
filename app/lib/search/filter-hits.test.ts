@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { splitSentences, formatNumberedPassage, reconstructHits, toLetter } from "./filter-hits"
+import { splitSentences, formatNumberedPassage, extractMatchTexts, toLetter } from "./filter-hits"
 
 describe("splitSentences", () => {
   const cases: { name: string; text: string; expected: string[] }[] = [
@@ -70,7 +70,7 @@ describe("toLetter", () => {
   })
 })
 
-describe("reconstructHits", () => {
+describe("extractMatchTexts", () => {
   const sentences = [
     "She felt overwhelmed.",
     "The deadlines were relentless.",
@@ -81,67 +81,46 @@ describe("reconstructHits", () => {
   const cases: {
     name: string
     groups: number[][]
-    file: string
-    id?: string
-    expected: { file: string; id?: string; text: string }[]
+    expected: string[]
   }[] = [
     {
-      name: "single group → one hit with joined text",
+      name: "single group → one match with joined text",
       groups: [[1, 2]],
-      file: "doc.md",
-      expected: [{ file: "doc.md", text: "She felt overwhelmed. The deadlines were relentless." }],
+      expected: ["She felt overwhelmed. The deadlines were relentless."],
     },
     {
-      name: "multiple groups → multiple hits",
+      name: "multiple groups → multiple matches",
       groups: [[1], [4]],
-      file: "doc.md",
-      expected: [
-        { file: "doc.md", text: "She felt overwhelmed." },
-        { file: "doc.md", text: "Her manager noticed the decline." },
-      ],
+      expected: ["She felt overwhelmed.", "Her manager noticed the decline."],
     },
     {
       name: "empty groups → empty result",
       groups: [],
-      file: "doc.md",
       expected: [],
     },
     {
       name: "out-of-range indices are filtered",
       groups: [[0, 5, 2]],
-      file: "doc.md",
-      expected: [{ file: "doc.md", text: "The deadlines were relentless." }],
-    },
-    {
-      name: "id is preserved",
-      groups: [[3]],
-      file: "note.md",
-      id: "callout-1",
-      expected: [{ file: "note.md", id: "callout-1", text: "On weekends she gardened." }],
+      expected: ["The deadlines were relentless."],
     },
     {
       name: "group with all invalid indices → skipped",
       groups: [[0, 99]],
-      file: "doc.md",
       expected: [],
     },
   ]
 
-  it.each(cases)("$name", ({ groups, file, id, expected }) => {
-    expect(reconstructHits(sentences, groups, file, id)).toEqual(expected)
+  it.each(cases)("$name", ({ groups, expected }) => {
+    expect(extractMatchTexts(sentences, groups)).toEqual(expected)
   })
 
-  it("drops hits with fewer than 3 words", () => {
+  it("drops matches with fewer than 3 words", () => {
     const short = ["Yes.", "No way.", "This has enough words here."]
-    expect(reconstructHits(short, [[1], [2], [3]], "f.md")).toEqual([
-      { file: "f.md", text: "This has enough words here." },
-    ])
+    expect(extractMatchTexts(short, [[1], [2], [3]])).toEqual(["This has enough words here."])
   })
 
   it("word count applies to combined group, not individual sentences", () => {
     const mixed = ["Yes.", "The deadlines were relentless."]
-    expect(reconstructHits(mixed, [[1, 2]], "f.md")).toEqual([
-      { file: "f.md", text: "Yes. The deadlines were relentless." },
-    ])
+    expect(extractMatchTexts(mixed, [[1, 2]])).toEqual(["Yes. The deadlines were relentless."])
   })
 })

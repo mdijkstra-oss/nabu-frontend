@@ -161,11 +161,10 @@ const buildCosineBase = (baseSql: string, hyde: HydeQuery): string => {
   )
 }
 
-export const buildCosineQuery = (baseSql: string, hyde: HydeQuery): string =>
-  `${buildCosineBase(baseSql, hyde)} ORDER BY ${SCORE_COLUMN} DESC LIMIT 200`
+const COSINE_QUERY_LIMIT = 350
 
-export const buildUncappedCosineQuery = (baseSql: string, hyde: HydeQuery): string =>
-  `${buildCosineBase(baseSql, hyde)} ORDER BY ${SCORE_COLUMN} DESC`
+export const buildCosineQuery = (baseSql: string, hyde: HydeQuery): string =>
+  `${buildCosineBase(baseSql, hyde)} ORDER BY ${SCORE_COLUMN} DESC LIMIT ${COSINE_QUERY_LIMIT}`
 
 export const buildHybridPlan = (
   sql: string,
