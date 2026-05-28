@@ -191,14 +191,20 @@ const filterAndGrowBatch = async (
   return growHits(filtered, files)
 }
 
+export interface FilterOptions {
+  target?: number
+  maxBarren?: number
+}
+
 export const filterParallel = (
   hits: SearchHit[],
   intent: string,
   files: FileStore,
   onResults: (results: SearchHit[]) => void,
-  target?: number
+  opts?: FilterOptions
 ): Promise<PoolResult<SearchHit[], SearchHit>> =>
   processPool(chunkHits(hits), (chunk) => filterAndGrowBatch(chunk, intent, files), onResults, {
     concurrency: FILTER_CONCURRENCY,
-    target,
+    target: opts?.target,
+    maxBarren: opts?.maxBarren,
   })
