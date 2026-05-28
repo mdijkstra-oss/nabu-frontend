@@ -1,50 +1,38 @@
+import type { Segment } from "./types"
+import { splitBySentences } from "./split"
+import { locateTextInSentences } from "./present"
+
+export const normalizeMatchWhitespace = (match: string): string => match.replace(/\n\n+/g, " ")
+
 interface Range {
   start: number
   end: number
 }
 
+const CONTEXT_BUDGET = 30
+const MIN_STUB_WORDS = 8
 const SEPARATOR = "\n\n…\n\n"
-const PARAGRAPH_SPLIT = /\n\n+/
-const WORD_SPLIT = /\s+/
-const SHORT_PARAGRAPH_WORDS = 20
-const MAX_PARAGRAPH_WORDS = 120
+const WORD_RE = /\s+/
+const LOCATE_THRESHOLD = 1
 
-const collapseWhitespace = (text: string): string => text.replace(/\s+/g, " ").trim()
+const wordCount = (text: string): number => text.split(WORD_RE).filter(Boolean).length
 
-const splitParagraphs = (text: string): string[] =>
-  text.split(PARAGRAPH_SPLIT).filter((p) => p.trim().length > 0)
-
-const wordCount = (text: string): number => text.split(WORD_SPLIT).filter(Boolean).length
-
-const isShortParagraph = (text: string): boolean => wordCount(text) < SHORT_PARAGRAPH_WORDS
-
-const paragraphContainsMatch = (paragraph: string, match: string): boolean => {
-  if (paragraph.includes(match) || match.includes(paragraph)) return true
-  const normalizedParagraph = collapseWhitespace(paragraph)
-  const normalizedMatch = collapseWhitespace(match)
-  return (
-    normalizedParagraph.includes(normalizedMatch) || normalizedMatch.includes(normalizedParagraph)
-  )
+const taketail = (text: string, count: number): string => {
+  const words = text.split(WORD_RE).filter(Boolean)
+  if (words.length <= count) return text
+  return words.slice(-count).join(" ")
 }
 
-const findMatchingParagraphs = (paragraphs: string[], match: string): number[] => {
-  const indices: number[] = []
-  for (let i = 0; i < paragraphs.length; i++) {
-    if (paragraphContainsMatch(paragraphs[i], match)) indices.push(i)
-  }
-  return indices
-}
-
-const expandShortParagraph = (index: number, total: number): Range => {
-  const start = Math.max(0, index - 1)
-  const end = Math.min(total - 1, index + 1)
-  return { start, end }
+const takeHead = (text: string, count: number): string => {
+  const words = text.split(WORD_RE).filter(Boolean)
+  if (words.length <= count) return text
+  return words.slice(0, count).join(" ")
 }
 
 const mergeRanges = (ranges: Range[]): Range[] => {
   if (ranges.length === 0) return []
   const sorted = [...ranges].sort((a, b) => a.start - b.start)
-  const merged: Range[] = [sorted[0]]
+  const merged: Range[] = [{ ...sorted[0] }]
   for (let i = 1; i < sorted.length; i++) {
     const prev = merged[merged.length - 1]
     if (sorted[i].start <= prev.end + 1) {
@@ -56,81 +44,135 @@ const mergeRanges = (ranges: Range[]): Range[] => {
   return merged
 }
 
-const collectSelectedRanges = (paragraphs: string[], matches: string[]): Range[] =>
-  matches.flatMap((match) => {
-    const indices = findMatchingParagraphs(paragraphs, match)
-    return indices.map((i) =>
-      isShortParagraph(paragraphs[i])
-        ? expandShortParagraph(i, paragraphs.length)
-        : { start: i, end: i }
-    )
-  })
-
-const findMatchWordIndex = (words: string[], match: string): number => {
-  const joined = words.join(" ")
-  const charIdx = joined.indexOf(collapseWhitespace(match))
-  if (charIdx === -1) return -1
-  const prefix = joined.slice(0, charIdx)
-  return prefix.split(WORD_SPLIT).filter(Boolean).length
+const locateMatch = (sentenceTexts: string[], match: string): Range | null => {
+  const result = locateTextInSentences(sentenceTexts, match, LOCATE_THRESHOLD)
+  if (!result) return null
+  return { start: result.start - 1, end: result.end - 1 }
 }
 
-const findEarliestMatchWord = (words: string[], matches: string[]): number => {
-  let earliest = -1
-  for (const match of matches) {
-    const idx = findMatchWordIndex(words, match)
-    if (idx !== -1 && (earliest === -1 || idx < earliest)) earliest = idx
-  }
-  return earliest
+const locateAll = (sentenceTexts: string[], matches: string[]): Range[] =>
+  matches
+    .map((m) => locateMatch(sentenceTexts, normalizeMatchWhitespace(m)))
+    .filter((r): r is Range => r !== null)
+
+const gapWordCount = (segments: Segment[], a: Range, b: Range): number => {
+  let total = 0
+  for (let i = a.end + 1; i < b.start; i++) total += wordCount(segments[i].text)
+  return total
 }
 
-const capParagraph = (text: string, matches: string[]): string => {
-  const words = text.split(WORD_SPLIT).filter(Boolean)
-  if (words.length <= MAX_PARAGRAPH_WORDS) return text
-
-  const matchWordIdx = findEarliestMatchWord(words, matches)
-
-  if (matchWordIdx === -1) {
-    return words.slice(0, MAX_PARAGRAPH_WORDS).join(" ") + " …"
+const mergeClose = (ranges: Range[], segments: Segment[], budget: number): Range[] => {
+  if (ranges.length <= 1) return ranges
+  const merged: Range[] = [{ ...ranges[0] }]
+  for (let i = 1; i < ranges.length; i++) {
+    const prev = merged[merged.length - 1]
+    if (gapWordCount(segments, prev, ranges[i]) <= 2 * budget) {
+      prev.end = ranges[i].end
+    } else {
+      merged.push({ ...ranges[i] })
+    }
   }
-
-  const half = Math.floor(MAX_PARAGRAPH_WORDS / 2)
-  let start = Math.max(0, matchWordIdx - half)
-  let end = start + MAX_PARAGRAPH_WORDS
-  if (end > words.length) {
-    end = words.length
-    start = Math.max(0, end - MAX_PARAGRAPH_WORDS)
-  }
-
-  const slice = words.slice(start, end).join(" ")
-  const prefix = start > 0 ? "… " : ""
-  const suffix = end < words.length ? " …" : ""
-  return prefix + slice + suffix
+  return merged
 }
 
-const extractRegion = (paragraphs: string[], range: Range, matches: string[]): string =>
-  paragraphs
-    .slice(range.start, range.end + 1)
-    .map((p) => capParagraph(p, matches))
-    .join("\n\n")
+interface ExpandedEdge {
+  boundary: number
+  truncated: { index: number; words: number } | null
+}
 
-const coversAll = (ranges: Range[], total: number): boolean =>
-  ranges.length === 1 && ranges[0].start === 0 && ranges[0].end === total - 1
+const expandBefore = (segments: Segment[], from: number, budget: number): ExpandedEdge => {
+  let used = 0
+  let boundary = from
+  for (let i = from - 1; i >= 0; i--) {
+    const w = wordCount(segments[i].text)
+    if (used + w <= budget) {
+      used += w
+      boundary = i
+    } else {
+      const remaining = budget - used
+      if (remaining >= MIN_STUB_WORDS)
+        return { boundary, truncated: { index: i, words: remaining } }
+      return { boundary, truncated: null }
+    }
+  }
+  return { boundary, truncated: null }
+}
 
-export const normalizeMatchWhitespace = (match: string): string => match.replace(/\n\n+/g, " ")
+const expandAfter = (segments: Segment[], from: number, budget: number): ExpandedEdge => {
+  let used = 0
+  let boundary = from
+  for (let i = from + 1; i < segments.length; i++) {
+    const w = wordCount(segments[i].text)
+    if (used + w <= budget) {
+      used += w
+      boundary = i
+    } else {
+      const remaining = budget - used
+      if (remaining >= MIN_STUB_WORDS)
+        return { boundary, truncated: { index: i, words: remaining } }
+      return { boundary, truncated: null }
+    }
+  }
+  return { boundary, truncated: null }
+}
+
+const originalGap = (text: string, segments: Segment[], a: number, b: number): string =>
+  text.slice(segments[a].end, segments[b].start)
+
+const renderRegion = (
+  text: string,
+  segments: Segment[],
+  range: Range,
+  budget: number,
+  isFirst: boolean,
+  isLast: boolean
+): string => {
+  const before = expandBefore(segments, range.start, budget)
+  const after = expandAfter(segments, range.end, budget)
+
+  const parts: string[] = []
+
+  const hasHiddenBefore = before.truncated === null && before.boundary > 0
+
+  if (before.truncated) {
+    parts.push("…" + taketail(segments[before.truncated.index].text, before.truncated.words))
+    parts.push(originalGap(text, segments, before.truncated.index, before.boundary))
+  } else if (isFirst && hasHiddenBefore) {
+    parts.push("…" + originalGap(text, segments, before.boundary - 1, before.boundary))
+  }
+
+  parts.push(text.slice(segments[before.boundary].start, segments[after.boundary].end))
+
+  const hasHiddenAfter = after.truncated === null && after.boundary < segments.length - 1
+
+  if (after.truncated) {
+    parts.push(originalGap(text, segments, after.boundary, after.truncated.index))
+    parts.push(takeHead(segments[after.truncated.index].text, after.truncated.words) + "…")
+  } else if (isLast && hasHiddenAfter) {
+    parts.push(originalGap(text, segments, after.boundary, after.boundary + 1) + "…")
+  }
+
+  return parts.join("")
+}
+
+const splitSentenceSegments = splitBySentences()
 
 export const trimAroundMatches = (text: string, matches: string[]): string => {
   if (matches.length === 0) return text
-  const normalized = matches.map(normalizeMatchWhitespace)
-  const paragraphs = splitParagraphs(text)
-  if (paragraphs.length === 0) return text
 
-  const raw = collectSelectedRanges(paragraphs, normalized)
-  if (raw.length === 0) return text
+  const segments = splitSentenceSegments(text)
+  if (segments.length === 0) return text
 
-  const merged = mergeRanges(raw)
-  const regions = merged.map((r) => extractRegion(paragraphs, r, normalized))
+  const sentenceTexts = segments.map((s) => s.text)
+  const matchRanges = locateAll(sentenceTexts, matches)
+  if (matchRanges.length === 0) return text
 
-  if (coversAll(merged, paragraphs.length)) return regions.join("\n\n")
+  const merged = mergeRanges(matchRanges)
+  const regions = mergeClose(merged, segments, CONTEXT_BUDGET)
 
-  return regions.join(SEPARATOR)
+  return regions
+    .map((r, i) =>
+      renderRegion(text, segments, r, CONTEXT_BUDGET, i === 0, i === regions.length - 1)
+    )
+    .join(SEPARATOR)
 }

@@ -18,6 +18,9 @@ const doc = [
   "The results suggest that information processing is deeply contextual and cannot be separated from the social environment in which it occurs.",
 ].join("\n\n")
 
+const longParagraph = (count: number): string =>
+  Array.from({ length: count }, (_, i) => `Sentence number ${i} has some words in it.`).join(" ")
+
 describe("trimAroundMatches", () => {
   const cases: {
     name: string
@@ -32,24 +35,33 @@ describe("trimAroundMatches", () => {
       check: (r) => expect(r).toBe(doc),
     },
     {
-      name: "match in long paragraph → returns that paragraph only",
+      name: "match not found → returns original",
+      text: doc,
+      matches: ["this text does not exist anywhere in the document at all"],
+      check: (r) => expect(r).toBe(doc),
+    },
+    {
+      name: "empty text → returns empty",
+      text: "",
+      matches: ["anything"],
+      check: (r) => expect(r).toBe(""),
+    },
+    {
+      name: "match in middle → trims distant content",
       text: doc,
       matches: ["conducted interviews with 40 participants"],
       check: (r) => {
         expect(r).toContain("We conducted interviews")
         expect(r).not.toContain("# Introduction")
-        expect(r).not.toContain("# Discussion")
       },
     },
     {
-      name: "match in short paragraph → expands to neighbors",
+      name: "short match → gets context from budget",
       text: doc,
       matches: ["Short finding."],
       check: (r) => {
         expect(r).toContain("Short finding.")
-        expect(r).toContain("# Results")
-        expect(r).toContain("# Discussion")
-        expect(r).not.toContain("# Introduction")
+        expect(r).not.toContain("project started in 2019")
       },
     },
     {
@@ -74,74 +86,77 @@ describe("trimAroundMatches", () => {
       },
     },
     {
-      name: "all paragraphs matched → returns original",
+      name: "all content matched → returns full text",
       text: "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
       matches: ["First paragraph.", "Second paragraph.", "Third paragraph."],
       check: (r) => expect(r).toBe("First paragraph.\n\nSecond paragraph.\n\nThird paragraph."),
     },
     {
-      name: "match not found in any paragraph → returns original",
-      text: doc,
-      matches: ["this text does not exist anywhere"],
-      check: (r) => expect(r).toBe(doc),
+      name: "single sentence text → no trimming possible",
+      text: "Just a single sentence with some words.",
+      matches: ["single sentence"],
+      check: (r) => expect(r).toBe("Just a single sentence with some words."),
     },
     {
-      name: "empty text → returns empty",
-      text: "",
-      matches: ["anything"],
-      check: (r) => expect(r).toBe(""),
-    },
-    {
-      name: "match spans across paragraph boundary via includes",
-      text: "Alpha bravo.\n\nBravo charlie.\n\nDelta echo.",
-      matches: ["Bravo charlie."],
+      name: "small match between large neighbors → context is budget-capped",
+      text: `${longParagraph(20)}\n\nThe key insight was trust.\n\n${longParagraph(20)}`,
+      matches: ["The key insight was trust."],
       check: (r) => {
-        expect(r).toContain("Bravo charlie.")
+        expect(r).toContain("The key insight was trust.")
+        expect(r).toContain("…")
+        const words = r.split(/\s+/).filter(Boolean)
+        expect(words.length).toBeLessThan(100)
       },
     },
     {
-      name: "long paragraph is capped at 120 words with ellipsis",
-      text: Array.from({ length: 200 }, (_, i) => `word${i}`).join(" "),
-      matches: ["word0"],
+      name: "truncated before-context shows tail words closest to match",
+      text: `${longParagraph(20)}\n\nThe key insight was trust.\n\nShort after.`,
+      matches: ["The key insight was trust."],
       check: (r) => {
-        const words = r.split(/\s+/)
-        expect(words.length).toBeLessThanOrEqual(122)
-        expect(r).toContain("word0")
-        expect(r).toContain("word119")
-        expect(r).not.toContain("word120 ")
-        expect(r.endsWith("…")).toBe(true)
+        expect(r).toContain("The key insight was trust.")
+        expect(r).toContain("Short after.")
+        expect(r.startsWith("…")).toBe(true)
       },
     },
     {
-      name: "paragraph under 120 words is not capped",
-      text: Array.from({ length: 50 }, (_, i) => `word${i}`).join(" "),
-      matches: ["word0"],
+      name: "truncated after-context shows head words closest to match",
+      text: `Short before.\n\nThe key insight was trust.\n\n${longParagraph(20)}`,
+      matches: ["The key insight was trust."],
       check: (r) => {
-        expect(r).toContain("word49")
+        expect(r).toContain("The key insight was trust.")
+        expect(r).toContain("Short before.")
+        expect(r).toContain("…")
+        expect(r).not.toContain("Sentence number 19")
+      },
+    },
+    {
+      name: "adjacent matches merge via gap budget",
+      text: "Before.\n\nMatch one.\n\nSmall gap.\n\nMatch two.\n\nAfter.",
+      matches: ["Match one.", "Match two."],
+      check: (r) => {
+        expect(r).not.toContain(SEP)
+        expect(r).toContain("Match one.")
+        expect(r).toContain("Small gap.")
+        expect(r).toContain("Match two.")
+      },
+    },
+    {
+      name: "preserves paragraph breaks in output",
+      text: "Context before.\n\nThe match sentence.\n\nContext after.",
+      matches: ["The match sentence."],
+      check: (r) => {
+        expect(r).toContain("Context before.\n\nThe match sentence.\n\nContext after.")
+      },
+    },
+    {
+      name: "multiple small context sentences all fit within budget",
+      text: "A.\n\nB.\n\nC.\n\nMatch.\n\nD.\n\nE.\n\nF.",
+      matches: ["Match."],
+      check: (r) => {
+        expect(r).toContain("Match.")
+        expect(r).toContain("A.")
+        expect(r).toContain("F.")
         expect(r).not.toContain("…")
-      },
-    },
-    {
-      name: "match at end of long paragraph → caps from end, prefix ellipsis",
-      text: Array.from({ length: 200 }, (_, i) => `word${i}`).join(" "),
-      matches: ["word190 word191 word192"],
-      check: (r) => {
-        expect(r).toContain("word190")
-        expect(r).toContain("word199")
-        expect(r.startsWith("… ")).toBe(true)
-        expect(r).not.toContain("word0")
-      },
-    },
-    {
-      name: "match in middle of long paragraph → caps around match",
-      text: Array.from({ length: 200 }, (_, i) => `word${i}`).join(" "),
-      matches: ["word100 word101 word102"],
-      check: (r) => {
-        expect(r).toContain("word100")
-        expect(r.startsWith("… ")).toBe(true)
-        expect(r.endsWith(" …")).toBe(true)
-        expect(r).not.toContain("word0")
-        expect(r).not.toContain("word199")
       },
     },
     {
@@ -158,33 +173,14 @@ describe("trimAroundMatches", () => {
       check: (r) => {
         expect(r).toContain("het doet iets")
         expect(r).toContain("OMT as an explicit expert warrant")
-        expect(r).not.toContain("routekaart")
-        expect(r).not.toContain("juridisch lastig")
       },
     },
     {
-      name: "real-world: short match at start of long single paragraph gets capped",
-      text: "nou dit najaar zal er wel weer een opleving van corona komen. Dat hoeft dan niet meteen reden tot paniek te zijn van: o we zitten nog tot diep volgend jaar aan de mondkapjes vast?\nDE JONGE\nNee, zeker niet. Omdat ik denk dat je erbij moet zeggen dat dat maar net afhangt van wat er de komende tijd gaat gebeuren. Het eerste is namelijk: gaat het ons lukken om een zo hoog mogelijke vaccinatiegraad te bereiken? Als ons dat gaat lukken is de kans kleiner dat we inderdaad met een eventuele opleving in het najaar te maken krijgen. Als die vaccinatiegraad ook nog eens lukt om dat zo homogeen mogelijk te verspreiden over Nederland. Dan helpt dat ook om het virus eronder te houden. Als er geen mutaties komen of als we de mutaties die komen snel weten te onderdrukken, dan helpt dat ook om een opleving te kunnen voorkomen. Kortom, ons gedrag voor de komende periode, maar ook ons beleid voor de komende periode is nog steeds zeer bepalend voor hoe het najaar eruit gaat zien. En dat maakt ook, want ja dit is heel mooi dat we deze stap 3 nu versneld kunnen zetten en ja het is hartstikke mooi dat we stap 4 en 5 samen kunnen pakken zodat we de meest beperkende maatregelen hebben kunnen doen verdwijnen voor 1 juli. Maar we moeten daarmee niet denken dat de coronacrisis voorbij is, we zijn er namelijk nog niet vanaf. We zijn er bijna, zeker, maar we moeten het nog steeds met beleid blijven doen om te zorgen dat we ook in het najaar geen opleving krijgen. Dus met name vaccinatie is ongelofelijk van belang. En dat zullen we tot vervelens toe blijven herhalen, iedere dag opnieuw.",
-      matches: ["Nee, zeker niet."],
+      name: "match with newlines in match text → normalizes and locates",
+      text: "Alpha bravo.\n\nBravo charlie.\n\nDelta echo.",
+      matches: ["Bravo charlie."],
       check: (r) => {
-        expect(r).toContain("Nee, zeker niet.")
-        const words = r.split(/\s+/).filter(Boolean)
-        expect(words.length).toBeLessThanOrEqual(122)
-        expect(r).toContain(" …")
-        expect(r).not.toContain("iedere dag opnieuw")
-      },
-    },
-    {
-      name: "long match spanning many sentences is capped but contains match start",
-      text: "nu gesloten zijn en misschien iets verlichting richting 28 april en anders hopelijk later: bereid nu wel vast voor hoe dat in jouw sector eruit zou zien. En dat gaat dus van cafés en restaurants en terrassen tot en met de strandtenten maar ook de theaters, de scholen, de musea, de recreatiesector et cetera et cetera. Dan tot slot wil ik echt voor één punt aandacht vragen en dat is dat inmiddels veertien zendmasten in Nederland in de afgelopen tijd, daar is brandgesticht. En daar heeft Ferd Grapperhaus namens het kabinet al over gezegd dat dit letterlijk, letterlijk levensgevaarlijk is en ik wil dat hier herhalen. Het is letterlijk levensgevaarlijk, omdat behalve dat wij misschien daardoor niet onze eigen telefoontjes op dat moment kunnen doen in zo'n regio waar zo'n zendmast belangrijk, veel erger nog is dat dit direct onze hulpdiensten raakt. Het raakt direct de noodoproepen en de gevolgen kunnen dus letterlijk gevolgen van leven of dood zijn. Dus ik herhaal hier de woorden van Ferd Grapperhaus: dit is letterlijk levensgevaarlijk. Dit raakt niet alleen onze iPhonetjes of wat we ook allemaal voor spullen hebben, het raakt ook gewoon onze hulpdiensten en dat is zeer ernstig, letterlijk levensgevaarlijk. De politie doet er alles aan om de daders op te sporen en ze te kunnen berechten en nogmaals, stop hiermee. Dit is echt van groot belang, dit is echt letterlijk levensgevaarlijk, al helemaal nu in een tijd waarin er zo veel druk ligt op onze hulpdiensten is dit totaal onacceptabel. Dat wou ik echt nog even ook hier naar voren brengen.",
-      matches: [
-        "Dan tot slot wil ik echt voor één punt aandacht vragen en dat is dat inmiddels veertien zendmasten in Nederland in de afgelopen tijd, daar is brandgesticht. En daar heeft Ferd Grapperhaus namens het kabinet al over gezegd dat dit letterlijk, letterlijk levensgevaarlijk is en ik wil dat hier herhalen. Het is letterlijk levensgevaarlijk, omdat behalve dat wij misschien daardoor niet onze eigen telefoontjes op dat moment kunnen doen in zo'n regio waar zo'n zendmast belangrijk, veel erger nog is dat dit direct onze hulpdiensten raakt. Het raakt direct de noodoproepen en de gevolgen kunnen dus letterlijk gevolgen van leven of dood zijn. Dus ik herhaal hier de woorden van Ferd Grapperhaus: dit is letterlijk levensgevaarlijk. Dit raakt niet alleen onze iPhonetjes of wat we ook allemaal voor spullen hebben, het raakt ook gewoon onze hulpdiensten en dat is zeer ernstig, letterlijk levensgevaarlijk. De politie doet er alles aan om de daders op te sporen en ze te kunnen berechten en nogmaals, stop hiermee. Dit is echt van groot belang, dit is echt letterlijk levensgevaarlijk, al helemaal nu in een tijd waarin er zo veel druk ligt op onze hulpdiensten is dit totaal onacceptabel.",
-      ],
-      check: (r) => {
-        expect(r).toContain("veertien zendmasten")
-        expect(r).toContain(" …")
-        const words = r.split(/\s+/).filter(Boolean)
-        expect(words.length).toBeLessThanOrEqual(122)
+        expect(r).toContain("Bravo charlie.")
       },
     },
   ]
