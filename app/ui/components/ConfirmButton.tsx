@@ -52,7 +52,7 @@ export function ConfirmButton({ icon, label, onConfirm, disabled, className }: C
             ? "cursor-default opacity-40 bg-transparent"
             : isArmed
               ? "cursor-pointer bg-error-600 hover:bg-error-500"
-              : "cursor-pointer bg-transparent hover:bg-neutral-700/60",
+              : "cursor-pointer bg-transparent hover:bg-brand-50",
         className
       )}
       onClick={handleClick}
@@ -64,8 +64,8 @@ export function ConfirmButton({ icon, label, onConfirm, disabled, className }: C
       <span
         className={cn(
           "flex items-center [&>svg]:h-3.5 [&>svg]:w-3.5 transition-colors duration-200",
-          isArmed || isDone ? "text-white" : disabled ? "text-neutral-400" : "text-white",
-          !disabled && !isArmed && !isDone && "group-hover/confirm:text-neutral-100"
+          isArmed || isDone ? "text-white" : disabled ? "text-neutral-400" : "text-subtext-color",
+          !disabled && !isArmed && !isDone && "group-hover/confirm:text-[var(--orange-9)]"
         )}
       >
         {icon}
@@ -73,8 +73,8 @@ export function ConfirmButton({ icon, label, onConfirm, disabled, className }: C
       <span
         className={cn(
           "text-caption-bold font-caption-bold transition-colors duration-200",
-          isArmed || isDone ? "text-white" : disabled ? "text-neutral-400" : "text-white",
-          !disabled && !isArmed && !isDone && "group-hover/confirm:text-neutral-100"
+          isArmed || isDone ? "text-white" : disabled ? "text-neutral-400" : "text-subtext-color",
+          !disabled && !isArmed && !isDone && "group-hover/confirm:text-default-font"
         )}
       >
         {activeLabel}

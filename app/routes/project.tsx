@@ -756,7 +756,11 @@ export default function ProjectLayout() {
                             : undefined
                         )}
                         detail={selectedCodesDetail}
-                        onDeselect={clearSelectedCodes}
+                        titleAction={
+                          hasAllCodesSelected
+                            ? { label: "Deselect all", onClick: clearSelectedCodes }
+                            : { label: "Select all", onClick: selectAllCodes }
+                        }
                         actions={codeSelectionActions}
                       />
                     ) : null,

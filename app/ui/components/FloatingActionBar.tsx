@@ -17,7 +17,7 @@ export interface ActionBarAction {
 export interface ActionBarProps {
   title: string
   detail?: ReactNode
-  onDeselect?: () => void
+  titleAction?: { label: string; onClick: () => void }
   actions: readonly ActionBarAction[]
 }
 
@@ -42,8 +42,8 @@ export function ActionBarButton({
           : cn(
               "cursor-pointer",
               isAi
-                ? "border border-solid border-brand-600 hover:border-brand-300 bg-transparent hover:bg-brand-900/40"
-                : "border-none bg-transparent hover:bg-neutral-600/60"
+                ? "border border-solid border-[var(--orange-9)] bg-transparent hover:border-transparent hover:bg-brand-50"
+                : "border-none bg-transparent hover:bg-brand-50"
             ),
         !disabled && !isAi && "border-none bg-transparent"
       )}
@@ -54,8 +54,8 @@ export function ActionBarButton({
       <span
         className={cn(
           "flex items-center [&>svg]:h-3.5 [&>svg]:w-3.5 transition-colors",
-          isAi ? "text-brand-400" : disabled ? "text-neutral-400" : "text-white",
-          !disabled && !isAi && "group-hover/action:text-neutral-100"
+          disabled ? "text-neutral-400" : "text-subtext-color",
+          !disabled && "group-hover/action:text-[var(--orange-9)]"
         )}
       >
         {icon}
@@ -63,8 +63,8 @@ export function ActionBarButton({
       <span
         className={cn(
           "text-caption-bold font-caption-bold transition-colors",
-          isAi ? "text-brand-300" : disabled ? "text-neutral-400" : "text-white",
-          !disabled && !isAi && "group-hover/action:text-neutral-100"
+          disabled ? "text-neutral-400" : "text-subtext-color",
+          !disabled && "group-hover/action:text-default-font"
         )}
       >
         {label}
@@ -73,7 +73,7 @@ export function ActionBarButton({
   )
 }
 
-export function ActionBar({ title, detail, onDeselect, actions }: ActionBarProps) {
+export function ActionBar({ title, detail, titleAction, actions }: ActionBarProps) {
   const [showDetail, setShowDetail] = useState(false)
   const [detailHovered, setDetailHovered] = useState(false)
   const [frozenGrid, setFrozenGrid] = useState<{
@@ -132,27 +132,30 @@ export function ActionBar({ title, detail, onDeselect, actions }: ActionBarProps
         )}
       </AnimatePresence>
       <motion.div
-        className="flex w-full items-center gap-4 rounded-xl bg-neutral-900 px-5 py-2.5 whitespace-nowrap"
+        className="flex w-full items-center gap-4 rounded-xl border border-solid border-neutral-border bg-sidebar px-5 py-2.5 whitespace-nowrap"
         initial={{ y: 8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 8, opacity: 0 }}
         transition={springTransition}
-        onMouseEnter={detail ? () => setShowDetail(true) : undefined}
       >
-        <div className="flex items-center gap-2">
-          <span className="text-caption-bold font-caption-bold text-neutral-200 cursor-default">
+        <div
+          className="flex items-center gap-2"
+          onMouseEnter={detail ? () => setShowDetail(true) : undefined}
+        >
+          <span className="text-caption-bold font-caption-bold text-default-font cursor-default">
             {title}
           </span>
-          {onDeselect && (
+          {titleAction && (
             <button
-              className="cursor-pointer border-none bg-transparent text-caption font-caption text-neutral-400 hover:text-neutral-200"
-              onClick={onDeselect}
+              className="cursor-pointer border-none bg-transparent text-caption font-caption text-subtext-color hover:text-[var(--orange-9)]"
+              onClick={titleAction.onClick}
               type="button"
             >
-              · Deselect
+              · {titleAction.label}
             </button>
           )}
         </div>
+        <div className="h-4 w-px flex-none bg-neutral-border" />
         <div className="flex items-center gap-3">
           {actions.map((action, i) => {
             if (action.variant === "confirm")
