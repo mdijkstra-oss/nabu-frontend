@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
+import { AnimatePresence } from "framer-motion"
 import { useParams, useNavigate } from "react-router"
 import { useProject } from "./project"
 import { useSearchResults } from "~/ui/hooks/useSearchResults"
@@ -71,7 +72,7 @@ const searchStatusText = (
 export default function ProjectSearch() {
   const params = useParams<{ projectId: string; searchId: string }>()
   const navigate = useNavigate()
-  const { files, dbReady, debugOptions, getFileTags, tagDefinitions } = useProject()
+  const { files, dbReady, debugOptions, getFileTags, tagDefinitions, actionBar } = useProject()
   const [revision, _setRevision] = useState(0)
   const { search, results, hydes, phase, error, hasMore, loadMore } = useSearchResults(
     params.searchId ?? "",
@@ -180,7 +181,7 @@ export default function ProjectSearch() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col gap-2 bg-neutral-100 p-2 pb-0">
+    <div className="flex h-full w-full flex-col gap-2 bg-neutral-100 p-2">
       <div
         ref={scrollRef}
         className="flex-1 overflow-auto rounded-xl border border-solid border-panel-border bg-default-background px-12 py-8"
@@ -223,6 +224,7 @@ export default function ProjectSearch() {
       <div className="rounded-xl border border-solid border-panel-border bg-default-background">
         <StatusBar text={statusText} loading={isLoading} />
       </div>
+      <AnimatePresence>{actionBar}</AnimatePresence>
     </div>
   )
 }

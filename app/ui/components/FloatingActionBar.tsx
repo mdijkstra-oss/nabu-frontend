@@ -1,8 +1,7 @@
 "use client"
 
 import { Children, useRef, useState, type ReactNode } from "react"
-import { AnimatePresence, LayoutGroup, motion } from "framer-motion"
-import { X } from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
 import { cn } from "~/ui/utils"
 import { NabuGate } from "~/ui/components/nabu/NabuGate"
 import { ConfirmButton } from "~/ui/components/ConfirmButton"
@@ -15,15 +14,15 @@ export interface ActionBarAction {
   disabled?: boolean
 }
 
-export interface FloatingActionBarProps {
+export interface ActionBarProps {
   title: string
-  titleAction?: { label: string; onClick: () => void }
-  titleDetail?: ReactNode
+  detail?: ReactNode
+  onDeselect?: () => void
   actions: readonly ActionBarAction[]
-  onClose: () => void
 }
 
 const springTransition = { type: "spring" as const, stiffness: 500, damping: 28 }
+const detailTransition = { type: "spring" as const, stiffness: 400, damping: 30 }
 
 export function ActionBarButton({
   icon,
@@ -74,15 +73,7 @@ export function ActionBarButton({
   )
 }
 
-const detailTransition = { type: "spring" as const, stiffness: 400, damping: 30 }
-
-export function FloatingActionBar({
-  title,
-  titleAction,
-  titleDetail,
-  actions,
-  onClose,
-}: FloatingActionBarProps) {
+export function ActionBar({ title, detail, onDeselect, actions }: ActionBarProps) {
   const [showDetail, setShowDetail] = useState(false)
   const [detailHovered, setDetailHovered] = useState(false)
   const [frozenGrid, setFrozenGrid] = useState<{
@@ -91,117 +82,98 @@ export function FloatingActionBar({
     height: number
   } | null>(null)
   const detailRef = useRef<HTMLDivElement>(null)
-  const detailCount = Children.count(titleDetail)
+  const detailCount = Children.count(detail)
   const detailCols = detailCount <= 6 ? 2 : 3
   const detailRows = Math.ceil(detailCount / detailCols)
 
   return (
-    <div
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
-      onMouseLeave={titleDetail ? () => setShowDetail(false) : undefined}
-    >
-      <LayoutGroup>
-        <AnimatePresence>
-          {showDetail && titleDetail && (
+    <div className="relative" onMouseLeave={() => setShowDetail(false)}>
+      <AnimatePresence>
+        {showDetail && detail && (
+          <motion.div
+            className="absolute bottom-full left-0 w-full pb-2"
+            initial={{ y: 8, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 8, opacity: 0 }}
+            transition={detailTransition}
+          >
             <motion.div
-              className="absolute bottom-full left-1/2 -translate-x-1/2 min-w-full w-max pb-3"
-              initial={{ y: 8, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 8, opacity: 0 }}
-              transition={detailTransition}
+              ref={detailRef}
+              layout={!detailHovered}
+              className="grid grid-flow-col content-start gap-x-4 gap-y-0 rounded-xl bg-sidebar px-4 py-3 shadow-lg text-xs overflow-hidden"
+              style={{
+                originX: 0.5,
+                originY: 1,
+                gridTemplateRows: `repeat(${frozenGrid?.rows ?? detailRows}, auto)`,
+                ...(frozenGrid
+                  ? { gridTemplateColumns: frozenGrid.cols, height: frozenGrid.height }
+                  : {}),
+              }}
+              transition={springTransition}
+              onMouseEnter={() => {
+                setDetailHovered(true)
+                if (detailRef.current) {
+                  const style = getComputedStyle(detailRef.current)
+                  setFrozenGrid({
+                    cols: style.gridTemplateColumns,
+                    rows: detailRows,
+                    height: detailRef.current.getBoundingClientRect().height,
+                  })
+                }
+              }}
+              onMouseLeave={() => {
+                setDetailHovered(false)
+                setFrozenGrid(null)
+              }}
             >
-              <motion.div
-                ref={detailRef}
-                layout={!detailHovered}
-                className="grid grid-flow-col content-start gap-x-4 gap-y-0 rounded-xl bg-sidebar px-4 py-3 shadow-lg text-xs overflow-hidden"
-                style={{
-                  originX: 0.5,
-                  originY: 1,
-                  gridTemplateRows: `repeat(${frozenGrid?.rows ?? detailRows}, auto)`,
-                  ...(frozenGrid
-                    ? { gridTemplateColumns: frozenGrid.cols, height: frozenGrid.height }
-                    : {}),
-                }}
-                transition={springTransition}
-                onMouseEnter={() => {
-                  setDetailHovered(true)
-                  if (detailRef.current) {
-                    const style = getComputedStyle(detailRef.current)
-                    setFrozenGrid({
-                      cols: style.gridTemplateColumns,
-                      rows: detailRows,
-                      height: detailRef.current.getBoundingClientRect().height,
-                    })
-                  }
-                }}
-                onMouseLeave={() => {
-                  setDetailHovered(false)
-                  setFrozenGrid(null)
-                }}
-              >
-                {titleDetail}
-              </motion.div>
+              {detail}
             </motion.div>
-          )}
-        </AnimatePresence>
-        <motion.div
-          layout
-          className="flex flex-col items-center gap-2.5 rounded-2xl bg-neutral-900 px-5 py-3.5 shadow-lg whitespace-nowrap"
-          initial={{ y: 24, scale: 0.95, opacity: 0 }}
-          animate={{ y: 0, scale: 1, opacity: 1 }}
-          exit={{ y: 24, scale: 0.95, opacity: 0 }}
-          transition={springTransition}
-        >
-          <div className="flex w-full items-center justify-between gap-4">
-            <div
-              className="flex flex-1 items-center gap-2"
-              onMouseEnter={titleDetail ? () => setShowDetail(true) : undefined}
-            >
-              <span className="text-body-bold font-body-bold text-neutral-200 cursor-default">
-                {title}
-              </span>
-              {titleAction && (
-                <button
-                  className="cursor-pointer border-none bg-transparent text-caption font-caption text-neutral-200 hover:text-brand-400"
-                  onClick={titleAction.onClick}
-                  type="button"
-                >
-                  · {titleAction.label}
-                </button>
-              )}
-            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <motion.div
+        className="flex w-full items-center gap-4 rounded-xl bg-neutral-900 px-5 py-2.5 whitespace-nowrap"
+        initial={{ y: 8, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 8, opacity: 0 }}
+        transition={springTransition}
+        onMouseEnter={detail ? () => setShowDetail(true) : undefined}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-caption-bold font-caption-bold text-neutral-200 cursor-default">
+            {title}
+          </span>
+          {onDeselect && (
             <button
-              className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-neutral-700 hover:bg-neutral-600"
-              onClick={onClose}
-              onMouseEnter={() => setShowDetail(false)}
+              className="cursor-pointer border-none bg-transparent text-caption font-caption text-neutral-400 hover:text-neutral-200"
+              onClick={onDeselect}
               type="button"
             >
-              <X className="h-3 w-3 text-neutral-200" />
+              · Deselect
             </button>
-          </div>
-          <div className="flex h-px w-full flex-none bg-neutral-700" />
-          <div className="flex items-center gap-3" onMouseEnter={() => setShowDetail(false)}>
-            {actions.map((action, i) => {
-              if (action.variant === "confirm")
-                return (
-                  <ConfirmButton
-                    key={i}
-                    icon={action.icon}
-                    label={action.label}
-                    onConfirm={action.onClick}
-                    disabled={action.disabled}
-                  />
-                )
-              const button = <ActionBarButton {...action} />
-              return action.variant === "ai" ? (
-                <NabuGate key={i}>{button}</NabuGate>
-              ) : (
-                <ActionBarButton key={i} {...action} />
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {actions.map((action, i) => {
+            if (action.variant === "confirm")
+              return (
+                <ConfirmButton
+                  key={i}
+                  icon={action.icon}
+                  label={action.label}
+                  onConfirm={action.onClick}
+                  disabled={action.disabled}
+                />
               )
-            })}
-          </div>
-        </motion.div>
-      </LayoutGroup>
+            const button = <ActionBarButton {...action} />
+            return action.variant === "ai" ? (
+              <NabuGate key={i}>{button}</NabuGate>
+            ) : (
+              <ActionBarButton key={i} {...action} />
+            )
+          })}
+        </div>
+      </motion.div>
     </div>
   )
 }

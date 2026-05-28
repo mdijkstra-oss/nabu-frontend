@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from "react"
+import { AnimatePresence } from "framer-motion"
 import { useSearchParams } from "react-router"
 import { useScrollToEntity } from "~/ui/hooks/useScrollToEntity"
 import { parseSpotlight } from "~/lib/editor/spotlight/parse"
@@ -95,6 +96,7 @@ export default function ProjectFile() {
     getFileTags,
     getFileDate: getFileDateFn,
     tagDefinitions,
+    actionBar,
   } = useProject()
   const [searchParams] = useSearchParams()
   const spotlight = useMemo(() => parseSpotlight(searchParams.get("spotlight")), [searchParams])
@@ -211,6 +213,7 @@ export default function ProjectFile() {
           tooltip={rawContent ? documentStatusTooltip(rawContent) : undefined}
         />
       </div>
+      <AnimatePresence>{actionBar}</AnimatePresence>
     </div>
   )
 }

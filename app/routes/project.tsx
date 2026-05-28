@@ -1,6 +1,13 @@
-import { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from "react"
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react"
 import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
-import { AnimatePresence } from "framer-motion"
 import { AlertTriangle, Eraser, FileText } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
 import { useFiles } from "~/ui/hooks/useFiles"
@@ -82,7 +89,7 @@ import { resolveCodingFiles } from "~/domain/actions/coding/selectors"
 import { clearCodingsPatches } from "~/domain/actions/clear-codings/apply"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
-import { FloatingActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
+import { ActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
@@ -204,6 +211,7 @@ export interface ProjectContextValue {
     filename: string
   ) => { text: string; color: string; reason?: string; code?: string }[] | undefined
   tagDefinitions: TagDefinition[]
+  actionBar: ReactNode
 }
 
 export const useProject = () => useOutletContext<ProjectContextValue>()
@@ -738,6 +746,20 @@ export default function ProjectLayout() {
                   getFileDate: getFileDateFn,
                   getFileAnnotations,
                   tagDefinitions,
+                  actionBar:
+                    (isOnDocumentPage || isOnSearchPage) && hasSelectedCodes ? (
+                      <ActionBar
+                        title={formatSelectionTitle(
+                          selectedCodes.size,
+                          selectedCodes.size === 1
+                            ? findCodeById(files, [...selectedCodes][0])?.title
+                            : undefined
+                        )}
+                        detail={selectedCodesDetail}
+                        onDeselect={clearSelectedCodes}
+                        actions={codeSelectionActions}
+                      />
+                    ) : null,
                 }}
               />
             </div>
@@ -755,28 +777,6 @@ export default function ProjectLayout() {
           dragHandlers={fileImport.dragHandlers}
           onDismiss={fileImport.dismiss}
         />
-        <AnimatePresence>
-          {(isOnDocumentPage || isOnSearchPage) && hasSelectedCodes ? (
-            <FloatingActionBar
-              title={
-                hasAllCodesSelected
-                  ? "All codes selected"
-                  : formatSelectionTitle(
-                      selectedCodes.size,
-                      selectedCodes.size === 1
-                        ? findCodeById(files, [...selectedCodes][0])?.title
-                        : undefined
-                    )
-              }
-              titleAction={
-                hasAllCodesSelected ? undefined : { label: "Select all", onClick: selectAllCodes }
-              }
-              titleDetail={selectedCodesDetail}
-              onClose={clearSelectedCodes}
-              actions={codeSelectionActions}
-            />
-          ) : null}
-        </AnimatePresence>
       </div>
     </NabuProvider>
   )
