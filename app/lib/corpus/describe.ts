@@ -1,16 +1,10 @@
 import { callLlm } from "~/lib/agent/client/fetch"
-import { extractText } from "~/lib/agent/client/convert"
+import { extractText, toSystem } from "~/lib/agent/client/convert"
 import { fnvHash } from "~/lib/utils/hash"
 import type { CorpusDescription } from "~/domain/corpus/types"
 
 const ENDPOINT = "/corpus-describer"
 const MIN_WORDS_FOR_LLM = 500
-
-const toSystem = (content: string) => ({
-  type: "message" as const,
-  role: "system" as const,
-  content,
-})
 
 const wordCount = (texts: string[]): number =>
   texts.reduce((sum, t) => sum + t.split(/\s+/).length, 0)

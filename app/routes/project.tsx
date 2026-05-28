@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from "react"
-import { Outlet, useNavigate, useParams, useOutletContext, useSearchParams } from "react-router"
+import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
 import { AnimatePresence } from "framer-motion"
-import { Eraser, FileText } from "lucide-react"
+import { AlertTriangle, Eraser, FileText } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
 import { useFiles } from "~/ui/hooks/useFiles"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
@@ -21,7 +21,11 @@ import {
   toggleSearchSaved,
   removeSearch,
 } from "~/domain/data-blocks/settings/searches/selectors"
-import { updateSearchEntries, saveNewSearch } from "~/lib/agent/tools/search/settings"
+import {
+  updateSearchEntries,
+  saveNewSearch,
+  updateSearchSql,
+} from "~/lib/agent/tools/search/settings"
 import { NabuProvider } from "~/ui/components/nabu/context"
 import { NabuChatSidebar } from "~/ui/components/nabu/NabuChatSidebar"
 import { DebugMenuButton } from "~/ui/components/debug/DebugMenuButton"
@@ -62,13 +66,18 @@ import { HIDDEN_TAG_ID, HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hi
 import { buildIdentifierResolver } from "~/lib/files/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import type { SearchEntry } from "~/domain/search/types"
-import { buildFlaggedSearch } from "~/domain/search/queries"
+import {
+  buildFlaggedSearch,
+  buildCandidatePlaceholder,
+  buildCandidateSql,
+} from "~/domain/search/queries"
+import { generateSearchIntent } from "~/lib/search/intent"
 import { collectExhibits } from "~/domain/exhibits/selectors"
 import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
 import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
-import { codeWithFiles } from "~/domain/actions/coding/actions"
+import { buildRefineTask, codeWithFiles, codeWithQuery } from "~/domain/actions/coding/actions"
 import { resolveCodingFiles } from "~/domain/actions/coding/selectors"
 import { clearCodingsPatches } from "~/domain/actions/clear-codings/apply"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
@@ -79,7 +88,6 @@ import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getAllCodes, findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
 import { DismissableWrap } from "~/ui/components/DismissableWrap"
-import { buildToolbar } from "~/ui/toolbars"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
 
@@ -206,9 +214,6 @@ const formatSelectionTitle = (count: number, singleName?: string): string =>
 export default function ProjectLayout() {
   const params = useParams<{ projectId: string; fileId?: string; searchId?: string }>()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const toolbarMeta = Object.fromEntries(searchParams.entries())
-  const urlToolbar = buildToolbar(searchParams.get("toolbar") ?? "", toolbarMeta)
   const dismissSidebarRef = useRef<(() => void) | null>(null)
   const [activeNav, setActiveNav] = useState<ActiveNav>("documents")
   const [searchValue, setSearchValue] = useState("")
@@ -454,6 +459,7 @@ export default function ProjectLayout() {
 
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
   const isOnDocumentPage = !!params.fileId
+  const isOnSearchPage = !!params.searchId
   const totalCodeCount = useMemo(() => getAllCodes(files).length, [files])
   const hasSelectedCodes = selectedCodes.size > 0
   const hasAllCodesSelected = selectedCodes.size >= totalCodeCount && totalCodeCount > 0
@@ -469,7 +475,7 @@ export default function ProjectLayout() {
   )
   const annotationCounts = useMemo(
     () => (currentFile ? getAnnotationCountsByCode(getFileAnnotations(currentFile)) : {}),
-    [currentFile, files]
+    [currentFile, files, getFileAnnotations]
   )
   const globalAnnotationCounts = useMemo(() => getAnnotationGlobalCountsByCode(files), [files])
   const reviewStats = useMemo(() => getReviewStatsByCode(files), [files])
@@ -488,6 +494,14 @@ export default function ProjectLayout() {
     const refs = resolveCodingFiles(files, [...selectedCodes])
     if (refs.length > 0) dispatchTask(codeWithFiles(refs))
   }, [selectedCodes, files])
+
+  const handleCodeSearchResults = useCallback(() => {
+    if (!params.searchId) return
+    const search = findSearchById(files, params.searchId)
+    if (!search) return
+    const refs = resolveCodingFiles(files, [...selectedCodes])
+    if (refs.length > 0) dispatchTask(codeWithQuery(refs, search.sql))
+  }, [params.searchId, files, selectedCodes])
 
   const deselectCode = useCallback(
     (id: string) => {
@@ -517,31 +531,62 @@ export default function ProjectLayout() {
     ))
   }, [selectedCodes, files, params.projectId, currentFile, navigate, deselectCode])
 
-  const codeSelectionActions = useMemo(
-    (): ActionBarAction[] => [
-      {
+  const codeSelectionActions = useMemo((): ActionBarAction[] => {
+    const actions: ActionBarAction[] = []
+
+    if (isOnDocumentPage) {
+      actions.push({
         icon: <Eraser />,
         label: hasSelectedAnnotationsInFile ? "Clear codings" : "Not coded",
         onClick: handleClearCodings,
         variant: "confirm",
         disabled: !hasSelectedAnnotationsInFile,
-      },
-      {
+      })
+      actions.push({
         icon: <FileText />,
         label: "Code file",
         onClick: handleCodeSelectedCodes,
         variant: "ai",
-      },
-    ],
-    [hasSelectedAnnotationsInFile, handleClearCodings, handleCodeSelectedCodes]
-  )
+      })
+    } else if (isOnSearchPage) {
+      actions.push({
+        icon: <FileText />,
+        label: "Code search results",
+        onClick: handleCodeSearchResults,
+        variant: "ai",
+      })
+    }
+
+    if (selectedCodes.size === 1) {
+      const codeId = [...selectedCodes][0]
+      const stat = reviewStats?.[codeId]
+      if (stat && stat.severity !== "normal") {
+        actions.push({
+          icon: <AlertTriangle />,
+          label: "Diagnose",
+          onClick: () => dispatchTask(buildRefineTask(codeId)),
+          variant: "ai",
+        })
+      }
+    }
+
+    return actions
+  }, [
+    isOnDocumentPage,
+    isOnSearchPage,
+    hasSelectedAnnotationsInFile,
+    handleClearCodings,
+    handleCodeSelectedCodes,
+    handleCodeSearchResults,
+    selectedCodes,
+    reviewStats,
+  ])
 
   const handleSearchCode = (code: Code) => {
     const id = saveNewSearch({
       title: code.id,
       description: `Passages coded as: ${code.id}`,
       sql: `SELECT file, id, text FROM annotations WHERE code = '${code.id}'`,
-      meta: { toolbar: "code-refinement", codeId: code.id },
     })
     if (!id) return
     dismissSidebarRef.current?.()
@@ -554,7 +599,6 @@ export default function ProjectLayout() {
       title: `${code.id} in file`,
       description: `Passages coded as: ${code.id} in ${currentFile}`,
       sql: `SELECT file, id, text FROM annotations WHERE code = '${code.id}' AND file = '${currentFile}'`,
-      meta: { toolbar: "code-refinement", codeId: code.id },
     })
     if (!id) return
     dismissSidebarRef.current?.()
@@ -564,8 +608,21 @@ export default function ProjectLayout() {
   const handleSearchUnsure = (code: Code) => {
     const id = saveNewSearch(buildFlaggedSearch(code.id, code.id))
     if (!id) return
+    writeSelectedCodes([code.id])
     dismissSidebarRef.current?.()
     navigate(`/project/${params.projectId}/search/${id}`)
+  }
+
+  const handleFindCandidates = (code: Code) => {
+    if (code.detail.trim().length === 0) return
+    const id = saveNewSearch(buildCandidatePlaceholder(code.id))
+    if (!id) return
+    writeSelectedCodes([code.id])
+    dismissSidebarRef.current?.()
+    navigate(`/project/${params.projectId}/search/${id}`)
+    generateSearchIntent(code.detail).then((intent) => {
+      updateSearchSql(id, buildCandidateSql(intent), intent)
+    })
   }
 
   const handleCodeFile = (code: Code) => {
@@ -625,6 +682,7 @@ export default function ProjectLayout() {
               onSearchCode={handleSearchCode}
               onSearchCodeInFile={handleSearchCodeInFile}
               onSearchUnsure={handleSearchUnsure}
+              onFindCandidates={handleFindCandidates}
             />
           ),
         }
@@ -698,19 +756,7 @@ export default function ProjectLayout() {
           onDismiss={fileImport.dismiss}
         />
         <AnimatePresence>
-          {urlToolbar ? (
-            <FloatingActionBar
-              title={urlToolbar.title}
-              onClose={() =>
-                setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev)
-                  next.delete("toolbar")
-                  return next
-                })
-              }
-              actions={urlToolbar.buttons}
-            />
-          ) : isOnDocumentPage && hasSelectedCodes ? (
+          {(isOnDocumentPage || isOnSearchPage) && hasSelectedCodes ? (
             <FloatingActionBar
               title={
                 hasAllCodesSelected

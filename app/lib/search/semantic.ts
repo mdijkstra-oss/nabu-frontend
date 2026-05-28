@@ -26,14 +26,17 @@ const FILES_TABLE_RE = /\bFROM\s+files\b/i
 
 export const sqlQueriesFilesTable = (sql: string): boolean => FILES_TABLE_RE.test(sql)
 
-const SEMANTIC_PATTERN = /SEMANTIC\('([^']+)'\)/g
+const SQL_STRING_BODY = "[^']*(?:''[^']*)*"
+const SEMANTIC_PATTERN = new RegExp(`SEMANTIC\\('(${SQL_STRING_BODY})'\\)`, "g")
 const SCORE_COLUMN = "_semantic_score"
 
 export const SEMANTIC_ABSENCE_HINT =
   "\n-----\nIf SEMANTIC results are off-topic, the corpus does not contain what was asked for. Do not retry with grep or ILIKE. Absence is data."
 
-const OPERATOR_AFTER_SEMANTIC = /SEMANTIC\('[^']+'\)\s*(>|<|>=|<=|=|!=|<>)/
-const AS_AFTER_SEMANTIC = /SEMANTIC\('[^']+'\)\s*AS\b/i
+const OPERATOR_AFTER_SEMANTIC = new RegExp(
+  `SEMANTIC\\('${SQL_STRING_BODY}'\\)\\s*(>|<|>=|<=|=|!=|<>)`
+)
+const AS_AFTER_SEMANTIC = new RegExp(`SEMANTIC\\('${SQL_STRING_BODY}'\\)\\s*AS\\b`, "i")
 const SEMANTIC_IN_ORDER_BY = /ORDER\s+BY\s[\s\S]*?SEMANTIC\s*\(/i
 
 const ORDER_BY_RE = /\bORDER\s+BY\s+/i
@@ -41,11 +44,17 @@ const ORDER_BY_TAIL_RE = /\s*ORDER\s+BY\s+[\s\S]*$/i
 
 const formatVector = (vector: number[]): string => `[${vector.join(",")}]`
 
+const unescapeSqlString = (s: string): string => s.replace(/''/g, "'")
+
 export const extractSemanticTokens = (sql: string): SemanticToken[] => {
   const tokens: SemanticToken[] = []
   let match: RegExpExecArray | null
   while ((match = SEMANTIC_PATTERN.exec(sql)) !== null) {
-    tokens.push({ text: match[1], start: match.index, end: match.index + match[0].length })
+    tokens.push({
+      text: unescapeSqlString(match[1]),
+      start: match.index,
+      end: match.index + match[0].length,
+    })
   }
   SEMANTIC_PATTERN.lastIndex = 0
   return tokens
@@ -181,7 +190,7 @@ const aliasSemanticTokens = (sql: string, tokens: SemanticToken[]): string => {
   let cursor = 0
   for (const token of tokens) {
     result += sql.slice(cursor, token.start)
-    result += `SEMANTIC('${token.text}') AS ${SCORE_COLUMN}`
+    result += `SEMANTIC('${escapeSqlString(token.text)}') AS ${SCORE_COLUMN}`
     cursor = token.end
   }
   result += sql.slice(cursor)

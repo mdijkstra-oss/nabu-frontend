@@ -77,7 +77,8 @@ const processSegment = (
 
   const size = sizeOf(seg)
 
-  if (size > config.target) {
+  const maxSegment = config.maxSegment ?? config.target
+  if (size > maxSegment) {
     const parts = forceSplitSegment(seg, config.target)
     return parts.reduce((a, part) => processSegment(a, part, config, sizeOf), flushed)
   }

@@ -4,7 +4,7 @@ import { useState, useEffect, useSyncExternalStore } from "react"
 import { ChevronRight, ChevronDown, Copy, Check, ListX, ListChecks } from "lucide-react"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { getRawCalls, subscribeRawCalls, type RawLlmCall } from "~/lib/agent/client/raw-store"
-import { matchesWordsInOrder } from "~/lib/utils/filter"
+import { findMatchOffset } from "~/lib/text/find"
 
 const isPending = (call: RawLlmCall): boolean => call.duration === null
 const isCanceled = (call: RawLlmCall): boolean => call.duration === -1
@@ -194,13 +194,15 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
 const FILTER_MIN_LENGTH = 5
 const FILTER_DEBOUNCE_MS = 300
 
-const callMatchesFilter = (call: RawLlmCall, filter: string): boolean =>
-  matchesWordsInOrder(filter, [
+const callMatchesFilter = (call: RawLlmCall, filter: string): boolean => {
+  const content = [
     call.endpoint,
     call.requestBody,
     call.rawResponse ?? "",
     call.streamingContent,
-  ])
+  ].join(" ")
+  return findMatchOffset(content, filter, true) !== null
+}
 
 const filterCalls = (calls: RawLlmCall[], filter: string): RawLlmCall[] =>
   filter.length < FILTER_MIN_LENGTH ? calls : calls.filter((c) => callMatchesFilter(c, filter))

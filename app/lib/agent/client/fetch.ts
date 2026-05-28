@@ -5,6 +5,7 @@ import { getLlmHost, getLlmHeaders } from "~/lib/agent/env"
 import { getActiveSignal } from "~/lib/utils/signal"
 import { calculateBackoff } from "~/lib/utils/backoff"
 import { initialParseState, processLine, stateToBlocks, type ParseCallbacks } from "./parse"
+import { toSystem } from "./convert"
 import type { InputItem, ResponseFormat } from "./convert"
 import { startRawCall, completeRawCall, updateRawCallStream } from "./raw-store"
 import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
@@ -187,18 +188,12 @@ export const formatBlockSchemasContent = (schemas: BlockSchemaDefinition[]): str
 export const formatDatabaseSchemaContent = (schema: string): string =>
   `Database schema (DuckDB):\n\n${schema}`
 
-const toSystemMessage = (content: string): InputItem => ({
-  type: "message",
-  role: "system",
-  content,
-})
-
 const buildRequestBody = (options: CallLlmOptions): string => {
   const extras: InputItem[] = []
   if (options.blockSchemas?.length)
-    extras.push(toSystemMessage(formatBlockSchemasContent(options.blockSchemas)))
+    extras.push(toSystem(formatBlockSchemasContent(options.blockSchemas)))
   if (options.databaseSchema)
-    extras.push(toSystemMessage(formatDatabaseSchemaContent(options.databaseSchema)))
+    extras.push(toSystem(formatDatabaseSchemaContent(options.databaseSchema)))
   const messages = extras.length > 0 ? [...extras, ...options.messages] : options.messages
   const body: Record<string, unknown> = { messages }
   if (options.tools) body.tools = options.tools

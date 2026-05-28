@@ -74,10 +74,7 @@ const isCacheValid = (ctx: SemanticContext, languages: string[]): boolean => {
   return cachedLanguages.every((l) => langSet.has(l))
 }
 
-interface HydeItem {
-  description: CorpusDescription
-  query: string
-}
+type HydeTask = () => Promise<HydeResult[]>
 
 interface HydeResult {
   language: string
@@ -101,29 +98,23 @@ const resolveHydesForLanguages = async (
   if (isCacheValid(ctx, languages)) return ok(ctx.cachedHydes as HydesCache)
 
   const relevant = filterDescriptionsForLanguages(descriptions, languages)
-  const items: HydeItem[] = relevant.map((d) => ({ description: d, query }))
+
+  const descriptionTasks: HydeTask[] = relevant.map((d) => async () => {
+    const texts = await generateHydesForDescription(d, query)
+    return texts.map((t) => ({ language: d.language, texts: [t] }))
+  })
+
+  const genericTasks: HydeTask[] = languages.map((language) => async () => {
+    const texts = await generateGenericHydes(language, query)
+    return texts.map((t) => ({ language, texts: [t] }))
+  })
 
   const cache: HydesCache = {}
   for (const lang of languages) cache[lang] = []
 
   await processPool(
-    items,
-    async (item) => {
-      const texts = await generateHydesForDescription(item.description, item.query)
-      return texts.map((t) => ({ language: item.description.language, texts: [t] }))
-    },
-    (results: HydeResult[]) => {
-      for (const r of results) cache[r.language].push(...r.texts)
-    },
-    { warmup: 1 }
-  )
-
-  await processPool(
-    languages,
-    async (language) => {
-      const texts = await generateGenericHydes(language, query)
-      return texts.map((t) => ({ language, texts: [t] }))
-    },
+    [...descriptionTasks, ...genericTasks],
+    (task) => task(),
     (results: HydeResult[]) => {
       for (const r of results) cache[r.language].push(...r.texts)
     },

@@ -34,6 +34,11 @@ describe("extractSemanticTokens", () => {
       expected: [{ text: "political frustration", start: 7, end: 40 }],
     },
     {
+      name: "unescapes SQL-escaped single quotes",
+      sql: "SELECT SEMANTIC('passages about ''complottheorieën'' and ''nepnieuws''') FROM files",
+      expected: [{ text: "passages about 'complottheorieën' and 'nepnieuws'", start: 7, end: 72 }],
+    },
+    {
       name: "does not match multi-arg syntax",
       sql: "SELECT SEMANTIC('a', 'b') FROM files",
       expected: [],
@@ -50,6 +55,7 @@ describe("hasSemanticTokens", () => {
     { name: "plain SQL", sql: "SELECT file FROM files", expected: false },
     { name: "SEMANTIC()", sql: "SEMANTIC('test')", expected: true },
     { name: "multi-arg is not matched", sql: "SEMANTIC('a', 'b')", expected: false },
+    { name: "SEMANTIC() with escaped quotes", sql: "SEMANTIC('it''s a test')", expected: true },
     { name: "partial match is false", sql: "SEMANTIC test", expected: false },
   ]
 
@@ -305,6 +311,12 @@ describe("formatDebugSql", () => {
       sql: "SELECT f.file, f.text, SEMANTIC('joy') FROM files f LIMIT 10",
       expected:
         "SELECT f.file, f.text, SEMANTIC('joy') AS _semantic_score FROM files f ORDER BY _semantic_score DESC LIMIT 10",
+    },
+    {
+      name: "semantic with escaped quotes round-trips correctly",
+      sql: "SELECT f.file, f.text, SEMANTIC('passages about ''nepnieuws''') FROM files f",
+      expected:
+        "SELECT f.file, f.text, SEMANTIC('passages about ''nepnieuws''') AS _semantic_score FROM files f ORDER BY _semantic_score DESC",
     },
   ]
 

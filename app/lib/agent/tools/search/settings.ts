@@ -102,6 +102,15 @@ export const saveNewSearch = (data: NewSearchData): string => {
   return id
 }
 
+export const updateSearchSql = (searchId: string, sql: string, highlight?: string): void => {
+  const settings = readSettings()
+  const entries = settings.searches ?? []
+  const updated = entries.map((e) =>
+    e.id === searchId ? { ...e, sql, ...(highlight && { highlight }) } : e
+  )
+  updateSearchEntries(updated)
+}
+
 export const updateSearchHydes = (
   searchId: string,
   hydes: HydesCache,

@@ -102,4 +102,16 @@ const blockToInputItem = (block: Block): InputItem | InputItem[] => {
 
 export const blocksToMessages = (blocks: Block[]): InputItem[] => blocks.flatMap(blockToInputItem)
 
+export const toSystem = (content: string) => ({
+  type: "message" as const,
+  role: "system" as const,
+  content,
+})
+
+export const toUser = (content: string) => ({
+  type: "message" as const,
+  role: "user" as const,
+  content,
+})
+
 export type { InputItem }

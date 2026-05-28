@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
-import { useParams, useNavigate, useSearchParams } from "react-router"
+import { useParams, useNavigate } from "react-router"
 import { useProject } from "./project"
 import { useSearchResults } from "~/ui/hooks/useSearchResults"
 import { SearchHeader } from "~/ui/components/search/SearchHeader"
@@ -7,7 +7,7 @@ import { SearchResultList } from "~/ui/components/search/SearchResultList"
 import { StatusBar } from "~/ui/components/StatusBar"
 import type { SearchHit } from "~/domain/search/types"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
-import { formatDebugSql } from "~/lib/search/semantic"
+import { formatDebugSql, hasSemanticTokens } from "~/lib/search/semantic"
 import { formatHydeDebug } from "~/lib/search/format-hydes"
 import type { SearchPhase } from "~/ui/hooks/useSearchResults"
 import { buildIdentifierResolver } from "~/lib/files/selectors"
@@ -55,10 +55,16 @@ const filterHitsByTags = (
 
 const countUniqueFiles = (hits: SearchHit[]): number => new Set(hits.map((h) => h.file)).size
 
-const searchStatusText = (phase: SearchPhase, count: number, fileCount: number): string | null => {
+const searchStatusText = (
+  phase: SearchPhase,
+  count: number,
+  fileCount: number,
+  isSemantic: boolean
+): string | null => {
   if (phase === "searching") return "Pre-selecting in corpus"
   if (phase === "filtering" && count === 0) return "Narrowing down results"
-  if (count > 0) return `Showing ${count} results across ${fileCount} files`
+  const qualifier = isSemantic ? "potential " : ""
+  if (count > 0) return `Showing ${count} ${qualifier}results across ${fileCount} files`
   return null
 }
 
@@ -96,29 +102,19 @@ export default function ProjectSearch() {
   )
 
   const fileCount = useMemo(() => countUniqueFiles(filteredResults), [filteredResults])
-  const statusText = searchStatusText(phase, filteredResults.length, fileCount)
-  const isLoading = phase === "searching" || phase === "filtering"
-  const isDone = phase === "done"
+  const isPending = search?.sql.length === 0
+  const isSemantic = search ? hasSemanticTokens(search.sql) : false
+  const statusText = isPending
+    ? "Writing search query"
+    : searchStatusText(phase, filteredResults.length, fileCount, isSemantic)
+  const isLoading = isPending || phase === "searching" || phase === "filtering"
+  const isDone = !isPending && phase === "done"
 
   const searchDataRef = useRef({ search, results, files })
-  const [, setSearchParams] = useSearchParams()
 
   useEffect(() => {
     searchDataRef.current = { search, results, files }
   }, [search, results, files])
-
-  const searchId = params.searchId
-  useEffect(() => {
-    const meta = search?.meta
-    if (!meta) return
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      for (const [key, value] of Object.entries(meta)) {
-        next.set(key, value)
-      }
-      return next
-    })
-  }, [searchId])
 
   useEffect(() => {
     setPageContextOverride(() => {

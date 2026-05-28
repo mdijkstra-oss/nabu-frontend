@@ -12,7 +12,8 @@ const pluginKey = new PluginKey("spotlight")
 
 export const spotlightMeta = pluginKey
 
-const SPOTLIGHT_STYLE = "border-bottom: 2px solid var(--orange-9) !important;"
+const SPOTLIGHT_STYLE =
+  "border-bottom: 2px solid color-mix(in srgb, var(--orange-9) 70%, transparent) !important;"
 
 const resolveSpotlightSingle = (doc: Node, text: string): TextRange | null =>
   findTextRange(doc, text)

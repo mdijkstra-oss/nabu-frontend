@@ -9,6 +9,7 @@ export type Splitter = (text: string) => Segment[]
 export interface ChunkConfig {
   target: number
   min: number
+  maxSegment?: number
   breakBefore?: (segment: Segment) => boolean
   sizeOf?: (segment: Segment) => number
 }

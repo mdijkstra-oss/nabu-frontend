@@ -119,6 +119,23 @@ describe("chunk", () => {
         expect(r[0].text).toBe("largetiny")
       },
     },
+    {
+      name: "maxSegment raises force-split threshold",
+      segments: buildSegments(["a".repeat(30)]),
+      config: { target: 20, min: 5, maxSegment: 40 },
+      check: (r) => {
+        expect(r).toHaveLength(1)
+        expect(r[0].text).toBe("a".repeat(30))
+      },
+    },
+    {
+      name: "maxSegment still force-splits above threshold",
+      segments: buildSegments(["the quick brown fox jumps over the lazy dog"]),
+      config: { target: 20, min: 5, maxSegment: 25 },
+      check: (r) => {
+        expect(r.length).toBeGreaterThanOrEqual(2)
+      },
+    },
   ]
 
   it.each(cases)("$name", ({ segments, config, check }) => {

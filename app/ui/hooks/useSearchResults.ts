@@ -100,6 +100,7 @@ export const useSearchResults = (
 
   useEffect(() => {
     if (!search || !dbReady) return
+    if (search.sql.length === 0) return
 
     const db = getDatabase()
     if (!db) return

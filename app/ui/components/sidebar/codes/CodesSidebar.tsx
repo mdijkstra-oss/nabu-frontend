@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useSyncExternalStore } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { CheckSquare, ExternalLink } from "lucide-react"
+import { CheckSquare, ExternalLink, Search } from "lucide-react"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { CheckableWrap } from "~/ui/components/CheckableWrap"
@@ -35,6 +35,7 @@ interface CodesSidebarProps {
   onSearchCode?: (code: Code) => void
   onSearchCodeInFile?: (code: Code) => void
   onSearchUnsure?: (code: Code) => void
+  onFindCandidates?: (code: Code) => void
 }
 
 const formatGlobalTooltip = ({ count, fileCount }: GlobalAnnotationCount): string =>
@@ -101,6 +102,7 @@ export const CodesSidebar = ({
   onSearchCode,
   onSearchCodeInFile,
   onSearchUnsure,
+  onFindCandidates,
 }: CodesSidebarProps) => {
   const [searchValue, setSearchValue] = useState("")
   const [hoveredCode, setHoveredCode] = useState<Code | null>(null)
@@ -209,6 +211,16 @@ export const CodesSidebar = ({
                 globalCount={globalAnnotationCounts[hoveredCode.id]}
                 onClick={() => onSearchCode?.(hoveredCode)}
               />
+              {onFindCandidates && hoveredCode.detail.trim().length > 0 && (
+                <TooltipWrap text="Find candidates">
+                  <button
+                    className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-black/10"
+                    onClick={() => onFindCandidates(hoveredCode)}
+                  >
+                    <Search className="h-3.5 w-3.5 text-subtext-color" />
+                  </button>
+                </TooltipWrap>
+              )}
               <TooltipWrap text="Go to code definition">
                 <button
                   className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-black/10"

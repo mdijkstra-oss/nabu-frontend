@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { callLlm } from "~/lib/agent/client/fetch"
-import { extractText, toResponseFormat } from "~/lib/agent/client/convert"
+import { extractText, toResponseFormat, toSystem, toUser } from "~/lib/agent/client/convert"
 
 const ENDPOINT = "/topic-assigner"
 
@@ -27,18 +27,6 @@ const buildExistingMessage = (existing: ExistingClassifications): string =>
 
 const CALL_TO_ACTION =
   "Classify the document above. Reuse an existing type and subject from the lists provided if any fit reasonably. Only create new labels if nothing existing applies."
-
-const toSystem = (content: string) => ({
-  type: "message" as const,
-  role: "system" as const,
-  content,
-})
-
-const toUser = (content: string) => ({
-  type: "message" as const,
-  role: "user" as const,
-  content,
-})
 
 const lowercaseClassification = (c: Classification): Classification => ({
   type: c.type.toLowerCase(),

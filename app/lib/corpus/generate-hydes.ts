@@ -1,17 +1,11 @@
 import { callLlm } from "~/lib/agent/client/fetch"
-import { extractText } from "~/lib/agent/client/convert"
+import { extractText, toSystem } from "~/lib/agent/client/convert"
 import type { CorpusDescription } from "~/domain/corpus/types"
 
 const HYDE_GENERATOR_ENDPOINT = "/hyde-generator"
 const GENERIC_HYDE_ENDPOINT = "/generic-hyde"
 const EXPECTED_HYDE_COUNT = 3
 const SEPARATOR = "---"
-
-const toSystem = (content: string) => ({
-  type: "message" as const,
-  role: "system" as const,
-  content,
-})
 
 const formatCallToAction = (language: string): string =>
   `Generate the 3 passages now in ${language}. Separate with ---`

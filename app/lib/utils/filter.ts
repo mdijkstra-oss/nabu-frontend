@@ -17,16 +17,3 @@ export const matchesAllWords = (query: string, texts: string[]): boolean => {
   const combined = texts.map(normalize).join(" ")
   return words.every((word) => combined.includes(word))
 }
-
-export const matchesWordsInOrder = (query: string, texts: string[]): boolean => {
-  const words = normalize(query).split(/\s+/).filter(Boolean)
-  if (words.length === 0) return true
-  const combined = texts.map(normalize).join(" ")
-  let pos = 0
-  for (const word of words) {
-    const idx = combined.indexOf(word, pos)
-    if (idx === -1) return false
-    pos = idx + word.length
-  }
-  return true
-}

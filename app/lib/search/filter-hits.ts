@@ -2,6 +2,7 @@ import { z } from "zod"
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
 import type { PoolResult } from "~/lib/utils/pool"
+import { toSystem } from "~/lib/agent/client/convert"
 import { callAndParse } from "~/lib/agent/client/call-parse"
 import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 import { splitBySentences } from "~/lib/text/split"
@@ -91,17 +92,15 @@ const groupMatchesByLabel = (
 const formatBatchPassage = (prepared: PreparedHit[], labels: string[]): string =>
   prepared.map((p, i) => `[${labels[i]}]\n${p.numbered}`).join("\n\n")
 
-const toSystemMessage = (content: string) => ({ type: "message", role: "system", content }) as const
-
 const callSemanticFilterBatch = async (
   intent: string,
   prepared: PreparedHit[]
 ): Promise<number[][][]> => {
   const labels = prepared.map((_, i) => toLetter(i))
   const messages = [
-    toSystemMessage(`<search_intent>${intent}</search_intent>`),
-    toSystemMessage(formatBatchPassage(prepared, labels)),
-    toSystemMessage(FILTER_CALL_TO_ACTION),
+    toSystem(`<search_intent>${intent}</search_intent>`),
+    toSystem(formatBatchPassage(prepared, labels)),
+    toSystem(FILTER_CALL_TO_ACTION),
   ]
 
   const result = await callAndParse(SEMANTIC_FILTER_ENDPOINT, messages, FilterResponseSchema)
