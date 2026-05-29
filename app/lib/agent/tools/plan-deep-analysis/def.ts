@@ -19,12 +19,12 @@ const FileTarget = z.object({
   group: z.string().describe('UI grouping label (e.g. "Transcript", "Codebook")'),
 })
 
-const QueryTarget = z.object({
-  type: z.literal("query"),
-  sql: z.string().min(1).describe("SQL query to find target files via search"),
+const SearchTarget = z.object({
+  type: z.literal("search"),
+  search_id: z.string().min(1).describe("ID of an existing search result page to use as target"),
 })
 
-export const TargetEntry = z.discriminatedUnion("type", [FileTarget, QueryTarget])
+export const TargetEntry = z.discriminatedUnion("type", [FileTarget, SearchTarget])
 
 export type TargetEntry = z.infer<typeof TargetEntry>
 
@@ -33,7 +33,7 @@ export const PlanDeepAnalysisArgs = z.object({
     .array(z.union([FileEntry, TargetEntry]))
     .max(5, TOO_MANY_FILES_NUDGE)
     .describe(
-      "Files or queries to analyze — content that will be examined against the source criteria. Each is either a file path with group label, or a SQL query (`type: 'query'`) that resolves to files."
+      "Files or searches to analyze — content that will be examined against the source criteria. Each is either a file path with group label, or a reference to an existing search (`type: 'search'`) whose results resolve to target sections."
     ),
   source_files: z
     .array(SourceFileEntry)
@@ -54,6 +54,6 @@ export type PlanDeepAnalysisArgs = z.infer<typeof PlanDeepAnalysisArgs>
 export const planDeepAnalysisTool: AnyTool = {
   name: "plan_deep_analysis",
   description:
-    "Load source criteria and target files, filter target sections by relevance. Auto generates and starts a structured plan to follow. Use when applying analytical criteria from source files across target content.\n\nparallel: no — batches internally, wait for results before acting",
+    "Load source criteria and target files, filter target sections by relevance. Auto generates and starts a structured plan to follow. Use when applying analytical criteria from source files across target content.\n\nQuery-based targets require a search ID from a prior `search` call — pass as `type: 'search'` with the ID. Run `search` first if targets come from a query.\n\nparallel: no — batches internally, wait for results before acting",
   schema: PlanDeepAnalysisArgs,
 }

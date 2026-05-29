@@ -7,7 +7,7 @@ import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import { updateSearchHydes } from "~/lib/agent/tools/search/settings"
 import { filterParallel, FILTER_BATCH_SIZE } from "~/lib/search/filter-hits"
-import { runSearchPipeline, sortByScore, PAGE_FILTER_BUDGET } from "~/lib/search/pipeline"
+import { runSearchPipeline, sortByScore, MAX_BARREN_BATCHES } from "~/lib/search/pipeline"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery } from "~/lib/search/semantic"
 
@@ -56,6 +56,12 @@ export const useSearchResults = (
   const files = useSyncExternalStore(subscribe, getFiles)
   const search = findSearchById(files, searchId)
   const [settled, setSettled] = useState<SettledState>(EMPTY)
+
+  const isStale = settled.searchId !== null && settled.searchId !== searchId
+  if (isStale) setSettled(EMPTY)
+
+  const searchSql = search?.sql ?? ""
+  const searchHighlight = search?.highlight ?? ""
   const contRef = useRef<ContinuationState | null>(null)
 
   const loadMore = useCallback(async () => {
@@ -78,7 +84,7 @@ export const useSearchResults = (
       state.highlight,
       getFiles(),
       appendHits,
-      { target: PAGE_FILTER_BUDGET.target, maxBarren: PAGE_FILTER_BUDGET.maxBarren }
+      { target: 20, maxBarren: MAX_BARREN_BATCHES }
     )
 
     state.loading = false
@@ -91,11 +97,13 @@ export const useSearchResults = (
   }, [])
 
   useEffect(() => {
-    if (!search || !dbReady) return
-    if (search.sql.length === 0) return
+    if (!searchSql || !dbReady) return
 
     const db = getDatabase()
     if (!db) return
+
+    const freshSearch = findSearchById(getFiles(), searchId)
+    if (!freshSearch) return
 
     let cancelled = false
 
@@ -123,15 +131,15 @@ export const useSearchResults = (
       }
 
       const result = await runSearchPipeline(
-        search.sql,
-        search.highlight,
+        freshSearch.sql,
+        freshSearch.highlight,
         {
           ...ctx,
-          cachedHydes: search.hydes,
-          cachedDescriptionsHash: search.descriptionsHash,
+          cachedHydes: freshSearch.hydes,
+          cachedDescriptionsHash: freshSearch.descriptionsHash,
         },
         getFiles(),
-        PAGE_FILTER_BUDGET,
+        20,
         appendHits
       )
 
@@ -161,7 +169,7 @@ export const useSearchResults = (
       } = result.value
 
       if (isSemantic && hydesCache) {
-        updateSearchHydes(search.id, hydesCache, descriptionsHash)
+        updateSearchHydes(freshSearch.id, hydesCache, descriptionsHash)
       }
 
       const hasMore = needsFiltering && !exhausted && rawRemaining.length > 0
@@ -169,7 +177,7 @@ export const useSearchResults = (
       if (hasMore) {
         contRef.current = {
           remaining: rawRemaining,
-          highlight: search.highlight,
+          highlight: freshSearch.highlight,
           loading: false,
           cancelled,
         }
@@ -189,7 +197,7 @@ export const useSearchResults = (
       cancelled = true
       if (contRef.current) contRef.current.cancelled = true
     }
-  }, [search, searchId, revision, dbReady, loadMore])
+  }, [searchId, searchSql, searchHighlight, revision, dbReady, loadMore])
 
   return {
     search,

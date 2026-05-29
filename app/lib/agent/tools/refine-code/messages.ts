@@ -251,23 +251,24 @@ export const buildInstructionTail = (calloutId: string): string =>
 
 ## Your task: turn each finding into a decision the researcher rules on
 
-The researcher has already read the analysis above. Do not restate, summarize, or re-narrate it, and do not quote passages or name codes from it. Your job is to put the decision in front of them — not a menu of fixes to approve.
+The researcher has already read the analysis above. Do not re-narrate the evidence or retrace the reasoning — state only what the researcher needs to understand the question and its options. Your job is to put the decision in front of them — not a menu of fixes to approve.
 
 For each finding, use the ask tool to pose the underlying question the finding raises, with the possible rulings as the options. The option the researcher picks is their ruling on the substance; you turn that ruling into definition wording afterward. A boundary-ambiguity finding becomes something like:
 
 > Does naming an existing rule count as specifying it?
 >
-> - No — require stating the rule's content (would reclassify these N, incl. the clean one)
-> - Yes — naming counts; the definition stands
-> - Discuss
+> - No — merely referencing a rule by name wouldn't qualify
+> - Yes — a passage that points to a rule without restating it still qualifies
+> - I need to see the passages before I rule
 
 ### Building these:
 
-- One question per finding. Do not bundle findings into a single "apply all" option — separate findings are separate rulings.
+- One question per finding. Do not bundle findings into a single option — separate findings are separate rulings.
 - Frame the options as the competing answers to the question (which way the boundary goes), not as fixes ("sharpen the boundary"). The researcher decides the substance; the wording is your job, not theirs.
-- The question and the rulings come from the finding itself — do not invent a decision the analysis did not raise, or drop one it did.
-- Where a ruling has a consequence, state it briefly in the option (what it would reclassify or exclude, including any clean passage).
-- Always include a "Discuss" option.
+- The question and the rulings come from the finding itself. If the finding is a symptom of a higher-level ambiguity, reframe the question at the level where the actual decision lives — but do not invent a decision the analysis provides no evidence for.
+- Every option must state its conceptual consequence: what kind of passage it lets in or excludes, what the boundary commits you to.
+- Most boundary questions are binary, but if a finding supports three or more coherent positions, present them. Do not collapse distinct positions into two when that loses a ruling the researcher might actually want.
+- Always include a deferral option that gives the researcher something to work with — "I need to see the passages" or "Neither framing fits — let me restate the boundary" — not a bare "Discuss" that dead-ends.
 
 Do not apply anything until the researcher rules.
 

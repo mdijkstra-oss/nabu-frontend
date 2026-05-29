@@ -10,10 +10,7 @@ import { sanitizeSemanticError, sqlQueriesFilesTable } from "./semantic"
 import { filterParallel, FILTER_BATCH_SIZE } from "./filter-hits"
 import { growHits } from "./slices"
 
-export interface FilterBudget {
-  target: number
-  maxBarren: number
-}
+export const MAX_BARREN_BATCHES = 5
 
 export interface PipelineResult {
   hits: SearchHit[]
@@ -29,9 +26,6 @@ export interface PipelineResult {
 export interface PipelineError {
   message: string
 }
-
-export const LLM_FILTER_BUDGET: FilterBudget = { target: 50, maxBarren: 5 }
-export const PAGE_FILTER_BUDGET: FilterBudget = { target: FILTER_BATCH_SIZE, maxBarren: 5 }
 
 export const sortByScore = (hits: SearchHit[]): SearchHit[] =>
   [...hits].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
@@ -103,7 +97,7 @@ const filterWithBudget = async (
   rawHits: SearchHit[],
   highlight: string,
   files: FileStore,
-  budget: FilterBudget,
+  target: number,
   onResults?: (hits: SearchHit[]) => void
 ) => {
   const collected: SearchHit[] = []
@@ -113,8 +107,8 @@ const filterWithBudget = async (
   }
 
   const { consumed, barren } = await filterParallel(rawHits, highlight, files, collectAndForward, {
-    target: budget.target,
-    maxBarren: budget.maxBarren,
+    target,
+    maxBarren: MAX_BARREN_BATCHES,
   })
 
   const rawConsumed = Math.min(consumed * FILTER_BATCH_SIZE, rawHits.length)
@@ -129,7 +123,7 @@ export const runSearchPipeline = async (
   highlight: string,
   ctx: SemanticContext,
   files: FileStore,
-  budget: FilterBudget,
+  target: number,
   onResults?: (hits: SearchHit[]) => void
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const resolved = await resolveAndExecute(sql, ctx)
@@ -157,7 +151,7 @@ export const runSearchPipeline = async (
     })
   }
 
-  const filtered = await filterWithBudget(rawHits, highlight, files, budget, onResults)
+  const filtered = await filterWithBudget(rawHits, highlight, files, target, onResults)
 
   return ok({
     ...filtered,

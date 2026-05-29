@@ -84,7 +84,7 @@ import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
 import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
-import { buildRefineTask, codeWithFiles, codeWithQuery } from "~/domain/actions/coding/actions"
+import { buildRefineTask, codeWithFiles, codeWithSearch } from "~/domain/actions/coding/actions"
 import { resolveCodingFiles } from "~/domain/actions/coding/selectors"
 import { clearCodingsPatches } from "~/domain/actions/clear-codings/apply"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
@@ -483,7 +483,7 @@ export default function ProjectLayout() {
   )
   const annotationCounts = useMemo(
     () => (currentFile ? getAnnotationCountsByCode(getFileAnnotations(currentFile)) : {}),
-    [currentFile, files, getFileAnnotations]
+    [currentFile, getFileAnnotations]
   )
   const globalAnnotationCounts = useMemo(() => getAnnotationGlobalCountsByCode(files), [files])
   const reviewStats = useMemo(() => getReviewStatsByCode(files), [files])
@@ -508,7 +508,7 @@ export default function ProjectLayout() {
     const search = findSearchById(files, params.searchId)
     if (!search) return
     const refs = resolveCodingFiles(files, [...selectedCodes])
-    if (refs.length > 0) dispatchTask(codeWithQuery(refs, search.sql))
+    if (refs.length > 0) dispatchTask(codeWithSearch(refs, params.searchId))
   }, [params.searchId, files, selectedCodes])
 
   const deselectCode = useCallback(

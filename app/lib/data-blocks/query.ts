@@ -45,7 +45,7 @@ export const recoverArrayItems = <T>(
 const isRecoverableObject = (json: unknown): json is Record<string, unknown> =>
   typeof json === "object" && json !== null && !Array.isArray(json)
 
-const cache = createCappedCache<string, unknown>(1000)
+const cache = createCappedCache<string, unknown>(3000)
 
 const BOUNDARY_COMMENT = /^\/\/ (?:start|end) json-\S+.*$/
 

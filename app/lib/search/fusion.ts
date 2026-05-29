@@ -39,6 +39,8 @@ export const rrfScores = (rankMaps: Map<string, number>[], k = RRF_K): Map<strin
   return scores
 }
 
+const FUSED_RESULT_LIMIT = 500
+
 export const fuseCosineResults = (
   cosinePerHyde: ScoredChunk[][],
   limit: number | undefined
@@ -50,7 +52,8 @@ export const fuseCosineResults = (
   const chunkLookup = buildChunkLookup(allChunks)
 
   const sorted = [...scores.entries()].sort((a, b) => b[1] - a[1])
-  const sliced = limit !== undefined ? sorted.slice(0, limit) : sorted
+  const cap = limit !== undefined ? limit : FUSED_RESULT_LIMIT
+  const sliced = sorted.slice(0, cap)
 
   return sliced.flatMap(([key, score]) => {
     const chunk = chunkLookup.get(key)

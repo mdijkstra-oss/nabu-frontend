@@ -146,6 +146,24 @@ export const tryPut = async <T>(
   }
 }
 
+export const clearAllCaches = async (): Promise<void> => {
+  const names = [...dbCache.keys()]
+  for (const name of names) {
+    try {
+      const db = await dbCache.get(name)
+      db?.close()
+    } catch {
+      /* close may fail on already-closed db */
+    }
+    dbCache.delete(name)
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(name)
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+}
+
 export const cacheInStorage =
   <Args extends string[], T>(
     prefix: string,

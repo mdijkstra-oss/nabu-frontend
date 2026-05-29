@@ -5,7 +5,7 @@ import { getDatabase } from "~/domain/db/database"
 import { getLlmHost } from "~/lib/agent/env"
 import { stripPaging } from "~/lib/search/paging"
 import { SEMANTIC_ABSENCE_HINT } from "~/lib/search/semantic"
-import { runSearchPipeline, LLM_FILTER_BUDGET } from "~/lib/search/pipeline"
+import { runSearchPipeline } from "~/lib/search/pipeline"
 import { saveNewSearch } from "./settings"
 import { getFiles } from "~/lib/files/store"
 import { getSearchEntries } from "~/domain/data-blocks/settings/searches/selectors"
@@ -64,7 +64,7 @@ const handleSearch = async (call: { args: unknown }): Promise<ToolResult<unknown
       cachedDescriptionsHash: existingEntry?.descriptionsHash,
     },
     files,
-    LLM_FILTER_BUDGET
+    50
   )
   if (!result.ok) return { status: "error", output: result.error.message }
 

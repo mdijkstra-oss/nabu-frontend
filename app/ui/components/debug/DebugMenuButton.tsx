@@ -1,11 +1,12 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { Bug, Check, Minimize } from "lucide-react"
+import { Bug, Check, Minimize, Trash2 } from "lucide-react"
 import * as SubframeCore from "@subframe/core"
 import { IconButton } from "~/ui/components/IconButton"
 import { DropdownMenu } from "~/ui/components/DropdownMenu"
 import { DEBUG_TOGGLES, type DebugOptions } from "~/ui/components/editor/debug-config"
+import { clearAllCaches } from "~/lib/utils/storage-cache"
 
 interface DebugMenuButtonProps {
   debugOptions: DebugOptions
@@ -73,6 +74,9 @@ export const DebugMenuButton = ({
           )}
           <DropdownMenu.DropdownItem icon={<Minimize />} onClick={onRequestCompaction}>
             Force compaction
+          </DropdownMenu.DropdownItem>
+          <DropdownMenu.DropdownItem icon={<Trash2 />} onClick={clearAllCaches}>
+            Clear IndexedDB caches
           </DropdownMenu.DropdownItem>
         </DropdownMenu>
       </SubframeCore.DropdownMenu.Content>

@@ -41,7 +41,7 @@ export const tokenizeWords = (text: string): string[] => {
   return words
 }
 
-const tokenCache = createCappedCache<string, Token[]>(50)
+const tokenCache = createCappedCache<string, Token[]>(500)
 
 const getDocTokens = (content: string): Token[] => {
   const cached = tokenCache.get(content)

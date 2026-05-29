@@ -18,7 +18,7 @@ Do NOT question these next steps, they come DIRECTLY from user. Do every step in
   guidance: "qual-coding/codebook/refine",
 })
 
-export const codeWithQuery = (refs: CodingFileRef[], sql: string): TaskConfig => {
+export const codeWithSearch = (refs: CodingFileRef[], searchId: string): TaskConfig => {
   const fileList = concatPretty(refs.map((r) => r.file))
 
   const hasHidden = refs.some((r) => r.hidden)
@@ -26,7 +26,7 @@ export const codeWithQuery = (refs: CodingFileRef[], sql: string): TaskConfig =>
     ? " Note: .generated.hidden.md files will not appear in ls output, but do exist - DO NOT read supplied files plan deep will read for you."
     : ""
   return {
-    context: `Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Use the generic codebook as framework if exists AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote} Use target_files: [{ type: "query", sql: "${sql.replace(/"/g, '\\"')}" }] instead of file paths.`,
+    context: `Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Use the generic codebook as framework if exists as "framework" AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote} Use target_files: [{ type: "search", search_id: "${searchId}" }] instead of file paths.`,
     userMessage: `Can you code search results with ${fileList}`,
   }
 }

@@ -92,6 +92,13 @@ const groupMatchesByLabel = (
 const formatBatchPassage = (prepared: PreparedHit[], labels: string[]): string =>
   prepared.map((p, i) => `[${labels[i]}]\n${p.numbered}`).join("\n\n")
 
+const MAX_SELECTED_RATIO = 0.4
+
+const countSelectedSentences = (groups: number[][]): number => new Set(groups.flat()).size
+
+const isOverselected = (groups: number[][], totalSentences: number): boolean =>
+  countSelectedSentences(groups) > totalSentences * MAX_SELECTED_RATIO
+
 const callSemanticFilterBatch = async (
   intent: string,
   prepared: PreparedHit[]
@@ -106,7 +113,10 @@ const callSemanticFilterBatch = async (
   const result = await callAndParse(SEMANTIC_FILTER_ENDPOINT, messages, FilterResponseSchema)
   if (!result.ok) return prepared.map(() => [])
 
-  return groupMatchesByLabel(result.data, labels)
+  const grouped = groupMatchesByLabel(result.data, labels)
+  return grouped.map((groups, i) =>
+    isOverselected(groups, prepared[i].sentences.length) ? [] : groups
+  )
 }
 
 const FILTER_CACHE_PREFIX = "filter"
