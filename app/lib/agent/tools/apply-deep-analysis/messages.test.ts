@@ -163,9 +163,11 @@ describe("buildFindCall with real governance content", () => {
     expect(frameworkMsg?.content).toContain("narrower, defensible reading")
   })
 
-  it("target appears in <target> wrapper with numbered sentences", () => {
+  it("target appears in <target file=... prefix=...> wrapper with numbered sentences", () => {
     const { messages } = buildFindCall(targetContent, sources, resolve)
-    const targetMsg = messages.find((m) => m.role === "system" && m.content.startsWith("<target>"))
+    const targetMsg = messages.find(
+      (m) => m.role === "system" && m.content.includes('<target file="target" prefix="a">')
+    )
     expect(targetMsg).toBeDefined()
     expect(targetMsg?.content).toContain("anderhalve meter")
   })
@@ -173,6 +175,56 @@ describe("buildFindCall with real governance content", () => {
   it("returns correct sentence count", () => {
     const { sentences } = buildFindCall(targetContent, sources, resolve)
     expect(sentences).toHaveLength(5)
+  })
+
+  it("returns prefixes with default firstFile", () => {
+    const { prefixes } = buildFindCall(targetContent, sources, resolve)
+    expect(prefixes).toHaveLength(1)
+    expect(prefixes[0].file).toBe("target")
+    expect(prefixes[0].prefix).toBe("a")
+  })
+
+  it("respects custom firstFile", () => {
+    const { prefixes } = buildFindCall(targetContent, sources, resolve, "", "", "custom.md")
+    expect(prefixes[0].file).toBe("custom.md")
+  })
+})
+
+describe("buildFindCall with multi-file content", () => {
+  const resolve = buildResolver({
+    [FRAMEWORK_PATH]: frameworkContent,
+    [GOVERNANCE_PATH]: governanceContent,
+  })
+
+  const sources = { framework: [FRAMEWORK_PATH], dimension: [GOVERNANCE_PATH] }
+
+  const multiContent = [
+    "First sentence in file A.",
+    "Second sentence in file A.",
+    "",
+    "§§ other.md [10-20]",
+    "",
+    "First sentence in file B.",
+    "Second sentence in file B.",
+  ].join("\n")
+
+  it("produces two target blocks for two files", () => {
+    const { messages } = buildFindCall(multiContent, sources, resolve, "", "", "file-a.md")
+    const allContent = messages.map((m) => m.content).join("\n")
+    expect(allContent).toContain('<target file="file-a.md" prefix="a">')
+    expect(allContent).toContain('<target file="other.md" prefix="b">')
+  })
+
+  it("returns correct sentence count across files", () => {
+    const { sentences } = buildFindCall(multiContent, sources, resolve, "", "", "file-a.md")
+    expect(sentences).toHaveLength(4)
+  })
+
+  it("returns correct prefixes for two files", () => {
+    const { prefixes } = buildFindCall(multiContent, sources, resolve, "", "", "file-a.md")
+    expect(prefixes).toHaveLength(2)
+    expect(prefixes[0]).toEqual({ file: "file-a.md", prefix: "a", offset: 0, count: 2 })
+    expect(prefixes[1]).toEqual({ file: "other.md", prefix: "b", offset: 2, count: 2 })
   })
 })
 

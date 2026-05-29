@@ -6,7 +6,8 @@ import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { think, FINDING, CONSENSUS } from "./thoughts"
-import { buildFindCall, singleIdFindSchema, extractSourceIds } from "./messages"
+import { buildFindCall, buildPrefixedFindSchema, extractSourceIds } from "./messages"
+import { resolveToGlobal } from "./format"
 import { groupBySpan, filterOverlappingSpans } from "./consensus"
 import { FIND_ENDPOINT, FIND_RUNS, FIND_CONCURRENCY } from "./def"
 
@@ -132,24 +133,40 @@ const groupSlotResults = (results: SlotResult[], callCount: number): FindResult[
 const executeFindSlot = async (
   slot: FindSlot,
   rawTarget: string,
+  firstFile: string,
   leadingCtx: string,
   trailingCtx: string,
   resolve: ContentResolver
 ): Promise<SlotResult> => {
-  const { messages } = buildFindCall(rawTarget, slot.sources, resolve, leadingCtx, trailingCtx)
+  const { messages, prefixes } = buildFindCall(
+    rawTarget,
+    slot.sources,
+    resolve,
+    leadingCtx,
+    trailingCtx,
+    firstFile
+  )
   const sourceId = extractSourceIds(slot.sources, resolve)[0] ?? ""
+  const files = [...new Set(prefixes.map((p) => p.file))]
+  const schema = buildPrefixedFindSchema(files)
   const endpoint = `${FIND_ENDPOINT}?model=${slot.runIdx % 2}`
-  const result = await callAndParse(endpoint, messages, singleIdFindSchema)
+  const result = await callAndParse(endpoint, messages, schema)
   if (!result.ok) throw new Error(result.error)
   return {
     callIdx: slot.callIdx,
-    spans: result.data.results.map((r) => ({ ...r, analysis_source_id: sourceId })),
+    spans: result.data.results.flatMap((r) => {
+      const start = resolveToGlobal(r.start, prefixes)
+      const end = resolveToGlobal(r.end, prefixes)
+      if (start === null || end === null) return []
+      return [{ start, end, analysis_source_id: sourceId }]
+    }),
   }
 }
 
 export const findAllDimensions = async (
   calls: ScopedSources[],
   rawTarget: string,
+  firstFile: string,
   leadingCtx: string,
   trailingCtx: string,
   resolve: ContentResolver
@@ -160,7 +177,9 @@ export const findAllDimensions = async (
 
   const { results: slotResults, failures } = await processPool<FindSlot, SlotResult>(
     slots,
-    async (slot) => [await executeFindSlot(slot, rawTarget, leadingCtx, trailingCtx, resolve)],
+    async (slot) => [
+      await executeFindSlot(slot, rawTarget, firstFile, leadingCtx, trailingCtx, resolve),
+    ],
     noop,
     { concurrency: FIND_CONCURRENCY, warmup: FIND_RUNS }
   )

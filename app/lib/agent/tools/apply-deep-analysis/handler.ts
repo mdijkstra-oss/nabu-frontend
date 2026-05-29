@@ -315,9 +315,11 @@ const processComposite = async (
 
   const analyzedCodes = new Set(extractDimensionIds(calls, getFileView))
 
+  const firstFile = composite.segments[0]?.path ?? "target"
   const pipelineResult = await runAnalysisPipeline(
     calls,
     composite.content,
+    firstFile,
     leadingCtx,
     trailingCtx,
     scoped,

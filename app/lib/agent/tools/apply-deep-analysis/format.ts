@@ -92,12 +92,108 @@ export const extractTrailingContext = (
 
 export const SECTION_MARKER = "§§ "
 
+export interface FilePrefix {
+  file: string
+  prefix: string
+  offset: number
+  count: number
+}
+
 export const prepareTargetContent = (raw: string): string =>
   stripMarkdown(extractProse(raw), { keepHeadings: true })
 
 const splitSentenceTexts = splitBySentences()
 
 const isSectionMarker = (text: string): boolean => text.startsWith(SECTION_MARKER)
+
+const CHUNK_SEPARATOR = "---"
+
+export const letterForIndex = (i: number): string => String.fromCharCode(97 + i)
+
+export const parseFileFromMarker = (marker: string): string => {
+  const after = marker.slice(SECTION_MARKER.length)
+  const bracketIdx = after.indexOf(" [")
+  return bracketIdx >= 0 ? after.slice(0, bracketIdx) : after.trim()
+}
+
+interface NumberByFileResult {
+  content: string
+  sentences: string[]
+  prefixes: FilePrefix[]
+}
+
+export const numberByFile = (raw: string, firstFile: string): NumberByFileResult => {
+  const prepared = prepareTargetContent(raw)
+  const all = splitSentenceTexts(prepared)
+
+  const sentences: string[] = []
+  const prefixes: FilePrefix[] = []
+  const blocks: string[] = []
+
+  let currentFile = firstFile
+  let fileIdx = 0
+  let fileLines: string[] = []
+  let fileOffset = sentences.length
+  let fileCount = 0
+
+  const flushBlock = (): void => {
+    if (fileCount > 0 || fileLines.length > 0) {
+      const prefix = letterForIndex(fileIdx)
+      prefixes.push({ file: currentFile, prefix, offset: fileOffset, count: fileCount })
+      blocks.push(
+        `<target file="${currentFile}" prefix="${prefix}">\n${fileLines.join("\n")}\n</target>`
+      )
+      fileIdx++
+    }
+  }
+
+  for (const s of all) {
+    if (isSectionMarker(s.text)) {
+      const newFile = parseFileFromMarker(s.text)
+      if (newFile === currentFile) {
+        fileLines.push(CHUNK_SEPARATOR)
+      } else {
+        flushBlock()
+        currentFile = newFile
+        fileLines = []
+        fileOffset = sentences.length
+        fileCount = 0
+      }
+    } else {
+      sentences.push(s.text)
+      const prefix = letterForIndex(fileIdx)
+      fileCount++
+      fileLines.push(`${prefix}${fileCount}: ${s.text}`)
+    }
+  }
+
+  flushBlock()
+
+  return { content: blocks.join("\n\n"), sentences, prefixes }
+}
+
+interface PrefixedRef {
+  letter: string
+  index: number
+}
+
+export const parsePrefixedRef = (ref: string): PrefixedRef | null => {
+  if (ref.length < 2) return null
+  const letter = ref[0]
+  if (letter < "a" || letter > "z") return null
+  const num = Number(ref.slice(1))
+  if (!Number.isInteger(num) || num < 1) return null
+  return { letter, index: num }
+}
+
+export const resolveToGlobal = (ref: string, prefixes: readonly FilePrefix[]): number | null => {
+  const parsed = parsePrefixedRef(ref)
+  if (!parsed) return null
+  const entry = prefixes.find((p) => p.prefix === parsed.letter)
+  if (!entry) return null
+  if (parsed.index < 1 || parsed.index > entry.count) return null
+  return entry.offset + parsed.index
+}
 
 export const numberSection = (text: string): { sentences: string[]; numbered: string } => {
   const all = splitSentenceTexts(text)

@@ -42,13 +42,21 @@ const processBatch = async (
 export const runAnalysisPipeline = async (
   calls: ScopedSources[],
   rawTarget: string,
+  firstFile: string,
   leadingCtx: string,
   trailingCtx: string,
   sources: ScopedSources,
   sentences: string[],
   resolve: ContentResolver
 ): Promise<PipelineResult> => {
-  const findResult = await findAllDimensions(calls, rawTarget, leadingCtx, trailingCtx, resolve)
+  const findResult = await findAllDimensions(
+    calls,
+    rawTarget,
+    firstFile,
+    leadingCtx,
+    trailingCtx,
+    resolve
+  )
 
   if (findResult.annotations.length === 0) {
     return { annotations: [], errors: findResult.errors }

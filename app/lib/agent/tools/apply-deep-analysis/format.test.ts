@@ -6,6 +6,11 @@ import {
   extractTrailingContext,
   extractSentenceContext,
   numberSection,
+  numberByFile,
+  parsePrefixedRef,
+  resolveToGlobal,
+  letterForIndex,
+  parseFileFromMarker,
   mapResults,
   toAnnotationOps,
   toAnalysisResults,
@@ -16,6 +21,7 @@ import {
   ABSENCE_HINT,
   type MappedResult,
   type VoteRecord,
+  type FilePrefix,
 } from "./format"
 import { buildRemovalOps, type AnnotationRef } from "./step-clear"
 
@@ -751,6 +757,141 @@ describe("buildRemovalOps expanded blob", () => {
         expected
       )
     )
+  })
+})
+
+describe("letterForIndex", () => {
+  const cases = [
+    { index: 0, expected: "a" },
+    { index: 1, expected: "b" },
+    { index: 25, expected: "z" },
+  ]
+
+  cases.forEach(({ index, expected }) => {
+    it(`index ${index} → "${expected}"`, () => expect(letterForIndex(index)).toBe(expected))
+  })
+})
+
+describe("parseFileFromMarker", () => {
+  const cases = [
+    { name: "with line range", marker: "§§ file.md [10-20]", expected: "file.md" },
+    {
+      name: "with path and range",
+      marker: "§§ path/to/file.md [5-15]",
+      expected: "path/to/file.md",
+    },
+    { name: "without range", marker: "§§ file.md", expected: "file.md" },
+  ]
+
+  cases.forEach(({ name, marker, expected }) => {
+    it(name, () => expect(parseFileFromMarker(marker)).toBe(expected))
+  })
+})
+
+describe("numberByFile", () => {
+  const cases = [
+    {
+      name: "single file produces one target block",
+      raw: "First sentence. Second sentence.",
+      firstFile: "test.md",
+      expectedSentenceCount: 2,
+      expectedPrefixCount: 1,
+      contentContains: ['<target file="test.md" prefix="a">'],
+      contentNotContains: ["<target file="],
+    },
+    {
+      name: "multi-file with §§ marker produces two blocks",
+      raw: `First sentence.\n\n${SECTION_MARKER}other.md [10-20]\n\nSecond sentence.`,
+      firstFile: "main.md",
+      expectedSentenceCount: 2,
+      expectedPrefixCount: 2,
+      contentContains: [
+        '<target file="main.md" prefix="a">',
+        '<target file="other.md" prefix="b">',
+      ],
+      contentNotContains: [],
+    },
+    {
+      name: "same-file chunk gets --- separator within same block",
+      raw: `First sentence.\n\n${SECTION_MARKER}main.md [20-30]\n\nSecond sentence.`,
+      firstFile: "main.md",
+      expectedSentenceCount: 2,
+      expectedPrefixCount: 1,
+      contentContains: ["---"],
+      contentNotContains: [],
+    },
+  ]
+
+  cases.forEach(
+    ({ name, raw, firstFile, expectedSentenceCount, expectedPrefixCount, contentContains }) => {
+      it(name, () => {
+        const result = numberByFile(raw, firstFile)
+        expect(result.sentences).toHaveLength(expectedSentenceCount)
+        expect(result.prefixes).toHaveLength(expectedPrefixCount)
+        for (const c of contentContains) {
+          expect(result.content).toContain(c)
+        }
+      })
+    }
+  )
+
+  it("sentences array matches numberSection output for single file", () => {
+    const text = "First sentence. Second sentence. Third."
+    const byFile = numberByFile(text, "test.md")
+    const section = numberSection(text)
+    expect(byFile.sentences).toEqual(section.sentences)
+  })
+
+  it("prefixes have correct offsets for multi-file", () => {
+    const raw = `A. B.\n\n${SECTION_MARKER}other.md [1-5]\n\nC. D. E.`
+    const result = numberByFile(raw, "first.md")
+    expect(result.prefixes[0]).toEqual({ file: "first.md", prefix: "a", offset: 0, count: 2 })
+    expect(result.prefixes[1]).toEqual({ file: "other.md", prefix: "b", offset: 2, count: 3 })
+  })
+
+  it("uses prefixed numbering in content", () => {
+    const raw = "Hello world. Goodbye world."
+    const result = numberByFile(raw, "test.md")
+    expect(result.content).toContain("a1: Hello world.")
+    expect(result.content).toContain("a2: Goodbye world.")
+  })
+})
+
+describe("parsePrefixedRef", () => {
+  const cases = [
+    { name: "valid ref", ref: "a3", expected: { letter: "a", index: 3 } },
+    { name: "valid single digit", ref: "b1", expected: { letter: "b", index: 1 } },
+    { name: "valid multi digit", ref: "c12", expected: { letter: "c", index: 12 } },
+    { name: "too short", ref: "a", expected: null },
+    { name: "non-letter prefix", ref: "13", expected: null },
+    { name: "zero index", ref: "a0", expected: null },
+    { name: "negative", ref: "a-1", expected: null },
+    { name: "uppercase rejected", ref: "A3", expected: null },
+  ]
+
+  cases.forEach(({ name, ref, expected }) => {
+    it(name, () => expect(parsePrefixedRef(ref)).toEqual(expected))
+  })
+})
+
+describe("resolveToGlobal", () => {
+  const prefixes: FilePrefix[] = [
+    { file: "a.md", prefix: "a", offset: 0, count: 5 },
+    { file: "b.md", prefix: "b", offset: 5, count: 3 },
+  ]
+
+  const cases = [
+    { name: "first sentence of first file", ref: "a1", expected: 1 },
+    { name: "last sentence of first file", ref: "a5", expected: 5 },
+    { name: "first sentence of second file", ref: "b1", expected: 6 },
+    { name: "last sentence of second file", ref: "b3", expected: 8 },
+    { name: "out of range returns null", ref: "a6", expected: null },
+    { name: "unknown prefix returns null", ref: "c1", expected: null },
+    { name: "invalid ref returns null", ref: "bad", expected: null },
+  ]
+
+  cases.forEach(({ name, ref, expected }) => {
+    it(name, () => expect(resolveToGlobal(ref, prefixes)).toBe(expected))
   })
 })
 

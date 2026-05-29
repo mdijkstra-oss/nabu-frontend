@@ -9,7 +9,7 @@ import { stripBoundaryComments } from "~/lib/patch/resolve/json-boundary"
 import { calloutToDeepSource } from "~/domain/data-blocks/callout/definition"
 import { getCallouts } from "~/domain/data-blocks/callout/selectors"
 import { GENERATED_SUFFIX } from "~/lib/files/filename"
-import { prepareTargetContent, numberSection } from "./format"
+import { numberByFile, type FilePrefix } from "./format"
 import { cacheMarker } from "../../client/call-parse"
 
 interface Message {
@@ -23,15 +23,17 @@ export interface ScopedSources {
   dimension: string[]
 }
 
-export const singleIdFindSchema = z.object({
-  results: z.array(
-    z.object({
-      start: z.number().int().min(1),
-      end: z.number().int().min(1),
-      reasonToKeep: z.string(),
-    })
-  ),
-})
+export const buildPrefixedFindSchema = (validFiles: string[]) =>
+  z.object({
+    results: z.array(
+      z.object({
+        file: validFiles.length > 0 ? z.enum(validFiles as [string, ...string[]]) : z.string(),
+        start: z.string(),
+        end: z.string(),
+        reasonToKeep: z.string(),
+      })
+    ),
+  })
 
 export const buildFindResultSchema = (validIds: string[]) =>
   z.object({
@@ -177,8 +179,6 @@ export const buildCodeSourceMessages = (
   return messages
 }
 
-const buildSectionMessage = (section: string): string => `<target>\n${section}\n</target>`
-
 const buildLeadingContextMessage = (context: string): string =>
   `<context type="preceding">\n${context}\n</context>`
 
@@ -220,7 +220,7 @@ const buildFindEnvelope = (
       content: buildLeadingContextMessage(leadingCtx),
     })
   }
-  messages.push({ type: "message", role: "system", content: buildSectionMessage(section) })
+  messages.push({ type: "message", role: "system", content: section })
   if (trailingCtx) {
     messages.push({
       type: "message",
@@ -250,6 +250,8 @@ export const buildFindMessages = (
     FIND_CTA
   )
 
+const wrapTarget = (section: string): string => `<target>\n${section}\n</target>`
+
 const buildSpanEnvelope = (
   frameworkMessages: Message[],
   section: string,
@@ -269,7 +271,7 @@ const buildSpanEnvelope = (
       content: buildLeadingContextMessage(leadingCtx),
     })
   }
-  messages.push({ type: "message", role: "system", content: buildSectionMessage(section) })
+  messages.push({ type: "message", role: "system", content: wrapTarget(section) })
   if (trailingCtx) {
     messages.push({
       type: "message",
@@ -302,6 +304,7 @@ export const buildSpanStepMessages = (
 export interface FindCallResult {
   messages: Message[]
   sentences: string[]
+  prefixes: FilePrefix[]
 }
 
 export const buildFindCall = (
@@ -309,10 +312,10 @@ export const buildFindCall = (
   sources: ScopedSources,
   resolve: ContentResolver,
   leadingCtx = "",
-  trailingCtx = ""
+  trailingCtx = "",
+  firstFile = "target"
 ): FindCallResult => {
-  const section = prepareTargetContent(rawTarget)
-  const { sentences, numbered } = numberSection(section)
-  const messages = buildFindMessages(numbered, sources, leadingCtx, trailingCtx, resolve)
-  return { messages, sentences }
+  const { content, sentences, prefixes } = numberByFile(rawTarget, firstFile)
+  const messages = buildFindMessages(content, sources, leadingCtx, trailingCtx, resolve)
+  return { messages, sentences, prefixes }
 }
