@@ -1,4 +1,5 @@
 import type { StepDefObject } from "../../derived"
+import { CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
 
 export interface LabeledTarget {
   path: string
@@ -7,10 +8,23 @@ export interface LabeledTarget {
   ranges: { startLine: number; endLine: number }[]
 }
 
-export interface SectionMatch {
+export interface SectionEntry {
   path: string
+  startLine: number
+  endLine: number
+}
+
+export interface SectionMatch {
   label: string
-  ranges: { startLine: number; endLine: number }[]
+  sections: SectionEntry[]
+}
+
+export interface FileSearchGroup {
+  path: string
+  sections: SectionEntry[]
+  totalChars: number
+  resultCount: number
+  bestScore: number
 }
 
 export interface SourceEntry {
@@ -30,7 +44,10 @@ export const formatTargetFile = (path: string, targets: LabeledTarget[]): string
 }
 
 export const toSectionMatches = (labeled: LabeledTarget[]): SectionMatch[] =>
-  labeled.map((t) => ({ path: t.path, label: t.label, ranges: t.ranges }))
+  labeled.map((t) => ({
+    label: t.label,
+    sections: t.ranges.map((r) => ({ path: t.path, startLine: r.startLine, endLine: r.endLine })),
+  }))
 
 export const buildAutoSteps = (
   matches: SectionMatch[],
@@ -47,11 +64,48 @@ export const buildExecRules = (firstStepCall: string): string =>
 
    ${firstStepCall}`
 
+const basename = (path: string): string => path.split("/").pop() ?? path
+
+interface Bucket {
+  files: FileSearchGroup[]
+  chars: number
+}
+
+const flushBucket = (bucket: Bucket): SectionMatch => {
+  const sections = bucket.files.flatMap((f) => f.sections)
+  const results = bucket.files.reduce((sum, f) => sum + f.resultCount, 0)
+  const isSingleFile = bucket.files.length === 1
+  const label = isSingleFile
+    ? `${results} results in ${basename(bucket.files[0].path)}`
+    : `${results} results across ${bucket.files.length} files`
+  return { label, sections }
+}
+
+export const groupSearchSections = (files: FileSearchGroup[]): SectionMatch[] => {
+  const sorted = [...files].sort((a, b) => b.bestScore - a.bestScore)
+  const steps: SectionMatch[] = []
+  let current: Bucket = { files: [], chars: 0 }
+
+  for (const file of sorted) {
+    const wouldOverflow = current.chars > 0 && current.chars + file.totalChars > CHUNK_TARGET_CHARS
+    if (wouldOverflow) {
+      steps.push(flushBucket(current))
+      current = { files: [], chars: 0 }
+    }
+    current.files.push(file)
+    current.chars += file.totalChars
+  }
+
+  if (current.files.length > 0) steps.push(flushBucket(current))
+
+  return steps
+}
+
 const formatSourceArg = (sources: SourceEntry[]): string =>
   `[${sources.map((s) => `{path: "${s.path}", scope: "${s.scope}"}`).join(", ")}]`
 
 const formatSectionsArg = (m: SectionMatch): string =>
-  `[${m.ranges.map((r) => `{path: "${m.path}", start_line: ${r.startLine}, end_line: ${r.endLine}}`).join(", ")}]`
+  `[${m.sections.map((s) => `{path: "${s.path}", start_line: ${s.startLine}, end_line: ${s.endLine}}`).join(", ")}]`
 
 const autoResult = "on result: write nothing. call complete_step immediately."
 const interactiveResult =

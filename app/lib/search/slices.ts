@@ -4,7 +4,26 @@ import type { Annotation } from "~/domain/data-blocks/attributes/schema"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
 import { getBlock } from "~/lib/data-blocks/query"
 import { stripAttributesBlock } from "~/lib/markdown/strip-attributes"
-import { stripBlocksByLanguage } from "~/lib/data-blocks/parse"
+import { findBlocksByLanguage, stripBlocksByLanguage } from "~/lib/data-blocks/parse"
+
+export interface AnnotationSplit {
+  prose: string
+  annotationsBlock: string | null
+  annotationTexts: string[]
+}
+
+export const splitAnnotationsFromProse = (raw: string): AnnotationSplit => {
+  const blocks = findBlocksByLanguage(raw, "json-annotations")
+  if (blocks.length === 0) return { prose: raw, annotationsBlock: null, annotationTexts: [] }
+  const block = blocks[0]
+  const prose = stripBlocksByLanguage(raw, "json-annotations")
+  const parsed = getBlock(raw, "json-annotations", AnnotationsBlockSchema)
+  const annotationTexts = (parsed?.annotations ?? []).map((a: Annotation) => a.text)
+  return { prose, annotationsBlock: raw.slice(block.start, block.end), annotationTexts }
+}
+
+export const reattachAnnotations = (prose: string, block: string | null): string =>
+  block ? `${prose}\n\n${block}` : prose
 
 interface Range {
   start: number

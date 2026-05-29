@@ -9,22 +9,39 @@ import { buildSemanticContext } from "~/domain/corpus/init"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import { runSearchPipeline } from "~/lib/search/pipeline"
 
+export interface FileHitGroup {
+  texts: string[]
+  bestScore: number
+}
+
 export interface ResolvedTargets {
   files: FileEntry[]
   searchIds: string[]
+  searchHits: Map<string, FileHitGroup>
   errors: string[]
 }
 
 const isSearchTarget = (t: FileEntry | TargetEntry): t is TargetEntry & { type: "search" } =>
   "type" in t && t.type === "search"
 
-const deduplicateByFile = (hits: SearchHit[]): string[] => [...new Set(hits.map((h) => h.file))]
+const groupHitsByFile = (hits: SearchHit[]): Map<string, FileHitGroup> => {
+  const groups = new Map<string, FileHitGroup>()
+  for (const hit of hits) {
+    if (!hit.text) continue
+    const group = groups.get(hit.file) ?? { texts: [], bestScore: 0 }
+    group.texts.push(hit.text)
+    group.bestScore = Math.max(group.bestScore, hit.score ?? 0)
+    groups.set(hit.file, group)
+  }
+  return groups
+}
 
 export const resolveSearchTargets = async (
   targets: (FileEntry | TargetEntry)[]
 ): Promise<ResolvedTargets> => {
   const files: FileEntry[] = []
   const searchIds: string[] = []
+  const searchHits = new Map<string, FileHitGroup>()
   const errors: string[] = []
 
   const db = getDatabase()
@@ -79,16 +96,23 @@ export const resolveSearchTargets = async (
       continue
     }
 
-    const uniquePaths = deduplicateByFile(result.value.hits)
-    const searchFiles = uniquePaths.map((path): FileEntry => ({ path, group: "Search" }))
+    const fileGroups = groupHitsByFile(result.value.hits)
+    const searchFiles = [...fileGroups.keys()].map((path): FileEntry => ({ path, group: "Search" }))
+
+    for (const [path, group] of fileGroups) {
+      const existing = searchHits.get(path) ?? { texts: [], bestScore: 0 }
+      existing.texts.push(...group.texts)
+      existing.bestScore = Math.max(existing.bestScore, group.bestScore)
+      searchHits.set(path, existing)
+    }
 
     console.debug(
-      `[plan-deep] search ${target.search_id} resolved ${result.value.hits.length} hits → ${uniquePaths.length} files`
+      `[plan-deep] search ${target.search_id} resolved ${result.value.hits.length} hits → ${fileGroups.size} files`
     )
 
     files.push(...searchFiles)
     searchIds.push(target.search_id)
   }
 
-  return { files, searchIds, errors }
+  return { files, searchIds, searchHits, errors }
 }

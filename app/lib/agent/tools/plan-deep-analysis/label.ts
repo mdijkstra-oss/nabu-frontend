@@ -17,6 +17,9 @@ export const labelAll = async (items: LabelItem[]): Promise<LabeledTarget[]> => 
         endLine: s.endLine,
       }))
       const ranges = remapRanges(lineMap, rawRanges)
+      console.debug(
+        `[plan-search] label: "${label.label}" ${path} [${ranges.map((r) => `${r.startLine}-${r.endLine}`).join(", ")}] ${composite.content.length} chars`
+      )
       return [{ path, label: label.label, desc: label.desc, ranges } as LabeledTarget]
     },
     () => undefined,

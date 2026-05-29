@@ -6,7 +6,7 @@ import { TagBadge } from "~/ui/components/TagBadge"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
-import { refreshHits } from "~/lib/search/slices"
+import { refreshHits, splitAnnotationsFromProse, reattachAnnotations } from "~/lib/search/slices"
 import { useThrottledValue } from "~/ui/hooks/useThrottledValue"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
@@ -87,13 +87,16 @@ const SearchSlicePreview = ({
   matches?: string[]
   onNavigate?: () => void
 }) => {
-  const trimmed = matches ? trimAroundMatches(text, matches) : text
+  const { prose, annotationsBlock, annotationTexts } = splitAnnotationsFromProse(text)
+  const allAnchors = matches ? [...matches, ...annotationTexts] : annotationTexts
+  const trimmed = allAnchors.length > 0 ? trimAroundMatches(prose, allAnchors) : prose
+  const content = reattachAnnotations(trimmed, annotationsBlock)
   return (
     <div className="group/hit flex w-full items-center">
       <div className={GUTTER} />
       <div className="min-w-0 grow rounded-md border border-solid border-neutral-200 px-4 py-3">
         <MilkdownEditor
-          content={trimmed}
+          content={content}
           readOnly
           filePath={filePath}
           spotlight={matches ? matchesToSpotlights(matches) : null}

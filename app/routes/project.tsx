@@ -597,6 +597,7 @@ export default function ProjectLayout() {
       sql: `SELECT file, id, text FROM annotations WHERE code = '${code.id}'`,
     })
     if (!id) return
+    writeSelectedCodes([code.id])
     dismissSidebarRef.current?.()
     navigate(`/project/${params.projectId}/search/${id}`)
   }
@@ -609,6 +610,7 @@ export default function ProjectLayout() {
       sql: `SELECT file, id, text FROM annotations WHERE code = '${code.id}' AND file = '${currentFile}'`,
     })
     if (!id) return
+    writeSelectedCodes([code.id])
     dismissSidebarRef.current?.()
     navigate(`/project/${params.projectId}/search/${id}`)
   }
