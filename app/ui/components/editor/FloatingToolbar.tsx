@@ -59,6 +59,9 @@ const TOOLBAR_GROUPS = [
   ],
 ]
 
+const isLeavingTo = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement | null>): boolean =>
+  ref.current?.contains(e.relatedTarget as Node) ?? false
+
 export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const portalRef = useRef<HTMLDivElement>(null)
@@ -66,6 +69,7 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   const [, getEditor] = useInstance()
   void getEditor
   const [rect, setRect] = useState<DOMRect | null>(null)
+  const [hovered, setHovered] = useState(true)
 
   const updateSelection = useCallback(() => {
     const container = containerRef.current
@@ -97,19 +101,37 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
     }
   }, [scheduleUpdate])
 
+  const handleContainerEnter = useCallback(() => {
+    setHovered(true)
+    updateSelection()
+  }, [updateSelection])
+
+  const handleContainerLeave = useCallback((e: React.MouseEvent) => {
+    if (isLeavingTo(e, portalRef)) return
+    setHovered(false)
+  }, [])
+
+  const handlePortalLeave = useCallback((e: React.MouseEvent) => {
+    if (isLeavingTo(e, containerRef)) return
+    setHovered(false)
+  }, [])
+
+  const visible = rect && hovered
   const centerX = rect ? clampHorizontal(rect.left + rect.width / 2) : 0
   const showAbove = rect ? rect.top > MIN_TOP_SPACE : true
   const top = rect ? (showAbove ? rect.top - TOOLBAR_GAP : rect.bottom + TOOLBAR_GAP) : 0
   const transform = showAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)"
 
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} onMouseEnter={handleContainerEnter} onMouseLeave={handleContainerLeave}>
       {children}
-      {rect &&
+      {visible &&
         createPortal(
           <div
             ref={portalRef}
             onMouseDown={(e) => e.preventDefault()}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={handlePortalLeave}
             style={{
               position: "fixed",
               left: `${centerX}px`,
