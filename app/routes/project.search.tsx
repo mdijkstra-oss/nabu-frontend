@@ -62,6 +62,7 @@ const searchStatusText = (
   fileCount: number,
   isSemantic: boolean
 ): string | null => {
+  if (phase === "resolving") return "Resolving search embeddings"
   if (phase === "searching") return "Pre-selecting in corpus"
   if (phase === "filtering" && count === 0) return "Narrowing down results"
   const qualifier = isSemantic ? "potential " : ""
@@ -108,7 +109,8 @@ export default function ProjectSearch() {
   const statusText = isPending
     ? "Writing search query"
     : searchStatusText(phase, filteredResults.length, fileCount, isSemantic)
-  const isLoading = isPending || phase === "searching" || phase === "filtering"
+  const isLoading =
+    isPending || phase === "resolving" || phase === "searching" || phase === "filtering"
   const isDone = !isPending && phase === "done"
 
   const searchDataRef = useRef({ search, results, files })
@@ -199,6 +201,11 @@ export default function ProjectSearch() {
               <pre className="w-full rounded-md bg-neutral-100 px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
                 {formatDebugSql(search.sql)}
               </pre>
+              {search.highlight && (
+                <pre className="w-full rounded-md bg-neutral-100 px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
+                  {search.highlight}
+                </pre>
+              )}
               {hydes.length > 0 && (
                 <pre className="w-full rounded-md bg-neutral-100 px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
                   {formatHydeDebug(hydes)}

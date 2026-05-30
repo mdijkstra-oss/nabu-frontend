@@ -9,13 +9,12 @@ export const buildFlaggedSearch = (codeId: string, title: string): NewSearchData
   sql: buildFlaggedAnnotationsSql(codeId),
 })
 
-export const buildCandidatePlaceholder = (title: string): NewSearchData => ({
-  title: `${title} (candidates)`,
-  description: `Semantic search for passages matching: ${title}`,
-  sql: "",
-})
-
 const escapeSqlString = (s: string): string => s.replace(/'/g, "''")
 
-export const buildCandidateSql = (intent: string): string =>
-  `SELECT f.file, f.text, SEMANTIC('${escapeSqlString(intent)}') FROM files f`
+const buildCandidateFilename = (codeId: string): string => `${codeId}.generated.hidden.md`
+
+export const buildCandidateSearch = (codeId: string): NewSearchData => ({
+  title: `${codeId} (candidates)`,
+  description: `File-similarity search for passages matching code: ${codeId}`,
+  sql: `SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('${escapeSqlString(buildCandidateFilename(codeId))}') FROM files f`,
+})

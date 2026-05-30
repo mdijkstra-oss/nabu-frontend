@@ -28,6 +28,7 @@ export const sqlQueriesFilesTable = (sql: string): boolean => FILES_TABLE_RE.tes
 
 const SQL_STRING_BODY = "[^']*(?:''[^']*)*"
 const SEMANTIC_PATTERN = new RegExp(`SEMANTIC\\('(${SQL_STRING_BODY})'\\)`, "g")
+const FILE_EMBEDDING_PATTERN = new RegExp(`EMBEDDINGS_FROM_FILE\\('(${SQL_STRING_BODY})'\\)`, "g")
 const SCORE_COLUMN = "_semantic_score"
 
 export const SEMANTIC_ABSENCE_HINT =
@@ -64,6 +65,34 @@ export const hasSemanticTokens = (sql: string): boolean => {
   const result = SEMANTIC_PATTERN.test(sql)
   SEMANTIC_PATTERN.lastIndex = 0
   return result
+}
+
+export const extractFileEmbeddingTokens = (sql: string): SemanticToken[] => {
+  const tokens: SemanticToken[] = []
+  let match: RegExpExecArray | null
+  while ((match = FILE_EMBEDDING_PATTERN.exec(sql)) !== null) {
+    tokens.push({
+      text: unescapeSqlString(match[1]),
+      start: match.index,
+      end: match.index + match[0].length,
+    })
+  }
+  FILE_EMBEDDING_PATTERN.lastIndex = 0
+  return tokens
+}
+
+export const hasFileEmbeddingTokens = (sql: string): boolean => {
+  const result = FILE_EMBEDDING_PATTERN.test(sql)
+  FILE_EMBEDDING_PATTERN.lastIndex = 0
+  return result
+}
+
+const validateFileEmbeddingSql = (sql: string, tokens: SemanticToken[]): string[] => {
+  const errors: string[] = []
+  if (tokens.length > 1) errors.push("Multiple EMBEDDINGS_FROM_FILE() calls. Use one per query.")
+  if (hasSemanticTokens(sql))
+    errors.push("Cannot combine SEMANTIC() and EMBEDDINGS_FROM_FILE() in the same query.")
+  return errors
 }
 
 export const validateSemanticSql = (sql: string, tokens: SemanticToken[]): string[] => {
@@ -103,6 +132,11 @@ export const validateSql = (sql: string): Result<void, string> => {
   if (hasSemanticTokens(sql)) {
     const tokens = extractSemanticTokens(sql)
     errors.push(...validateSemanticSql(sql, tokens))
+  }
+
+  if (hasFileEmbeddingTokens(sql)) {
+    const tokens = extractFileEmbeddingTokens(sql)
+    errors.push(...validateFileEmbeddingSql(sql, tokens))
   }
 
   if (errors.length === 0) return ok(undefined)
@@ -185,12 +219,12 @@ export const buildHybridPlan = (
   return { intent: token.text, baseSql, hydes, limit }
 }
 
-const aliasSemanticTokens = (sql: string, tokens: SemanticToken[]): string => {
+const aliasTokens = (sql: string, tokens: SemanticToken[], wrapper: string): string => {
   let result = ""
   let cursor = 0
   for (const token of tokens) {
     result += sql.slice(cursor, token.start)
-    result += `SEMANTIC('${escapeSqlString(token.text)}') AS ${SCORE_COLUMN}`
+    result += `${wrapper}('${escapeSqlString(token.text)}') AS ${SCORE_COLUMN}`
     cursor = token.end
   }
   result += sql.slice(cursor)
@@ -198,9 +232,15 @@ const aliasSemanticTokens = (sql: string, tokens: SemanticToken[]): string => {
 }
 
 export const formatDebugSql = (sql: string): string => {
-  if (!hasSemanticTokens(sql)) return sql
-  const tokens = extractSemanticTokens(sql)
-  return normalizeSemanticSql(aliasSemanticTokens(sql, tokens))
+  if (hasSemanticTokens(sql)) {
+    const tokens = extractSemanticTokens(sql)
+    return normalizeSemanticSql(aliasTokens(sql, tokens, "SEMANTIC"))
+  }
+  if (hasFileEmbeddingTokens(sql)) {
+    const tokens = extractFileEmbeddingTokens(sql)
+    return normalizeSemanticSql(aliasTokens(sql, tokens, "EMBEDDINGS_FROM_FILE"))
+  }
+  return sql
 }
 
 export const normalizeSemanticSql = (sql: string): string => {

@@ -60,15 +60,14 @@ const handleSearch = async (call: { args: unknown }): Promise<ToolResult<unknown
     parsed.data.highlight,
     {
       ...ctx,
-      cachedHydes: existingEntry?.hydes,
-      cachedDescriptionsHash: existingEntry?.descriptionsHash,
+      cachedEmbeddings: existingEntry?.embeddings,
     },
     files,
     50
   )
   if (!result.ok) return { status: "error", output: result.error.message }
 
-  const { hits, isSemantic, hydesCache, descriptionsHash } = result.value
+  const { hits, isSemantic, embeddings } = result.value
   if (hasNoResults(hits)) return formatEmpty(sql)
 
   const capped = hits.length > MAX_DISPLAY_ROWS
@@ -76,8 +75,8 @@ const handleSearch = async (call: { args: unknown }): Promise<ToolResult<unknown
   const id = saveNewSearch({
     ...parsed.data,
     sql,
-    hydes: hydesCache,
-    descriptionsHash,
+    embeddings,
+    ...(result.value.highlight && { highlight: result.value.highlight }),
   })
   return { status: "ok", output: formatOutput(id, display, capped, isSemantic) }
 }

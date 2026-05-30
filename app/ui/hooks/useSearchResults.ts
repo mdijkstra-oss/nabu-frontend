@@ -5,13 +5,14 @@ import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors
 import { getDatabase } from "~/domain/db/database"
 import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
-import { updateSearchHydes } from "~/lib/agent/tools/search/settings"
+import { updateSearchCache } from "~/lib/agent/tools/search/settings"
+import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
 import { filterParallel, FILTER_BATCH_SIZE } from "~/lib/search/filter-hits"
 import { runSearchPipeline, sortByScore, MAX_BARREN_BATCHES } from "~/lib/search/pipeline"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery } from "~/lib/search/semantic"
 
-export type SearchPhase = "idle" | "searching" | "filtering" | "done"
+export type SearchPhase = "idle" | "resolving" | "searching" | "filtering" | "done"
 
 interface SettledState {
   results: SearchHit[]
@@ -61,7 +62,6 @@ export const useSearchResults = (
   if (isStale) setSettled(EMPTY)
 
   const searchSql = search?.sql ?? ""
-  const searchHighlight = search?.highlight ?? ""
   const contRef = useRef<ContinuationState | null>(null)
 
   const loadMore = useCallback(async () => {
@@ -84,7 +84,7 @@ export const useSearchResults = (
       state.highlight,
       getFiles(),
       appendHits,
-      { target: 20, maxBarren: MAX_BARREN_BATCHES }
+      { target: 30, maxBarren: MAX_BARREN_BATCHES }
     )
 
     state.loading = false
@@ -116,11 +116,41 @@ export const useSearchResults = (
         hydes: [],
         error: null,
         searchId,
-        phase: "searching",
+        phase: "resolving",
         hasMore: false,
       })
 
       const ctx = await buildSemanticContext(db, getLlmHost())
+      if (cancelled) return
+
+      const resolved = await resolveSemanticSql(freshSearch.sql, {
+        ...ctx,
+        cachedEmbeddings: freshSearch.embeddings,
+      })
+      if (cancelled) return
+
+      if (!resolved.ok) {
+        setSettled({
+          results: [],
+          hydes: [],
+          error: resolved.error.message,
+          searchId,
+          phase: "done",
+          hasMore: false,
+        })
+        return
+      }
+
+      if (resolved.value.type === "hybrid") {
+        const hybrid = resolved.value
+        setSettled((prev) => ({ ...prev, hydes: hybrid.plan.hydes }))
+        updateSearchCache(freshSearch.id, hybrid.embeddings, hybrid.highlight)
+      }
+
+      setSettled((prev) => ({ ...prev, phase: "searching" }))
+
+      const updatedSearch = findSearchById(getFiles(), searchId)
+      if (!updatedSearch || cancelled) return
 
       const appendHits = (hits: SearchHit[]) => {
         if (cancelled) return
@@ -131,15 +161,14 @@ export const useSearchResults = (
       }
 
       const result = await runSearchPipeline(
-        freshSearch.sql,
-        freshSearch.highlight,
+        updatedSearch.sql,
+        updatedSearch.highlight,
         {
           ...ctx,
-          cachedHydes: freshSearch.hydes,
-          cachedDescriptionsHash: freshSearch.descriptionsHash,
+          cachedEmbeddings: updatedSearch.embeddings,
         },
         getFiles(),
-        20,
+        30,
         appendHits
       )
 
@@ -157,27 +186,16 @@ export const useSearchResults = (
         return
       }
 
-      const {
-        hits,
-        rawRemaining,
-        hydes,
-        isSemantic,
-        hydesCache,
-        descriptionsHash,
-        needsFiltering,
-        exhausted,
-      } = result.value
+      const { hits, rawRemaining, hydes, needsFiltering, exhausted } = result.value
 
-      if (isSemantic && hydesCache) {
-        updateSearchHydes(freshSearch.id, hydesCache, descriptionsHash)
-      }
+      const effectiveHighlight = result.value.highlight || updatedSearch.highlight
 
       const hasMore = needsFiltering && !exhausted && rawRemaining.length > 0
 
       if (hasMore) {
         contRef.current = {
           remaining: rawRemaining,
-          highlight: freshSearch.highlight,
+          highlight: effectiveHighlight,
           loading: false,
           cancelled,
         }
@@ -197,7 +215,7 @@ export const useSearchResults = (
       cancelled = true
       if (contRef.current) contRef.current.cancelled = true
     }
-  }, [searchId, searchSql, searchHighlight, revision, dbReady, loadMore])
+  }, [searchId, searchSql, revision, dbReady, loadMore])
 
   return {
     search,

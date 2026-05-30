@@ -78,11 +78,10 @@ export const resolveSearchTargets = async (
       entry.highlight,
       {
         ...ctx,
-        cachedHydes: entry.hydes,
-        cachedDescriptionsHash: entry.descriptionsHash,
+        cachedEmbeddings: entry.embeddings,
       },
       allFiles,
-      100,
+      1000,
       onBatchResults
     )
 

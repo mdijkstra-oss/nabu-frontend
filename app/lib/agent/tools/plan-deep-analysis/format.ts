@@ -64,8 +64,6 @@ export const buildExecRules = (firstStepCall: string): string =>
 
    ${firstStepCall}`
 
-const basename = (path: string): string => path.split("/").pop() ?? path
-
 interface Bucket {
   files: FileSearchGroup[]
   chars: number
@@ -76,7 +74,7 @@ const flushBucket = (bucket: Bucket): SectionMatch => {
   const results = bucket.files.reduce((sum, f) => sum + f.resultCount, 0)
   const isSingleFile = bucket.files.length === 1
   const label = isSingleFile
-    ? `${results} results in ${basename(bucket.files[0].path)}`
+    ? `${results} results in one file`
     : `${results} results across ${bucket.files.length} files`
   return { label, sections }
 }
@@ -87,7 +85,8 @@ export const groupSearchSections = (files: FileSearchGroup[]): SectionMatch[] =>
   let current: Bucket = { files: [], chars: 0 }
 
   for (const file of sorted) {
-    const wouldOverflow = current.chars > 0 && current.chars + file.totalChars > CHUNK_TARGET_CHARS
+    const wouldOverflow =
+      current.chars > 0 && current.chars + file.totalChars > CHUNK_TARGET_CHARS * 2
     if (wouldOverflow) {
       steps.push(flushBucket(current))
       current = { files: [], chars: 0 }

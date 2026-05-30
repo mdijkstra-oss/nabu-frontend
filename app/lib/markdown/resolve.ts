@@ -239,6 +239,8 @@ const resolveSpotlightColors = (annotationColors: string[]): ResolvedColors => {
   return barberPoleColors(annotationColors)
 }
 
+const normalizeSpotlightLabel = (text: string): string => `"${text.toLowerCase().trim()}"`
+
 const resolveTextRef = (
   ref: Extract<EntityRef, { kind: "text" }>,
   files: FileStore,
@@ -252,7 +254,7 @@ const resolveTextRef = (
     colors: hasSpotlight(ref) ? resolveSpotlightColors(annotationColors) : FILE_COLORS,
     icon: hasSpotlight(ref) ? icons.spotlight : icons.file,
     url: buildTextUrl(projectId, ref.documentId, ref.spotlight),
-    label: ref.documentId,
+    label: text ? normalizeSpotlightLabel(text) : ref.documentId,
   }
 }
 

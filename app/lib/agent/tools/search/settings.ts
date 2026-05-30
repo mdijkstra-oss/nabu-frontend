@@ -3,7 +3,7 @@ import { executeFileAction } from "~/lib/data-blocks/file-action"
 import type { Settings } from "~/domain/data-blocks/settings/schema"
 import { getSettings } from "~/domain/data-blocks/settings/selectors"
 import { SETTINGS_FILE } from "~/lib/files/filename"
-import type { SearchEntry, HydesCache, NewSearchData } from "~/domain/search/types"
+import type { SearchEntry, EmbeddingsCache, NewSearchData } from "~/domain/search/types"
 
 export type { NewSearchData }
 
@@ -50,8 +50,7 @@ const bySql =
 const bumpExisting = (
   entries: SearchEntry[],
   sql: string,
-  hydes?: HydesCache,
-  descriptionsHash?: string,
+  embeddings?: EmbeddingsCache,
   meta?: Record<string, string>
 ): SearchEntry[] =>
   entries.map((e) =>
@@ -59,8 +58,7 @@ const bumpExisting = (
       ? {
           ...e,
           createdAt: Date.now(),
-          ...(hydes && { hydes }),
-          ...(descriptionsHash && { descriptionsHash }),
+          ...(embeddings && { embeddings }),
           ...(meta && { meta }),
         }
       : e
@@ -71,13 +69,7 @@ export const saveNewSearch = (data: NewSearchData): string => {
   const existing = (settings.searches ?? []).find(bySql(data.sql))
 
   if (existing) {
-    const bumped = bumpExisting(
-      settings.searches ?? [],
-      data.sql,
-      data.hydes,
-      data.descriptionsHash,
-      data.meta
-    )
+    const bumped = bumpExisting(settings.searches ?? [], data.sql, data.embeddings, data.meta)
     updateSearchEntries(bumped)
     return existing.id
   }
@@ -91,8 +83,7 @@ export const saveNewSearch = (data: NewSearchData): string => {
     saved: false,
     createdAt: Date.now(),
     sql: data.sql,
-    ...(data.hydes && { hydes: data.hydes }),
-    ...(data.descriptionsHash && { descriptionsHash: data.descriptionsHash }),
+    ...(data.embeddings && { embeddings: data.embeddings }),
     ...(data.meta && { meta: data.meta }),
   }
 
@@ -111,15 +102,15 @@ export const updateSearchSql = (searchId: string, sql: string, highlight?: strin
   updateSearchEntries(updated)
 }
 
-export const updateSearchHydes = (
+export const updateSearchCache = (
   searchId: string,
-  hydes: HydesCache,
-  descriptionsHash?: string
+  embeddings: EmbeddingsCache,
+  highlight?: string
 ): void => {
   const settings = readSettings()
   const entries = settings.searches ?? []
   const updated = entries.map((e) =>
-    e.id === searchId ? { ...e, hydes, ...(descriptionsHash && { descriptionsHash }) } : e
+    e.id === searchId ? { ...e, embeddings, ...(highlight && { highlight }) } : e
   )
   updateSearchEntries(updated)
 }

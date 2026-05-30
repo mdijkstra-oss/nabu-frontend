@@ -16,9 +16,23 @@ const validSql = z.string().superRefine((sql, ctx) => {
   if (!result.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error })
 })
 
-export const HydesCacheSchema = z.record(z.string(), z.array(z.string()))
+export const InclusionsSchema = z.record(z.string(), z.array(z.string()))
 
-export type HydesCache = z.infer<typeof HydesCacheSchema>
+export type Inclusions = z.infer<typeof InclusionsSchema>
+
+export const EmbeddingsSourceSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("corpus"), hash: z.string() }),
+  z.object({ type: z.literal("file"), filename: z.string(), hash: z.string() }),
+])
+
+export type EmbeddingsSource = z.infer<typeof EmbeddingsSourceSchema>
+
+export const EmbeddingsCacheSchema = z.object({
+  source: EmbeddingsSourceSchema,
+  inclusions: InclusionsSchema,
+})
+
+export type EmbeddingsCache = z.infer<typeof EmbeddingsCacheSchema>
 
 export const SearchEntrySchema = z.object({
   id: z.string(),
@@ -28,8 +42,7 @@ export const SearchEntrySchema = z.object({
   saved: z.boolean(),
   createdAt: z.number(),
   sql: validSql,
-  hydes: HydesCacheSchema.optional(),
-  descriptionsHash: z.string().optional(),
+  embeddings: EmbeddingsCacheSchema.optional(),
   meta: z.record(z.string(), z.string()).optional(),
 })
 
@@ -40,7 +53,6 @@ export interface NewSearchData {
   description: string
   highlight?: string
   sql: string
-  hydes?: HydesCache
-  descriptionsHash?: string
+  embeddings?: EmbeddingsCache
   meta?: Record<string, string>
 }

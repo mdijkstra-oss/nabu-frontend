@@ -244,8 +244,8 @@ describe("groupSearchSections", () => {
     {
       name: "overflow creates new bucket preserving score order",
       input: [
-        group({ path: "a.md", bestScore: 0.9, totalChars: 15000 }),
-        group({ path: "b.md", bestScore: 0.7, totalChars: 15000 }),
+        group({ path: "a.md", bestScore: 0.9, totalChars: 25000 }),
+        group({ path: "b.md", bestScore: 0.7, totalChars: 25000 }),
       ],
       check: (result: SectionMatch[]) => {
         expect(result).toHaveLength(2)

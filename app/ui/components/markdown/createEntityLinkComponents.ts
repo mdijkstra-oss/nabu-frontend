@@ -59,7 +59,7 @@ const createAnchorComponent =
         colors: resolved.colors,
         icon: resolved.icon,
         onClick: handleClick,
-        children: props.children,
+        children: resolved.label,
       })
     }
 

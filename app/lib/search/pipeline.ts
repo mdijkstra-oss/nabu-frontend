@@ -1,8 +1,9 @@
 import type { Result } from "~/lib/fp/result"
-import type { SearchHit, HydesCache } from "~/domain/search/types"
+import type { SearchHit, EmbeddingsCache } from "~/domain/search/types"
 import type { HydeQuery, HybridSearchPlan } from "./semantic"
 import type { SemanticContext } from "./resolve-semantic"
 import type { FileStore } from "~/lib/files/store"
+import type { Database } from "~/lib/db/types"
 import { ok, err } from "~/lib/fp/result"
 import { resolveSemanticSql } from "./resolve-semantic"
 import { executeSearch, executeHybridLocal } from "./execute"
@@ -17,8 +18,8 @@ export interface PipelineResult {
   rawRemaining: SearchHit[]
   hydes: HydeQuery[]
   isSemantic: boolean
-  hydesCache?: HydesCache
-  descriptionsHash?: string
+  embeddings?: EmbeddingsCache
+  highlight?: string
   needsFiltering: boolean
   exhausted: boolean
 }
@@ -30,68 +31,36 @@ export interface PipelineError {
 export const sortByScore = (hits: SearchHit[]): SearchHit[] =>
   [...hits].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
 
-const resolveAndExecutePlain = async (sql: string, ctx: SemanticContext) => {
-  const rawHits = await executeSearch(ctx.db, sql)
-  if (!rawHits.ok)
-    return { ok: false as const, error: { message: sanitizeSemanticError(rawHits.error.message) } }
-  return {
-    ok: true as const,
-    rawHits: rawHits.value,
-    hydes: [] as HydeQuery[],
-    isSemantic: false,
-    hydesCache: undefined,
-    descriptionsHash: undefined,
-  }
+interface Executed {
+  rawHits: SearchHit[]
+  hydes: HydeQuery[]
+  isSemantic: boolean
+  embeddings?: EmbeddingsCache
+  highlight?: string
 }
 
-const resolveAndExecuteHybrid = async (
+const executePlain = async (
+  sql: string,
+  db: Database
+): Promise<Result<Executed, PipelineError>> => {
+  const result = await executeSearch(db, sql)
+  if (!result.ok) return err({ message: sanitizeSemanticError(result.error.message) })
+  return ok({ rawHits: result.value, hydes: [], isSemantic: false })
+}
+
+const executeHybrid = async (
   plan: HybridSearchPlan,
-  hydesCache: HydesCache,
-  descriptionsHash: string,
-  ctx: SemanticContext
-) => {
-  const rawHits = await executeHybridLocal(ctx.db, plan)
-  if (!rawHits.ok)
-    return { ok: false as const, error: { message: sanitizeSemanticError(rawHits.error.message) } }
-  return {
-    ok: true as const,
-    rawHits: rawHits.value,
-    hydes: plan.hydes,
-    isSemantic: true,
-    hydesCache,
-    descriptionsHash,
-  }
+  embeddings: EmbeddingsCache,
+  highlight: string | undefined,
+  db: Database
+): Promise<Result<Executed, PipelineError>> => {
+  if (plan.hydes.length === 0)
+    return err({ message: "Embedding resolution produced no search vectors" })
+
+  const result = await executeHybridLocal(db, plan)
+  if (!result.ok) return err({ message: sanitizeSemanticError(result.error.message) })
+  return ok({ rawHits: result.value, hydes: plan.hydes, isSemantic: true, embeddings, highlight })
 }
-
-const resolveAndExecute = async (sql: string, ctx: SemanticContext) => {
-  const resolved = await resolveSemanticSql(sql, ctx)
-  if (!resolved.ok) return { ok: false as const, error: { message: resolved.error.message } }
-
-  if (resolved.value.type === "plain") return resolveAndExecutePlain(resolved.value.sql, ctx)
-
-  return resolveAndExecuteHybrid(
-    resolved.value.plan,
-    resolved.value.hydesCache,
-    resolved.value.descriptionsHash,
-    ctx
-  )
-}
-
-const buildEmptyResult = (
-  hydes: HydeQuery[],
-  isSemantic: boolean,
-  hydesCache?: HydesCache,
-  descriptionsHash?: string
-): PipelineResult => ({
-  hits: [],
-  rawRemaining: [],
-  hydes,
-  isSemantic,
-  hydesCache,
-  descriptionsHash,
-  needsFiltering: false,
-  exhausted: true,
-})
 
 const filterWithBudget = async (
   rawHits: SearchHit[],
@@ -126,13 +95,34 @@ export const runSearchPipeline = async (
   target: number,
   onResults?: (hits: SearchHit[]) => void
 ): Promise<Result<PipelineResult, PipelineError>> => {
-  const resolved = await resolveAndExecute(sql, ctx)
-  if (!resolved.ok) return err(resolved.error)
+  const resolved = await resolveSemanticSql(sql, ctx)
+  if (!resolved.ok) return err({ message: resolved.error.message })
 
-  const { rawHits, hydes, isSemantic, hydesCache, descriptionsHash } = resolved
+  const executed =
+    resolved.value.type === "plain"
+      ? await executePlain(resolved.value.sql, ctx.db)
+      : await executeHybrid(
+          resolved.value.plan,
+          resolved.value.embeddings,
+          resolved.value.highlight,
+          ctx.db
+        )
+  if (!executed.ok) return err(executed.error)
+
+  const { rawHits, hydes, isSemantic, embeddings } = executed.value
+  const resolvedHighlight = executed.value.highlight
 
   if (rawHits.length === 0)
-    return ok(buildEmptyResult(hydes, isSemantic, hydesCache, descriptionsHash))
+    return ok({
+      hits: [],
+      rawRemaining: [],
+      hydes,
+      isSemantic,
+      embeddings,
+      highlight: resolvedHighlight,
+      needsFiltering: false,
+      exhausted: true,
+    })
 
   const needsFiltering = sqlQueriesFilesTable(sql)
 
@@ -144,21 +134,27 @@ export const runSearchPipeline = async (
       rawRemaining: [],
       hydes,
       isSemantic,
-      hydesCache,
-      descriptionsHash,
+      embeddings,
+      highlight: resolvedHighlight,
       needsFiltering: false,
       exhausted: true,
     })
   }
 
-  const filtered = await filterWithBudget(rawHits, highlight, files, target, onResults)
+  const effectiveHighlight = resolvedHighlight || highlight
+  if (!effectiveHighlight)
+    return err({
+      message: "Semantic filtering requires a highlight but none was resolved or provided",
+    })
+
+  const filtered = await filterWithBudget(rawHits, effectiveHighlight, files, target, onResults)
 
   return ok({
     ...filtered,
     hydes,
     isSemantic,
-    hydesCache,
-    descriptionsHash,
+    embeddings,
+    highlight: resolvedHighlight,
     needsFiltering: true,
   })
 }

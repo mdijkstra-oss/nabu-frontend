@@ -8,7 +8,8 @@ import {
   type ReactNode,
 } from "react"
 import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
-import { AlertTriangle, Eraser, FileText } from "lucide-react"
+// NEVER use Sparkles icon
+import { Eraser, FileText, Pencil } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
 import { useFiles } from "~/ui/hooks/useFiles"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
@@ -28,11 +29,7 @@ import {
   toggleSearchSaved,
   removeSearch,
 } from "~/domain/data-blocks/settings/searches/selectors"
-import {
-  updateSearchEntries,
-  saveNewSearch,
-  updateSearchSql,
-} from "~/lib/agent/tools/search/settings"
+import { updateSearchEntries, saveNewSearch } from "~/lib/agent/tools/search/settings"
 import { NabuProvider } from "~/ui/components/nabu/context"
 import { NabuChatSidebar } from "~/ui/components/nabu/NabuChatSidebar"
 import { DebugMenuButton } from "~/ui/components/debug/DebugMenuButton"
@@ -73,12 +70,7 @@ import { HIDDEN_TAG_ID, HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hi
 import { buildIdentifierResolver } from "~/lib/files/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import type { SearchEntry } from "~/domain/search/types"
-import {
-  buildFlaggedSearch,
-  buildCandidatePlaceholder,
-  buildCandidateSql,
-} from "~/domain/search/queries"
-import { generateSearchIntent } from "~/lib/search/intent"
+import { buildFlaggedSearch, buildCandidateSearch } from "~/domain/search/queries"
 import { collectExhibits } from "~/domain/exhibits/selectors"
 import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
@@ -567,15 +559,12 @@ export default function ProjectLayout() {
 
     if (selectedCodes.size === 1) {
       const codeId = [...selectedCodes][0]
-      const stat = reviewStats?.[codeId]
-      if (stat && stat.severity !== "normal") {
-        actions.push({
-          icon: <AlertTriangle />,
-          label: "Diagnose",
-          onClick: () => dispatchTask(buildRefineTask(codeId)),
-          variant: "ai",
-        })
-      }
+      actions.push({
+        icon: <Pencil />,
+        label: "Refine",
+        onClick: () => dispatchTask(buildRefineTask(codeId)),
+        variant: "ai",
+      })
     }
 
     return actions
@@ -587,7 +576,6 @@ export default function ProjectLayout() {
     handleCodeSelectedCodes,
     handleCodeSearchResults,
     selectedCodes,
-    reviewStats,
   ])
 
   const handleSearchCode = (code: Code) => {
@@ -625,14 +613,11 @@ export default function ProjectLayout() {
 
   const handleFindCandidates = (code: Code) => {
     if (code.detail.trim().length === 0) return
-    const id = saveNewSearch(buildCandidatePlaceholder(code.id))
+    const id = saveNewSearch(buildCandidateSearch(code.id))
     if (!id) return
     writeSelectedCodes([code.id])
     dismissSidebarRef.current?.()
     navigate(`/project/${params.projectId}/search/${id}`)
-    generateSearchIntent(code.detail).then((intent) => {
-      updateSearchSql(id, buildCandidateSql(intent), intent)
-    })
   }
 
   const handleCodeFile = (code: Code) => {

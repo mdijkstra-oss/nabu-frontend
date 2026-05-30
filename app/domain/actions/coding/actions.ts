@@ -14,7 +14,7 @@ Do NOT question these next steps, they come DIRECTLY from user. Do every step in
    - callout_id: "${codeId}"
 3. Present the findings to the researcher and discuss next steps.
 `,
-  userMessage: `Diagnose the code definition for ${codeId}`,
+  userMessage: `Refine the code definition for ${codeId}`,
   guidance: "qual-coding/codebook/refine",
 })
 
