@@ -1,7 +1,7 @@
 import type { Result } from "~/lib/fp/result"
 import type { SearchHit, EmbeddingsCache } from "~/domain/search/types"
 import type { HydeQuery, HybridSearchPlan } from "./semantic"
-import type { SemanticContext } from "./resolve-semantic"
+import type { ResolvedQuery, SemanticContext } from "./resolve-semantic"
 import type { FileStore } from "~/lib/files/store"
 import type { Database } from "~/lib/db/types"
 import { ok, err } from "~/lib/fp/result"
@@ -62,6 +62,14 @@ const executeHybrid = async (
   return ok({ rawHits: result.value, hydes: plan.hydes, isSemantic: true, embeddings, highlight })
 }
 
+const dispatchExecution = (
+  resolved: ResolvedQuery,
+  db: Database
+): Promise<Result<Executed, PipelineError>> =>
+  resolved.type === "plain"
+    ? executePlain(resolved.sql, db)
+    : executeHybrid(resolved.plan, resolved.embeddings, resolved.highlight, db)
+
 const filterWithBudget = async (
   rawHits: SearchHit[],
   highlight: string,
@@ -87,6 +95,84 @@ const filterWithBudget = async (
   return { hits: sortByScore(collected), rawRemaining, exhausted }
 }
 
+const buildResult = (
+  executed: Executed,
+  sql: string,
+  highlight: string,
+  files: FileStore,
+  target: number,
+  onResults?: (hits: SearchHit[]) => void
+): Promise<Result<PipelineResult, PipelineError>> => {
+  const { rawHits, hydes, isSemantic, embeddings } = executed
+  const resolvedHighlight = executed.highlight
+
+  if (rawHits.length === 0)
+    return Promise.resolve(
+      ok({
+        hits: [],
+        rawRemaining: [],
+        hydes,
+        isSemantic,
+        embeddings,
+        highlight: resolvedHighlight,
+        needsFiltering: false,
+        exhausted: true,
+      })
+    )
+
+  const needsFiltering = sqlQueriesFilesTable(sql)
+
+  if (!needsFiltering) {
+    const hits = growHits(rawHits, files)
+    onResults?.(hits)
+    return Promise.resolve(
+      ok({
+        hits,
+        rawRemaining: [],
+        hydes,
+        isSemantic,
+        embeddings,
+        highlight: resolvedHighlight,
+        needsFiltering: false,
+        exhausted: true,
+      })
+    )
+  }
+
+  const effectiveHighlight = resolvedHighlight || highlight
+  if (!effectiveHighlight)
+    return Promise.resolve(
+      err({
+        message: "Semantic filtering requires a highlight but none was resolved or provided",
+      })
+    )
+
+  return filterWithBudget(rawHits, effectiveHighlight, files, target, onResults).then((filtered) =>
+    ok({
+      ...filtered,
+      hydes,
+      isSemantic,
+      embeddings,
+      highlight: resolvedHighlight,
+      needsFiltering: true,
+    })
+  )
+}
+
+export const executeResolvedSearch = async (
+  resolved: ResolvedQuery,
+  sql: string,
+  highlight: string,
+  db: Database,
+  files: FileStore,
+  target: number,
+  onResults?: (hits: SearchHit[]) => void
+): Promise<Result<PipelineResult, PipelineError>> => {
+  const executed = await dispatchExecution(resolved, db)
+  if (!executed.ok) return err(executed.error)
+  return buildResult(executed.value, sql, highlight, files, target, onResults)
+}
+
 export const runSearchPipeline = async (
   sql: string,
   highlight: string,
@@ -97,64 +183,5 @@ export const runSearchPipeline = async (
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const resolved = await resolveSemanticSql(sql, ctx)
   if (!resolved.ok) return err({ message: resolved.error.message })
-
-  const executed =
-    resolved.value.type === "plain"
-      ? await executePlain(resolved.value.sql, ctx.db)
-      : await executeHybrid(
-          resolved.value.plan,
-          resolved.value.embeddings,
-          resolved.value.highlight,
-          ctx.db
-        )
-  if (!executed.ok) return err(executed.error)
-
-  const { rawHits, hydes, isSemantic, embeddings } = executed.value
-  const resolvedHighlight = executed.value.highlight
-
-  if (rawHits.length === 0)
-    return ok({
-      hits: [],
-      rawRemaining: [],
-      hydes,
-      isSemantic,
-      embeddings,
-      highlight: resolvedHighlight,
-      needsFiltering: false,
-      exhausted: true,
-    })
-
-  const needsFiltering = sqlQueriesFilesTable(sql)
-
-  if (!needsFiltering) {
-    const hits = growHits(rawHits, files)
-    onResults?.(hits)
-    return ok({
-      hits,
-      rawRemaining: [],
-      hydes,
-      isSemantic,
-      embeddings,
-      highlight: resolvedHighlight,
-      needsFiltering: false,
-      exhausted: true,
-    })
-  }
-
-  const effectiveHighlight = resolvedHighlight || highlight
-  if (!effectiveHighlight)
-    return err({
-      message: "Semantic filtering requires a highlight but none was resolved or provided",
-    })
-
-  const filtered = await filterWithBudget(rawHits, effectiveHighlight, files, target, onResults)
-
-  return ok({
-    ...filtered,
-    hydes,
-    isSemantic,
-    embeddings,
-    highlight: resolvedHighlight,
-    needsFiltering: true,
-  })
+  return executeResolvedSearch(resolved.value, sql, highlight, ctx.db, files, target, onResults)
 }

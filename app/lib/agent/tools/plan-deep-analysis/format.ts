@@ -74,8 +74,8 @@ const flushBucket = (bucket: Bucket): SectionMatch => {
   const results = bucket.files.reduce((sum, f) => sum + f.resultCount, 0)
   const isSingleFile = bucket.files.length === 1
   const label = isSingleFile
-    ? `${results} results in one file`
-    : `${results} results across ${bucket.files.length} files`
+    ? `${results} candidates in one file`
+    : `${results} candidates across ${bucket.files.length} files`
   return { label, sections }
 }
 

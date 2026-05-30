@@ -291,6 +291,18 @@ describe("mapResults", () => {
 describe("toAnnotationOps", () => {
   const cases = [
     {
+      name: "empty mapped returns no ops (clear-only path produces no adds)",
+      mapped: [] as MappedResult[],
+      action: "annotate_as_code" as const,
+      expected: [],
+    },
+    {
+      name: "empty mapped returns no ops for comment action",
+      mapped: [] as MappedResult[],
+      action: "annotate_as_comment" as const,
+      expected: [],
+    },
+    {
       name: "annotate_as_code sets code field",
       mapped: [{ text: "Some text", analysis_source_id: "code_abc", reason: "fits criteria" }],
       action: "annotate_as_code" as const,

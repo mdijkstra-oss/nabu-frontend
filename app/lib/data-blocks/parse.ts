@@ -210,6 +210,18 @@ export const extractProse = (markdown: string): string => {
   return prose
 }
 
+export const mapProseOffset = (
+  proseOffset: number,
+  blocks: { start: number; end: number }[]
+): number => {
+  let offset = 0
+  for (const block of blocks) {
+    if (proseOffset < block.start - offset) break
+    offset += block.end - block.start
+  }
+  return proseOffset + offset
+}
+
 const FENCE = "```"
 
 const isWhitespaceOnly = (s: string): boolean => s.trim().length === 0

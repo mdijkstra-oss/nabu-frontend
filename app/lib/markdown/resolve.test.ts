@@ -24,6 +24,9 @@ const fileWithTagDefinition = (
 ): string =>
   `# Prefs\n\n\`\`\`json-settings\n${JSON.stringify({ tags: [{ id, label, display, color, icon }] })}\n\`\`\``
 
+const fileWithSearch = (id: string, title: string): string =>
+  `# Settings\n\n\`\`\`json-settings\n${JSON.stringify({ searches: [{ id, title, description: title, highlight: "", saved: false, createdAt: 0, sql: "SELECT 1" }] })}\n\`\`\``
+
 describe("resolveEntityLink", () => {
   const cases: {
     name: string
@@ -110,6 +113,18 @@ describe("resolveEntityLink", () => {
       href: "file://tag-missing",
       files: {},
       expected: null,
+    },
+    {
+      name: "resolves search label with embedded entity IDs",
+      href: "file://search-a1b2c3d4",
+      files: {
+        "settings.hidden.md": fileWithSearch("search-a1b2c3d4", "callout-xyz00000 (candidates)"),
+        "codebook.md": fileWithCallout("callout-xyz00000", "Conspiracy theories", "blue"),
+      },
+      expected: {
+        kind: "search",
+        label: "Conspiracy theories (candidates)",
+      },
     },
     {
       name: "resolves text ref without spotlight",

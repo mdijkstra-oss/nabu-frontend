@@ -8,7 +8,7 @@ import { buildSemanticContext } from "~/domain/corpus/init"
 import { updateSearchCache } from "~/lib/agent/tools/search/settings"
 import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
 import { filterParallel, FILTER_BATCH_SIZE } from "~/lib/search/filter-hits"
-import { runSearchPipeline, sortByScore, MAX_BARREN_BATCHES } from "~/lib/search/pipeline"
+import { executeResolvedSearch, sortByScore, MAX_BARREN_BATCHES } from "~/lib/search/pipeline"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery } from "~/lib/search/semantic"
 
@@ -160,13 +160,11 @@ export const useSearchResults = (
         }))
       }
 
-      const result = await runSearchPipeline(
+      const result = await executeResolvedSearch(
+        resolved.value,
         updatedSearch.sql,
         updatedSearch.highlight,
-        {
-          ...ctx,
-          cachedEmbeddings: updatedSearch.embeddings,
-        },
+        ctx.db,
         getFiles(),
         30,
         appendHits

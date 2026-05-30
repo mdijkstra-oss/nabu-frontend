@@ -5,6 +5,8 @@ import { showProgress } from "../../client/store"
 import { activatePlan } from "../../executors/modes"
 import { buildAutoSteps, buildExecRules, toSectionMatches, groupSearchSections } from "./format"
 import type { LabeledTarget, SourceEntry, SectionEntry, FileSearchGroup } from "./format"
+import { findMatchOffset } from "~/lib/text/find"
+import { parseCodeBlocks, extractProse, mapProseOffset } from "~/lib/data-blocks/parse"
 import { errorMessage } from "~/lib/utils/error"
 import { resolveSearchTargets } from "./resolve"
 import type { FileHitGroup } from "./resolve"
@@ -30,34 +32,79 @@ const lineAtChar = (content: string, charIndex: number): number => {
   return line
 }
 
-const locateHitSections = (content: string, path: string, hitTexts: string[]): SectionEntry[] =>
-  hitTexts.flatMap((text) => {
-    const idx = content.indexOf(text)
-    if (idx === -1) return []
-    const startLine = lineAtChar(content, idx)
-    const endLine = lineAtChar(content, idx + text.length)
-    return [{ path, startLine, endLine }]
-  })
+const truncate = (text: string, max: number): string =>
+  text.length <= max ? text : text.slice(0, max) + "…"
 
-const toSearchGroups = (files: FileEntry[], hits: Map<string, FileHitGroup>): FileSearchGroup[] =>
-  files.flatMap((f) => {
+const locateHitSections = (content: string, path: string, hitTexts: string[]): SectionEntry[] => {
+  const blocks = parseCodeBlocks(content)
+  const prose = extractProse(content)
+  const located: SectionEntry[] = []
+  const lost: string[] = []
+
+  for (const text of hitTexts) {
+    const needleProse = extractProse(text)
+    const match = findMatchOffset(prose, needleProse)
+    if (!match) {
+      lost.push(truncate(text.replace(/\n/g, "\\n"), 120))
+      continue
+    }
+    const startLine = lineAtChar(content, mapProseOffset(match.start, blocks))
+    const endLine = lineAtChar(content, mapProseOffset(match.end, blocks))
+    located.push({ path, startLine, endLine })
+  }
+
+  if (lost.length > 0) {
+    console.debug(
+      `[plan-search-hits] ${path}: ${located.length}/${hitTexts.length} located, ${lost.length} lost`
+    )
+    for (const t of lost) console.debug(`[plan-search-hits]   lost: ${t}`)
+  }
+
+  return located
+}
+
+const toSearchGroups = (files: FileEntry[], hits: Map<string, FileHitGroup>): FileSearchGroup[] => {
+  let totalHits = 0
+  let totalLocated = 0
+  let droppedFiles = 0
+
+  const groups = files.flatMap((f) => {
     const content = getFileView(f.path)
-    if (content === undefined) return []
+    if (content === undefined) {
+      console.debug(`[plan-search-hits] ${f.path}: no file content, skipped`)
+      return []
+    }
     const group = hits.get(f.path)
     if (!group) return []
+
+    totalHits += group.texts.length
     const sections = locateHitSections(content, f.path, group.texts)
-    if (sections.length === 0) return []
+    totalLocated += sections.length
+
+    if (sections.length === 0) {
+      droppedFiles++
+      console.debug(`[plan-search-hits] ${f.path}: 0 sections located, file dropped entirely`)
+      return []
+    }
+
     const totalChars = group.texts.reduce((sum, t) => sum + t.length, 0)
     return [
       {
         path: f.path,
         sections,
         totalChars,
-        resultCount: group.texts.length,
+        resultCount: sections.length,
         bestScore: group.bestScore,
       },
     ]
   })
+
+  console.debug(
+    `[plan-search-hits] summary: ${totalLocated}/${totalHits} hits located across ${groups.length} files (${droppedFiles} files dropped)`
+  )
+
+  return groups
+}
 
 const buildTaskDescription = (searchIds: string[], labeled: LabeledTarget[]): string => {
   const searchRefs = searchIds.map((id) => `file://${id}`)

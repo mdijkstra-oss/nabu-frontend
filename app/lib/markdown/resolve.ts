@@ -28,6 +28,8 @@ import { findCalloutById, findDocumentForCallout } from "~/domain/data-blocks/ca
 import { findChartById, findDocumentForChart } from "~/domain/data-blocks/chart/selectors"
 import { findTagDefinitionById } from "~/domain/data-blocks/settings/tags/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
+import { resolveEntityName } from "~/lib/files/selectors"
+import { resolveIdentifiers } from "~/lib/markdown/linkify/entities"
 
 export interface ResolvedColors {
   text: string
@@ -189,7 +191,7 @@ const resolveSearchRef = (
     colors: SEARCH_COLORS,
     icon: icons.search ?? icons.file,
     url: buildSearchUrl(projectId, ref.id),
-    label: search.title,
+    label: resolveIdentifiers(search.title, (id) => resolveEntityName(files, id)),
   }
 }
 

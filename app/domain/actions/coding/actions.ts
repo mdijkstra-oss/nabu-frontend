@@ -27,7 +27,7 @@ export const codeWithSearch = (refs: CodingFileRef[], searchId: string): TaskCon
     : ""
   return {
     context: `Use ls --show-tags to find codebooks, then use plan_deep_analysis to start coding of file. Do not use scout. Use the generic codebook as framework if exists as "framework" AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote} Use target_files: [{ type: "search", search_id: "${searchId}" }] instead of file paths.`,
-    userMessage: `Can you code search results with ${fileList}`,
+    userMessage: `Can you code ${searchId} with ${fileList}`,
   }
 }
 
