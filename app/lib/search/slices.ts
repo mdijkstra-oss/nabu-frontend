@@ -3,8 +3,8 @@ import type { FileStore } from "~/lib/files/store"
 import type { Annotation } from "~/domain/data-blocks/attributes/schema"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
 import { getBlock } from "~/lib/data-blocks/query"
-import { stripAttributesBlock } from "~/lib/markdown/strip-attributes"
-import { findBlocksByLanguage, stripBlocksByLanguage } from "~/lib/data-blocks/parse"
+import { findBlocksByLanguage, stripBlocksByLanguage, extractProse } from "~/lib/data-blocks/parse"
+import { findMatchOffset } from "~/lib/text/find"
 
 export interface AnnotationSplit {
   prose: string
@@ -41,11 +41,14 @@ const META_BLOCK_RE = /\n?<meta>[\s\S]*?<\/meta>\n?/g
 
 const stripMeta = (text: string): string => text.replace(META_BLOCK_RE, "\n").trim()
 
-const findRange = (haystack: string, needle: string): Range | null => {
+const findRangeExact = (haystack: string, needle: string): Range | null => {
   const idx = haystack.indexOf(needle)
   if (idx === -1) return null
   return { start: idx, end: idx + needle.length }
 }
+
+const locateInProse = (prose: string, needle: string): Range | null =>
+  findRangeExact(prose, needle) ?? findMatchOffset(prose, needle)
 
 const rangesOverlap = (a: Range, b: Range): boolean => a.start < b.end && b.start < a.end
 
@@ -81,13 +84,13 @@ const expandSliceWithAnnotations = (
   entityId?: string
 ): ExpandedSlice => {
   const cleanSlice = stripMeta(stripMarks(sliceText))
-  const sliceRange = findRange(prose, cleanSlice)
+  const sliceRange = locateInProse(prose, cleanSlice)
   if (!sliceRange) return { text: cleanSlice, annotations: [] }
   if (annotations.length === 0) return { text: sliceText, annotations: [] }
 
   const allOverlapping: { annotation: Annotation; range: Range }[] = []
   for (const ann of annotations) {
-    const annRange = findRange(prose, ann.text)
+    const annRange = locateInProse(prose, ann.text)
     if (!annRange) continue
     if (rangesOverlap(sliceRange, annRange)) {
       allOverlapping.push({ annotation: ann, range: annRange })
@@ -115,7 +118,7 @@ export const extractSearchSlice = (hit: SearchHit, fileContent: string): string 
   const annotations = parseAnnotations(fileContent)
   if (annotations.length === 0) return stripMeta(hit.text)
 
-  const prose = stripAttributesBlock(fileContent)
+  const prose = extractProse(fileContent)
   const { text, annotations: overlapping } = expandSliceWithAnnotations(
     hit.text,
     prose,

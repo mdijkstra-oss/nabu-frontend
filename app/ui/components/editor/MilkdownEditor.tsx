@@ -18,6 +18,7 @@ import { createSelectionPlugin } from "~/lib/editor/selection/plugin"
 import { createHiddenBlocksPlugin } from "~/lib/editor/hidden-blocks/plugin"
 import { createCalloutBlocksPlugin } from "~/lib/editor/callout-blocks/plugin"
 import { AnnotationHover } from "./AnnotationHover"
+import { FloatingToolbar } from "./FloatingToolbar"
 import { ReadOnlyProvider } from "./ReadOnlyContext"
 import { FilePathProvider } from "./FilePathContext"
 import { DebugOptionsProvider } from "./DebugOptionsContext"
@@ -130,9 +131,11 @@ const MilkdownEditorCore = ({
   }, [loading, getEditor, defaultValue, annotations, spotlight])
 
   return (
-    <AnnotationHover annotations={annotations} filePath={filePath}>
-      <Milkdown />
-    </AnnotationHover>
+    <FloatingToolbar>
+      <AnnotationHover annotations={annotations} filePath={filePath}>
+        <Milkdown />
+      </AnnotationHover>
+    </FloatingToolbar>
   )
 }
 

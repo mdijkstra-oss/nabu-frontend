@@ -127,15 +127,31 @@ const toSectionStep = (
 const SYNTHESIS_STEP: StepDefObject = {
   title: "Synthesis",
   expected: `
-  Ground every observation by quoting the relevant source text. Do not predict what later documents will show. Do not evaluate this document's importance relative to the corpus. Do not call apply_deep_analysis again.
-
-  If Research Questions exist:
-    - Write a synthesis per RQ. Annotations + codebook are your input.
-    - 1-2 quotes per observation. 150-250 words max.
-    - No general summary. No next steps. Stop after the last RQ.
-  Else:
-    - Summarize key patterns found across annotations.
-    - 100-150 words. No next steps.
+    Ground every observation in source text. Do not predict what later
+    documents will show. Do not evaluate importance relative to the corpus.
+    
+    Reviewed annotations (flagged by one model, not the other) are
+    candidates, not findings. Build claims on confirmed annotations.
+    Reviewed ones may be noted as "tentatively" or "pending review."
+    
+    1-2 quotes per pattern. The quote must directly demonstrate the
+    pattern — if you need to explain relevance, pick a better quote.
+    Scale claims to evidence: one quote → "in at least one instance";
+    multiple passages → "recurrently." No exhaustive listing.
+    
+    Assess confidence: confirmed / (confirmed + reviewed).
+    
+    If ≥ 0.7 and Research Questions exist:
+      Synthesis per RQ. 150-250 words per RQ.
+      State the pattern, then quote, then note if other passages
+      reinforce or complicate it. Do not place a quote next to a
+      claim it doesn't directly support.
+      
+    Else:
+      Integrated findings section. Focus on what confirmed annotations
+      show. Note where reviewed annotations would extend the picture.
+      If confidence < 0.4, focus on what the disagreement pattern
+      suggests about the code definition. 100-150 words.
 `,
   checkpoint: false,
 }

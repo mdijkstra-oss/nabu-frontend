@@ -11,7 +11,7 @@ import { sanitizeSemanticError, sqlQueriesFilesTable } from "./semantic"
 import { filterParallel, FILTER_BATCH_SIZE } from "./filter-hits"
 import { growHits } from "./slices"
 
-export const MAX_BARREN_BATCHES = 5
+export const MAX_BARREN_BATCHES = 10
 
 export interface PipelineResult {
   hits: SearchHit[]

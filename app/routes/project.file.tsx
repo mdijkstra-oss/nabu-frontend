@@ -10,7 +10,6 @@ import { toDisplayName } from "~/lib/files/filename"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 import { ScrollGutter } from "~/ui/components/editor/ScrollGutter"
 import { FileHeader } from "~/ui/components/editor/FileHeader"
-import { EditorToolbar } from "~/ui/components/editor/EditorToolbar"
 import { StatusBar } from "~/ui/components/StatusBar"
 import { computeTextStats, countLines, formatStatsLabel, formatStatsDetail } from "~/lib/text/stats"
 import { stripSingletonBlocks } from "~/lib/data-blocks/registry"
@@ -18,27 +17,7 @@ import {
   getDocumentType,
   getDocumentSubject,
 } from "~/domain/data-blocks/attributes/topics/selectors"
-import {
-  Bold,
-  Clipboard,
-  Code2,
-  Copy,
-  FileText,
-  Heading1,
-  Heading2,
-  Heading3,
-  Image,
-  Italic,
-  Link,
-  List,
-  ListChecks,
-  ListOrdered,
-  Quote,
-  Share2,
-  Strikethrough,
-  Trash,
-  Underline,
-} from "lucide-react"
+import { Clipboard, Copy, FileText, Share2, Trash } from "lucide-react"
 
 const formatClassificationLine = (
   type: string | undefined,
@@ -172,20 +151,6 @@ export default function ProjectFile() {
             ref={scrollContainerRef}
             className="flex grow shrink-0 basis-0 flex-col items-start pl-12 pr-6 py-6 overflow-auto"
           >
-            <EditorToolbar
-              groups={[
-                [{ icon: <Heading1 /> }, { icon: <Heading2 /> }, { icon: <Heading3 /> }],
-                [
-                  { icon: <Bold /> },
-                  { icon: <Italic /> },
-                  { icon: <Underline /> },
-                  { icon: <Strikethrough /> },
-                ],
-                [{ icon: <Link /> }, { icon: <Image /> }],
-                [{ icon: <List /> }, { icon: <ListOrdered /> }, { icon: <ListChecks /> }],
-                [{ icon: <Code2 /> }, { icon: <Quote /> }],
-              ]}
-            />
             <div
               ref={editorContainerRef}
               className="relative flex w-full grow flex-col items-start gap-8 pt-8"

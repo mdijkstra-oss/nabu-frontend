@@ -8,6 +8,7 @@ import type { LabeledTarget, SourceEntry, SectionEntry, FileSearchGroup } from "
 import { findMatchOffset } from "~/lib/text/find"
 import { parseCodeBlocks, extractProse, mapProseOffset } from "~/lib/data-blocks/parse"
 import { errorMessage } from "~/lib/utils/error"
+import { mergeOverlapping } from "~/lib/utils/ranges"
 import { resolveSearchTargets } from "./resolve"
 import type { FileHitGroup } from "./resolve"
 import { filterFileTargets } from "./filter"
@@ -34,6 +35,25 @@ const lineAtChar = (content: string, charIndex: number): number => {
 
 const truncate = (text: string, max: number): string =>
   text.length <= max ? text : text.slice(0, max) + "…"
+
+export const mergeOverlappingSections = (sections: SectionEntry[]): SectionEntry[] =>
+  mergeOverlapping(
+    sections,
+    (s) => s.startLine,
+    (s) => s.endLine,
+    (a, b) => ({ ...a, endLine: Math.max(a.endLine, b.endLine) })
+  )
+
+export const sectionCharCount = (content: string, sections: SectionEntry[]): number => {
+  const lines = content.split("\n")
+  let total = 0
+  for (const s of sections) {
+    const start = Math.max(0, s.startLine - 1)
+    const end = Math.min(lines.length, s.endLine)
+    for (let i = start; i < end; i++) total += lines[i].length + 1
+  }
+  return total
+}
 
 const locateHitSections = (content: string, path: string, hitTexts: string[]): SectionEntry[] => {
   const blocks = parseCodeBlocks(content)
@@ -66,6 +86,7 @@ const locateHitSections = (content: string, path: string, hitTexts: string[]): S
 const toSearchGroups = (files: FileEntry[], hits: Map<string, FileHitGroup>): FileSearchGroup[] => {
   let totalHits = 0
   let totalLocated = 0
+  let totalMerged = 0
   let droppedFiles = 0
 
   const groups = files.flatMap((f) => {
@@ -78,8 +99,10 @@ const toSearchGroups = (files: FileEntry[], hits: Map<string, FileHitGroup>): Fi
     if (!group) return []
 
     totalHits += group.texts.length
-    const sections = locateHitSections(content, f.path, group.texts)
-    totalLocated += sections.length
+    const raw = locateHitSections(content, f.path, group.texts)
+    totalLocated += raw.length
+    const sections = mergeOverlappingSections(raw)
+    totalMerged += sections.length
 
     if (sections.length === 0) {
       droppedFiles++
@@ -87,7 +110,7 @@ const toSearchGroups = (files: FileEntry[], hits: Map<string, FileHitGroup>): Fi
       return []
     }
 
-    const totalChars = group.texts.reduce((sum, t) => sum + t.length, 0)
+    const totalChars = sectionCharCount(content, sections)
     return [
       {
         path: f.path,
@@ -100,7 +123,7 @@ const toSearchGroups = (files: FileEntry[], hits: Map<string, FileHitGroup>): Fi
   })
 
   console.debug(
-    `[plan-search-hits] summary: ${totalLocated}/${totalHits} hits located across ${groups.length} files (${droppedFiles} files dropped)`
+    `[plan-search-hits] summary: ${totalHits} hits → ${totalLocated} located → ${totalMerged} merged across ${groups.length} files (${droppedFiles} dropped)`
   )
 
   return groups

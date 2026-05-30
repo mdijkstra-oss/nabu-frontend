@@ -8,6 +8,7 @@ interface ToolbarItem {
   icon: ReactNode
   onClick?: () => void
   active?: boolean
+  disabled?: boolean
 }
 
 type ToolbarGroup = ToolbarItem[]
@@ -39,6 +40,7 @@ export const EditorToolbar = ({ groups, className }: EditorToolbarProps) => (
               icon={item.icon}
               variant={item.active ? "brand-secondary" : "neutral-tertiary"}
               onClick={item.onClick}
+              disabled={item.disabled}
             />
           ))}
         </div>
