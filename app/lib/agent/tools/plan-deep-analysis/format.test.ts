@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest"
-import type { LabeledTarget, SectionMatch, FileSearchGroup } from "./format"
+import type { LabeledTarget, SectionMatch, ScoredSection } from "./format"
 import {
   formatLabeledTarget,
   formatTargetFile,
   toSectionMatches,
   buildAutoSteps,
-  groupSearchSections,
+  bucketSearchSections,
 } from "./format"
 
 const target = (overrides: Partial<LabeledTarget> = {}): LabeledTarget => ({
@@ -205,48 +205,24 @@ describe("buildAutoSteps", () => {
   })
 })
 
-describe("groupSearchSections", () => {
-  const group = (overrides: Partial<FileSearchGroup>): FileSearchGroup => {
-    const path = overrides.path ?? "file.md"
-    return {
-      path,
-      sections: [{ path, startLine: 1, endLine: 10 }],
-      totalChars: 100,
-      resultCount: 1,
-      bestScore: 0.5,
-      ...overrides,
-    }
-  }
+describe("bucketSearchSections", () => {
+  const scored = (path: string, chars: number, startLine = 1, endLine = 10): ScoredSection => ({
+    section: { path, startLine, endLine },
+    chars,
+  })
 
   const cases = [
     {
-      name: "higher bestScore file appears in first bucket",
-      input: [
-        group({ path: "low.md", bestScore: 0.3, totalChars: 100 }),
-        group({ path: "high.md", bestScore: 0.9, totalChars: 100 }),
-      ],
-      check: (result: SectionMatch[]) => {
-        expect(result[0].sections[0].path).toBe("high.md")
-      },
-    },
-    {
-      name: "files packed in score order within budget",
-      input: [
-        group({ path: "a.md", bestScore: 0.8, totalChars: 5000 }),
-        group({ path: "b.md", bestScore: 0.6, totalChars: 5000 }),
-        group({ path: "c.md", bestScore: 0.4, totalChars: 5000 }),
-      ],
+      name: "preserves input order in single bucket",
+      input: [scored("first.md", 100), scored("second.md", 100), scored("third.md", 100)],
       check: (result: SectionMatch[]) => {
         expect(result).toHaveLength(1)
-        expect(result[0].label).toContain("3 files")
+        expect(result[0].sections.map((s) => s.path)).toEqual(["first.md", "second.md", "third.md"])
       },
     },
     {
-      name: "overflow creates new bucket preserving score order",
-      input: [
-        group({ path: "a.md", bestScore: 0.9, totalChars: 25000 }),
-        group({ path: "b.md", bestScore: 0.7, totalChars: 25000 }),
-      ],
+      name: "overflow creates new bucket preserving order",
+      input: [scored("a.md", 25000), scored("b.md", 25000)],
       check: (result: SectionMatch[]) => {
         expect(result).toHaveLength(2)
         expect(result[0].sections[0].path).toBe("a.md")
@@ -254,16 +230,33 @@ describe("groupSearchSections", () => {
       },
     },
     {
-      name: "single file produces one bucket",
-      input: [group({ path: "only.md", bestScore: 1.0, totalChars: 500 })],
+      name: "sections from different files interleave within budget",
+      input: [scored("x.md", 5000), scored("y.md", 5000), scored("x.md", 5000, 20, 30)],
+      check: (result: SectionMatch[]) => {
+        expect(result).toHaveLength(1)
+        expect(result[0].sections.map((s) => s.path)).toEqual(["x.md", "y.md", "x.md"])
+        expect(result[0].label).toContain("2 files")
+      },
+    },
+    {
+      name: "single section produces one bucket",
+      input: [scored("only.md", 500)],
       check: (result: SectionMatch[]) => {
         expect(result).toHaveLength(1)
         expect(result[0].sections[0].path).toBe("only.md")
+        expect(result[0].label).toContain("1 candidates in one file")
+      },
+    },
+    {
+      name: "empty input returns empty",
+      input: [],
+      check: (result: SectionMatch[]) => {
+        expect(result).toHaveLength(0)
       },
     },
   ]
 
   cases.forEach(({ name, input, check }) => {
-    it(name, () => check(groupSearchSections(input)))
+    it(name, () => check(bucketSearchSections(input)))
   })
 })

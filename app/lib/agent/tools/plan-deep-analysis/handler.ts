@@ -3,14 +3,20 @@ import { planDeepAnalysisTool, PlanDeepAnalysisArgs } from "./def"
 import { registerTool, tool } from "../../executors/tool"
 import { showProgress } from "../../client/store"
 import { activatePlan } from "../../executors/modes"
-import { buildAutoSteps, buildExecRules, toSectionMatches, groupSearchSections } from "./format"
-import type { LabeledTarget, SourceEntry, SectionEntry, FileSearchGroup } from "./format"
+import { buildAutoSteps, buildExecRules, toSectionMatches, bucketSearchSections } from "./format"
+import type {
+  LabeledTarget,
+  SourceEntry,
+  SectionEntry,
+  ScoredSection,
+  SectionMatch,
+} from "./format"
 import { findMatchOffset } from "~/lib/text/find"
 import { parseCodeBlocks, extractProse, mapProseOffset } from "~/lib/data-blocks/parse"
 import { errorMessage } from "~/lib/utils/error"
 import { mergeOverlapping } from "~/lib/utils/ranges"
 import { resolveSearchTargets } from "./resolve"
-import type { FileHitGroup } from "./resolve"
+import type { SearchHit } from "~/domain/search/types"
 import { filterFileTargets } from "./filter"
 import { labelAll } from "./label"
 import { getFileView } from "../file-view"
@@ -83,50 +89,94 @@ const locateHitSections = (content: string, path: string, hitTexts: string[]): S
   return located
 }
 
-const toSearchGroups = (files: FileEntry[], hits: Map<string, FileHitGroup>): FileSearchGroup[] => {
-  let totalHits = 0
-  let totalLocated = 0
-  let totalMerged = 0
-  let droppedFiles = 0
+const sliceLines = (content: string, startLine: number, endLine: number): string =>
+  content
+    .split("\n")
+    .slice(startLine - 1, endLine)
+    .join("\n")
 
-  const groups = files.flatMap((f) => {
-    const content = getFileView(f.path)
-    if (content === undefined) {
-      console.debug(`[plan-search-hits] ${f.path}: no file content, skipped`)
+const locateHit = (hit: SearchHit): SectionEntry | null => {
+  if (!hit.text) return null
+  const content = getFileView(hit.file)
+  if (content === undefined) return null
+  const sections = locateHitSections(content, hit.file, [hit.text])
+  return sections[0] ?? null
+}
+
+const markHitInSection = (sectionText: string, hitText: string): string => {
+  const hitProse = extractProse(hitText)
+  const match = findMatchOffset(sectionText, hitProse)
+  if (!match) return sectionText
+  const before = sectionText.slice(0, match.start)
+  const bold = sectionText.slice(match.start, match.end)
+  const after = sectionText.slice(match.end)
+  return `${before}**${bold}**${after}`
+}
+
+const logScoredSection = (hit: SearchHit, section: SectionEntry, content: string): void => {
+  if (!hit.text) return
+  const sectionText = sliceLines(content, section.startLine, section.endLine)
+  const marked = markHitInSection(sectionText, hit.text)
+  console.debug(
+    `[plan-search-hits] ${hit.file} [${section.startLine}-${section.endLine}] (score: ${hit.score ?? "?"})\n${marked}`
+  )
+}
+
+interface ScoredResult {
+  scored: ScoredSection[]
+  hitTexts: Map<string, string>
+}
+
+const sectionKey = (s: SectionEntry): string => `${s.path}\0${s.startLine}\0${s.endLine}`
+
+const toScoredSections = (hits: SearchHit[]): ScoredResult => {
+  let located = 0
+  let lost = 0
+  const hitTexts = new Map<string, string>()
+
+  const scored = hits.flatMap((hit) => {
+    const section = locateHit(hit)
+    if (!section) {
+      lost++
       return []
     }
-    const group = hits.get(f.path)
-    if (!group) return []
-
-    totalHits += group.texts.length
-    const raw = locateHitSections(content, f.path, group.texts)
-    totalLocated += raw.length
-    const sections = mergeOverlappingSections(raw)
-    totalMerged += sections.length
-
-    if (sections.length === 0) {
-      droppedFiles++
-      console.debug(`[plan-search-hits] ${f.path}: 0 sections located, file dropped entirely`)
-      return []
-    }
-
-    const totalChars = sectionCharCount(content, sections)
-    return [
-      {
-        path: f.path,
-        sections,
-        totalChars,
-        resultCount: sections.length,
-        bestScore: group.bestScore,
-      },
-    ]
+    located++
+    const content = getFileView(hit.file)
+    if (content === undefined) return []
+    logScoredSection(hit, section, content)
+    if (hit.text) hitTexts.set(sectionKey(section), hit.text)
+    const chars = sectionCharCount(content, [section])
+    return [{ section, chars }]
   })
 
   console.debug(
-    `[plan-search-hits] summary: ${totalHits} hits → ${totalLocated} located → ${totalMerged} merged across ${groups.length} files (${droppedFiles} dropped)`
+    `[plan-search-hits] summary: ${hits.length} hits → ${located} located, ${lost} lost`
   )
 
-  return groups
+  return { scored, hitTexts }
+}
+
+const logStepMap = (steps: SectionMatch[], hitTexts: Map<string, string>): void => {
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]
+    console.debug(`[plan-step-map] step ${i + 1}: "${step.label}"`)
+
+    for (const section of step.sections) {
+      const content = getFileView(section.path)
+      if (!content) {
+        console.debug(
+          `[plan-step-map]   ${section.path} [${section.startLine}-${section.endLine}] (file not found)`
+        )
+        continue
+      }
+      const sectionText = sliceLines(content, section.startLine, section.endLine)
+      const hitText = hitTexts.get(sectionKey(section))
+      const marked = hitText ? markHitInSection(sectionText, hitText) : sectionText
+      console.debug(
+        `[plan-step-map]   ${section.path} [${section.startLine}-${section.endLine}]\n${marked}`
+      )
+    }
+  }
 }
 
 const buildTaskDescription = (searchIds: string[], labeled: LabeledTarget[]): string => {
@@ -147,7 +197,7 @@ registerTool(
       const {
         files: resolvedTargets,
         searchIds,
-        searchHits,
+        orderedHits,
         errors,
       } = await resolveSearchTargets(target_files)
       if (errors.length > 0) return { status: "error", output: errors.join("\n"), mutations: [] }
@@ -186,10 +236,11 @@ registerTool(
 
       const fileMatches = toSectionMatches(labeled)
 
-      const searchGroups = toSearchGroups(searchFiles, searchHits)
-      const searchMatches = groupSearchSections(searchGroups)
+      const { scored: scoredSections, hitTexts } = toScoredSections(orderedHits)
+      const searchMatches = bucketSearchSections(scoredSections)
+      logStepMap(searchMatches, hitTexts)
       console.debug(
-        `[plan-search] search grouping: ${searchGroups.length} files → ${searchMatches.length} steps`
+        `[plan-search] search bucketing: ${scoredSections.length} sections → ${searchMatches.length} steps`
       )
 
       const allMatches = [...fileMatches, ...searchMatches]

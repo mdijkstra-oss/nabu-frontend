@@ -19,12 +19,9 @@ export interface SectionMatch {
   sections: SectionEntry[]
 }
 
-export interface FileSearchGroup {
-  path: string
-  sections: SectionEntry[]
-  totalChars: number
-  resultCount: number
-  bestScore: number
+export interface ScoredSection {
+  section: SectionEntry
+  chars: number
 }
 
 export interface SourceEntry {
@@ -64,38 +61,30 @@ export const buildExecRules = (firstStepCall: string): string =>
 
    ${firstStepCall}`
 
-interface Bucket {
-  files: FileSearchGroup[]
-  chars: number
+const bucketLabel = (sections: SectionEntry[]): string => {
+  const files = new Set(sections.map((s) => s.path))
+  return files.size === 1
+    ? `${sections.length} candidates in one file`
+    : `${sections.length} candidates across ${files.size} files`
 }
 
-const flushBucket = (bucket: Bucket): SectionMatch => {
-  const sections = bucket.files.flatMap((f) => f.sections)
-  const results = bucket.files.reduce((sum, f) => sum + f.resultCount, 0)
-  const isSingleFile = bucket.files.length === 1
-  const label = isSingleFile
-    ? `${results} candidates in one file`
-    : `${results} candidates across ${bucket.files.length} files`
-  return { label, sections }
-}
-
-export const groupSearchSections = (files: FileSearchGroup[]): SectionMatch[] => {
-  const sorted = [...files].sort((a, b) => b.bestScore - a.bestScore)
+export const bucketSearchSections = (scored: ScoredSection[]): SectionMatch[] => {
   const steps: SectionMatch[] = []
-  let current: Bucket = { files: [], chars: 0 }
+  let current: SectionEntry[] = []
+  let chars = 0
 
-  for (const file of sorted) {
-    const wouldOverflow =
-      current.chars > 0 && current.chars + file.totalChars > CHUNK_TARGET_CHARS * 2
+  for (const { section, chars: sectionChars } of scored) {
+    const wouldOverflow = chars > 0 && chars + sectionChars > CHUNK_TARGET_CHARS * 2
     if (wouldOverflow) {
-      steps.push(flushBucket(current))
-      current = { files: [], chars: 0 }
+      steps.push({ label: bucketLabel(current), sections: current })
+      current = []
+      chars = 0
     }
-    current.files.push(file)
-    current.chars += file.totalChars
+    current.push(section)
+    chars += sectionChars
   }
 
-  if (current.files.length > 0) steps.push(flushBucket(current))
+  if (current.length > 0) steps.push({ label: bucketLabel(current), sections: current })
 
   return steps
 }
