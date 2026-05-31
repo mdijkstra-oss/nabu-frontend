@@ -3,63 +3,14 @@ import type { FileStore } from "~/lib/files/store"
 import type { Annotation } from "~/domain/data-blocks/attributes/schema"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
 import { getBlock } from "~/lib/data-blocks/query"
-import { findBlocksByLanguage, stripBlocksByLanguage, extractProse } from "~/lib/data-blocks/parse"
+import { stripBlocksByLanguage, extractProse } from "~/lib/data-blocks/parse"
 import { findMatchOffset } from "~/lib/text/find"
-
-export interface AnnotationSplit {
-  prose: string
-  annotationsBlock: string | null
-  annotationTexts: string[]
-}
-
-export const splitAnnotationsFromProse = (raw: string): AnnotationSplit => {
-  const blocks = findBlocksByLanguage(raw, "json-annotations")
-  if (blocks.length === 0) return { prose: raw, annotationsBlock: null, annotationTexts: [] }
-  const block = blocks[0]
-  const prose = stripBlocksByLanguage(raw, "json-annotations")
-  const parsed = getBlock(raw, "json-annotations", AnnotationsBlockSchema)
-  const annotationTexts = (parsed?.annotations ?? []).map((a: Annotation) => a.text)
-  return { prose, annotationsBlock: raw.slice(block.start, block.end), annotationTexts }
-}
-
-export const reattachAnnotations = (prose: string, block: string | null): string =>
-  block ? `${prose}\n\n${block}` : prose
+import { trimAroundMatches } from "~/lib/text/trim-around"
+import { splitBySentences } from "~/lib/text/split"
 
 interface Range {
   start: number
   end: number
-}
-
-interface ExpandedSlice {
-  text: string
-  annotations: Annotation[]
-}
-
-const stripMarks = (text: string): string => text.replace(/<\/?mark>/g, "")
-
-const META_BLOCK_RE = /\n?<meta>[\s\S]*?<\/meta>\n?/g
-
-const stripMeta = (text: string): string => text.replace(META_BLOCK_RE, "\n").trim()
-
-const findRangeExact = (haystack: string, needle: string): Range | null => {
-  const idx = haystack.indexOf(needle)
-  if (idx === -1) return null
-  return { start: idx, end: idx + needle.length }
-}
-
-const locateInProse = (prose: string, needle: string): Range | null =>
-  findRangeExact(prose, needle) ?? findMatchOffset(prose, needle)
-
-const rangesOverlap = (a: Range, b: Range): boolean => a.start < b.end && b.start < a.end
-
-const boundingRange = (base: Range, extras: Range[]): Range => {
-  let start = base.start
-  let end = base.end
-  for (const r of extras) {
-    if (r.start < start) start = r.start
-    if (r.end > end) end = r.end
-  }
-  return { start, end }
 }
 
 const parseAnnotations = (fileContent: string): Annotation[] =>
@@ -68,76 +19,122 @@ const parseAnnotations = (fileContent: string): Annotation[] =>
 const formatAnnotationsBlock = (annotations: Annotation[]): string =>
   "```json-annotations\n" + JSON.stringify({ annotations }) + "\n```"
 
-const filterByEntityId = (
-  overlapping: { annotation: Annotation; range: Range }[],
-  entityId: string | undefined
-): { annotation: Annotation; range: Range }[] => {
-  if (!entityId) return overlapping
-  const matched = overlapping.filter((o) => o.annotation.id === entityId)
-  return matched.length > 0 ? matched : overlapping
+const resolveAnchors = (hit: SearchHit, fileContent: string): string[] | null => {
+  if (hit.matches && hit.matches.length > 0) return hit.matches
+  if (hit.id) {
+    const annotations = parseAnnotations(fileContent)
+    const match = annotations.find((a) => a.id === hit.id)
+    if (match) return [match.text]
+  }
+  return null
 }
 
-const expandSliceWithAnnotations = (
-  sliceText: string,
+const splitSentenceSegments = splitBySentences()
+
+const locateExact = (prose: string, text: string): Range | null => {
+  const idx = prose.indexOf(text)
+  if (idx !== -1) return { start: idx, end: idx + text.length }
+  return findMatchOffset(prose, text, true)
+}
+
+const edgeSentences = (text: string): [string, string] | [string] | null => {
+  const segments = splitSentenceSegments(text)
+  if (segments.length === 0) return null
+  if (segments.length === 1) return [segments[0].text]
+  return [segments[0].text, segments[segments.length - 1].text]
+}
+
+const locateEdgesInProse = (prose: string, text: string): Range | null => {
+  const exact = locateExact(prose, text)
+  if (exact) return exact
+  const edges = edgeSentences(text)
+  if (!edges) return null
+  const first = locateExact(prose, edges[0])
+  if (!first) return null
+  if (edges.length === 1) return first
+  const last = locateExact(prose, edges[1])
+  if (!last) return null
+  return { start: Math.min(first.start, last.start), end: Math.max(first.end, last.end) }
+}
+
+const rangesOverlap = (a: Range, b: Range): boolean => a.start < b.end && b.start < a.end
+
+const hasFooting = (ann: Annotation, prose: string, trimmedRange: Range): boolean => {
+  const annEdges = edgeSentences(ann.text)
+  if (!annEdges) return false
+  const proseSlice = prose.slice(trimmedRange.start, trimmedRange.end)
+  const hasEdge = annEdges.some((s) => findMatchOffset(proseSlice, s, true) !== null)
+  if (!hasEdge) return false
+  const annRange = locateExact(prose, ann.text) ?? findMatchOffset(prose, ann.text)
+  if (!annRange) return false
+  return rangesOverlap(annRange, trimmedRange)
+}
+
+const findFootedAnnotations = (
+  trimmedProse: string,
   prose: string,
   annotations: Annotation[],
   entityId?: string
-): ExpandedSlice => {
-  const cleanSlice = stripMeta(stripMarks(sliceText))
-  const sliceRange = locateInProse(prose, cleanSlice)
-  if (!sliceRange) return { text: cleanSlice, annotations: [] }
-  if (annotations.length === 0) return { text: sliceText, annotations: [] }
+): Annotation[] => {
+  const candidates = entityId ? annotations.filter((a) => a.id === entityId) : annotations
 
-  const allOverlapping: { annotation: Annotation; range: Range }[] = []
+  const trimmedRange = locateEdgesInProse(prose, trimmedProse)
+  if (!trimmedRange) return []
+
+  return candidates.filter((ann) => hasFooting(ann, prose, trimmedRange))
+}
+
+const expandToAnnotations = (
+  prose: string,
+  trimmedProse: string,
+  annotations: Annotation[]
+): string => {
+  if (annotations.length === 0) return trimmedProse
+
+  const trimmedRange = locateEdgesInProse(prose, trimmedProse)
+  if (!trimmedRange) return trimmedProse
+
+  let start = trimmedRange.start
+  let end = trimmedRange.end
+
   for (const ann of annotations) {
-    const annRange = locateInProse(prose, ann.text)
+    const annRange = locateExact(prose, ann.text) ?? findMatchOffset(prose, ann.text)
     if (!annRange) continue
-    if (rangesOverlap(sliceRange, annRange)) {
-      allOverlapping.push({ annotation: ann, range: annRange })
-    }
+    if (annRange.start < start) start = annRange.start
+    if (annRange.end > end) end = annRange.end
   }
 
-  const overlapping = filterByEntityId(allOverlapping, entityId)
-
-  if (overlapping.length === 0) return { text: sliceText, annotations: [] }
-
-  const expanded = boundingRange(
-    sliceRange,
-    overlapping.map((o) => o.range)
-  )
-  return {
-    text: prose.slice(expanded.start, expanded.end),
-    annotations: overlapping.map((o) => o.annotation),
-  }
+  return prose.slice(start, end)
 }
 
 export const extractSearchSlice = (hit: SearchHit, fileContent: string): string | null => {
-  if (!hit.text) return null
-  if (!fileContent) return stripMeta(hit.text)
-
-  const annotations = parseAnnotations(fileContent)
-  if (annotations.length === 0) return stripMeta(hit.text)
+  const anchors = resolveAnchors(hit, fileContent)
+  if (!anchors) return null
+  if (!fileContent) return hit.text ?? null
 
   const prose = extractProse(fileContent)
-  const { text, annotations: overlapping } = expandSliceWithAnnotations(
-    hit.text,
-    prose,
-    annotations,
-    hit.id
-  )
-  if (overlapping.length === 0) return text
+  const trimmed = trimAroundMatches(prose, anchors)
 
-  return `${text}\n\n${formatAnnotationsBlock(overlapping)}`
+  const annotations = parseAnnotations(fileContent)
+  if (annotations.length === 0) return trimmed
+
+  const footed = findFootedAnnotations(trimmed, prose, annotations, hit.id)
+  if (footed.length === 0) return trimmed
+
+  const expanded = expandToAnnotations(prose, trimmed, footed)
+  return `${expanded}\n\n${formatAnnotationsBlock(footed)}`
 }
 
 const growHit = (hit: SearchHit, files: FileStore): SearchHit => {
-  if (!hit.text) return hit
   const fileContent = files[hit.file]
   if (!fileContent) return hit
   const grown = extractSearchSlice(hit, fileContent)
   if (!grown) return hit
   return { ...hit, text: grown }
 }
+
+const stripAnnotationsBlock = (raw: string): string =>
+  stripBlocksByLanguage(raw, "json-annotations")
 
 const hitDedupeKey = (hit: SearchHit): string | null =>
   hit.text ? `${hit.file}\0${stripAnnotationsBlock(hit.text)}` : null
@@ -155,9 +152,6 @@ const deduplicateHits = (hits: SearchHit[]): SearchHit[] => {
 
 export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
   deduplicateHits(hits.map((hit) => growHit(hit, files)))
-
-const stripAnnotationsBlock = (raw: string): string =>
-  stripBlocksByLanguage(raw, "json-annotations")
 
 const isHitAlive = (hit: SearchHit, files: FileStore): boolean => {
   const content = files[hit.file]
