@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
-import { useInstance } from "@milkdown/react"
-import { editorViewCtx } from "@milkdown/kit/core"
 import {
   Bold,
   Code2,
@@ -25,8 +23,7 @@ import { getResolvedSelectedCodes, type Code } from "~/domain/data-blocks/callou
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { solidBackground, elementBackground } from "~/ui/theme/radix"
 import { useIsReadOnly } from "./ReadOnlyContext"
-import { useFilePath } from "./FilePathContext"
-import { posToTextOffset, proseTextContent } from "~/lib/editor/text"
+import { resolveEditorSelection } from "~/lib/editor/selection-context"
 import { buildAnnotationPatchOps } from "~/lib/editor/annotations/merge"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { getFileRaw } from "~/lib/files/store"
@@ -174,46 +171,33 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const portalRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number | null>(null)
-  const [loading, getEditor] = useInstance()
   const selectionOnly = useIsReadOnly()
   const { files } = useFiles()
-  const filePath = useFilePath()
   const selectedCodes = useMemo(() => getResolvedSelectedCodes(files), [files])
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [hovered, setHovered] = useState(true)
 
-  const handleCodeClick = useCallback(
-    (codeId: string) => {
-      if (loading || !filePath) return
-      const editor = getEditor()
-      if (!editor) return
+  const handleCodeClick = useCallback((codeId: string) => {
+    const resolved = resolveEditorSelection()
+    if (!resolved) return
 
-      editor.action((ctx) => {
-        const view = ctx.get(editorViewCtx)
-        const { from, to } = view.state.selection
-        if (from === to) return
+    const fileContent = getFileRaw(resolved.filePath)
+    if (!fileContent) return
 
-        const doc = view.state.doc
-        const docText = proseTextContent(doc)
-        const selStart = posToTextOffset(doc, from)
-        const selEnd = posToTextOffset(doc, to)
+    const annotationsForCode = getStoredAnnotations(fileContent).filter((a) => a.code === codeId)
 
-        const raw = getFileRaw(filePath)
-        const annotationsForCode = getStoredAnnotations(raw).filter((a) => a.code === codeId)
+    const { ops } = buildAnnotationPatchOps(
+      { start: resolved.fullWords.startOffset, end: resolved.fullWords.endOffset },
+      fileContent,
+      annotationsForCode,
+      codeId,
+      generateAnnotationId()
+    )
 
-        const { ops } = buildAnnotationPatchOps(
-          { start: selStart, end: selEnd },
-          docText,
-          annotationsForCode,
-          codeId,
-          generateAnnotationId()
-        )
-
-        executeUxAction([{ path: filePath, language: ANNOTATIONS_LANGUAGE, ops }])
-      })
-    },
-    [loading, getEditor, filePath]
-  )
+    executeUxAction([
+      { path: resolved.filePath, language: ANNOTATIONS_LANGUAGE, ops, exactText: true },
+    ])
+  }, [])
 
   const updateSelection = useCallback(() => {
     const container = containerRef.current

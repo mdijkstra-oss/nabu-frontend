@@ -36,7 +36,7 @@ export const codeWithSelection = (
    - sections: [${formatSections(ranges)}]
    - source_files: use the generic codebook (scope: "framework") if it exists, AND these codebook files as dimensions (scope: "dimension"): ${fileList}. Do not use any other codebooks.
    - post_action: "annotate_as_code"${hiddenNote}`,
-    userMessage: `Code selection "${snippetPreview(ranges[0].text)}" with ${fileList}`,
+    userMessage: `Code selection "${snippetPreview(ranges[0].fullWords.text)}" with ${fileList}`,
   }
 }
 

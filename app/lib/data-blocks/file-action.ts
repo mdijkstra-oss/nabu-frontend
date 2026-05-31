@@ -8,6 +8,7 @@ export interface FilePatch {
   language: string
   ops: JsonPatchOp[]
   blockId?: string
+  exactText?: boolean
 }
 
 export interface FileAction {
@@ -22,7 +23,14 @@ export const executeUxAction = (patches: FilePatch[]): void =>
 export const executeFileAction = (action: FileAction): void => {
   for (const patch of action.patches) {
     const original = getFileRaw(patch.path)
-    const result = patchBlockContent(original, patch.language, patch.ops, patch.blockId)
+    const fuzzyOverride = patch.exactText ? [] : undefined
+    const result = patchBlockContent(
+      original,
+      patch.language,
+      patch.ops,
+      patch.blockId,
+      fuzzyOverride
+    )
     if (!result.ok) {
       console.error(
         `[FILE-ACTION] patch failed for ${patch.path} (${patch.language}):`,

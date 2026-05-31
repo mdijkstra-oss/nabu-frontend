@@ -50,12 +50,13 @@ export const patchBlockContent = (
   content: string,
   language: string,
   ops: JsonPatchOp[],
-  blockId?: string
+  blockId?: string,
+  overrideFuzzyFields?: string[]
 ): PatchResult => {
   const resolved = findBlock(content, language, blockId)
   if (!resolved.ok) return resolved
 
-  const fuzzyFields = getFuzzyFields(language)
+  const fuzzyFields = overrideFuzzyFields ?? getFuzzyFields(language)
   const { doc, applied, failures } = applyEnrichedOps(ops, resolved.json, content, { fuzzyFields })
 
   if (applied === 0) return { ok: false, error: failures.join("\n") || "No operations applied" }

@@ -47,7 +47,6 @@ import {
   setPersistEnabled,
   setPendingRefsSuppressed,
   resolvePendingRefsInBulk,
-  getFileRaw,
 } from "~/lib/files/store"
 import {
   startDatabase,
@@ -86,9 +85,8 @@ import {
 } from "~/domain/actions/coding/actions"
 import { resolveCodingFiles } from "~/domain/actions/coding/selectors"
 import { useEditorSelection } from "~/ui/hooks/useEditorSelection"
-import type { EditorSelection } from "~/lib/editor/selection-store"
 import { debounce } from "~/lib/utils/debounce"
-import { locateSelectionInFile } from "~/lib/editor/selection-context"
+import { resolveEditorSelection, resolveSearchSelections } from "~/lib/editor/selection-context"
 import { clearCodingsPatches } from "~/domain/actions/clear-codings/apply"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
@@ -472,33 +470,22 @@ export default function ProjectLayout() {
   const editorSelection = useEditorSelection()
 
   const logSelectionRef = useRef(
-    debounce((...args: unknown[]) => {
-      const sel = args[0] as EditorSelection
-      if (!sel.filePath) return
-      const fileContent = getFileRaw(sel.filePath)
-      if (!fileContent) return
-      const range = locateSelectionInFile(
-        sel.text,
-        sel.filePath,
-        fileContent,
-        sel.context ?? undefined
-      )
+    debounce(() => {
+      const range = resolveEditorSelection()
       if (range) {
         console.log(
           "[selection]",
           `${range.filePath}:${range.startLine + 1}-${range.endLine + 1}`,
-          `"${sel.text.slice(0, 60)}"`,
+          `"${range.exact.text.slice(0, 60)}"`,
           range
         )
-      } else {
-        console.log("[selection] no match", `"${sel.text.slice(0, 60)}"`, `in ${sel.filePath}`)
       }
     }, 300)
   )
 
   useEffect(() => {
     if (!editorSelection?.filePath) return
-    logSelectionRef.current(editorSelection)
+    logSelectionRef.current()
   }, [editorSelection])
 
   const isOnDocumentPage = !!params.fileId
@@ -547,32 +534,19 @@ export default function ProjectLayout() {
   }, [params.searchId, files, selectedCodes])
 
   const handleCodeSelection = useCallback(() => {
-    if (!editorSelection?.filePath) return
     const refs = resolveCodingFiles(files, [...selectedCodes])
     if (refs.length === 0) return
-    const fileContent = getFileRaw(editorSelection.filePath)
-    if (!fileContent) return
-    const range = locateSelectionInFile(
-      editorSelection.text,
-      editorSelection.filePath,
-      fileContent,
-      editorSelection.context ?? undefined
-    )
-    console.log(
-      "[selection]",
-      range
-        ? `resolved "${editorSelection.text.slice(0, 40)}" → ${range.filePath}:${range.startLine + 1}-${range.endLine + 1} (offsets ${range.startOffset}-${range.endOffset})`
-        : `failed to resolve "${editorSelection.text.slice(0, 40)}" in ${editorSelection.filePath}`,
-      { selection: editorSelection, range }
-    )
-    if (!range) return
 
     if (isOnSearchPage && params.searchId) {
-      dispatchTask(codeWithSearchSelection(refs, [range], params.searchId))
+      const ranges = resolveSearchSelections()
+      if (ranges.length === 0) return
+      dispatchTask(codeWithSearchSelection(refs, ranges, params.searchId))
     } else {
+      const range = resolveEditorSelection()
+      if (!range) return
       dispatchTask(codeWithSelection(refs, [range]))
     }
-  }, [editorSelection, files, selectedCodes, isOnSearchPage, params.searchId])
+  }, [files, selectedCodes, isOnSearchPage, params.searchId])
 
   const toggleCode = useCallback(
     (id: string) => writeSelectedCodes(toggleSelectedCode([...selectedCodes], id)),

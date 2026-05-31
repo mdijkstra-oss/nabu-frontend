@@ -160,7 +160,7 @@ export const MilkdownEditor = ({
     ? "w-full text-default-font"
     : "w-full max-w-[768px] text-default-font"
   const editor = (
-    <div className={containerClass}>
+    <div className={containerClass} data-file-path={filePath}>
       <MilkdownProvider>
         <ProsemirrorAdapterProvider>
           <MilkdownEditorCore
