@@ -9,7 +9,7 @@ import {
 } from "react"
 import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
 // NEVER use Sparkles icon
-import { Eraser, FileText, Pencil } from "lucide-react"
+import { Check, Eraser, FileText, Pencil } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
 import { useFiles } from "~/ui/hooks/useFiles"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
@@ -83,10 +83,10 @@ import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 import { ActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
-import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
+import { getSelectedCodes, toggleSelectedCode } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getAllCodes, findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
-import { DismissableWrap } from "~/ui/components/DismissableWrap"
+import { solidBackground } from "~/ui/theme/radix"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
 
@@ -503,33 +503,52 @@ export default function ProjectLayout() {
     if (refs.length > 0) dispatchTask(codeWithSearch(refs, params.searchId))
   }, [params.searchId, files, selectedCodes])
 
-  const deselectCode = useCallback(
-    (id: string) => {
-      const remaining = [...selectedCodes].filter((c) => c !== id)
-      writeSelectedCodes(remaining)
-    },
+  const toggleCode = useCallback(
+    (id: string) => writeSelectedCodes(toggleSelectedCode([...selectedCodes], id)),
     [selectedCodes]
   )
 
+  const allCodes = useMemo(() => getAllCodes(files), [files])
+
   const selectedCodesDetail = useMemo(() => {
-    const ids = [...selectedCodes].sort()
-    if (ids.length === 0) return null
-    return ids.map((id) => (
-      <div key={id} className="whitespace-nowrap py-1">
-        <DismissableWrap onDismiss={() => deselectCode(id)}>
-          <InlineMarkdown
-            files={files}
-            projectId={params.projectId ?? null}
-            currentFile={currentFile ?? null}
-            currentFileContent={currentFile ? (files[currentFile] ?? null) : null}
-            navigate={navigate}
+    if (allCodes.length === 0) return null
+    return allCodes.map((code) => {
+      const isSelected = selectedCodes.has(code.id)
+      return (
+        <div key={code.id} className="whitespace-nowrap py-1">
+          <button
+            className="flex cursor-pointer items-center gap-2 border-none bg-transparent p-0"
+            onClick={() => toggleCode(code.id)}
           >
-            {id}
-          </InlineMarkdown>
-        </DismissableWrap>
-      </div>
-    ))
-  }, [selectedCodes, files, params.projectId, currentFile, navigate, deselectCode])
+            <span
+              className="flex h-4 w-4 flex-none items-center justify-center rounded-full border-2 border-solid transition-all"
+              style={{
+                borderColor: solidBackground(code.color),
+                backgroundColor: isSelected ? solidBackground(code.color) : "transparent",
+                opacity: isSelected ? 1 : 0.4,
+              }}
+            >
+              {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+            </span>
+            <span
+              className="text-caption font-caption text-default-font transition-opacity"
+              style={{ opacity: isSelected ? 1 : 0.5 }}
+            >
+              <InlineMarkdown
+                files={files}
+                projectId={params.projectId ?? null}
+                currentFile={currentFile ?? null}
+                currentFileContent={currentFile ? (files[currentFile] ?? null) : null}
+                navigate={navigate}
+              >
+                {code.id}
+              </InlineMarkdown>
+            </span>
+          </button>
+        </div>
+      )
+    })
+  }, [allCodes, selectedCodes, files, params.projectId, currentFile, navigate, toggleCode])
 
   const codeSelectionActions = useMemo((): ActionBarAction[] => {
     const actions: ActionBarAction[] = []

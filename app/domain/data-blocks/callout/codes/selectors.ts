@@ -3,6 +3,7 @@ import { getCallouts } from "../selectors"
 import { toDisplayName } from "~/lib/files/filename"
 import type { FileStore } from "~/lib/files/store"
 import { collectAll, findIn } from "~/lib/files/collect"
+import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 
 export interface Code {
   id: string
@@ -45,6 +46,14 @@ export const groupCodesByFile = (files: FileStore): CodeGroup[] =>
     if (codes.length > 0) acc.push({ fileId: filename, name: toDisplayName(filename), codes })
     return acc
   }, [])
+
+export const getResolvedSelectedCodes = (files: FileStore): Code[] => {
+  const ids = getSelectedCodes(files)
+  return [...ids].flatMap((id) => {
+    const code = findCodeById(files, id)
+    return code ? [calloutToCode(code)] : []
+  })
+}
 
 export const getCodebook = (files: FileStore): Codebook | undefined => {
   const categories = groupCodesByFile(files)

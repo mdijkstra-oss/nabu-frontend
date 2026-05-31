@@ -133,7 +133,9 @@ export interface UpdateFileOptions {
 }
 
 export const updateFileRaw = (filename: string, raw: string, options?: UpdateFileOptions): void => {
-  const resolveId: IdResolver = (id) => findAnnotationById(files, id)?.text
+  const resolveId: IdResolver | undefined = options?.skipPendingRefs
+    ? undefined
+    : (id) => findAnnotationById(files, id)?.text
   const normalized = normalizeFile(raw, resolveId)
   if (normalized === files[filename]) return
   const isNew = !(filename in files)

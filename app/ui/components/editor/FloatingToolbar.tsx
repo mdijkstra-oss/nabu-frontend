@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { useInstance } from "@milkdown/react"
 import {
@@ -14,8 +14,15 @@ import {
   ListOrdered,
   Quote,
   Strikethrough,
+  BookMarked,
+  Highlighter,
 } from "lucide-react"
 import { EditorToolbar } from "./EditorToolbar"
+import { IconButton } from "~/ui/components/IconButton"
+import { useFiles } from "~/ui/hooks/useFiles"
+import { getResolvedSelectedCodes, type Code } from "~/domain/data-blocks/callout/codes/selectors"
+import { solidBackground, elementBackground } from "~/ui/theme/radix"
+import { useIsReadOnly } from "./ReadOnlyContext"
 
 interface FloatingToolbarProps {
   children: ReactNode
@@ -25,14 +32,24 @@ const TOOLBAR_GAP = 8
 const VIEWPORT_MARGIN = 12
 const MIN_TOP_SPACE = 80
 
-const getNativeSelectionRect = (container: HTMLElement): DOMRect | null => {
+interface SelectionState {
+  rect: DOMRect
+  hasRange: boolean
+}
+
+const getNativeSelectionState = (
+  container: HTMLElement,
+  selectionOnly: boolean
+): SelectionState | null => {
   const domSel = window.getSelection()
-  if (!domSel || domSel.rangeCount === 0 || domSel.isCollapsed) return null
+  if (!domSel || domSel.rangeCount === 0) return null
+  const hasRange = !domSel.isCollapsed
+  if (selectionOnly && !hasRange) return null
   const range = domSel.getRangeAt(0)
   if (!container.contains(range.commonAncestorContainer)) return null
   const rect = range.getBoundingClientRect()
   if (rect.width === 0 && rect.height === 0) return null
-  return rect
+  return { rect, hasRange }
 }
 
 const clampHorizontal = (x: number): number =>
@@ -59,6 +76,79 @@ const TOOLBAR_GROUPS = [
   ],
 ]
 
+const SpotlightCodebookIcon = () => (
+  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-400">
+    <BookMarked className="h-3 w-3 text-white" />
+  </div>
+)
+
+const MarkerHighlightIcon = () => (
+  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-300">
+    <Highlighter className="h-3 w-3 text-amber-800" />
+  </div>
+)
+
+const POPUP_MAX_HEIGHT = 110
+
+const CodeEntry = ({ name, color }: Code) => (
+  <div
+    className="flex cursor-default items-center gap-2 px-3 py-1.5 transition-colors hover:bg-[var(--code-hover-bg)]"
+    style={{ "--code-hover-bg": elementBackground(color) } as React.CSSProperties}
+  >
+    <div
+      className="h-3 w-3 flex-none rounded-full"
+      style={{ backgroundColor: solidBackground(color) }}
+    />
+    <span className="text-caption font-caption text-default-font truncate">{name}</span>
+  </div>
+)
+
+const AnnotationPill = ({ codes }: { codes: readonly Code[] }) => {
+  const triggerRef = useRef<HTMLDivElement>(null)
+  const [popupPosition, setPopupPosition] = useState<"above" | "below" | null>(null)
+  const hasCodes = codes.length > 0
+
+  const handleShowPopup = useCallback(() => {
+    if (!triggerRef.current) return
+    const bottom = triggerRef.current.getBoundingClientRect().bottom
+    const hasSpaceBelow = bottom + POPUP_MAX_HEIGHT < window.innerHeight
+    setPopupPosition(hasSpaceBelow ? "below" : "above")
+  }, [])
+
+  const handleHidePopup = useCallback(() => setPopupPosition(null), [])
+
+  const popupPositionClass = popupPosition === "below" ? "top-full pt-4" : "bottom-full pb-4"
+
+  return (
+    <div className="flex items-start gap-1 rounded-xl border border-solid border-neutral-border bg-default-background px-2 py-2 shadow-md">
+      <div
+        ref={triggerRef}
+        className="relative"
+        onMouseEnter={hasCodes ? handleShowPopup : undefined}
+        onMouseLeave={handleHidePopup}
+      >
+        <IconButton
+          size="small"
+          icon={<SpotlightCodebookIcon />}
+          variant="neutral-tertiary"
+          disabled={!hasCodes}
+          title={hasCodes ? undefined : "First select codebook entry from sidebar"}
+        />
+        {popupPosition && (
+          <div className={`absolute left-1/2 -translate-x-1/2 ${popupPositionClass}`}>
+            <div className="min-w-[180px] max-h-[102px] overflow-hidden overflow-y-auto rounded-xl bg-default-background border border-solid border-neutral-border shadow-lg">
+              {codes.map((code) => (
+                <CodeEntry key={code.id} {...code} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <IconButton size="small" icon={<MarkerHighlightIcon />} variant="neutral-tertiary" disabled />
+    </div>
+  )
+}
+
 const isLeavingTo = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement | null>): boolean =>
   ref.current?.contains(e.relatedTarget as Node) ?? false
 
@@ -68,14 +158,17 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   const rafRef = useRef<number | null>(null)
   const [, getEditor] = useInstance()
   void getEditor
-  const [rect, setRect] = useState<DOMRect | null>(null)
+  const selectionOnly = useIsReadOnly()
+  const { files } = useFiles()
+  const selectedCodes = useMemo(() => getResolvedSelectedCodes(files), [files])
+  const [selection, setSelection] = useState<SelectionState | null>(null)
   const [hovered, setHovered] = useState(true)
 
   const updateSelection = useCallback(() => {
     const container = containerRef.current
     if (!container) return
-    setRect(getNativeSelectionRect(container))
-  }, [])
+    setSelection(getNativeSelectionState(container, selectionOnly))
+  }, [selectionOnly])
 
   const scheduleUpdate = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
@@ -88,7 +181,7 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
       if (portalRef.current?.contains(e.target as Node)) return
-      setRect(null)
+      setSelection(null)
     }
 
     document.addEventListener("selectionchange", scheduleUpdate)
@@ -116,6 +209,8 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
     setHovered(false)
   }, [])
 
+  const rect = selection?.rect ?? null
+  const hasRange = selection?.hasRange ?? false
   const visible = rect && hovered
   const centerX = rect ? clampHorizontal(rect.left + rect.width / 2) : 0
   const showAbove = rect ? rect.top > MIN_TOP_SPACE : true
@@ -132,6 +227,7 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
             onMouseDown={(e) => e.preventDefault()}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={handlePortalLeave}
+            className="flex items-center gap-2"
             style={{
               position: "fixed",
               left: `${centerX}px`,
@@ -141,6 +237,7 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
             }}
           >
             <EditorToolbar groups={TOOLBAR_GROUPS} />
+            {hasRange && <AnnotationPill codes={selectedCodes} />}
           </div>,
           document.body
         )}
