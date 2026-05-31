@@ -19,10 +19,19 @@ const parseAnnotations = (fileContent: string): Annotation[] =>
 const formatAnnotationsBlock = (annotations: Annotation[]): string =>
   "```json-annotations\n" + JSON.stringify({ annotations }) + "\n```"
 
-const resolveAnchors = (hit: SearchHit, fileContent: string): string[] | null => {
+interface FileContext {
+  prose: string
+  annotations: Annotation[]
+}
+
+const computeFileContext = (fileContent: string): FileContext => ({
+  prose: extractProse(fileContent),
+  annotations: parseAnnotations(fileContent),
+})
+
+const resolveAnchors = (hit: SearchHit, annotations: Annotation[]): string[] | null => {
   if (hit.matches && hit.matches.length > 0) return hit.matches
   if (hit.id) {
-    const annotations = parseAnnotations(fileContent)
     const match = annotations.find((a) => a.id === hit.id)
     if (match) return [match.text]
   }
@@ -107,28 +116,31 @@ const expandToAnnotations = (
   return prose.slice(start, end)
 }
 
-export const extractSearchSlice = (hit: SearchHit, fileContent: string): string | null => {
-  const anchors = resolveAnchors(hit, fileContent)
+const extractSliceFromContext = (
+  hit: SearchHit,
+  fileContent: string,
+  ctx: FileContext
+): string | null => {
+  const anchors = resolveAnchors(hit, ctx.annotations)
   if (!anchors) return null
   if (!fileContent) return hit.text ?? null
 
-  const prose = extractProse(fileContent)
-  const trimmed = trimAroundMatches(prose, anchors)
+  const trimmed = trimAroundMatches(ctx.prose, anchors)
 
-  const annotations = parseAnnotations(fileContent)
-  if (annotations.length === 0) return trimmed
+  if (ctx.annotations.length === 0) return trimmed
 
-  const footed = findFootedAnnotations(trimmed, prose, annotations, hit.id)
+  const footed = findFootedAnnotations(trimmed, ctx.prose, ctx.annotations, hit.id)
   if (footed.length === 0) return trimmed
 
-  const expanded = expandToAnnotations(prose, trimmed, footed)
+  const expanded = expandToAnnotations(ctx.prose, trimmed, footed)
   return `${expanded}\n\n${formatAnnotationsBlock(footed)}`
 }
 
-const growHit = (hit: SearchHit, files: FileStore): SearchHit => {
-  const fileContent = files[hit.file]
-  if (!fileContent) return hit
-  const grown = extractSearchSlice(hit, fileContent)
+export const extractSearchSlice = (hit: SearchHit, fileContent: string): string | null =>
+  extractSliceFromContext(hit, fileContent, computeFileContext(fileContent))
+
+const growHitWithContext = (hit: SearchHit, fileContent: string, ctx: FileContext): SearchHit => {
+  const grown = extractSliceFromContext(hit, fileContent, ctx)
   if (!grown) return hit
   return { ...hit, text: grown }
 }
@@ -150,8 +162,30 @@ const deduplicateHits = (hits: SearchHit[]): SearchHit[] => {
   })
 }
 
-export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  deduplicateHits(hits.map((hit) => growHit(hit, files)))
+const getFileContext = (
+  file: string,
+  files: FileStore,
+  cache: Map<string, FileContext>
+): FileContext | null => {
+  const content = files[file]
+  if (!content) return null
+  const cached = cache.get(file)
+  if (cached) return cached
+  const ctx = computeFileContext(content)
+  cache.set(file, ctx)
+  return ctx
+}
+
+export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
+  const cache = new Map<string, FileContext>()
+  return deduplicateHits(
+    hits.map((hit) => {
+      const ctx = getFileContext(hit.file, files, cache)
+      if (!ctx) return hit
+      return growHitWithContext(hit, files[hit.file], ctx)
+    })
+  )
+}
 
 const isHitAlive = (hit: SearchHit, files: FileStore): boolean => {
   const content = files[hit.file]
@@ -160,10 +194,23 @@ const isHitAlive = (hit: SearchHit, files: FileStore): boolean => {
   return content.includes(hit.id)
 }
 
-const regrowHit = (hit: SearchHit, files: FileStore): SearchHit => {
+const regrowHitWithContext = (hit: SearchHit, fileContent: string, ctx: FileContext): SearchHit => {
   if (!hit.text) return hit
-  return growHit({ ...hit, text: stripAnnotationsBlock(hit.text) }, files)
+  return growHitWithContext({ ...hit, text: stripAnnotationsBlock(hit.text) }, fileContent, ctx)
 }
 
-export const refreshHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  deduplicateHits(hits.filter((h) => isHitAlive(h, files)).map((h) => regrowHit(h, files)))
+export const pruneHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  deduplicateHits(hits.filter((h) => isHitAlive(h, files)))
+
+export const refreshHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
+  const cache = new Map<string, FileContext>()
+  return deduplicateHits(
+    hits
+      .filter((h) => isHitAlive(h, files))
+      .map((h) => {
+        const ctx = getFileContext(h.file, files, cache)
+        if (!ctx) return h
+        return regrowHitWithContext(h, files[h.file], ctx)
+      })
+  )
+}
