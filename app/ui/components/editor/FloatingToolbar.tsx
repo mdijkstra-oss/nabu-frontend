@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { useInstance } from "@milkdown/react"
+import { editorViewCtx } from "@milkdown/kit/core"
 import {
   Bold,
   Code2,
@@ -21,8 +22,15 @@ import { EditorToolbar } from "./EditorToolbar"
 import { IconButton } from "~/ui/components/IconButton"
 import { useFiles } from "~/ui/hooks/useFiles"
 import { getResolvedSelectedCodes, type Code } from "~/domain/data-blocks/callout/codes/selectors"
+import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { solidBackground, elementBackground } from "~/ui/theme/radix"
 import { useIsReadOnly } from "./ReadOnlyContext"
+import { useFilePath } from "./FilePathContext"
+import { posToTextOffset, proseTextContent } from "~/lib/editor/text"
+import { buildAnnotationPatchOps } from "~/lib/editor/annotations/merge"
+import { executeUxAction } from "~/lib/data-blocks/file-action"
+import { getFileRaw } from "~/lib/files/store"
+import { generateShortId } from "~/lib/data-blocks/uuid"
 
 interface FloatingToolbarProps {
   children: ReactNode
@@ -31,6 +39,7 @@ interface FloatingToolbarProps {
 const TOOLBAR_GAP = 8
 const VIEWPORT_MARGIN = 12
 const MIN_TOP_SPACE = 80
+const ANNOTATIONS_LANGUAGE = "json-annotations"
 
 interface SelectionState {
   rect: DOMRect
@@ -90,10 +99,11 @@ const MarkerHighlightIcon = () => (
 
 const POPUP_MAX_HEIGHT = 110
 
-const CodeEntry = ({ name, color }: Code) => (
+const CodeEntry = ({ name, color, onClick }: Code & { onClick: () => void }) => (
   <div
-    className="flex cursor-default items-center gap-2 px-3 py-1.5 transition-colors hover:bg-[var(--code-hover-bg)]"
+    className="flex cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-[var(--code-hover-bg)]"
     style={{ "--code-hover-bg": elementBackground(color) } as React.CSSProperties}
+    onClick={onClick}
   >
     <div
       className="h-3 w-3 flex-none rounded-full"
@@ -103,7 +113,13 @@ const CodeEntry = ({ name, color }: Code) => (
   </div>
 )
 
-const AnnotationPill = ({ codes }: { codes: readonly Code[] }) => {
+const AnnotationPill = ({
+  codes,
+  onCodeClick,
+}: {
+  codes: readonly Code[]
+  onCodeClick: (codeId: string) => void
+}) => {
   const triggerRef = useRef<HTMLDivElement>(null)
   const [popupPosition, setPopupPosition] = useState<"above" | "below" | null>(null)
   const hasCodes = codes.length > 0
@@ -138,7 +154,7 @@ const AnnotationPill = ({ codes }: { codes: readonly Code[] }) => {
           <div className={`absolute left-1/2 -translate-x-1/2 ${popupPositionClass}`}>
             <div className="min-w-[180px] max-h-[102px] overflow-hidden overflow-y-auto rounded-xl bg-default-background border border-solid border-neutral-border shadow-lg">
               {codes.map((code) => (
-                <CodeEntry key={code.id} {...code} />
+                <CodeEntry key={code.id} {...code} onClick={() => onCodeClick(code.id)} />
               ))}
             </div>
           </div>
@@ -152,17 +168,52 @@ const AnnotationPill = ({ codes }: { codes: readonly Code[] }) => {
 const isLeavingTo = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement | null>): boolean =>
   ref.current?.contains(e.relatedTarget as Node) ?? false
 
+const generateAnnotationId = (): string => `annotation-${generateShortId()}`
+
 export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const portalRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number | null>(null)
-  const [, getEditor] = useInstance()
-  void getEditor
+  const [loading, getEditor] = useInstance()
   const selectionOnly = useIsReadOnly()
   const { files } = useFiles()
+  const filePath = useFilePath()
   const selectedCodes = useMemo(() => getResolvedSelectedCodes(files), [files])
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [hovered, setHovered] = useState(true)
+
+  const handleCodeClick = useCallback(
+    (codeId: string) => {
+      if (loading || !filePath) return
+      const editor = getEditor()
+      if (!editor) return
+
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx)
+        const { from, to } = view.state.selection
+        if (from === to) return
+
+        const doc = view.state.doc
+        const docText = proseTextContent(doc)
+        const selStart = posToTextOffset(doc, from)
+        const selEnd = posToTextOffset(doc, to)
+
+        const raw = getFileRaw(filePath)
+        const annotationsForCode = getStoredAnnotations(raw).filter((a) => a.code === codeId)
+
+        const { ops } = buildAnnotationPatchOps(
+          { start: selStart, end: selEnd },
+          docText,
+          annotationsForCode,
+          codeId,
+          generateAnnotationId()
+        )
+
+        executeUxAction([{ path: filePath, language: ANNOTATIONS_LANGUAGE, ops }])
+      })
+    },
+    [loading, getEditor, filePath]
+  )
 
   const updateSelection = useCallback(() => {
     const container = containerRef.current
@@ -237,7 +288,7 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
             }}
           >
             <EditorToolbar groups={TOOLBAR_GROUPS} />
-            {hasRange && <AnnotationPill codes={selectedCodes} />}
+            {hasRange && <AnnotationPill codes={selectedCodes} onCodeClick={handleCodeClick} />}
           </div>,
           document.body
         )}

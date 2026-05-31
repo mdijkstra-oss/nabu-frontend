@@ -2,6 +2,8 @@ export interface EditorSelection {
   text: string
   from: number
   to: number
+  filePath: string | null
+  context: string | null
 }
 
 let selection: EditorSelection | null = null

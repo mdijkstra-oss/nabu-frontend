@@ -122,3 +122,121 @@ export const findMatchOffset = (
   }
   return null
 }
+
+const isWordChar = (ch: string): boolean => /[a-zA-Z0-9]/.test(ch)
+
+const isWhitespace = (ch: string): boolean => /\s/.test(ch)
+
+const wordCharsOf = (s: string): string => s.replace(/[^a-zA-Z0-9]/g, "")
+
+const consumeBackward = (content: string, fromPos: number, partialRaw: string): number | null => {
+  const chars = wordCharsOf(partialRaw)
+  if (chars.length === 0) return fromPos
+  let ci = fromPos - 1
+  let pi = chars.length - 1
+  while (ci >= 0 && isWhitespace(content[ci])) ci--
+  while (ci >= 0 && pi >= 0) {
+    if (isWordChar(content[ci])) {
+      if (content[ci] !== chars[pi]) return null
+      pi--
+    }
+    ci--
+  }
+  if (pi >= 0) return null
+  return ci + 1
+}
+
+const consumeForward = (content: string, fromPos: number, partialRaw: string): number | null => {
+  const chars = wordCharsOf(partialRaw)
+  if (chars.length === 0) return fromPos
+  let ci = fromPos
+  let pi = 0
+  while (ci < content.length && isWhitespace(content[ci])) ci++
+  while (ci < content.length && pi < chars.length) {
+    if (isWordChar(content[ci])) {
+      if (content[ci] !== chars[pi]) return null
+      pi++
+    }
+    ci++
+  }
+  if (pi < chars.length) return null
+  return ci
+}
+
+const findTwoTokenMatch = (
+  content: string,
+  contentTokens: Token[],
+  needleTokens: Token[],
+  needle: string
+): MatchOffset | null => {
+  const [first, second] = needleTokens
+  const firstRaw = needle.slice(first.start, first.end)
+  const lastRaw = needle.slice(second.start, second.end)
+
+  const secondMatch = findOrderedMatch(contentTokens, [second.word])
+  if (secondMatch) {
+    const start = consumeBackward(content, secondMatch.start, firstRaw)
+    if (start !== null) return { start, end: secondMatch.end }
+  }
+
+  const firstMatch = findOrderedMatch(contentTokens, [first.word])
+  if (firstMatch) {
+    const end = consumeForward(content, firstMatch.end, lastRaw)
+    if (end !== null) return { start: firstMatch.start, end }
+  }
+
+  return null
+}
+
+export const findWithPartialEdges = (content: string, needle: string): MatchOffset | null => {
+  const needleTokens = tokenize(needle)
+  if (needleTokens.length < 2) return null
+
+  const contentTokens = getDocTokens(content)
+
+  if (needleTokens.length === 2)
+    return findTwoTokenMatch(content, contentTokens, needleTokens, needle)
+
+  const innerTokens = needleTokens.slice(1, -1)
+  const innerWords = innerTokens.map((t) => t.word)
+  const innerMatch = findOrderedMatch(contentTokens, innerWords)
+  if (!innerMatch) return null
+
+  const firstRaw = needle.slice(needleTokens[0].start, needleTokens[0].end)
+  const lastToken = needleTokens[needleTokens.length - 1]
+  const lastRaw = needle.slice(lastToken.start, lastToken.end)
+
+  const start = consumeBackward(content, innerMatch.start, firstRaw)
+  if (start === null) return null
+
+  const end = consumeForward(content, innerMatch.end, lastRaw)
+  if (end === null) return null
+
+  return { start, end }
+}
+
+export const expandWithContext = (
+  text: string,
+  start: number,
+  end: number,
+  padWords: number
+): string => {
+  const tokens = tokenize(text)
+  if (tokens.length === 0) return text.slice(start, end)
+
+  let selStartIdx = tokens.findIndex((t) => t.start >= start)
+  if (selStartIdx === -1) selStartIdx = tokens.length
+
+  let selEndIdx = selStartIdx
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (tokens[i].end <= end) {
+      selEndIdx = i
+      break
+    }
+  }
+
+  const contextStartIdx = Math.max(0, selStartIdx - padWords)
+  const contextEndIdx = Math.min(tokens.length - 1, selEndIdx + padWords)
+
+  return text.slice(tokens[contextStartIdx].start, tokens[contextEndIdx].end)
+}

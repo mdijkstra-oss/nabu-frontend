@@ -74,6 +74,39 @@ const offsetToPos = (doc: Node, offset: number, shouldSkip: NodeFilter): number 
 export const textOffsetToPos = (doc: Node, offset: number): number =>
   offsetToPos(doc, offset, isHiddenCodeBlock)
 
+const posToOffset = (doc: Node, targetPos: number, shouldSkip: NodeFilter): number => {
+  let textSeen = 0
+  let needsSep = false
+
+  doc.descendants((node, nodePos) => {
+    if (nodePos >= targetPos) return false
+    if (shouldSkip(node)) return false
+
+    if (node.isBlock && needsSep) {
+      textSeen += 1
+      needsSep = false
+    }
+
+    const len = node.textContent.length
+    if (len > 0 && node.isLeaf) {
+      needsSep = true
+      const nodeEnd = nodePos + node.nodeSize
+      if (targetPos <= nodeEnd) {
+        textSeen += targetPos - nodePos
+        return false
+      }
+      textSeen += len
+    }
+
+    return !node.isLeaf
+  })
+
+  return textSeen
+}
+
+export const posToTextOffset = (doc: Node, pos: number): number =>
+  posToOffset(doc, pos, isHiddenCodeBlock)
+
 export const findTextRange = (doc: Node, needle: string, cachedText?: string): TextRange | null => {
   const content = cachedText ?? proseTextContent(doc)
   const offset = findMatchOffset(content, needle)

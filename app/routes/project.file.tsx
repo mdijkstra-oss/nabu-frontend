@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from "react"
+import { useEditorSelection } from "~/ui/hooks/useEditorSelection"
 import { AnimatePresence } from "framer-motion"
 import { useSearchParams } from "react-router"
 import { useScrollToEntity } from "~/ui/hooks/useScrollToEntity"
@@ -11,7 +12,13 @@ import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 import { ScrollGutter } from "~/ui/components/editor/ScrollGutter"
 import { FileHeader } from "~/ui/components/editor/FileHeader"
 import { StatusBar } from "~/ui/components/StatusBar"
-import { computeTextStats, countLines, formatStatsLabel, formatStatsDetail } from "~/lib/text/stats"
+import {
+  computeTextStats,
+  countLines,
+  formatStatsLabel,
+  formatStatsDetail,
+  formatSelectionSuffix,
+} from "~/lib/text/stats"
 import { stripSingletonBlocks } from "~/lib/data-blocks/registry"
 import {
   getDocumentType,
@@ -79,6 +86,7 @@ export default function ProjectFile() {
   } = useProject()
   const [searchParams] = useSearchParams()
   const spotlight = useMemo(() => parseSpotlight(searchParams.get("spotlight")), [searchParams])
+  const editorSelection = useEditorSelection()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const editorContainerRef = useRef<HTMLDivElement>(null)
   useScrollToEntity(editorContainerRef, currentFile)
@@ -174,7 +182,11 @@ export default function ProjectFile() {
       </div>
       <div className="rounded-xl border border-solid border-panel-border bg-default-background">
         <StatusBar
-          text={rawContent ? documentStatusText(rawContent) : null}
+          text={
+            rawContent
+              ? `${documentStatusText(rawContent)}${formatSelectionSuffix(editorSelection?.text)}`
+              : null
+          }
           tooltip={rawContent ? documentStatusTooltip(rawContent) : undefined}
         />
       </div>

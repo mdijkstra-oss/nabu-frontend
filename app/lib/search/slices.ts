@@ -199,9 +199,6 @@ const regrowHitWithContext = (hit: SearchHit, fileContent: string, ctx: FileCont
   return growHitWithContext({ ...hit, text: stripAnnotationsBlock(hit.text) }, fileContent, ctx)
 }
 
-export const pruneHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  deduplicateHits(hits.filter((h) => isHitAlive(h, files)))
-
 export const refreshHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
   const cache = new Map<string, FileContext>()
   return deduplicateHits(

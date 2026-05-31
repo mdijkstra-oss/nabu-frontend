@@ -47,6 +47,7 @@ import {
   setPersistEnabled,
   setPendingRefsSuppressed,
   resolvePendingRefsInBulk,
+  getFileRaw,
 } from "~/lib/files/store"
 import {
   startDatabase,
@@ -76,8 +77,18 @@ import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
 import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
-import { buildRefineTask, codeWithFiles, codeWithSearch } from "~/domain/actions/coding/actions"
+import {
+  buildRefineTask,
+  codeWithFiles,
+  codeWithSearch,
+  codeWithSelection,
+  codeWithSearchSelection,
+} from "~/domain/actions/coding/actions"
 import { resolveCodingFiles } from "~/domain/actions/coding/selectors"
+import { useEditorSelection } from "~/ui/hooks/useEditorSelection"
+import type { EditorSelection } from "~/lib/editor/selection-store"
+import { debounce } from "~/lib/utils/debounce"
+import { locateSelectionInFile } from "~/lib/editor/selection-context"
 import { clearCodingsPatches } from "~/domain/actions/clear-codings/apply"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
@@ -458,6 +469,38 @@ export default function ProjectLayout() {
   }
 
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
+  const editorSelection = useEditorSelection()
+
+  const logSelectionRef = useRef(
+    debounce((...args: unknown[]) => {
+      const sel = args[0] as EditorSelection
+      if (!sel.filePath) return
+      const fileContent = getFileRaw(sel.filePath)
+      if (!fileContent) return
+      const range = locateSelectionInFile(
+        sel.text,
+        sel.filePath,
+        fileContent,
+        sel.context ?? undefined
+      )
+      if (range) {
+        console.log(
+          "[selection]",
+          `${range.filePath}:${range.startLine + 1}-${range.endLine + 1}`,
+          `"${sel.text.slice(0, 60)}"`,
+          range
+        )
+      } else {
+        console.log("[selection] no match", `"${sel.text.slice(0, 60)}"`, `in ${sel.filePath}`)
+      }
+    }, 300)
+  )
+
+  useEffect(() => {
+    if (!editorSelection?.filePath) return
+    logSelectionRef.current(editorSelection)
+  }, [editorSelection])
+
   const isOnDocumentPage = !!params.fileId
   const isOnSearchPage = !!params.searchId
   const totalCodeCount = useMemo(() => getAllCodes(files).length, [files])
@@ -502,6 +545,34 @@ export default function ProjectLayout() {
     const refs = resolveCodingFiles(files, [...selectedCodes])
     if (refs.length > 0) dispatchTask(codeWithSearch(refs, params.searchId))
   }, [params.searchId, files, selectedCodes])
+
+  const handleCodeSelection = useCallback(() => {
+    if (!editorSelection?.filePath) return
+    const refs = resolveCodingFiles(files, [...selectedCodes])
+    if (refs.length === 0) return
+    const fileContent = getFileRaw(editorSelection.filePath)
+    if (!fileContent) return
+    const range = locateSelectionInFile(
+      editorSelection.text,
+      editorSelection.filePath,
+      fileContent,
+      editorSelection.context ?? undefined
+    )
+    console.log(
+      "[selection]",
+      range
+        ? `resolved "${editorSelection.text.slice(0, 40)}" → ${range.filePath}:${range.startLine + 1}-${range.endLine + 1} (offsets ${range.startOffset}-${range.endOffset})`
+        : `failed to resolve "${editorSelection.text.slice(0, 40)}" in ${editorSelection.filePath}`,
+      { selection: editorSelection, range }
+    )
+    if (!range) return
+
+    if (isOnSearchPage && params.searchId) {
+      dispatchTask(codeWithSearchSelection(refs, [range], params.searchId))
+    } else {
+      dispatchTask(codeWithSelection(refs, [range]))
+    }
+  }, [editorSelection, files, selectedCodes, isOnSearchPage, params.searchId])
 
   const toggleCode = useCallback(
     (id: string) => writeSelectedCodes(toggleSelectedCode([...selectedCodes], id)),
@@ -550,6 +621,8 @@ export default function ProjectLayout() {
     })
   }, [allCodes, selectedCodes, files, params.projectId, currentFile, navigate, toggleCode])
 
+  const hasEditorSel = !!editorSelection?.filePath
+
   const codeSelectionActions = useMemo((): ActionBarAction[] => {
     const actions: ActionBarAction[] = []
 
@@ -563,15 +636,15 @@ export default function ProjectLayout() {
       })
       actions.push({
         icon: <FileText />,
-        label: "Code file",
-        onClick: handleCodeSelectedCodes,
+        label: hasEditorSel ? "Code selection" : "Code file",
+        onClick: hasEditorSel ? handleCodeSelection : handleCodeSelectedCodes,
         variant: "ai",
       })
     } else if (isOnSearchPage) {
       actions.push({
         icon: <FileText />,
-        label: "Code search results",
-        onClick: handleCodeSearchResults,
+        label: hasEditorSel ? "Code selection" : "Code search results",
+        onClick: hasEditorSel ? handleCodeSelection : handleCodeSearchResults,
         variant: "ai",
       })
     }
@@ -580,7 +653,7 @@ export default function ProjectLayout() {
       const codeId = [...selectedCodes][0]
       actions.push({
         icon: <Pencil />,
-        label: "Refine",
+        label: "Refine Code",
         onClick: () => dispatchTask(buildRefineTask(codeId)),
         variant: "ai",
       })
@@ -591,9 +664,11 @@ export default function ProjectLayout() {
     isOnDocumentPage,
     isOnSearchPage,
     hasSelectedAnnotationsInFile,
+    hasEditorSel,
     handleClearCodings,
     handleCodeSelectedCodes,
     handleCodeSearchResults,
+    handleCodeSelection,
     selectedCodes,
   ])
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { Schema } from "prosemirror-model"
-import { textOffsetToPos, proseTextContent } from "~/lib/editor/text"
+import { textOffsetToPos, posToTextOffset, proseTextContent } from "~/lib/editor/text"
 
 const schema = new Schema({
   nodes: {
@@ -222,5 +222,72 @@ describe("textOffsetToPos", () => {
       const pos = textOffsetToPos(doc, offset)
       expect(doc.textBetween(pos, pos + expectedResolved.length)).toBe(expectedResolved)
     })
+  })
+})
+
+describe("posToTextOffset", () => {
+  const cases = [
+    {
+      name: "start of single paragraph",
+      paragraphs: ["Hello"],
+      pos: 1,
+      expected: 0,
+    },
+    {
+      name: "middle of single paragraph",
+      paragraphs: ["Hello"],
+      pos: 3,
+      expected: 2,
+    },
+    {
+      name: "end of single paragraph",
+      paragraphs: ["Hello"],
+      pos: 6,
+      expected: 5,
+    },
+    {
+      name: "start of second paragraph",
+      paragraphs: ["Hello", "World"],
+      pos: 8,
+      expected: 6,
+    },
+    {
+      name: "middle of second paragraph",
+      paragraphs: ["Hello", "World"],
+      pos: 10,
+      expected: 8,
+    },
+    {
+      name: "third paragraph",
+      paragraphs: ["AAA", "BBB", "CCC"],
+      pos: 11,
+      expected: 8,
+    },
+  ]
+
+  it.each(cases)("$name", ({ paragraphs, pos, expected }) => {
+    const doc = createDoc(paragraphs)
+    expect(posToTextOffset(doc, pos)).toBe(expected)
+  })
+
+  it("round-trips with textOffsetToPos", () => {
+    const doc = createDoc(["Hello", "World", "Foo"])
+    const proseText = proseTextContent(doc)
+    for (let offset = 0; offset <= proseText.length; offset++) {
+      const pos = textOffsetToPos(doc, offset)
+      expect(posToTextOffset(doc, pos)).toBe(offset)
+    }
+  })
+
+  it("skips hidden code blocks", () => {
+    const doc = createDoc([
+      "Before",
+      { code: '{"tags": []}', language: "json-attributes" },
+      "After",
+    ])
+    const proseText = proseTextContent(doc)
+    expect(proseText).toBe("Before\nAfter")
+    const afterPos = textOffsetToPos(doc, 7)
+    expect(posToTextOffset(doc, afterPos)).toBe(7)
   })
 })

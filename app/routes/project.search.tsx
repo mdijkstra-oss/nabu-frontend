@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
+import { useEditorSelection } from "~/ui/hooks/useEditorSelection"
+import { formatSelectionSuffix } from "~/lib/text/stats"
 import { AnimatePresence } from "framer-motion"
 import { useParams, useNavigate } from "react-router"
 import { useProject } from "./project"
@@ -103,12 +105,16 @@ export default function ProjectSearch() {
     [results, activeTags, getFileTags]
   )
 
+  const editorSelection = useEditorSelection()
   const fileCount = useMemo(() => countUniqueFiles(filteredResults), [filteredResults])
   const isPending = search?.sql.length === 0
   const isSemantic = search ? hasSemanticTokens(search.sql) : false
-  const statusText = isPending
+  const baseStatusText = isPending
     ? "Writing search query"
     : searchStatusText(phase, filteredResults.length, fileCount, isSemantic)
+  const statusText = baseStatusText
+    ? `${baseStatusText}${formatSelectionSuffix(editorSelection?.text)}`
+    : null
   const isLoading =
     isPending || phase === "resolving" || phase === "searching" || phase === "filtering"
   const isDone = !isPending && phase === "done"

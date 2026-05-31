@@ -11,7 +11,7 @@ const WORDS_PER_MINUTE = 238
 
 export const countLines = (text: string): number => text.split("\n").length
 
-const countWords = (text: string): number => text.split(/\s+/).filter(Boolean).length
+export const countWords = (text: string): number => text.split(/\s+/).filter(Boolean).length
 
 export const computeTextStats = (text: string): TextStats => {
   const chars = text.length
@@ -34,3 +34,9 @@ export const formatStatsLabel = (stats: TextStats): string =>
 
 export const formatStatsDetail = (stats: TextStats): string =>
   `${formatNumber(stats.chars)} characters · ~${formatNumber(stats.estimatedTokens)} tokens`
+
+export const formatSelectionSuffix = (selectionText: string | undefined): string => {
+  if (!selectionText) return ""
+  const n = countWords(selectionText)
+  return n > 0 ? ` (${n} words selected)` : ""
+}

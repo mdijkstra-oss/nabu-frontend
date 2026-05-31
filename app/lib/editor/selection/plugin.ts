@@ -3,6 +3,8 @@ import type { EditorState } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { Decoration, DecorationSet } from "prosemirror-view"
 import { setEditorSelection, clearEditorSelection } from "~/lib/editor/selection-store"
+import { proseTextContent, posToTextOffset } from "~/lib/editor/text"
+import { expandWithContext } from "~/lib/text/find"
 
 const pluginKey = new PluginKey("editorSelection")
 
@@ -23,17 +25,28 @@ const createBlurDecorations = (state: EditorState): DecorationSet => {
   ])
 }
 
-const syncSelection = (view: EditorView): void => {
+const CONTEXT_PAD_WORDS = 8
+
+const buildContext = (view: EditorView, from: number, to: number): string | null => {
+  const doc = view.state.doc
+  const proseText = proseTextContent(doc)
+  const selStart = posToTextOffset(doc, from)
+  const selEnd = posToTextOffset(doc, to)
+  return expandWithContext(proseText, selStart, selEnd, CONTEXT_PAD_WORDS)
+}
+
+const syncSelection = (view: EditorView, filePath: string | null): void => {
   const { from, to } = view.state.selection
   if (isEmptySelection(from, to)) {
     clearEditorSelection()
     return
   }
   const text = view.state.doc.textBetween(from, to, "\n")
-  setEditorSelection({ text, from, to })
+  const context = buildContext(view, from, to)
+  setEditorSelection({ text, from, to, filePath, context })
 }
 
-export const createSelectionPlugin = (): Plugin =>
+export const createSelectionPlugin = (filePath: string | null): Plugin =>
   new Plugin({
     key: pluginKey,
     state: {
@@ -74,7 +87,7 @@ export const createSelectionPlugin = (): Plugin =>
       update: (view, prevState) => {
         const selChanged =
           !view.state.selection.eq(prevState.selection) || view.state.doc !== prevState.doc
-        if (selChanged) syncSelection(view)
+        if (selChanged) syncSelection(view, filePath)
       },
       destroy: () => {
         clearEditorSelection()

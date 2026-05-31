@@ -69,7 +69,7 @@ const MilkdownEditorCore = ({
   const nodeViewFactory = useNodeViewFactory()
   const annotationsPlugin = $prose(() => createAnnotationsPlugin())
   const spotlightPlugin = $prose(() => createSpotlightPlugin())
-  const selectionPlugin = $prose(() => createSelectionPlugin())
+  const selectionPlugin = $prose(() => createSelectionPlugin(filePath ?? null))
   const hiddenBlocksPlugin = $prose(() => createHiddenBlocksPlugin())
   const gapCursorPlugin = $prose(gapCursor)
   const calloutBlocksPlugin = createCalloutBlocksPlugin(nodeViewFactory)

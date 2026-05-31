@@ -1,6 +1,67 @@
 import type { TaskConfig } from "~/lib/agent/dispatch"
+import type { FileSelectionRange } from "~/lib/editor/selection-context"
 import type { CodingFileRef } from "./selectors"
 import { concatPretty } from "~/lib/utils/format"
+
+const SNIPPET_EDGE = 4
+
+const snippetPreview = (text: string): string => {
+  const words = text.split(/\s+/).filter(Boolean)
+  if (words.length <= SNIPPET_EDGE * 2) return words.join(" ")
+  return `${words.slice(0, SNIPPET_EDGE).join(" ")} … ${words.slice(-SNIPPET_EDGE).join(" ")}`
+}
+
+const formatSections = (ranges: FileSelectionRange[]): string =>
+  ranges
+    .map(
+      (r) => `{ path: "${r.filePath}", start_line: ${r.startLine + 1}, end_line: ${r.endLine + 1} }`
+    )
+    .join(", ")
+
+export const codeWithSelection = (
+  refs: CodingFileRef[],
+  ranges: FileSelectionRange[]
+): TaskConfig => {
+  const fileList = concatPretty(refs.map((r) => r.file))
+
+  const hasHidden = refs.some((r) => r.hidden)
+  const hiddenNote = hasHidden
+    ? "\nNote: .generated.hidden.md files will not appear in ls output, but do exist — DO NOT read supplied files, apply_deep_analysis will read them for you."
+    : ""
+  return {
+    context: `Do NOT use plan_deep_analysis or scout. Follow these steps exactly:
+
+1. Run ls --show-tags to find codebook files.
+2. Call apply_deep_analysis with these exact arguments:
+   - sections: [${formatSections(ranges)}]
+   - source_files: use the generic codebook (scope: "framework") if it exists, AND these codebook files as dimensions (scope: "dimension"): ${fileList}. Do not use any other codebooks.
+   - post_action: "annotate_as_code"${hiddenNote}`,
+    userMessage: `Code selection "${snippetPreview(ranges[0].text)}" with ${fileList}`,
+  }
+}
+
+export const codeWithSearchSelection = (
+  refs: CodingFileRef[],
+  ranges: FileSelectionRange[],
+  searchId: string
+): TaskConfig => {
+  const fileList = concatPretty(refs.map((r) => r.file))
+
+  const hasHidden = refs.some((r) => r.hidden)
+  const hiddenNote = hasHidden
+    ? "\nNote: .generated.hidden.md files will not appear in ls output, but do exist — DO NOT read supplied files, apply_deep_analysis will read them for you."
+    : ""
+  return {
+    context: `Do NOT use plan_deep_analysis or scout. Follow these steps exactly:
+
+1. Run ls --show-tags to find codebook files.
+2. Call apply_deep_analysis with these exact arguments:
+   - sections: [${formatSections(ranges)}]
+   - source_files: use the generic codebook (scope: "framework") if it exists, AND these codebook files as dimensions (scope: "dimension"): ${fileList}. Do not use any other codebooks.
+   - post_action: "annotate_as_code"${hiddenNote}`,
+    userMessage: `Code selected results from ${searchId} (${ranges.length} ${ranges.length === 1 ? "section" : "sections"}) with ${fileList}`,
+  }
+}
 
 export const buildRefineTask = (codeId: string): TaskConfig => ({
   context: `

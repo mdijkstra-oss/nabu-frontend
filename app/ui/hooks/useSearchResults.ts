@@ -157,6 +157,7 @@ export const useSearchResults = (
         setSettled((prev) => ({
           ...prev,
           results: sortByScore([...prev.results, ...hits]),
+          phase: prev.phase === "searching" ? "filtering" : prev.phase,
         }))
       }
 
