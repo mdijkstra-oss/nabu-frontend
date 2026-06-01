@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { createPortal } from "react-dom"
 import {
   Bold,
   Code2,
@@ -39,14 +38,24 @@ const MIN_TOP_SPACE = 80
 const ANNOTATIONS_LANGUAGE = "json-annotations"
 
 interface SelectionState {
-  rect: DOMRect
+  top: number
+  centerX: number
   hasRange: boolean
+  showAbove: boolean
 }
 
-const getNativeSelectionState = (
+const isSelectionBackward = (sel: Selection): boolean => {
+  if (sel.isCollapsed || !sel.anchorNode || !sel.focusNode) return false
+  const position = sel.anchorNode.compareDocumentPosition(sel.focusNode)
+  if (position & Node.DOCUMENT_POSITION_FOLLOWING) return false
+  if (position & Node.DOCUMENT_POSITION_PRECEDING) return true
+  return sel.anchorOffset > sel.focusOffset
+}
+
+const getNativeSelectionRect = (
   container: HTMLElement,
   selectionOnly: boolean
-): SelectionState | null => {
+): { rect: DOMRect; hasRange: boolean; isBackward: boolean } | null => {
   const domSel = window.getSelection()
   if (!domSel || domSel.rangeCount === 0) return null
   const hasRange = !domSel.isCollapsed
@@ -55,11 +64,16 @@ const getNativeSelectionState = (
   if (!container.contains(range.commonAncestorContainer)) return null
   const rect = range.getBoundingClientRect()
   if (rect.width === 0 && rect.height === 0) return null
-  return { rect, hasRange }
+  return { rect, hasRange, isBackward: isSelectionBackward(domSel) }
 }
 
-const clampHorizontal = (x: number): number =>
-  Math.max(VIEWPORT_MARGIN, Math.min(x, window.innerWidth - VIEWPORT_MARGIN))
+const clampCenterX = (x: number, containerWidth: number): number =>
+  Math.max(VIEWPORT_MARGIN, Math.min(x, containerWidth - VIEWPORT_MARGIN))
+
+const computePlacement = (rect: DOMRect, isBackward: boolean): boolean => {
+  if (isBackward) return false
+  return rect.top > MIN_TOP_SPACE
+}
 
 const TOOLBAR_GROUPS = [
   [
@@ -162,15 +176,13 @@ const AnnotationPill = ({
   )
 }
 
-const isLeavingTo = (e: React.MouseEvent, ref: React.RefObject<HTMLDivElement | null>): boolean =>
-  ref.current?.contains(e.relatedTarget as Node) ?? false
-
 const generateAnnotationId = (): string => `annotation-${generateShortId()}`
 
 export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
-  const portalRef = useRef<HTMLDivElement>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number | null>(null)
+  const placementRef = useRef<boolean | null>(null)
   const selectionOnly = useIsReadOnly()
   const { files } = useFiles()
   const selectedCodes = useMemo(() => getResolvedSelectedCodes(files), [files])
@@ -202,20 +214,38 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   const updateSelection = useCallback(() => {
     const container = containerRef.current
     if (!container) return
-    setSelection(getNativeSelectionState(container, selectionOnly))
+    const raw = getNativeSelectionRect(container, selectionOnly)
+    if (!raw) {
+      placementRef.current = null
+      setSelection(null)
+      return
+    }
+    const containerRect = container.getBoundingClientRect()
+    const showAbove = placementRef.current ?? computePlacement(raw.rect, raw.isBackward)
+    placementRef.current = showAbove
+    const top = showAbove
+      ? raw.rect.top - containerRect.top - TOOLBAR_GAP
+      : raw.rect.bottom - containerRect.top + TOOLBAR_GAP
+    const centerX = clampCenterX(
+      raw.rect.left - containerRect.left + raw.rect.width / 2,
+      containerRect.width
+    )
+    setSelection({ top, centerX, hasRange: raw.hasRange, showAbove })
   }, [selectionOnly])
 
   const scheduleUpdate = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null
+      placementRef.current = null
       updateSelection()
     })
   }, [updateSelection])
 
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
-      if (portalRef.current?.contains(e.target as Node)) return
+      if (toolbarRef.current?.contains(e.target as Node)) return
+      placementRef.current = null
       setSelection(null)
     }
 
@@ -234,48 +264,40 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
     updateSelection()
   }, [updateSelection])
 
-  const handleContainerLeave = useCallback((e: React.MouseEvent) => {
-    if (isLeavingTo(e, portalRef)) return
+  const handleContainerLeave = useCallback(() => {
     setHovered(false)
   }, [])
 
-  const handlePortalLeave = useCallback((e: React.MouseEvent) => {
-    if (isLeavingTo(e, containerRef)) return
-    setHovered(false)
-  }, [])
-
-  const rect = selection?.rect ?? null
-  const hasRange = selection?.hasRange ?? false
-  const visible = rect && hovered
-  const centerX = rect ? clampHorizontal(rect.left + rect.width / 2) : 0
-  const showAbove = rect ? rect.top > MIN_TOP_SPACE : true
-  const top = rect ? (showAbove ? rect.top - TOOLBAR_GAP : rect.bottom + TOOLBAR_GAP) : 0
-  const transform = showAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)"
+  const visible = selection && hovered
+  const transform = selection?.showAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)"
 
   return (
-    <div ref={containerRef} onMouseEnter={handleContainerEnter} onMouseLeave={handleContainerLeave}>
+    <div
+      ref={containerRef}
+      className="relative"
+      onMouseEnter={handleContainerEnter}
+      onMouseLeave={handleContainerLeave}
+    >
       {children}
-      {visible &&
-        createPortal(
-          <div
-            ref={portalRef}
-            onMouseDown={(e) => e.preventDefault()}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={handlePortalLeave}
-            className="flex items-center gap-2"
-            style={{
-              position: "fixed",
-              left: `${centerX}px`,
-              top: `${top}px`,
-              transform,
-              zIndex: 9999,
-            }}
-          >
-            <EditorToolbar groups={TOOLBAR_GROUPS} />
-            {hasRange && <AnnotationPill codes={selectedCodes} onCodeClick={handleCodeClick} />}
-          </div>,
-          document.body
-        )}
+      {visible && (
+        <div
+          ref={toolbarRef}
+          onMouseDown={(e) => e.preventDefault()}
+          className="flex items-center gap-2"
+          style={{
+            position: "absolute",
+            left: `${selection.centerX}px`,
+            top: `${selection.top}px`,
+            transform,
+            zIndex: 9999,
+          }}
+        >
+          <EditorToolbar groups={TOOLBAR_GROUPS} />
+          {selection.hasRange && (
+            <AnnotationPill codes={selectedCodes} onCodeClick={handleCodeClick} />
+          )}
+        </div>
+      )}
     </div>
   )
 }

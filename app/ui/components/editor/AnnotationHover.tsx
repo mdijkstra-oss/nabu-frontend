@@ -21,6 +21,7 @@ import { findTextRange, proseTextContent, type TextRange } from "~/lib/editor/te
 import { findMatchOffset } from "~/lib/text/find"
 import { buildFlaggedSearch } from "~/domain/search/queries"
 import { saveNewSearch } from "~/lib/agent/tools/search/settings"
+import { hasEditorSelection } from "~/lib/editor/selection-store"
 
 interface HoverState {
   text: string
@@ -119,8 +120,16 @@ const setReasonOp = (id: string, value: string) => [
   { op: "add" as const, path: `/annotations[id=${id}]/reason`, value },
 ]
 
-const setReviewOp = (id: string, value: string) => [
-  { op: "add" as const, path: `/annotations[id=${id}]/vote/review`, value },
+const setReviewOp = (
+  id: string,
+  value: string,
+  currentVote?: { find: { found: number; missed: number } }
+) => [
+  {
+    op: "add" as const,
+    path: `/annotations[id=${id}]/vote`,
+    value: { find: currentVote?.find ?? { found: 0, missed: 0 }, review: value },
+  },
 ]
 
 const annotationToEntry =
@@ -158,7 +167,11 @@ const annotationToEntry =
       onReviewChange: canMutate
         ? (value: string) =>
             executeUxAction([
-              { path: filePath, language: ANNOTATIONS_LANGUAGE, ops: setReviewOp(id, value) },
+              {
+                path: filePath,
+                language: ANNOTATIONS_LANGUAGE,
+                ops: setReviewOp(id, value, annotation.vote),
+              },
             ])
         : undefined,
       onReviewCountClick:
@@ -254,6 +267,8 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
 
   const handleMouseEnter = useCallback(
     (e: MouseEvent) => {
+      if (e.buttons !== 0) return
+      if (hasEditorSelection()) return
       const target = e.target as HTMLElement
       if (!isDecoration(target)) return
       const text = target.textContent ?? ""
@@ -285,11 +300,13 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
     if (!container) return
     container.addEventListener("mouseenter", handleMouseEnter, true)
     container.addEventListener("mouseleave", handleMouseLeave, true)
+    container.addEventListener("mousedown", dismiss, true)
     return () => {
       container.removeEventListener("mouseenter", handleMouseEnter, true)
       container.removeEventListener("mouseleave", handleMouseLeave, true)
+      container.removeEventListener("mousedown", dismiss, true)
     }
-  }, [handleMouseEnter, handleMouseLeave])
+  }, [handleMouseEnter, handleMouseLeave, dismiss])
 
   useEffect(() => {
     if (!hover) return
