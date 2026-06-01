@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildAnnotationPatchOps } from "./merge"
+import { buildAnnotationPatchOps, countAnnotationsInRange, buildClearSelectionOps } from "./merge"
 import type { Annotation } from "~/domain/data-blocks/attributes/schema"
 
 const makeAnnotation = (overrides: Partial<Annotation> & { text: string }): Annotation => ({
@@ -174,5 +174,94 @@ describe("buildAnnotationPatchOps", () => {
       expect(result.ops).toHaveLength(1)
       expect(result.ops[0].op).toBe("add")
     })
+  })
+})
+
+describe("countAnnotationsInRange", () => {
+  const docText = "The cat sat on the mat and the dog lay on the rug"
+
+  const cases = [
+    {
+      name: "counts single overlapping annotation",
+      annotations: [makeAnnotation({ id: "ann-1", text: "cat sat", code: "c1" })],
+      selection: { start: 0, end: 15 },
+      expected: 1,
+    },
+    {
+      name: "counts multiple overlapping annotations",
+      annotations: [
+        makeAnnotation({ id: "ann-1", text: "The cat", code: "c1" }),
+        makeAnnotation({ id: "ann-2", text: "cat sat on", code: "c2" }),
+      ],
+      selection: { start: 0, end: 15 },
+      expected: 2,
+    },
+    {
+      name: "non-overlapping annotation returns zero",
+      annotations: [makeAnnotation({ id: "ann-1", text: "the dog lay", code: "c1" })],
+      selection: { start: 0, end: 7 },
+      expected: 0,
+    },
+    {
+      name: "empty annotations returns zero",
+      annotations: [] as Annotation[],
+      selection: { start: 0, end: 15 },
+      expected: 0,
+    },
+    {
+      name: "annotation text not found in doc returns zero",
+      annotations: [makeAnnotation({ id: "ann-1", text: "elephant", code: "c1" })],
+      selection: { start: 0, end: 49 },
+      expected: 0,
+    },
+  ]
+
+  it.each(cases)("$name", ({ annotations, selection, expected }) => {
+    expect(countAnnotationsInRange(selection, docText, annotations)).toBe(expected)
+  })
+})
+
+describe("buildClearSelectionOps", () => {
+  const docText = "The cat sat on the mat and the dog lay on the rug"
+
+  const cases = [
+    {
+      name: "removes single overlapping annotation",
+      annotations: [
+        makeAnnotation({ id: "ann-1", text: "cat sat", code: "c1" }),
+        makeAnnotation({ id: "ann-2", text: "the dog lay", code: "c2" }),
+      ],
+      selection: { start: 0, end: 15 },
+      expectedOps: [{ op: "remove", path: "/annotations[id=ann-1]" }],
+    },
+    {
+      name: "removes multiple overlapping annotations",
+      annotations: [
+        makeAnnotation({ id: "ann-1", text: "The cat", code: "c1" }),
+        makeAnnotation({ id: "ann-2", text: "cat sat on", code: "c2" }),
+      ],
+      selection: { start: 0, end: 15 },
+      expectedOps: [
+        { op: "remove", path: "/annotations[id=ann-1]" },
+        { op: "remove", path: "/annotations[id=ann-2]" },
+      ],
+    },
+    {
+      name: "no ops when no overlap",
+      annotations: [makeAnnotation({ id: "ann-1", text: "the dog lay", code: "c1" })],
+      selection: { start: 0, end: 7 },
+      expectedOps: [],
+    },
+    {
+      name: "skips annotations without id",
+      annotations: [makeAnnotation({ text: "cat sat", code: "c1" })],
+      selection: { start: 0, end: 15 },
+      expectedOps: [],
+    },
+  ]
+
+  it.each(cases)("$name", ({ annotations, selection, expectedOps }) => {
+    const result = buildClearSelectionOps(selection, docText, annotations)
+    expect(result.ops).toEqual(expectedOps)
   })
 })

@@ -89,3 +89,24 @@ export const buildAnnotationPatchOps = (
 
   return { ops }
 }
+
+export const countAnnotationsInRange = (
+  selection: SelectionRange,
+  docText: string,
+  annotations: Annotation[]
+): number => {
+  const resolved = resolveAnnotationOffsets(annotations, docText)
+  return resolved.filter((r) => rangesOverlap(selection, r.offset)).length
+}
+
+export const buildClearSelectionOps = (
+  selection: SelectionRange,
+  docText: string,
+  annotations: Annotation[]
+): AnnotationPatchResult => {
+  const resolved = resolveAnnotationOffsets(annotations, docText)
+  const ops = resolved
+    .filter((r) => rangesOverlap(selection, r.offset))
+    .flatMap((r) => (r.annotation.id ? [buildRemoveOp(r.annotation.id)] : []))
+  return { ops }
+}

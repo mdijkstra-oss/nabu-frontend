@@ -9,7 +9,7 @@ import {
 } from "react"
 import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
 // NEVER use Sparkles icon
-import { Check, Eraser, FileText, Pencil } from "lucide-react"
+import { Eraser, FileText, Pencil } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
 import { useFiles } from "~/ui/hooks/useFiles"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
@@ -63,6 +63,7 @@ import {
   getAnnotationCountsByCode,
   getAnnotationGlobalCountsByCode,
   getReviewStatsByCode,
+  getStoredAnnotations,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { findDocumentForCallout } from "~/domain/data-blocks/callout/selectors"
 import { toDisplayName, isHiddenFile } from "~/lib/files/filename"
@@ -89,13 +90,12 @@ import { debounce } from "~/lib/utils/debounce"
 import { resolveEditorSelection, resolveSearchSelections } from "~/lib/editor/selection-context"
 import { clearCodingsPatches } from "~/domain/actions/clear-codings/apply"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
+import { countAnnotationsInRange, buildClearSelectionOps } from "~/lib/editor/annotations/merge"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 import { ActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
-import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
-import { getSelectedCodes, toggleSelectedCode } from "~/domain/data-blocks/ux/selectors"
+import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getAllCodes, findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
-import { solidBackground } from "~/ui/theme/radix"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
 
@@ -510,8 +510,11 @@ export default function ProjectLayout() {
   const globalAnnotationCounts = useMemo(() => getAnnotationGlobalCountsByCode(files), [files])
   const reviewStats = useMemo(() => getReviewStatsByCode(files), [files])
 
-  const hasSelectedAnnotationsInFile = useMemo(
-    () => Object.keys(annotationCounts).some((code) => selectedCodes.has(code)),
+  const selectedAnnotationCountInFile = useMemo(
+    () =>
+      Object.entries(annotationCounts)
+        .filter(([code]) => selectedCodes.has(code))
+        .reduce((sum, [, count]) => sum + count, 0),
     [annotationCounts, selectedCodes]
   )
 
@@ -519,6 +522,49 @@ export default function ProjectLayout() {
     if (!currentFile) return
     executeUxAction(clearCodingsPatches(currentFile, selectedCodes))
   }, [currentFile, selectedCodes])
+
+  const filterAnnotationsBySelectedCodes = useCallback(
+    (raw: string) => getStoredAnnotations(raw).filter((a) => a.code && selectedCodes.has(a.code)),
+    [selectedCodes]
+  )
+
+  const annotationCountInSelection = useMemo(() => {
+    if (!editorSelection?.filePath) return 0
+    const resolved = resolveEditorSelection()
+    if (!resolved) return 0
+    const raw = files[resolved.filePath]
+    if (!raw) return 0
+    const annotations = filterAnnotationsBySelectedCodes(raw)
+    return countAnnotationsInRange(
+      { start: resolved.exact.startOffset, end: resolved.exact.endOffset },
+      raw,
+      annotations
+    )
+  }, [editorSelection, files, filterAnnotationsBySelectedCodes])
+
+  const resolveActiveRanges = useCallback(() => {
+    if (isOnSearchPage) return resolveSearchSelections()
+    const range = resolveEditorSelection()
+    return range ? [range] : []
+  }, [isOnSearchPage])
+
+  const handleClearSelection = useCallback(() => {
+    const patches = resolveActiveRanges().flatMap((range) => {
+      const raw = files[range.filePath]
+      if (!raw) return []
+      const annotations = filterAnnotationsBySelectedCodes(raw)
+      const { ops } = buildClearSelectionOps(
+        { start: range.exact.startOffset, end: range.exact.endOffset },
+        raw,
+        annotations
+      )
+      return ops.length > 0
+        ? [{ path: range.filePath, language: "json-annotations" as const, ops }]
+        : []
+    })
+
+    if (patches.length > 0) executeUxAction(patches)
+  }, [files, filterAnnotationsBySelectedCodes, resolveActiveRanges])
 
   const handleCodeSelectedCodes = useCallback(() => {
     const refs = resolveCodingFiles(files, [...selectedCodes])
@@ -548,66 +594,53 @@ export default function ProjectLayout() {
     }
   }, [files, selectedCodes, isOnSearchPage, params.searchId])
 
-  const toggleCode = useCallback(
-    (id: string) => writeSelectedCodes(toggleSelectedCode([...selectedCodes], id)),
-    [selectedCodes]
-  )
-
-  const allCodes = useMemo(() => getAllCodes(files), [files])
-
-  const selectedCodesDetail = useMemo(() => {
-    if (allCodes.length === 0) return null
-    return allCodes.map((code) => {
-      const isSelected = selectedCodes.has(code.id)
-      return (
-        <div key={code.id} className="whitespace-nowrap py-1">
-          <button
-            className="flex cursor-pointer items-center gap-2 border-none bg-transparent p-0"
-            onClick={() => toggleCode(code.id)}
-          >
-            <span
-              className="flex h-4 w-4 flex-none items-center justify-center rounded-full border-2 border-solid transition-all"
-              style={{
-                borderColor: solidBackground(code.color),
-                backgroundColor: isSelected ? solidBackground(code.color) : "transparent",
-                opacity: isSelected ? 1 : 0.4,
-              }}
-            >
-              {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
-            </span>
-            <span
-              className="text-caption font-caption text-default-font transition-opacity"
-              style={{ opacity: isSelected ? 1 : 0.5 }}
-            >
-              <InlineMarkdown
-                files={files}
-                projectId={params.projectId ?? null}
-                currentFile={currentFile ?? null}
-                currentFileContent={currentFile ? (files[currentFile] ?? null) : null}
-                navigate={navigate}
-              >
-                {code.id}
-              </InlineMarkdown>
-            </span>
-          </button>
-        </div>
-      )
-    })
-  }, [allCodes, selectedCodes, files, params.projectId, currentFile, navigate, toggleCode])
-
   const hasEditorSel = !!editorSelection?.filePath
 
-  const codeSelectionActions = useMemo((): ActionBarAction[] => {
-    const actions: ActionBarAction[] = []
+  const formatClearLabel = (base: string, count: number): string =>
+    count > 0 ? `${base} (${count})` : base
 
-    if (isOnDocumentPage) {
-      actions.push({
+  const clearAction = useMemo((): ActionBarAction => {
+    if (hasEditorSel) {
+      return {
         icon: <Eraser />,
-        label: hasSelectedAnnotationsInFile ? "Clear codings" : "Not coded",
+        label: formatClearLabel("Clear selection", annotationCountInSelection),
+        onClick: handleClearSelection,
+        variant: "confirm",
+        disabled: annotationCountInSelection === 0,
+      }
+    }
+    if (isOnDocumentPage) {
+      return {
+        icon: <Eraser />,
+        label:
+          selectedAnnotationCountInFile > 0
+            ? formatClearLabel("Clear codings", selectedAnnotationCountInFile)
+            : "Not coded",
         onClick: handleClearCodings,
         variant: "confirm",
-        disabled: !hasSelectedAnnotationsInFile,
-      })
+        disabled: selectedAnnotationCountInFile === 0,
+      }
+    }
+    return {
+      icon: <Eraser />,
+      label: "Clear selection",
+      onClick: handleClearSelection,
+      variant: "confirm",
+      disabled: true,
+    }
+  }, [
+    hasEditorSel,
+    annotationCountInSelection,
+    isOnDocumentPage,
+    selectedAnnotationCountInFile,
+    handleClearSelection,
+    handleClearCodings,
+  ])
+
+  const codeSelectionActions = useMemo((): ActionBarAction[] => {
+    const actions: ActionBarAction[] = [clearAction]
+
+    if (isOnDocumentPage) {
       actions.push({
         icon: <FileText />,
         label: hasEditorSel ? "Code selection" : "Code file",
@@ -617,7 +650,7 @@ export default function ProjectLayout() {
     } else if (isOnSearchPage) {
       actions.push({
         icon: <FileText />,
-        label: hasEditorSel ? "Code selection" : "Code search results",
+        label: hasEditorSel ? "Code selection" : "Code results",
         onClick: hasEditorSel ? handleCodeSelection : handleCodeSearchResults,
         variant: "ai",
       })
@@ -635,11 +668,10 @@ export default function ProjectLayout() {
 
     return actions
   }, [
+    clearAction,
     isOnDocumentPage,
     isOnSearchPage,
-    hasSelectedAnnotationsInFile,
     hasEditorSel,
-    handleClearCodings,
     handleCodeSelectedCodes,
     handleCodeSearchResults,
     handleCodeSelection,
@@ -810,12 +842,6 @@ export default function ProjectLayout() {
                             ? findCodeById(files, [...selectedCodes][0])?.title
                             : undefined
                         )}
-                        detail={selectedCodesDetail}
-                        titleAction={
-                          hasAllCodesSelected
-                            ? { label: "Deselect all", onClick: clearSelectedCodes }
-                            : { label: "Select all", onClick: selectAllCodes }
-                        }
                         actions={codeSelectionActions}
                       />
                     ) : null,
