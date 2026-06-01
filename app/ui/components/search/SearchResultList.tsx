@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { memo, useMemo, useState, useEffect, useRef } from "react"
 import { FileText, Search } from "lucide-react"
 import { IconButton } from "~/ui/components/IconButton"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
@@ -6,7 +6,7 @@ import { TagBadge } from "~/ui/components/TagBadge"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
-import { refreshHits } from "~/lib/search/slices"
+import { refreshHitsAsync } from "~/lib/search/slices"
 import { useThrottledValue } from "~/ui/hooks/useThrottledValue"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
@@ -115,64 +115,71 @@ const SearchSlicePreview = ({
   )
 }
 
-const RunGroupCard = ({
-  group,
-  files,
-  projectId,
-  activeTags,
-  onNavigate,
-}: {
+interface RunGroupCardProps {
   group: RunGroup
   files: FileStore
   projectId: string
   activeTags?: Set<string>
   onNavigate?: (url: string) => void
-}) => {
-  const fileUrl = buildFileUrl(projectId, group.file)
-  const content = files[group.file] ?? ""
-  const tagIds = getTags(content)
-  const tags = tagIds
-    .map((id) => findTagDefinitionById(files, id))
-    .filter((t): t is NonNullable<typeof t> => t !== null)
-
-  const isFileOnlyGroup = group.hits.every(hitIsFileOnly)
-  const detailHits = group.hits.filter((h) => !hitIsFileOnly(h))
-
-  const handleOpenFile = () => onNavigate?.(fileUrl)
-
-  const hitsToRender = isFileOnlyGroup ? [{ file: group.file }] : detailHits
-
-  return (
-    <div className="flex w-full flex-col items-start overflow-hidden rounded-lg border border-solid border-neutral-border bg-default-background shadow-sm">
-      <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border bg-neutral-50 px-4 py-3">
-        <FileText className="text-body font-body text-brand-600" />
-        <button
-          type="button"
-          className="grow shrink-0 basis-0 text-left text-body-bold font-body-bold text-default-font hover:text-brand-600 transition-colors cursor-pointer"
-          onClick={handleOpenFile}
-        >
-          {toDisplayName(group.file)}
-        </button>
-        {tags.map((tag) => (
-          <TagBadge key={tag.id} tag={tag} active={!activeTags || activeTags.has(tag.id)} />
-        ))}
-      </div>
-      <div className="flex w-full flex-col items-start gap-4 py-5">
-        {hitsToRender.map((hit, i) =>
-          hit.text ? (
-            <SearchSlicePreview
-              key={hitKey(hit, i)}
-              text={hit.text}
-              filePath={hit.file}
-              matches={hit.matches}
-              onNavigate={() => onNavigate?.(buildHitUrl(projectId, hit))}
-            />
-          ) : null
-        )}
-      </div>
-    </div>
-  )
 }
+
+const areGroupPropsEqual = (prev: RunGroupCardProps, next: RunGroupCardProps): boolean =>
+  prev.group.file === next.group.file &&
+  prev.group.hits === next.group.hits &&
+  prev.files === next.files &&
+  prev.projectId === next.projectId &&
+  prev.activeTags === next.activeTags &&
+  prev.onNavigate === next.onNavigate
+
+const RunGroupCard = memo(
+  ({ group, files, projectId, activeTags, onNavigate }: RunGroupCardProps) => {
+    const fileUrl = buildFileUrl(projectId, group.file)
+    const content = files[group.file] ?? ""
+    const tagIds = getTags(content)
+    const tags = tagIds
+      .map((id) => findTagDefinitionById(files, id))
+      .filter((t): t is NonNullable<typeof t> => t !== null)
+
+    const isFileOnlyGroup = group.hits.every(hitIsFileOnly)
+    const detailHits = group.hits.filter((h) => !hitIsFileOnly(h))
+
+    const handleOpenFile = () => onNavigate?.(fileUrl)
+
+    const hitsToRender = isFileOnlyGroup ? [{ file: group.file }] : detailHits
+
+    return (
+      <div className="flex w-full flex-col items-start overflow-hidden rounded-lg border border-solid border-neutral-border bg-default-background shadow-sm">
+        <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border bg-neutral-50 px-4 py-3">
+          <FileText className="text-body font-body text-brand-600" />
+          <button
+            type="button"
+            className="grow shrink-0 basis-0 text-left text-body-bold font-body-bold text-default-font hover:text-brand-600 transition-colors cursor-pointer"
+            onClick={handleOpenFile}
+          >
+            {toDisplayName(group.file)}
+          </button>
+          {tags.map((tag) => (
+            <TagBadge key={tag.id} tag={tag} active={!activeTags || activeTags.has(tag.id)} />
+          ))}
+        </div>
+        <div className="flex w-full flex-col items-start gap-4 py-5">
+          {hitsToRender.map((hit, i) =>
+            hit.text ? (
+              <SearchSlicePreview
+                key={hitKey(hit, i)}
+                text={hit.text}
+                filePath={hit.file}
+                matches={hit.matches}
+                onNavigate={() => onNavigate?.(buildHitUrl(projectId, hit))}
+              />
+            ) : null
+          )}
+        </div>
+      </div>
+    )
+  },
+  areGroupPropsEqual
+)
 
 export const SearchResultList = ({
   hits,
@@ -182,7 +189,23 @@ export const SearchResultList = ({
   onNavigate,
 }: SearchResultListProps) => {
   const throttledFiles = useThrottledValue(files, 500)
-  const liveHits = useMemo(() => refreshHits(hits, throttledFiles), [hits, throttledFiles])
+  const [liveHits, setLiveHits] = useState<SearchHit[]>(hits)
+  const cancelRef = useRef(false)
+
+  useEffect(() => {
+    cancelRef.current = true
+    cancelRef.current = false
+    const isCancelled = () => cancelRef.current
+
+    refreshHitsAsync(hits, throttledFiles, isCancelled).then((refreshed) => {
+      if (!isCancelled()) setLiveHits(refreshed)
+    })
+
+    return () => {
+      cancelRef.current = true
+    }
+  }, [hits, throttledFiles])
+
   const groups = useMemo(() => groupByRun(liveHits), [liveHits])
 
   return (

@@ -64,11 +64,12 @@ const fuseHydes = async (
   buildQuery: QueryBuilder,
   limit: number | undefined
 ): Promise<Result<ScoredChunk[], DbError>> => {
-  const cosinePerHyde: ScoredChunk[][] = []
+  const results = await Promise.all(
+    plan.hydes.map((hyde) => runScoredQuery(db, buildQuery(plan.baseSql, hyde)))
+  )
 
-  for (const hyde of plan.hydes) {
-    const sql = buildQuery(plan.baseSql, hyde)
-    const result = await runScoredQuery(db, sql)
+  const cosinePerHyde: ScoredChunk[][] = []
+  for (const result of results) {
     if (!result.ok) return result
     cosinePerHyde.push(result.value)
   }

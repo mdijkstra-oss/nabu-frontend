@@ -8,7 +8,7 @@ import { buildSemanticContext } from "~/domain/corpus/init"
 import { updateSearchCache } from "~/lib/agent/tools/search/settings"
 import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
 import { filterParallel, FILTER_BATCH_SIZE } from "~/lib/search/filter-hits"
-import { executeResolvedSearch, sortByScore, MAX_BARREN_BATCHES } from "~/lib/search/pipeline"
+import { executeResolvedSearch, mergeByScore, MAX_BARREN_BATCHES } from "~/lib/search/pipeline"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery } from "~/lib/search/semantic"
 
@@ -75,7 +75,7 @@ export const useSearchResults = (
       if (state.cancelled) return
       setSettled((prev) => ({
         ...prev,
-        results: sortByScore([...prev.results, ...hits]),
+        results: mergeByScore(prev.results, hits),
       }))
     }
 
@@ -156,7 +156,7 @@ export const useSearchResults = (
         if (cancelled) return
         setSettled((prev) => ({
           ...prev,
-          results: sortByScore([...prev.results, ...hits]),
+          results: mergeByScore(prev.results, hits),
           phase: prev.phase === "searching" ? "filtering" : prev.phase,
         }))
       }

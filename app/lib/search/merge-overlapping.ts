@@ -15,44 +15,47 @@ const locateInProse = (prose: string, text: string): Range | null => {
 
 const rangesOverlap = (a: Range, b: Range): boolean => a.start < b.end && b.start < a.end
 
-export const mergeOverlappingHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
-  const absorbed = new Set<number>()
-  const ranges = new Map<number, Range>()
-  const proseCache = new Map<string, string>()
+interface IndexedHit {
+  hit: SearchHit
+  original: number
+}
 
-  const getProse = (file: string): string | null => {
-    const cached = proseCache.get(file)
-    if (cached !== undefined) return cached
-    const content = files[file]
-    if (!content) return null
-    const prose = extractProse(content)
-    proseCache.set(file, prose)
-    return prose
+const groupByFile = (hits: SearchHit[]): Map<string, IndexedHit[]> => {
+  const groups = new Map<string, IndexedHit[]>()
+  for (let i = 0; i < hits.length; i++) {
+    const file = hits[i].file
+    const group = groups.get(file)
+    if (group) group.push({ hit: hits[i], original: i })
+    else groups.set(file, [{ hit: hits[i], original: i }])
   }
+  return groups
+}
 
-  const getRange = (index: number, hit: SearchHit, prose: string): Range | null => {
-    const cached = ranges.get(index)
+const mergeFileGroup = (group: IndexedHit[], prose: string): IndexedHit[] => {
+  const ranges = new Map<number, Range>()
+  const absorbed = new Set<number>()
+  const result: IndexedHit[] = []
+
+  const getRange = (idx: number, hit: SearchHit): Range | null => {
+    const cached = ranges.get(idx)
     if (cached) return cached
     if (!hit.text) return null
     const range = locateInProse(prose, hit.text)
-    if (range) ranges.set(index, range)
+    if (range) ranges.set(idx, range)
     return range
   }
 
-  const result: SearchHit[] = []
-
-  for (let i = 0; i < hits.length; i++) {
+  for (let i = 0; i < group.length; i++) {
     if (absorbed.has(i)) continue
-    const hit = hits[i]
-    const prose = getProse(hit.file)
-    if (!prose || !hit.text) {
-      result.push(hit)
+    const { hit } = group[i]
+    if (!hit.text) {
+      result.push(group[i])
       continue
     }
 
-    const range = getRange(i, hit, prose)
+    const range = getRange(i, hit)
     if (!range) {
-      result.push(hit)
+      result.push(group[i])
       continue
     }
 
@@ -60,29 +63,54 @@ export const mergeOverlappingHits = (hits: SearchHit[], files: FileStore): Searc
     let mergedEnd = range.end
     let bestScore = hit.score ?? 0
 
-    for (let j = i + 1; j < hits.length; j++) {
+    for (let j = i + 1; j < group.length; j++) {
       if (absorbed.has(j)) continue
-      if (hits[j].file !== hit.file) continue
-      if (!hits[j].text) continue
+      if (!group[j].hit.text) continue
 
-      const otherRange = getRange(j, hits[j], prose)
+      const otherRange = getRange(j, group[j].hit)
       if (!otherRange) continue
 
       if (rangesOverlap({ start: mergedStart, end: mergedEnd }, otherRange)) {
         mergedStart = Math.min(mergedStart, otherRange.start)
         mergedEnd = Math.max(mergedEnd, otherRange.end)
-        bestScore = Math.max(bestScore, hits[j].score ?? 0)
+        bestScore = Math.max(bestScore, group[j].hit.score ?? 0)
         absorbed.add(j)
       }
     }
 
     const isUnchanged = mergedStart === range.start && mergedEnd === range.end
     if (isUnchanged) {
-      result.push(hit)
+      result.push(group[i])
     } else {
-      result.push({ ...hit, text: prose.slice(mergedStart, mergedEnd), score: bestScore })
+      result.push({
+        hit: { ...hit, text: prose.slice(mergedStart, mergedEnd), score: bestScore },
+        original: group[i].original,
+      })
     }
   }
 
   return result
+}
+
+export const mergeOverlappingHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
+  const proseCache = new Map<string, string>()
+  const groups = groupByFile(hits)
+  const merged: IndexedHit[] = []
+
+  for (const [file, group] of groups) {
+    const content = files[file]
+    if (!content) {
+      merged.push(...group)
+      continue
+    }
+
+    const cached = proseCache.get(file)
+    const prose = cached ?? extractProse(content)
+    if (!cached) proseCache.set(file, prose)
+
+    merged.push(...mergeFileGroup(group, prose))
+  }
+
+  merged.sort((a, b) => a.original - b.original)
+  return merged.map((m) => m.hit)
 }

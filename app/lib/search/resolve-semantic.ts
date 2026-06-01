@@ -212,13 +212,26 @@ const embedAndFlattenAll = async (
   inclusions: Inclusions,
   baseUrl: string
 ): Promise<Result<HydeQuery[], { message: string }>> => {
+  const entries = Object.entries(inclusions).filter(([, texts]) => texts.length > 0)
   const allQueries: HydeQuery[] = []
 
-  for (const [language, texts] of Object.entries(inclusions)) {
-    if (texts.length === 0) continue
-    const embeddingResult = await fetchEmbeddingBatch(texts, baseUrl)
-    if (!embeddingResult.ok) return err(embeddingResult.error)
-    allQueries.push(...toHydeQueries(language, texts, embeddingResult.value))
+  const pool = await processPool(
+    entries,
+    async ([language, texts]) => {
+      const result = await fetchEmbeddingBatch(texts, baseUrl)
+      if (!result.ok) throw new Error(result.error.message)
+      return toHydeQueries(language, texts, result.value)
+    },
+    (hydes) => allQueries.push(...hydes),
+    { warmup: 0 }
+  )
+
+  if (pool.failures.length > 0) {
+    const message =
+      pool.failures[0].error instanceof Error
+        ? pool.failures[0].error.message
+        : String(pool.failures[0].error)
+    return err({ message })
   }
 
   return ok(allQueries)

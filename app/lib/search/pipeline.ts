@@ -32,6 +32,20 @@ export interface PipelineError {
 export const sortByScore = (hits: SearchHit[]): SearchHit[] =>
   [...hits].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
 
+export const mergeByScore = (sorted: SearchHit[], incoming: SearchHit[]): SearchHit[] => {
+  const fresh = [...incoming].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+  const merged: SearchHit[] = []
+  let si = 0
+  let fi = 0
+  while (si < sorted.length && fi < fresh.length) {
+    if ((sorted[si].score ?? 0) >= (fresh[fi].score ?? 0)) merged.push(sorted[si++])
+    else merged.push(fresh[fi++])
+  }
+  while (si < sorted.length) merged.push(sorted[si++])
+  while (fi < fresh.length) merged.push(fresh[fi++])
+  return merged
+}
+
 interface Executed {
   rawHits: SearchHit[]
   hydes: HydeQuery[]

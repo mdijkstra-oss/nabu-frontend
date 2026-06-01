@@ -7,6 +7,8 @@ import { stripBlocksByLanguage, extractProse } from "~/lib/data-blocks/parse"
 import { findMatchOffset } from "~/lib/text/find"
 import { trimAroundMatches } from "~/lib/text/trim-around"
 import { splitBySentences } from "~/lib/text/split"
+import { createCappedCache } from "~/lib/utils/cache"
+import { yieldToBrowser } from "~/lib/utils/async"
 
 interface Range {
   start: number
@@ -162,30 +164,26 @@ const deduplicateHits = (hits: SearchHit[]): SearchHit[] => {
   })
 }
 
-const getFileContext = (
-  file: string,
-  files: FileStore,
-  cache: Map<string, FileContext>
-): FileContext | null => {
+const fileContextCache = createCappedCache<string, FileContext>(500)
+
+const getFileContext = (file: string, files: FileStore): FileContext | null => {
   const content = files[file]
   if (!content) return null
-  const cached = cache.get(file)
+  const cached = fileContextCache.get(content)
   if (cached) return cached
   const ctx = computeFileContext(content)
-  cache.set(file, ctx)
+  fileContextCache.set(content, ctx)
   return ctx
 }
 
-export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
-  const cache = new Map<string, FileContext>()
-  return deduplicateHits(
+export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  deduplicateHits(
     hits.map((hit) => {
-      const ctx = getFileContext(hit.file, files, cache)
+      const ctx = getFileContext(hit.file, files)
       if (!ctx) return hit
       return growHitWithContext(hit, files[hit.file], ctx)
     })
   )
-}
 
 const isHitAlive = (hit: SearchHit, files: FileStore): boolean => {
   const content = files[hit.file]
@@ -199,15 +197,31 @@ const regrowHitWithContext = (hit: SearchHit, fileContent: string, ctx: FileCont
   return growHitWithContext({ ...hit, text: stripAnnotationsBlock(hit.text) }, fileContent, ctx)
 }
 
-export const refreshHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
-  const cache = new Map<string, FileContext>()
-  return deduplicateHits(
+export const refreshHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  deduplicateHits(
     hits
       .filter((h) => isHitAlive(h, files))
       .map((h) => {
-        const ctx = getFileContext(h.file, files, cache)
+        const ctx = getFileContext(h.file, files)
         if (!ctx) return h
         return regrowHitWithContext(h, files[h.file], ctx)
       })
   )
+
+export const refreshHitsAsync = async (
+  hits: SearchHit[],
+  files: FileStore,
+  isCancelled: () => boolean
+): Promise<SearchHit[]> => {
+  const alive = hits.filter((h) => isHitAlive(h, files))
+  const refreshed: SearchHit[] = []
+
+  for (const h of alive) {
+    if (isCancelled()) return refreshed
+    const ctx = getFileContext(h.file, files)
+    refreshed.push(ctx ? regrowHitWithContext(h, files[h.file], ctx) : h)
+    await yieldToBrowser()
+  }
+
+  return deduplicateHits(refreshed)
 }
