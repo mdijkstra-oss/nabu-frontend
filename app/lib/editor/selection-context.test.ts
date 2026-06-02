@@ -59,8 +59,72 @@ describe("locateSelectionInFile", () => {
         filePath: "memo.md",
         startLine: 1,
         endLine: 1,
-        exact: { text: "**bold text** and *italic words*", startOffset: 11, endOffset: 43 },
-        fullWords: { text: "**bold text** and *italic words*", startOffset: 11, endOffset: 43 },
+        exact: { text: "bold text** and *italic words", startOffset: 13, endOffset: 42 },
+        fullWords: { text: "bold text** and *italic words", startOffset: 13, endOffset: 42 },
+      },
+    },
+    {
+      name: "prosemirror strips link URLs — match succeeds",
+      selectionText: "here to continue",
+      filePath: "links.md",
+      fileContent: "Click [here](https://example.com) to continue",
+      expected: {
+        filePath: "links.md",
+        startLine: 0,
+        endLine: 0,
+        exact: {
+          text: "here](https://example.com) to continue",
+          startOffset: 7,
+          endOffset: 45,
+        },
+        fullWords: {
+          text: "here](https://example.com) to continue",
+          startOffset: 7,
+          endOffset: 45,
+        },
+      },
+    },
+    {
+      name: "multiple links in document — selection between links",
+      selectionText: "first and second",
+      filePath: "links.md",
+      fileContent: "See [first](http://a.com) and [second](http://b.com) end",
+      expected: {
+        filePath: "links.md",
+        startLine: 0,
+        endLine: 0,
+        exact: {
+          text: "first](http://a.com) and [second",
+          startOffset: 5,
+          endOffset: 37,
+        },
+        fullWords: {
+          text: "first](http://a.com) and [second",
+          startOffset: 5,
+          endOffset: 37,
+        },
+      },
+    },
+    {
+      name: "select-all with links matches entire document",
+      selectionText: "Read the article about testing for more details",
+      filePath: "links.md",
+      fileContent:
+        "Read the [article](https://example.com/article) about [testing](https://example.com/test) for more details",
+      expected: {
+        filePath: "links.md",
+        startLine: 0,
+        endLine: 0,
+        exact: {
+          text: "Read the [article](https://example.com/article) about [testing](https://example.com/test) for more details",
+          startOffset: 0,
+          endOffset: 106,
+        },
+        fullWords: {
+          text: "Read the [article](https://example.com/article) about [testing](https://example.com/test) for more details",
+          startOffset: 0,
+          endOffset: 106,
+        },
       },
     },
     {
@@ -281,6 +345,23 @@ describe("locateSelectionInFile with context", () => {
       },
     },
     {
+      name: "context with link text disambiguates correctly",
+      selectionText: "details",
+      context: "Read the article for details on setup",
+      filePath: "links.md",
+      fileContent: [
+        "Some details about prerequisites.",
+        "Read the [article](https://example.com) for details on setup.",
+      ].join("\n"),
+      expected: {
+        filePath: "links.md",
+        startLine: 1,
+        endLine: 1,
+        exact: { text: "details", startOffset: 78, endOffset: 85 },
+        fullWords: { text: "details", startOffset: 78, endOffset: 85 },
+      },
+    },
+    {
       name: "partial edges with markdown formatting in source",
       selectionText: "old text and ital",
       context: "some intro bold text and italic words some outro",
@@ -291,7 +372,7 @@ describe("locateSelectionInFile with context", () => {
         startLine: 1,
         endLine: 1,
         exact: { text: "old text** and *ital", startOffset: 14, endOffset: 34 },
-        fullWords: { text: "**bold text** and *italic", startOffset: 11, endOffset: 36 },
+        fullWords: { text: "bold text** and *italic", startOffset: 13, endOffset: 36 },
       },
     },
   ]

@@ -4,6 +4,7 @@ import { findMatchOffset, findWithPartialEdges } from "~/lib/text/find"
 import { charOffsetToLine, lineToCharOffset, getLineContent } from "~/lib/text/lines"
 import { countLines } from "~/lib/text/stats"
 import { stripCodeBlockLines } from "~/lib/data-blocks/strip-lines"
+import { neutralizeMarkdown } from "~/lib/text/split"
 import { getFileRaw } from "~/lib/files/store"
 import { extractEditorSelections } from "~/lib/editor/selection-dom"
 import type { MatchOffset } from "~/lib/text/find"
@@ -70,6 +71,7 @@ const remapToOriginal = (
   filePath: string,
   fileContent: string,
   stripped: string,
+  neutralized: string,
   lineMap: number[],
   offset: MatchOffset
 ): FileSelectionRange => {
@@ -82,7 +84,14 @@ const remapToOriginal = (
     startOffset,
     endOffset,
   }
-  const fullWords = expandToWordBoundaries(fileContent, startOffset, endOffset)
+  const expanded = expandToWordBoundaries(neutralized, offset.start, offset.end)
+  const fullStart = strippedOffsetToOriginal(stripped, fileContent, lineMap, expanded.startOffset)
+  const fullEnd = strippedOffsetToOriginal(stripped, fileContent, lineMap, expanded.endOffset)
+  const fullWords: TextSpan = {
+    text: fileContent.slice(fullStart, fullEnd),
+    startOffset: fullStart,
+    endOffset: fullEnd,
+  }
   return { filePath, startLine, endLine, exact, fullWords }
 }
 
@@ -93,9 +102,10 @@ export const locateSelectionInFile = (
   context?: string
 ): FileSelectionRange | null => {
   const { content: stripped, lineMap } = stripCodeBlockLines(fileContent)
-  const offset = matchInStripped(stripped, selectionText, context)
+  const neutralized = neutralizeMarkdown(stripped)
+  const offset = matchInStripped(neutralized, selectionText, context)
   if (!offset) return null
-  return remapToOriginal(filePath, fileContent, stripped, lineMap, offset)
+  return remapToOriginal(filePath, fileContent, stripped, neutralized, lineMap, offset)
 }
 
 export const resolveEditorSelection = (): FileSelectionRange | null => {
