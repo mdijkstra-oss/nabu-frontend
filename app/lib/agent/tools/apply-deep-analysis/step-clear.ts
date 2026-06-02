@@ -4,6 +4,7 @@ export interface AnnotationRef {
   id?: string
   code?: string
   text: string
+  locked?: boolean
 }
 
 export interface RemoveAnnotationOp {
@@ -108,6 +109,7 @@ export const buildRemovalOps = (
     EXPAND_LINES
   )
   return annotations
+    .filter((a) => !a.locked)
     .filter((a) => hasMatchingCode(a, codes))
     .filter((a) => isTextOverlappingSection(blob, a.text, sectionCharStart, sectionCharEnd))
     .map((a) => ({ op: "remove_annotation" as const, match: { id: a.id } }))

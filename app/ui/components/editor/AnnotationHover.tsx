@@ -8,6 +8,7 @@ import { editorViewCtx } from "@milkdown/kit/core"
 import { annotationsMeta } from "~/lib/editor/annotations/plugin"
 import {
   hasReview,
+  isLocked,
   getReviewedCountsByCode,
   type Annotation,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
@@ -17,6 +18,7 @@ import { getCodeTitle } from "~/domain/data-blocks/callout/codes/selectors"
 import { findDocumentForCallout } from "~/domain/data-blocks/callout/selectors"
 import { getFiles } from "~/lib/files/store"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
+import type { JsonPatchOp } from "~/lib/patch/structured-json/apply"
 import { findTextRange, proseTextContent, type TextRange } from "~/lib/editor/text"
 import { findMatchOffset } from "~/lib/text/find"
 import { buildFlaggedSearch } from "~/domain/search/queries"
@@ -101,7 +103,7 @@ const resolveReviewOp = (id: string) => [
   { op: "remove" as const, path: `/annotations[id=${id}]/vote/review` },
 ]
 
-const buildUxCallback = (filePath: string, ops: { op: "remove"; path: string }[]) => () => {
+const buildUxCallback = (filePath: string, ops: JsonPatchOp[]) => () => {
   executeUxAction([{ path: filePath, language: ANNOTATIONS_LANGUAGE, ops }])
 }
 
@@ -132,6 +134,14 @@ const setReviewOp = (
   },
 ]
 
+const setLockedOp = (id: string) => [
+  { op: "add" as const, path: `/annotations[id=${id}]/locked`, value: true },
+]
+
+const unsetLockedOp = (id: string) => [
+  { op: "remove" as const, path: `/annotations[id=${id}]/locked` },
+]
+
 const annotationToEntry =
   (
     files: Record<string, string>,
@@ -143,6 +153,7 @@ const annotationToEntry =
   (annotation: Annotation, index: number): HighlightEntry => {
     const id = annotation.id
     const canMutate = !!filePath && !!id
+    const locked = isLocked(annotation)
     const code = annotation.code
     const codeReviewCount = code ? (reviewCounts[code] ?? 0) : 0
     return {
@@ -152,6 +163,10 @@ const annotationToEntry =
       description: annotation.reason,
       review: annotation.vote?.review,
       reviewCount: codeReviewCount > 0 ? codeReviewCount : undefined,
+      isLocked: locked,
+      onLock: canMutate
+        ? buildUxCallback(filePath, locked ? unsetLockedOp(id) : setLockedOp(id))
+        : undefined,
       onCopy: copyAnnotation(annotation),
       onDelete: canMutate ? buildUxCallback(filePath, removeAnnotationOp(id)) : undefined,
       onResolve:

@@ -27,6 +27,7 @@ const BaseAnnotationSchema = z.object({
   code: emptyToUndefined(z.string()).describe("Code ID from codebook (if no color)"),
   id: z.string().optional(),
   actor: z.enum(["ai", "user"]).optional(),
+  locked: z.boolean().optional(),
   vote: z
     .object({
       find: z.object({ found: z.number().int(), missed: z.number().int() }),

@@ -9,6 +9,7 @@ import { pushBlocks, buildStreamingCallbacks } from "../../client/store"
 import {
   collectReviewedAnnotations,
   collectCleanAnnotations,
+  collectLockedAnnotations,
   collectSiblingCodes,
   buildRefineMessages,
   buildAnnotationIndex,
@@ -45,11 +46,13 @@ registerTool(
       const files = getFiles()
       const flagged = collectReviewedAnnotations(files, callout_id)
       const clean = collectCleanAnnotations(files, callout_id)
+      const locked = collectLockedAnnotations(files, callout_id)
       const otherCodes = collectSiblingCodes(files, callout_id)
       const messages = buildRefineMessages(
         codeContent,
         flagged,
         clean,
+        locked,
         otherCodes,
         callout_id,
         files,
@@ -69,7 +72,7 @@ registerTool(
       if (!analysis)
         return { status: "error", output: "Refine agent returned no response", mutations: [] }
 
-      const index = buildAnnotationIndex(flagged, clean)
+      const index = buildAnnotationIndex(flagged, clean, locked)
       const tail = buildInstructionTail(callout_id)
 
       pushBlocks([

@@ -28,10 +28,10 @@ const createReviewWidget = (color: string): HTMLElement => {
   span.innerHTML = REVIEW_ICON_SVG
   span.style.background = toRadixVar(color)
   span.style.borderRadius = "2px"
-  span.style.padding = "0 2px"
+  span.style.padding = "2px 2px"
   span.style.display = "inline-flex"
   span.style.alignItems = "center"
-  span.style.verticalAlign = "baseline"
+  span.style.verticalAlign = "-2px"
   span.style.color = "var(--amber-11)"
   span.setAttribute("aria-label", "Flagged for review")
   return span
@@ -42,8 +42,30 @@ const hasReviewFlag = (a: ResolvedAnnotation): boolean => a.review === true
 const toReviewDecoration = (a: ResolvedAnnotation): Decoration =>
   Decoration.widget(a.from, () => createReviewWidget(a.color), { side: -1 })
 
+const LOCK_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+
+const createLockedWidget = (color: string): HTMLElement => {
+  const span = document.createElement("span")
+  span.innerHTML = LOCK_ICON_SVG
+  span.style.background = toRadixVar(color)
+  span.style.borderRadius = "2px"
+  span.style.padding = "2px 2px"
+  span.style.display = "inline-flex"
+  span.style.alignItems = "center"
+  span.style.verticalAlign = "-2px"
+  span.style.color = "var(--blue-11)"
+  span.setAttribute("aria-label", "Locked annotation")
+  return span
+}
+
+const hasLockedFlag = (a: ResolvedAnnotation): boolean => a.locked === true
+
+const toLockedDecoration = (a: ResolvedAnnotation): Decoration =>
+  Decoration.widget(a.from, () => createLockedWidget(a.color), { side: -1 })
+
 export const createMarkerDecorations = (resolved: ResolvedAnnotation[]): Decoration[] => [
   ...resolved.filter(hasId).map(toMarkerDecoration),
+  ...resolved.filter(hasLockedFlag).map(toLockedDecoration),
   ...resolved.filter(hasReviewFlag).map(toReviewDecoration),
 ]
 

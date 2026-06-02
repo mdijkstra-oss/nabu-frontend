@@ -41,6 +41,8 @@ import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
 import { FIND_CONTEXT_SENTENCES } from "./def"
 import { think, thinkWithName, STARTING, PICKING_UP, READING_FRAMEWORK, WRITING } from "./thoughts"
+import { findMatchOffset } from "~/lib/text/find"
+import type { Annotation as StoredAnnotation } from "~/domain/data-blocks/attributes/schema"
 
 type Enqueue = <T>(key: string, fn: () => Promise<T>) => Promise<T>
 
@@ -156,6 +158,35 @@ const handleReturn = async ({
   mutations: [],
 })
 
+const overlapsWithLocked = (
+  text: string,
+  lockedTexts: readonly string[],
+  sectionText: string
+): boolean => {
+  const newMatch = findMatchOffset(sectionText, text)
+  if (!newMatch) return false
+  for (const lt of lockedTexts) {
+    const lockedMatch = findMatchOffset(sectionText, lt)
+    if (!lockedMatch) continue
+    if (newMatch.start < lockedMatch.end && lockedMatch.start < newMatch.end) return true
+  }
+  return false
+}
+
+const filterOverlappingWithLocked = (
+  addOps: { op: string; item: { text: string } }[],
+  lockedAnnotations: StoredAnnotation[],
+  content: string,
+  startLine: number,
+  endLine: number
+): typeof addOps => {
+  if (lockedAnnotations.length === 0) return addOps
+  const lines = content.split("\n")
+  const sectionText = lines.slice(startLine - 1, endLine).join("\n")
+  const lockedTexts = lockedAnnotations.map((a) => a.text)
+  return addOps.filter((op) => !overlapsWithLocked(op.item.text, lockedTexts, sectionText))
+}
+
 const handleAnnotation =
   (action: "annotate_as_code" | "annotate_as_comment", enqueue: Enqueue) =>
   async ({
@@ -182,9 +213,17 @@ const handleAnnotation =
             )
           : { ops: [] }
 
-      const addOps = toAnnotationOps(mapped, action)
+      const rawAddOps = toAnnotationOps(mapped, action)
+      const lockedAnnotations = getStoredAnnotations(freshContent).filter((a) => a.locked === true)
+      const addOps = filterOverlappingWithLocked(
+        rawAddOps,
+        lockedAnnotations,
+        freshContent,
+        startLine,
+        endLine
+      )
       console.debug(
-        `[deep-analysis-replace] write: ${addOps.length} to add on ${path} [${startLine}-${endLine}]`
+        `[deep-analysis-replace] write: ${addOps.length} to add on ${path} [${startLine}-${endLine}] (${rawAddOps.length - addOps.length} dropped for locked overlap)`
       )
 
       const ops = [...clearResult.ops, ...addOps]

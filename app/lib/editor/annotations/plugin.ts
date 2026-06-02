@@ -26,6 +26,7 @@ const toResolvedAnnotation = (
     color: a.color,
   }
   if (a.id) resolved.id = a.id
+  if (a.locked) resolved.locked = true
   if (hasReview(a)) resolved.review = true
   return resolved
 }

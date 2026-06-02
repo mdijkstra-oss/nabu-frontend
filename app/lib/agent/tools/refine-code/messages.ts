@@ -31,6 +31,7 @@ const isForCode = (calloutId: string) => (a: StoredAnnotation) => a.code === cal
 
 const hasReviewNote = (a: StoredAnnotation): boolean => a.vote?.review !== undefined
 const hasVoteBlock = (a: StoredAnnotation): boolean => a.vote !== undefined
+const isLocked = (a: StoredAnnotation): boolean => a.locked === true
 
 const toReviewedAnnotation = (a: StoredAnnotation, file: string): ReviewedAnnotation => ({
   id: a.id,
@@ -48,6 +49,7 @@ export const collectReviewedAnnotations = (
   const result: ReviewedAnnotation[] = []
   for (const [path, raw] of Object.entries(files)) {
     for (const a of getStoredAnnotations(raw)) {
+      if (isLocked(a)) continue
       if (!matchesCode(a) || !hasReviewNote(a)) continue
       result.push(toReviewedAnnotation(a, path))
       if (result.length >= ANNOTATION_SAMPLE_SIZE) return result
@@ -61,7 +63,24 @@ export const collectCleanAnnotations = (files: FileStore, calloutId: string): Co
   const result: CodedAnnotation[] = []
   for (const [path, raw] of Object.entries(files)) {
     for (const a of getStoredAnnotations(raw)) {
+      if (isLocked(a)) continue
       if (!matchesCode(a) || !hasVoteBlock(a) || hasReviewNote(a)) continue
+      result.push({ id: a.id, text: a.text, reason: a.reason, file: path })
+      if (result.length >= ANNOTATION_SAMPLE_SIZE) return result
+    }
+  }
+  return result
+}
+
+export const collectLockedAnnotations = (
+  files: FileStore,
+  calloutId: string
+): CodedAnnotation[] => {
+  const matchesCode = isForCode(calloutId)
+  const result: CodedAnnotation[] = []
+  for (const [path, raw] of Object.entries(files)) {
+    for (const a of getStoredAnnotations(raw)) {
+      if (!matchesCode(a) || !isLocked(a) || !a.id) continue
       result.push({ id: a.id, text: a.text, reason: a.reason, file: path })
       if (result.length >= ANNOTATION_SAMPLE_SIZE) return result
     }
@@ -165,6 +184,29 @@ const formatCleanBlock = (
     .join("\n\n---\n\n")
 }
 
+const formatLockedAnnotation = (
+  a: CodedAnnotation,
+  calloutId: string,
+  fileSentences: Map<string, string[]>,
+  files: FileStore,
+  idx: number
+): string => {
+  const passage = formatPassageWithContext(a, calloutId, fileSentences, files, idx)
+  return `${passage}\n\nReason coded: ${a.reason}`
+}
+
+const formatLockedBlock = (
+  annotations: CodedAnnotation[],
+  calloutId: string,
+  files: FileStore
+): string => {
+  if (annotations.length === 0) return "No locked annotations found for this code."
+  const fileSentences = new Map<string, string[]>()
+  return annotations
+    .map((a, i) => formatLockedAnnotation(a, calloutId, fileSentences, files, i))
+    .join("\n\n---\n\n")
+}
+
 export const collectSiblingCodes = (files: FileStore, calloutId: string): CalloutBlock[] => {
   const sourceFile = findDocumentForCallout(files, calloutId)
   if (!sourceFile) return []
@@ -180,12 +222,13 @@ const formatOtherCodesBlock = (codes: CalloutBlock[]): string =>
     : codes.map(formatOtherCode).join("\n\n---\n\n")
 
 export const REFINE_CTA =
-  "Analyze this code definition against the flagged and clean passages. Identify patterns in the review flags, contrast with clean passages, and suggest how to sharpen the definition."
+  "Analyze this code definition against the flagged, clean, and locked passages. Identify patterns in the review flags, contrast with clean passages, treat locked passages as ground truth, and suggest how to sharpen the definition."
 
 export const buildRefineMessages = (
   codeDefinition: string,
   flagged: ReviewedAnnotation[],
   clean: CodedAnnotation[],
+  locked: CodedAnnotation[],
   otherCodes: CalloutBlock[],
   calloutId: string,
   files: FileStore,
@@ -216,6 +259,11 @@ export const buildRefineMessages = (
     {
       type: "message",
       role: "system",
+      content: `<locked-passages count="${locked.length}">\nResearcher-confirmed ground truth. These are correct applications of the code — do not question them. Use them as positive anchors when evaluating.\n\n${formatLockedBlock(locked, calloutId, files)}\n</locked-passages>`,
+    },
+    {
+      type: "message",
+      role: "system",
       content: `<flagged-passages count="${flagged.length}">\n${formatFlaggedBlock(flagged, calloutId, files)}\n</flagged-passages>`,
     },
     {
@@ -231,19 +279,24 @@ export const buildRefineMessages = (
   return messages
 }
 
-const formatAnnotationRow = (a: CodedAnnotation, status: "flagged" | "clean"): string => {
+const formatAnnotationRow = (
+  a: CodedAnnotation,
+  status: "locked" | "flagged" | "clean"
+): string => {
   const truncated = a.text.length > 60 ? a.text.slice(0, 57) + "..." : a.text
   return `| ${a.id} | ${a.file} | ${status} | ${truncated} |`
 }
 
 export const buildAnnotationIndex = (
   flagged: readonly CodedAnnotation[],
-  clean: readonly CodedAnnotation[]
+  clean: readonly CodedAnnotation[],
+  locked: readonly CodedAnnotation[]
 ): string => {
   const header = "## Annotation Index\n\n| id | file | status | text |\n|---|---|---|---|"
+  const lockedRows = locked.map((a) => formatAnnotationRow(a, "locked"))
   const flaggedRows = flagged.map((a) => formatAnnotationRow(a, "flagged"))
   const cleanRows = clean.map((a) => formatAnnotationRow(a, "clean"))
-  return [header, ...flaggedRows, ...cleanRows].join("\n")
+  return [header, ...lockedRows, ...flaggedRows, ...cleanRows].join("\n")
 }
 
 export const buildInstructionTail = (calloutId: string): string =>

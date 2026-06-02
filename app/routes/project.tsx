@@ -510,18 +510,20 @@ export default function ProjectLayout() {
   const globalAnnotationCounts = useMemo(() => getAnnotationGlobalCountsByCode(files), [files])
   const reviewStats = useMemo(() => getReviewStatsByCode(files), [files])
 
-  const selectedAnnotationCountInFile = useMemo(
-    () =>
-      Object.entries(annotationCounts)
-        .filter(([code]) => selectedCodes.has(code))
-        .reduce((sum, [, count]) => sum + count, 0),
-    [annotationCounts, selectedCodes]
-  )
+  const selectedAnnotationCountInFile = useMemo(() => {
+    if (!currentFile) return 0
+    const raw = files[currentFile]
+    if (!raw) return 0
+    return getStoredAnnotations(raw).filter((a) => a.code && selectedCodes.has(a.code) && !a.locked)
+      .length
+  }, [currentFile, files, selectedCodes])
 
   const handleClearCodings = useCallback(() => {
     if (!currentFile) return
-    executeUxAction(clearCodingsPatches(currentFile, selectedCodes))
-  }, [currentFile, selectedCodes])
+    const raw = files[currentFile]
+    if (!raw) return
+    executeUxAction(clearCodingsPatches(currentFile, selectedCodes, getStoredAnnotations(raw)))
+  }, [currentFile, selectedCodes, files])
 
   const filterAnnotationsBySelectedCodes = useCallback(
     (raw: string) => getStoredAnnotations(raw).filter((a) => a.code && selectedCodes.has(a.code)),
@@ -612,10 +614,7 @@ export default function ProjectLayout() {
     if (isOnDocumentPage) {
       return {
         icon: <Eraser />,
-        label:
-          selectedAnnotationCountInFile > 0
-            ? formatClearLabel("Clear codings", selectedAnnotationCountInFile)
-            : "Not coded",
+        label: selectedAnnotationCountInFile > 0 ? "Clear codings" : "Not coded",
         onClick: handleClearCodings,
         variant: "confirm",
         disabled: selectedAnnotationCountInFile === 0,

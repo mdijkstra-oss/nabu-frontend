@@ -1,6 +1,14 @@
-import { useRef, useCallback, useState, useLayoutEffect, type ChangeEvent } from "react"
-import { X, Trash2, MessageSquareWarning, Eraser, Copy } from "lucide-react"
+import {
+  useRef,
+  useCallback,
+  useState,
+  useLayoutEffect,
+  type ChangeEvent,
+  type ReactNode,
+} from "react"
+import { X, Trash2, MessageSquareWarning, Eraser, Copy, Lock, LockOpen } from "lucide-react"
 import { SwapButton } from "~/ui/components/SwapButton"
+import { TooltipWrap } from "~/ui/components/TooltipWrap"
 
 export interface HighlightEntry {
   id: string
@@ -9,6 +17,8 @@ export interface HighlightEntry {
   description?: string
   review?: string
   reviewCount?: number
+  isLocked?: boolean
+  onLock?: () => void
   onCopy?: () => void
   onDelete?: () => void
   onResolve?: () => void
@@ -42,11 +52,13 @@ const AutoTextarea = ({
   value,
   placeholder,
   className,
+  disabled,
   onChange,
 }: {
   value: string
   placeholder: string
   className: string
+  disabled?: boolean
   onChange: (value: string) => void
 }) => {
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -74,6 +86,7 @@ const AutoTextarea = ({
       value={value}
       placeholder={placeholder}
       className={className}
+      disabled={disabled}
       onChange={handleChange}
       onFocus={syncHeight}
     />
@@ -83,6 +96,7 @@ const AutoTextarea = ({
 const ReasonField = ({ entry }: { entry: HighlightEntry }) => {
   const [local, setLocal] = useState(entry.description ?? "")
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const locked = !!entry.isLocked
 
   const handleChange = useCallback(
     (value: string) => {
@@ -102,18 +116,24 @@ const ReasonField = ({ entry }: { entry: HighlightEntry }) => {
   }
 
   return (
-    <AutoTextarea
-      value={local}
-      placeholder="Add reason..."
-      className={TEXTAREA_REASON}
-      onChange={handleChange}
-    />
+    <TooltipWrap text="Unlock to edit" open={locked ? undefined : false}>
+      <div className={`w-full ${locked ? "opacity-60 cursor-not-allowed" : ""}`}>
+        <AutoTextarea
+          value={local}
+          placeholder="Add reason..."
+          className={TEXTAREA_REASON}
+          disabled={locked}
+          onChange={handleChange}
+        />
+      </div>
+    </TooltipWrap>
   )
 }
 
 const ReviewField = ({ entry }: { entry: HighlightEntry }) => {
   const [local, setLocal] = useState(entry.review ?? "")
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const locked = !!entry.isLocked
   const hasText = local.length > 0
 
   const handleChange = useCallback(
@@ -141,17 +161,27 @@ const ReviewField = ({ entry }: { entry: HighlightEntry }) => {
   return (
     <div className="mt-2 flex w-full items-center gap-2">
       <div className="w-3 flex-none" />
-      <div className="flex grow min-w-0 items-start rounded bg-amber-100/40 px-2 py-1.5">
-        <AutoTextarea
-          value={local}
-          placeholder="Add review note..."
-          className={TEXTAREA_REVIEW}
-          onChange={handleChange}
-        />
-      </div>
+      <TooltipWrap text="Unlock to edit" open={locked ? undefined : false}>
+        <div
+          className={`flex grow min-w-0 items-start rounded bg-amber-100/40 px-2 py-1.5 ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
+        >
+          <AutoTextarea
+            value={local}
+            placeholder="Add review note..."
+            className={TEXTAREA_REVIEW}
+            disabled={locked}
+            onChange={handleChange}
+          />
+        </div>
+      </TooltipWrap>
       <div className="flex flex-none flex-col items-center gap-1">
         {entry.onResolve &&
-          (hasText ? (
+          (locked ? (
+            <DisabledButton
+              icon={<MessageSquareWarning className="text-body text-amber-600" />}
+              tooltip="Unlock to edit"
+            />
+          ) : hasText ? (
             <SwapButton
               idle={<MessageSquareWarning className="text-body text-amber-600" />}
               active={<Eraser className="text-body text-green-600" />}
@@ -175,6 +205,14 @@ const ReviewField = ({ entry }: { entry: HighlightEntry }) => {
   )
 }
 
+const DisabledButton = ({ icon, tooltip }: { icon: ReactNode; tooltip: string }) => (
+  <TooltipWrap text={tooltip}>
+    <div className="flex h-6 min-w-6 items-center justify-center opacity-40 cursor-not-allowed">
+      {icon}
+    </div>
+  </TooltipWrap>
+)
+
 const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
   <div className="flex w-full flex-col">
     <div className="flex w-full items-center gap-2">
@@ -197,6 +235,26 @@ const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
             </span>
           ))}
       </div>
+      {entry.onLock && (
+        <SwapButton
+          idle={
+            entry.isLocked ? (
+              <Lock className="text-body text-blue-600" />
+            ) : (
+              <Lock className="text-body text-neutral-400" />
+            )
+          }
+          active={
+            entry.isLocked ? (
+              <LockOpen className="text-body text-neutral-700" />
+            ) : (
+              <Lock className="text-body text-blue-600" />
+            )
+          }
+          activeTooltip={entry.isLocked ? "Unlock annotation" : "Lock annotation"}
+          onClick={entry.onLock}
+        />
+      )}
       {entry.onCopy && (
         <SwapButton
           idle={<Copy className="text-body text-neutral-700" />}
@@ -205,14 +263,20 @@ const EntryContent = ({ entry }: { entry: HighlightEntry }) => (
           onClick={entry.onCopy}
         />
       )}
-      {entry.onDelete && (
-        <SwapButton
-          idle={<X className="text-body text-neutral-700" />}
-          active={<Trash2 className="text-body text-error-600" />}
-          activeTooltip="Remove annotation"
-          onClick={entry.onDelete}
-        />
-      )}
+      {entry.onDelete &&
+        (entry.isLocked ? (
+          <DisabledButton
+            icon={<X className="text-body text-neutral-700" />}
+            tooltip="Unlock to edit"
+          />
+        ) : (
+          <SwapButton
+            idle={<X className="text-body text-neutral-700" />}
+            active={<Trash2 className="text-body text-error-600" />}
+            activeTooltip="Remove annotation"
+            onClick={entry.onDelete}
+          />
+        ))}
     </div>
     <div className="flex w-full items-start gap-2 mt-1">
       <div className="w-3 flex-none" />

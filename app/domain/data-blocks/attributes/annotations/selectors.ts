@@ -28,6 +28,7 @@ const resolveAnnotation = (files: FileStore, stored: StoredAnnotation): Annotati
   color: resolveAnnotationColor(files, stored),
   reason: stored.reason,
   code: stored.code,
+  locked: stored.locked,
   vote: stored.vote,
 })
 
@@ -71,6 +72,8 @@ export const getAnnotationGlobalCountsByCode = (
   }
   return result
 }
+
+export const isLocked = (a: { locked?: boolean }): boolean => a.locked === true
 
 export const hasReview = (a: Annotation): boolean => a.vote?.review !== undefined
 
