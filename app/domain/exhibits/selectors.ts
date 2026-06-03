@@ -1,5 +1,5 @@
-import type { FileStore } from "~/lib/files/store"
 import { toDisplayName } from "~/lib/files/filename"
+import { createFileStoreSelector } from "~/lib/files/collect"
 import { getCharts } from "~/domain/data-blocks/chart/selectors"
 import type { ChartBlock } from "~/domain/data-blocks/chart/schema"
 import type { ChartType } from "~/lib/chart/types"
@@ -36,10 +36,13 @@ const chartToExhibit = (chart: ChartBlock, filename: string): ExhibitItem => ({
   documentTitle: toDisplayName(filename),
 })
 
-export const collectExhibits = (files: FileStore): ExhibitItem[] =>
-  Object.entries(files).flatMap(([filename, raw]) =>
-    getCharts(raw).map((chart) => chartToExhibit(chart, filename))
-  )
+export const collectExhibits = createFileStoreSelector<ChartBlock[], ExhibitItem[]>({
+  extract: getCharts,
+  initial: () => [],
+  fold: (acc, charts, filename) => {
+    for (const chart of charts) acc.push(chartToExhibit(chart, filename))
+  },
+})
 
 export interface ExhibitGroup {
   kind: ExhibitKind

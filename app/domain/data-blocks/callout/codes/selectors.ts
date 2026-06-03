@@ -2,7 +2,7 @@ import type { CalloutBlock } from "../schema"
 import { getCallouts } from "../selectors"
 import { toDisplayName } from "~/lib/files/filename"
 import type { FileStore } from "~/lib/files/store"
-import { collectAll, findIn } from "~/lib/files/collect"
+import { createFileStoreSelector, findIn } from "~/lib/files/collect"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 
 export interface Code {
@@ -25,7 +25,13 @@ export interface Codebook {
 export const getCodes = (raw: string): CalloutBlock[] =>
   getCallouts(raw).filter((c) => c.type === "codebook-code")
 
-export const getAllCodes = (files: FileStore): CalloutBlock[] => collectAll(files, getCodes)
+export const getAllCodes = createFileStoreSelector<CalloutBlock[], CalloutBlock[]>({
+  extract: getCodes,
+  initial: () => [],
+  fold: (acc, codes) => {
+    for (const code of codes) acc.push(code)
+  },
+})
 
 export const findCodeById = (files: FileStore, id: string): CalloutBlock | undefined =>
   findIn(files, getCodes, (c) => c.id === id)

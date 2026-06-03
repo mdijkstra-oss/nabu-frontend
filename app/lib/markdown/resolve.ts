@@ -292,3 +292,24 @@ export const resolveEntityLink = (
       return exhaustive(ref)
   }
 }
+
+export const findDepFile = (href: string, files: FileStore): string | null => {
+  const ref = parseEntityLink(href)
+  if (!ref) return null
+
+  switch (ref.kind) {
+    case "annotation":
+      return findDocumentForAnnotation(files, ref.id) ?? null
+    case "callout":
+      return findDocumentForCallout(files, ref.id) ?? null
+    case "chart":
+      return findDocumentForChart(files, ref.id) ?? null
+    case "text":
+      return ref.documentId
+    case "tag":
+    case "search":
+      return null
+    default:
+      return exhaustive(ref)
+  }
+}
