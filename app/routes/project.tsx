@@ -47,6 +47,7 @@ import {
   setPersistEnabled,
   setPendingRefsSuppressed,
   resolvePendingRefsInBulk,
+  waitForRequiredFiles,
 } from "~/lib/files/store"
 import {
   startDatabase,
@@ -86,7 +87,6 @@ import {
 } from "~/domain/actions/coding/actions"
 import { resolveCodingFiles } from "~/domain/actions/coding/selectors"
 import { useEditorSelection } from "~/ui/hooks/useEditorSelection"
-import { debounce } from "~/lib/utils/debounce"
 import { resolveEditorSelection, resolveSearchSelections } from "~/lib/editor/selection-context"
 import { clearCodingsPatches } from "~/domain/actions/clear-codings/apply"
 import { executeUxAction } from "~/lib/data-blocks/file-action"
@@ -313,6 +313,9 @@ export default function ProjectLayout() {
       await filesLoadedPromise
       if (cancelled) return
 
+      await waitForRequiredFiles()
+      if (cancelled) return
+
       setStatusLabel("Syncing database...")
       await waitForDatabase()
       if (cancelled) return
@@ -468,25 +471,6 @@ export default function ProjectLayout() {
 
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
   const editorSelection = useEditorSelection()
-
-  const logSelectionRef = useRef(
-    debounce(() => {
-      const range = resolveEditorSelection()
-      if (range) {
-        console.log(
-          "[selection]",
-          `${range.filePath}:${range.startLine + 1}-${range.endLine + 1}`,
-          `"${range.exact.text.slice(0, 60)}"`,
-          range
-        )
-      }
-    }, 300)
-  )
-
-  useEffect(() => {
-    if (!editorSelection?.filePath) return
-    logSelectionRef.current()
-  }, [editorSelection])
 
   const isOnDocumentPage = !!params.fileId
   const isOnSearchPage = !!params.searchId

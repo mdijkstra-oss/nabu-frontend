@@ -11,7 +11,7 @@ interface Range {
 
 const CONTEXT_BUDGET = 30
 const MIN_STUB_WORDS = 8
-const SEPARATOR = "\n\n…\n\n"
+export const SEPARATOR = "\n\n<!--SPLIT-->\n\n"
 const WORD_RE = /\s+/
 const LOCATE_THRESHOLD = 1
 

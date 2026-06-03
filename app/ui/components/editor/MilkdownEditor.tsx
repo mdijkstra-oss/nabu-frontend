@@ -30,6 +30,7 @@ import {
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
+import { useStableRef } from "~/ui/hooks/useStableRef"
 
 const readOnlyKey = new PluginKey("readOnly")
 
@@ -68,10 +69,12 @@ const MilkdownEditorCore = ({
   const prevContentRef = useRef(defaultValue)
   const [loading, getEditor] = useInstance()
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
-  const annotations = useMemo(
+  const rawAnnotations = useMemo(
     () => selectVisibleAnnotations(getAnnotations(files, defaultValue), selectedCodes),
     [files, defaultValue, selectedCodes]
   )
+  const annotations = useStableRef(rawAnnotations)
+  const spotlights = useStableRef(normalizeSpotlights(spotlight))
 
   const readOnlyPlugin = $prose(createReadOnlyPlugin)
 
@@ -112,7 +115,6 @@ const MilkdownEditorCore = ({
     if (contentChanged) {
       editor.action(replaceAll(defaultValue))
     }
-    const spotlights = normalizeSpotlights(spotlight)
     editor.action((ctx) => {
       const view = ctx.get(editorViewCtx)
       const tr = view.state.tr
@@ -120,7 +122,7 @@ const MilkdownEditorCore = ({
         .setMeta(spotlightMeta, spotlights)
       view.dispatch(tr)
     })
-  }, [loading, getEditor, defaultValue, annotations, spotlight])
+  }, [loading, getEditor, defaultValue, annotations, spotlights])
 
   return (
     <FloatingToolbar>

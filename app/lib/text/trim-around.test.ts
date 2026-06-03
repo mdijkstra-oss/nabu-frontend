@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { trimAroundMatches } from "./trim-around"
 
-const SEP = "\n\n…\n\n"
+const SEP = "\n\n<!--SPLIT-->\n\n"
 
 const doc = [
   "# Introduction",

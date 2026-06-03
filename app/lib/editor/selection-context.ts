@@ -38,6 +38,21 @@ const strippedOffsetToOriginal = (
 const findInRegion = (region: string, selectionText: string): MatchOffset | null =>
   findMatchOffset(region, selectionText, true) ?? findWithPartialEdges(region, selectionText)
 
+// Context is selection text + padding words from the editor view.
+// It disambiguates when the selection text appears more than once in the file
+// (e.g. selecting a short common phrase). Context is best-effort, not required:
+//
+// - Search-result slices stitch non-contiguous regions with "\n\n…\n\n" trim
+//   markers. Padding around a selection near such a marker pulls the marker
+//   into context, and the marker has no counterpart in the source file.
+// - Real prose can also contain "…" ("because I… wanted to say"), so we can't
+//   safely strip it from context without risking false collisions.
+// - The context build can also produce text that doesn't survive markdown
+//   neutralization (callout headers, hidden blocks) and won't match strict.
+//
+// When the context-narrowed lookup fails for any reason, fall through to a
+// global search of the stripped file. Selections wide enough to fail context
+// matching are also wide enough that ambiguous global matches are rare.
 const matchInStripped = (
   stripped: string,
   selectionText: string,
@@ -45,13 +60,15 @@ const matchInStripped = (
 ): MatchOffset | null => {
   if (context) {
     const contextOffset = findMatchOffset(stripped, context, true)
-    if (!contextOffset) return null
-    const region = stripped.slice(contextOffset.start, contextOffset.end)
-    const selInRegion = findInRegion(region, selectionText)
-    if (!selInRegion) return null
-    return {
-      start: contextOffset.start + selInRegion.start,
-      end: contextOffset.start + selInRegion.end,
+    if (contextOffset) {
+      const region = stripped.slice(contextOffset.start, contextOffset.end)
+      const selInRegion = findInRegion(region, selectionText)
+      if (selInRegion) {
+        return {
+          start: contextOffset.start + selInRegion.start,
+          end: contextOffset.start + selInRegion.end,
+        }
+      }
     }
   }
   return findInRegion(stripped, selectionText)

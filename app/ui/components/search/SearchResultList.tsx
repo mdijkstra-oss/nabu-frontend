@@ -17,8 +17,9 @@ import {
   serializeSpotlightParam,
 } from "~/lib/editor/spotlight/serialize"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
-import { normalizeMatchWhitespace } from "~/lib/text/trim-around"
+import { normalizeMatchWhitespace, SEPARATOR } from "~/lib/text/trim-around"
 import { splitSentences } from "~/lib/search/filter-hits"
+import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
 
 export interface SearchResultListProps {
   hits: SearchHit[]
@@ -43,13 +44,32 @@ const groupByRun = (hits: SearchHit[]): RunGroup[] => {
   return groups
 }
 
+const ANNOTATION_BLOCK_RE = /\n+```json-annotations\n[\s\S]*?\n```\s*$/
+
+const expandRegions = (hit: SearchHit): SearchHit[] => {
+  if (!hit.text || !hit.text.includes(SEPARATOR)) return [hit]
+  const match = ANNOTATION_BLOCK_RE.exec(hit.text)
+  const block = match ? match[0].replace(/^\n+/, "") : ""
+  const prose = match ? hit.text.slice(0, match.index) : hit.text
+  const regions = prose.split(SEPARATOR)
+  if (regions.length === 1) return [hit]
+  return regions.map((region) => {
+    const regionMatches = hit.matches?.filter((m) => region.includes(m))
+    return {
+      ...hit,
+      text: block ? `${region.replace(/\n+$/, "")}\n\n${block}` : region,
+      matches: regionMatches && regionMatches.length > 0 ? regionMatches : undefined,
+    }
+  })
+}
+
 const hitHasId = (hit: SearchHit): hit is SearchHit & { id: string } => hit.id !== undefined
 const hitHasText = (hit: SearchHit): hit is SearchHit & { text: string } => hit.text !== undefined
 const hitIsFileOnly = (hit: SearchHit): boolean => !hitHasId(hit) && !hitHasText(hit)
 
 const hitKey = (hit: SearchHit, index: number): string => {
+  if (hit.text) return `text:${hit.text.slice(0, 80)}`
   if (hit.id) return hit.id
-  if (hit.text) return `text:${hit.text.slice(0, 64)}`
   return `file:${hit.file}:${index}`
 }
 
@@ -98,16 +118,24 @@ const SearchSlicePreview = ({
   matches?: string[]
   onNavigate?: () => void
 }) => {
+  const debugOptions = useDebugOptions()
   return (
     <div className="group/hit flex w-full items-center">
       <div className={GUTTER} />
-      <div className="min-w-0 grow rounded-md border border-solid border-neutral-200 px-4 py-3">
-        <MilkdownEditor
-          content={text}
-          readOnly
-          filePath={filePath}
-          spotlight={matches ? matchesToSpotlights(matches) : null}
-        />
+      <div className="min-w-0 grow flex flex-col gap-2">
+        <div className="rounded-md border border-solid border-neutral-200 px-4 py-3">
+          <MilkdownEditor
+            content={text}
+            readOnly
+            filePath={filePath}
+            spotlight={matches ? matchesToSpotlights(matches) : null}
+          />
+        </div>
+        {debugOptions.renderAsJson && (
+          <pre className="overflow-x-auto rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2 text-[12px] leading-snug font-mono text-neutral-700 whitespace-pre-wrap">
+            {text}
+          </pre>
+        )}
       </div>
       <div className={GUTTER}>
         {onNavigate && (
@@ -204,17 +232,21 @@ export const SearchResultList = ({
   useEffect(() => {
     hitsRef.current = hits
   })
+  const prevFilesRef = useRef<FileStore | undefined>(undefined)
   const [refreshed, setRefreshed] = useState<{ source: SearchHit[]; output: SearchHit[] } | null>(
     null
   )
 
   useEffect(() => {
     const startingHits = hitsRef.current
+    const prevFiles = prevFilesRef.current
+    prevFilesRef.current = throttledFiles
     let cancelled = false
     const isCancelled = () => cancelled
 
-    refreshHitsAsync(startingHits, throttledFiles, isCancelled).then((output) => {
+    refreshHitsAsync(startingHits, throttledFiles, isCancelled, prevFiles).then((output) => {
       if (cancelled) return
+      if (output === startingHits) return
       setRefreshed({ source: startingHits, output })
     })
 
@@ -224,7 +256,8 @@ export const SearchResultList = ({
   }, [throttledFiles])
 
   const liveHits = refreshed && refreshed.source === hits ? refreshed.output : hits
-  const groups = useMemo(() => groupByRun(liveHits), [liveHits])
+  const expandedHits = useMemo(() => liveHits.flatMap(expandRegions), [liveHits])
+  const groups = useMemo(() => groupByRun(expandedHits), [expandedHits])
 
   return (
     <div className="flex w-full flex-col items-start gap-6">

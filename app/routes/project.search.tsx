@@ -7,6 +7,7 @@ import { useProject } from "./project"
 import { useSearchResults } from "~/ui/hooks/useSearchResults"
 import { SearchHeader } from "~/ui/components/search/SearchHeader"
 import { SearchResultList } from "~/ui/components/search/SearchResultList"
+import { DebugOptionsProvider } from "~/ui/components/editor/DebugOptionsContext"
 import { StatusBar } from "~/ui/components/StatusBar"
 import type { SearchHit } from "~/domain/search/types"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
@@ -224,13 +225,15 @@ export default function ProjectSearch() {
               <span className="text-body font-body text-subtext-color">No results found</span>
             </div>
           ) : (
-            <SearchResultList
-              hits={filteredResults}
-              files={files}
-              projectId={params.projectId}
-              activeTags={activeTags}
-              onNavigate={navigate}
-            />
+            <DebugOptionsProvider value={debugOptions}>
+              <SearchResultList
+                hits={filteredResults}
+                files={files}
+                projectId={params.projectId}
+                activeTags={activeTags}
+                onNavigate={navigate}
+              />
+            </DebugOptionsProvider>
           )}
         </div>
       </div>
