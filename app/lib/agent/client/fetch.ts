@@ -112,17 +112,10 @@ const streamToBlocks = async (response: Response, callbacks: ParseCallbacks): Pr
   const decoder = new TextDecoder()
   let buffer = ""
   let state = initialParseState()
-  let firstBytesLogged = false
-
   try {
     while (true) {
       const { done, value } = await readWithTimeout(reader, STALL_TIMEOUT_MS)
       if (done) break
-
-      if (!firstBytesLogged) {
-        console.log("[LLM] First bytes received", performance.now().toFixed(0) + "ms")
-        firstBytesLogged = true
-      }
 
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split("\n")
@@ -149,11 +142,6 @@ const streamToBlocks = async (response: Response, callbacks: ParseCallbacks): Pr
     callbacks.onBlock?.(block)
   }
   callbacks.onStreamEnd?.()
-
-  console.debug("[STREAM END]", {
-    pendingToolCalls: state.pendingToolCalls.length,
-    blocks: blocks.length,
-  })
 
   return blocks
 }
@@ -208,17 +196,6 @@ const buildUrl = (endpoint: string, temperature?: number): string => {
   return `${base}${sep}temperature=${temperature}`
 }
 
-const summarizeBlocks = (blocks: Block[]): Record<string, number> =>
-  blocks.reduce<Record<string, number>>(
-    (acc, b) => ({ ...acc, [b.type]: (acc[b.type] ?? 0) + 1 }),
-    {}
-  )
-
-const previewText = (blocks: Block[]): string | undefined => {
-  const text = blocks.find((b) => b.type === "text")
-  return text?.type === "text" ? text.content : undefined
-}
-
 const LLM_CACHE_PREFIX = "llm"
 const LLM_CACHE_CAP = 10_000
 const UNCACHEABLE_ENDPOINTS = ["/qual-coder", "/semantic-filter"]
@@ -259,10 +236,7 @@ export const callLlm = async (options: CallLlmOptions): Promise<Block[]> => {
 
   if (cacheKey) {
     const cached = await tryGet<Block[]>(LLM_CACHE_PREFIX, cacheKey)
-    if (cached) {
-      console.debug(`[LLM ${options.endpoint}] cache hit`)
-      return cached
-    }
+    if (cached) return cached
   }
 
   const rawId = startRawCall(options.endpoint, body)
@@ -287,10 +261,6 @@ export const callLlm = async (options: CallLlmOptions): Promise<Block[]> => {
 
   const duration = Math.round(performance.now() - t0)
   completeRawCall(rawId, JSON.stringify(blocks), duration)
-  console.debug(`[LLM ${options.endpoint}]`, {
-    blocks: summarizeBlocks(blocks),
-    preview: previewText(blocks),
-  })
 
   if (cacheKey && !hasErrorBlock(blocks)) {
     tryPut(LLM_CACHE_PREFIX, cacheKey, blocks, LLM_CACHE_CAP, options.endpoint)

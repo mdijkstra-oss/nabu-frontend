@@ -18,8 +18,6 @@ export interface ClearStepResult {
 
 const EXPAND_LINES = 4
 
-const formatCodes = (codes: ReadonlySet<string>): string => [...codes].join(", ")
-
 const hasMatchingCode = (
   a: AnnotationRef,
   codes: ReadonlySet<string>
@@ -119,14 +117,9 @@ export const clearAnnotationsOnSection = (
   annotations: readonly AnnotationRef[],
   content: string,
   codes: ReadonlySet<string>,
-  path: string,
   startLine: number,
   endLine: number
 ): ClearStepResult => {
-  console.debug(
-    `[deep-analysis-replace] clear: targeting ${path} [${startLine}-${endLine}], codes: [${formatCodes(codes)}]`
-  )
   const ops = buildRemovalOps(annotations, content, codes, startLine, endLine)
-  console.debug(`[deep-analysis-replace] clear: ${ops.length} to remove`)
   return { ops }
 }

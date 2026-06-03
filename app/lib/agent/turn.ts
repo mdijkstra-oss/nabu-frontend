@@ -13,8 +13,7 @@ const trimResult = (res: ToolResult<unknown>): ToolResult<unknown> =>
   res.status === "error" ? { ...res, output: trimErrorOutput(res.output) } : res
 
 const logToolResult = (call: ToolCall, res: ToolResult<unknown>): void => {
-  const log = res.status === "ok" ? console.debug : console.warn
-  log(`[TOOL ${call.name}]`, { call, ...res })
+  if (res.status !== "ok") console.warn(`[TOOL ${call.name}]`, { call, ...res })
 }
 
 const CANCELED_MESSAGE = "Canceled by user"

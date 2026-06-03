@@ -40,19 +40,12 @@ export const autoFuzzyFieldValue = (
 
   for (const pattern of patterns) {
     const parentWrapped = wrapParentField(op, pattern)
-    if (parentWrapped) {
-      console.debug(`[deep-fuzzy] wrap: parent ${op.path} field=${pattern.field}`)
-      return parentWrapped
-    }
+    if (parentWrapped) return parentWrapped
 
     const directWrapped = wrapDirectField(op, pattern)
-    if (directWrapped) {
-      console.debug(`[deep-fuzzy] wrap: direct ${op.path} field=${pattern.field}`)
-      return directWrapped
-    }
+    if (directWrapped) return directWrapped
   }
 
-  console.debug(`[deep-fuzzy] wrap: no pattern matched ${op.path}`)
   return op
 }
 

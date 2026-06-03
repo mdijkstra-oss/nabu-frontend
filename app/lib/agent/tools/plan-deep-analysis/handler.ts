@@ -4,13 +4,7 @@ import { registerTool, tool } from "../../executors/tool"
 import { showProgress } from "../../client/store"
 import { activatePlan } from "../../executors/modes"
 import { buildAutoSteps, buildExecRules, toSectionMatches, bucketSearchSections } from "./format"
-import type {
-  LabeledTarget,
-  SourceEntry,
-  SectionEntry,
-  ScoredSection,
-  SectionMatch,
-} from "./format"
+import type { LabeledTarget, SourceEntry, SectionEntry, ScoredSection } from "./format"
 import { findMatchOffset } from "~/lib/text/find"
 import { parseCodeBlocks, extractProse, mapProseOffset } from "~/lib/data-blocks/parse"
 import { errorMessage } from "~/lib/utils/error"
@@ -79,21 +73,8 @@ const locateHitSections = (content: string, path: string, hitTexts: string[]): S
     located.push({ path, startLine, endLine })
   }
 
-  if (lost.length > 0) {
-    console.debug(
-      `[plan-search-hits] ${path}: ${located.length}/${hitTexts.length} located, ${lost.length} lost`
-    )
-    for (const t of lost) console.debug(`[plan-search-hits]   lost: ${t}`)
-  }
-
   return located
 }
-
-const sliceLines = (content: string, startLine: number, endLine: number): string =>
-  content
-    .split("\n")
-    .slice(startLine - 1, endLine)
-    .join("\n")
 
 const locateHit = (hit: SearchHit): SectionEntry | null => {
   if (!hit.text) return null
@@ -103,81 +84,15 @@ const locateHit = (hit: SearchHit): SectionEntry | null => {
   return sections[0] ?? null
 }
 
-const markHitInSection = (sectionText: string, hitText: string): string => {
-  const hitProse = extractProse(hitText)
-  const match = findMatchOffset(sectionText, hitProse)
-  if (!match) return sectionText
-  const before = sectionText.slice(0, match.start)
-  const bold = sectionText.slice(match.start, match.end)
-  const after = sectionText.slice(match.end)
-  return `${before}**${bold}**${after}`
-}
-
-const logScoredSection = (hit: SearchHit, section: SectionEntry, content: string): void => {
-  if (!hit.text) return
-  const sectionText = sliceLines(content, section.startLine, section.endLine)
-  const marked = markHitInSection(sectionText, hit.text)
-  console.debug(
-    `[plan-search-hits] ${hit.file} [${section.startLine}-${section.endLine}] (score: ${hit.score ?? "?"})\n${marked}`
-  )
-}
-
-interface ScoredResult {
-  scored: ScoredSection[]
-  hitTexts: Map<string, string>
-}
-
-const sectionKey = (s: SectionEntry): string => `${s.path}\0${s.startLine}\0${s.endLine}`
-
-const toScoredSections = (hits: SearchHit[]): ScoredResult => {
-  let located = 0
-  let lost = 0
-  const hitTexts = new Map<string, string>()
-
-  const scored = hits.flatMap((hit) => {
+const toScoredSections = (hits: SearchHit[]): ScoredSection[] =>
+  hits.flatMap((hit) => {
     const section = locateHit(hit)
-    if (!section) {
-      lost++
-      return []
-    }
-    located++
+    if (!section) return []
     const content = getFileView(hit.file)
     if (content === undefined) return []
-    logScoredSection(hit, section, content)
-    if (hit.text) hitTexts.set(sectionKey(section), hit.text)
     const chars = sectionCharCount(content, [section])
     return [{ section, chars }]
   })
-
-  console.debug(
-    `[plan-search-hits] summary: ${hits.length} hits → ${located} located, ${lost} lost`
-  )
-
-  return { scored, hitTexts }
-}
-
-const logStepMap = (steps: SectionMatch[], hitTexts: Map<string, string>): void => {
-  for (let i = 0; i < steps.length; i++) {
-    const step = steps[i]
-    console.debug(`[plan-step-map] step ${i + 1}: "${step.label}"`)
-
-    for (const section of step.sections) {
-      const content = getFileView(section.path)
-      if (!content) {
-        console.debug(
-          `[plan-step-map]   ${section.path} [${section.startLine}-${section.endLine}] (file not found)`
-        )
-        continue
-      }
-      const sectionText = sliceLines(content, section.startLine, section.endLine)
-      const hitText = hitTexts.get(sectionKey(section))
-      const marked = hitText ? markHitInSection(sectionText, hitText) : sectionText
-      console.debug(
-        `[plan-step-map]   ${section.path} [${section.startLine}-${section.endLine}]\n${marked}`
-      )
-    }
-  }
-}
 
 const buildTaskDescription = (searchIds: string[], labeled: LabeledTarget[]): string => {
   const searchRefs = searchIds.map((id) => `file://${id}`)
@@ -215,16 +130,11 @@ registerTool(
       const framework = buildFramework(source_files)
 
       const explicitFiles = resolvedTargets.filter((f) => !isSearchFile(f))
-      const searchFiles = resolvedTargets.filter(isSearchFile)
-      console.debug(
-        `[plan-search] targets: ${explicitFiles.length} explicit, ${searchFiles.length} search files`
-      )
 
       let labeled: LabeledTarget[]
       try {
         showProgress("Preselecting sections…")
         const fileItems = await filterFileTargets(explicitFiles, framework)
-        console.debug(`[plan-search] filter done: ${fileItems.length} file items → labeling`)
         showProgress("Labeling sections…")
         labeled = await labelAll(fileItems)
       } catch (e) {
@@ -236,12 +146,8 @@ registerTool(
 
       const fileMatches = toSectionMatches(labeled)
 
-      const { scored: scoredSections, hitTexts } = toScoredSections(orderedHits)
+      const scoredSections = toScoredSections(orderedHits)
       const searchMatches = bucketSearchSections(scoredSections)
-      logStepMap(searchMatches, hitTexts)
-      console.debug(
-        `[plan-search] search bucketing: ${scoredSections.length} sections → ${searchMatches.length} steps`
-      )
 
       const allMatches = [...fileMatches, ...searchMatches]
       if (allMatches.length === 0) return { status: "ok", output: "ok", mutations: [] }

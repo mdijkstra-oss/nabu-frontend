@@ -40,8 +40,6 @@ interface IndexedSection {
 
 const byIndex = (a: IndexedSection, b: IndexedSection): number => a.index - b.index
 
-const charsToTokens = (chars: number): number => Math.round(chars / 4)
-
 export const scoutFile = async (
   path: string,
   content: string,
@@ -58,10 +56,6 @@ export const scoutFile = async (
   }
 
   const indexed: IndexedChunk[] = chunks.map((chunk, index) => ({ index, chunk }))
-  const chunkLengths = chunks.map((c) =>
-    charsToTokens(extractLines(content, c.startLine, c.endLine).length)
-  )
-  console.debug(`[scout] ${path} chunked in tokens [${chunkLengths.join(", ")}]`)
 
   const { results, failures } = await processPool(
     indexed,

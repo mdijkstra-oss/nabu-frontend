@@ -112,8 +112,10 @@ const tryEvict = async (db: IDBDatabase, prefix: string, cap: number): Promise<v
   }
 }
 
+const ignoreError = (): undefined => undefined
+
 const scheduleEviction = (db: IDBDatabase, prefix: string, cap: number): void => {
-  tryEvict(db, prefix, cap).catch((e) => console.debug("[CACHE] eviction failed for", prefix, e))
+  tryEvict(db, prefix, cap).catch(ignoreError)
 }
 
 export const buildKey = (args: string[]): string => fnvHash(args.join("\0"))
@@ -123,8 +125,7 @@ export const tryGet = async <T>(prefix: string, key: string): Promise<T | undefi
   try {
     const db = await getDb(prefix)
     return await idbGet<T>(db, key)
-  } catch (e) {
-    console.debug("[CACHE] get failed for", prefix, e)
+  } catch {
     return undefined
   }
 }
@@ -141,8 +142,8 @@ export const tryPut = async <T>(
     const db = await getDb(prefix)
     await idbPut(db, key, value, label)
     if (cap !== undefined) scheduleEviction(db, prefix, cap)
-  } catch (e) {
-    console.debug("[CACHE] put failed for", prefix, e)
+  } catch {
+    /* */
   }
 }
 

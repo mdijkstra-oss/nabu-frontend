@@ -145,11 +145,6 @@ const clusterAxes = async (
     groupNearbyLabels(subjects, baseUrl, threshold, subjectCounts),
   ])
 
-  console.debug(
-    `[corpus-cluster] types: ${types.length} → ${typeClusters.length} clusters, ` +
-      `subjects: ${subjects.length} → ${subjectClusters.length} clusters`
-  )
-
   return buildRemaps(typeClusters, subjectClusters)
 }
 
@@ -176,8 +171,6 @@ export const processDescriptionSync = async (
   const missing = findMissingPairs(pairs, cleaned)
 
   const removed = existing.length - cleaned.length
-  if (removed > 0) console.debug(`[corpus-describe] removing ${removed} stale descriptions`)
-
   if (missing.length === 0 && removed === 0) return
 
   const descriptions = [...cleaned]
@@ -197,5 +190,4 @@ export const processDescriptionSync = async (
   )
 
   writeDescriptions(descriptions)
-  console.debug(`[corpus-describe] ${descriptions.length} descriptions (${missing.length} new)`)
 }

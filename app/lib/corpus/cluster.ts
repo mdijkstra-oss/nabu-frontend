@@ -58,24 +58,6 @@ export const buildRemaps = (
   subjects: buildLabelRemap(subjectClusters),
 })
 
-const formatTopPairs = (labels: string[], embeddings: number[][], _threshold: number): string => {
-  const pairs: { a: string; b: string; score: number }[] = []
-  for (let i = 0; i < labels.length; i++) {
-    for (let j = i + 1; j < labels.length; j++) {
-      pairs.push({
-        a: labels[i],
-        b: labels[j],
-        score: cosineSimilarity(embeddings[i], embeddings[j]),
-      })
-    }
-  }
-  pairs.sort((a, b) => b.score - a.score)
-  return pairs
-    .slice(0, 5)
-    .map((p) => `${p.score.toFixed(4)} "${p.a}" ↔ "${p.b}"`)
-    .join("\n  ")
-}
-
 export const groupNearbyLabels = async (
   labels: string[],
   baseUrl: string,
@@ -91,12 +73,7 @@ export const groupNearbyLabels = async (
     return labels.map((l) => ({ representative: l, members: [l] }))
   }
 
-  const top = formatTopPairs(labels, result.value, threshold)
   const clusters = clusterLabels(labels, result.value, threshold, counts)
-  const merged = labels.length - clusters.length
-  console.debug(
-    `[cluster] ${labels.length} labels → ${clusters.length} clusters (${merged} merged), threshold=${threshold}\n  ${top}`
-  )
 
   return clusters
 }

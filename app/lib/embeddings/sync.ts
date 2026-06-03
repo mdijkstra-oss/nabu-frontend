@@ -160,8 +160,6 @@ const processSync = async (
   }
 
   await processPool(batches, embedBatch, reportBatchProgress, {})
-
-  console.debug(`[embeddings] synced ${dirty.length} files, ${processedChunks} new chunks`)
 }
 
 interface EmbeddingSyncHandle {

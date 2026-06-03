@@ -76,7 +76,6 @@ const runSync = async (
   previousFiles = currentFiles
   syncRevision++
   syncListeners.forEach((listener) => listener())
-  console.debug(`[db] synced: ${plan.changed.length} changed, ${plan.deleted.length} deleted`)
 }
 
 export const startDatabase = async (onProgress?: OnDbSyncProgress): Promise<void> => {
@@ -86,7 +85,6 @@ export const startDatabase = async (onProgress?: OnDbSyncProgress): Promise<void
   const withSchemas = buildProjectionsWithSchemas()
   const ddl = generateDdl(withSchemas)
 
-  console.debug("[db] initializing DuckDB...")
   const result = await initializeDatabase(ddl)
 
   if (!result.ok) {
@@ -95,7 +93,6 @@ export const startDatabase = async (onProgress?: OnDbSyncProgress): Promise<void
   }
 
   database = result.value
-  console.debug("[db] initialized, running initial sync...")
 
   await runSync(database, withSchemas, onProgress)
   dbReadyResolve?.()
@@ -108,8 +105,6 @@ export const startDatabase = async (onProgress?: OnDbSyncProgress): Promise<void
       return queryResult.value.rows
     }
   }
-
-  console.debug("[db] ready. Use window.query('SELECT ...') to query.")
 }
 
 export const syncOnce = async (): Promise<void> => {
@@ -127,7 +122,6 @@ export const startBackgroundSync = (): void => {
   }, 200)
 
   subscribe(debouncedSync)
-  console.debug("[db] background sync started")
 }
 
 export const getDatabase = (): Database | null => database

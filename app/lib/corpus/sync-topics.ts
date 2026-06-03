@@ -8,12 +8,7 @@ import { buildExcerpt } from "~/lib/text/excerpt"
 import { shouldReclassify, contentHash } from "~/domain/data-blocks/attributes/topics/selectors"
 import { executeFileAction } from "~/lib/data-blocks/file-action"
 import { classifyDocument, type Classification, type ExistingClassifications } from "./classify"
-import {
-  collectClassifications,
-  groupByCorpus,
-  collectTypeCounts,
-  collectSubjectCounts,
-} from "./tree"
+import { collectTypeCounts, collectSubjectCounts } from "./tree"
 import { processDescriptionSync } from "./sync-descriptions"
 import { processPool } from "~/lib/utils/pool"
 import { getLlmHost } from "~/lib/agent/env"
@@ -97,9 +92,6 @@ const classifyFile =
     }
 
     writeClassificationToAttributes(item.content, classification, item.filename)
-    console.debug(
-      `[classify] ${item.filename} → ${classification.type} / ${classification.subject}`
-    )
     return [classification]
   }
 
@@ -126,19 +118,6 @@ const processTopics = async (changedFiles: string[], deps: CorpusSyncDeps): Prom
   return true
 }
 
-const formatClassificationLog = (files: FileStore): string | null => {
-  const classifications = collectClassifications(files)
-  if (classifications.length === 0) return null
-  const groups = groupByCorpus(classifications)
-  const formatGroup = ({ key, count }: { key: string; count: number }): string =>
-    `[classify] ${key} (${count})`
-  return [
-    `[classify] ${classifications.length} files classified`,
-    `[classify] ${"─".repeat(35)}`,
-    ...groups.map(formatGroup),
-  ].join("\n")
-}
-
 export const startCorpusSync = (deps: CorpusSyncDeps): CorpusSyncHandle => {
   let previousFiles: FileStore = {}
 
@@ -150,12 +129,7 @@ export const startCorpusSync = (deps: CorpusSyncDeps): CorpusSyncHandle => {
 
       if (changed.length === 0) return
 
-      const topicsChanged = await processTopics(changed, deps)
-
-      if (topicsChanged) {
-        const log = formatClassificationLog(deps.getFiles())
-        if (log) console.debug(log)
-      }
+      await processTopics(changed, deps)
 
       const significantLanguages = await deps.getSignificantLanguages()
       await processDescriptionSync(deps.getFiles, significantLanguages, getLlmHost())

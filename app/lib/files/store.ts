@@ -23,6 +23,9 @@ import {
   type IdResolver,
 } from "~/lib/data-blocks/normalize"
 import { findAnnotationById } from "~/domain/data-blocks/attributes/annotations/selectors"
+import { SETTINGS_FILE, PREFERENCES_FILE } from "./filename"
+
+export const REQUIRED_FILES = [SETTINGS_FILE, PREFERENCES_FILE] as const
 
 const normalizeFile = (text: string, resolveId?: IdResolver): string =>
   normalizeSingletonOrder(expandBlockIdRefs(normalizeBlockFields(normalize(text)), resolveId)) +
@@ -113,7 +116,6 @@ export const getCurrentFile = (): string | null => currentFile
 export const getFileLineCount = (filename: string): number => countLines(getFileRaw(filename))
 
 export const setFiles = (newFiles: FileStore): void => {
-  console.debug(`[store] setFiles: ${Object.keys(newFiles).length} files`, Object.keys(newFiles))
   const resolveId: IdResolver = (id) => findAnnotationById(newFiles, id)?.text
   files = Object.fromEntries(
     Object.entries(newFiles).map(([k, v]) => [k, normalizeFile(stripPendingRefs(v), resolveId)])
@@ -138,10 +140,6 @@ export const updateFileRaw = (filename: string, raw: string, options?: UpdateFil
     : (id) => findAnnotationById(files, id)?.text
   const normalized = normalizeFile(raw, resolveId)
   if (normalized === files[filename]) return
-  const isNew = !(filename in files)
-  console.debug(
-    `[store] updateFileRaw: ${isNew ? "create" : "update"} "${filename}" (${normalized.length} chars)`
-  )
 
   const scheduleNotify = options?.immediate ? notify : debouncedNotify
 
@@ -157,10 +155,6 @@ export const updateFileRaw = (filename: string, raw: string, options?: UpdateFil
 
   const definitions = getAllDefinitions()
   const marked = markPendingRefs(normalized, definitions)
-  const pendingRefsInNew = findPendingRefs(marked)
-  if (pendingRefsInNew.length > 0) {
-    console.debug(`[store] marked ${pendingRefsInNew.length} pending refs in "${filename}"`)
-  }
 
   const newDefinitions = findDefinitionIds(normalized)
   let updatedFiles: FileStore = { ...files, [filename]: marked }
@@ -178,10 +172,6 @@ export const updateFileRaw = (filename: string, raw: string, options?: UpdateFil
     }
   }
 
-  if (resolvedPaths.length > 0) {
-    console.debug(`[store] resolved ${resolvedPaths.length} pending refs`)
-  }
-
   files = updatedFiles
   persistWrite(filename)
   for (const path of resolvedPaths) persistWrite(path)
@@ -189,7 +179,6 @@ export const updateFileRaw = (filename: string, raw: string, options?: UpdateFil
 }
 
 export const deleteFile = (filename: string): void => {
-  console.debug(`[store] deleteFile: "${filename}"`)
   removeFromDefinitionIndex(filename)
   const { [filename]: _, ...rest } = files
   files = rest
@@ -201,7 +190,6 @@ export const deleteFile = (filename: string): void => {
 }
 
 export const renameFile = (oldName: string, newName: string): void => {
-  console.debug(`[store] renameFile: "${oldName}" -> "${newName}"`)
   const content = files[oldName]
   if (content === undefined) return
 
@@ -228,8 +216,6 @@ export const resolvePendingRefsInBulk = (): void => {
   }
 
   if (updated !== files) {
-    const count = Object.keys(updated).filter((k) => updated[k] !== files[k]).length
-    console.debug(`[store] bulk pending refs: marked ${count} files`)
     files = updated
     notify()
   }
@@ -238,4 +224,24 @@ export const resolvePendingRefsInBulk = (): void => {
 export const subscribe = (listener: Listener): (() => void) => {
   listeners.add(listener)
   return () => listeners.delete(listener)
+}
+
+const hasAllRequiredFiles = (): boolean => REQUIRED_FILES.every((f) => f in files)
+
+export const waitForRequiredFiles = (timeoutMs = 30_000): Promise<void> => {
+  if (hasAllRequiredFiles()) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      unsub()
+      const missing = REQUIRED_FILES.filter((f) => !(f in files))
+      reject(new Error(`Required files missing after ${timeoutMs}ms: ${missing.join(", ")}`))
+    }, timeoutMs)
+    const unsub = subscribe(() => {
+      if (hasAllRequiredFiles()) {
+        clearTimeout(timer)
+        unsub()
+        resolve()
+      }
+    })
+  })
 }

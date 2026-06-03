@@ -69,10 +69,6 @@ export const resolveSearchTargets = async (
     )
     files.push(...searchFiles)
     searchIds.push(target.search_id)
-
-    console.debug(
-      `[plan-deep] search ${target.search_id} resolved ${result.value.length} hits → ${searchFiles.length} files`
-    )
   }
 
   return { files, searchIds, orderedHits, errors }

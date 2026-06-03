@@ -38,12 +38,5 @@ export const filterTarget = async (
   const excludedIndices = expandRanges(result.data.exclude)
   const surviving = paragraphs.filter((p) => !excludedIndices.has(p.index))
 
-  const rangesSummary = result.data.exclude
-    .map((r) => `  [${r.from}-${r.to}] ${r.reason}`)
-    .join("\n")
-  console.debug(
-    `[scout-filter] ${excludedIndices.size}/${paragraphs.length} paragraphs excluded\n${rangesSummary}`
-  )
-
   return { surviving, excludedIndices }
 }

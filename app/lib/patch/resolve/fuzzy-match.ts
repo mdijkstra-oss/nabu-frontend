@@ -46,17 +46,12 @@ export const resolveFuzzyPatterns = (patch: string, targetContent: string): Fuzz
   let resolved = 0
   const unresolved: string[] = []
 
-  console.debug(
-    `[deep-fuzzy] resolve: ${patterns.length} pattern(s), target ${targetContent.length} chars`
-  )
   for (const pattern of patterns) {
     const match = findBestMatch(targetContent, pattern.needle)
     if (match) {
-      console.debug(`[deep-fuzzy] resolve: OK "${pattern.needle.slice(0, 60)}..."`)
       result = result.replace(pattern.placeholder, match)
       resolved++
     } else {
-      console.debug(`[deep-fuzzy] resolve: MISS "${pattern.needle.slice(0, 80)}..."`)
       unresolved.push(pattern.needle)
     }
   }

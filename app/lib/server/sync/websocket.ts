@@ -29,20 +29,15 @@ export const createWebSocket = (
 
     const url = getWsUrl(`/ws/${projectId}`)
     ws = new WebSocket(url)
-    let messageCount = 0
 
     ws.onopen = () => {
       reconnectAttempt = 0
-      messageCount = 0
       callbacks.onConnect?.()
     }
 
     ws.onmessage = (event) => {
       try {
         const command = JSON.parse(event.data) as Command
-        messageCount++
-        const label = command.action.toLowerCase().replace("file", " file")
-        console.debug(`[ws] #${messageCount} ${label}: ${command.path}`)
         callbacks.onCommand(command)
       } catch {
         void 0
