@@ -77,6 +77,16 @@ export const isLocked = (a: { locked?: boolean }): boolean => a.locked === true
 
 export const hasReview = (a: Annotation): boolean => a.vote?.review !== undefined
 
+export const isAnnotationVisible = (
+  selected: Set<string>,
+  annotation: { code?: string }
+): boolean => selected.size === 0 || (!!annotation.code && selected.has(annotation.code))
+
+export const selectVisibleAnnotations = <T extends { code?: string }>(
+  annotations: T[],
+  selected: Set<string>
+): T[] => annotations.filter((a) => isAnnotationVisible(selected, a))
+
 const hasStoredReview = (a: StoredAnnotation): boolean => a.vote?.review !== undefined
 
 export type ReviewSeverity = "normal" | "warning" | "danger"
@@ -119,10 +129,6 @@ const isReviewOutlier = (
   const baselineUpper = wilsonUpperBound(otherReviewed, otherTotal)
   const codeLower = wilsonLowerBound(codeReviewed, codeTotal)
   const above = codeLower > baselineUpper
-
-  console.debug(
-    `[wilson] ${code}: total=${codeTotal} reviewed=${codeReviewed} lower=${codeLower.toFixed(3)} baseline=${baselineUpper.toFixed(3)} above=${above}`
-  )
 
   return above
 }

@@ -9,6 +9,8 @@ import { trimAroundMatches } from "~/lib/text/trim-around"
 import { splitBySentences } from "~/lib/text/split"
 import { createCappedCache } from "~/lib/utils/cache"
 import { yieldToBrowser } from "~/lib/utils/async"
+import { selectVisibleAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
+import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 
 interface Range {
   start: number
@@ -95,33 +97,11 @@ const findFootedAnnotations = (
   return candidates.filter((ann) => hasFooting(ann, prose, trimmedRange))
 }
 
-const expandToAnnotations = (
-  prose: string,
-  trimmedProse: string,
-  annotations: Annotation[]
-): string => {
-  if (annotations.length === 0) return trimmedProse
-
-  const trimmedRange = locateEdgesInProse(prose, trimmedProse)
-  if (!trimmedRange) return trimmedProse
-
-  let start = trimmedRange.start
-  let end = trimmedRange.end
-
-  for (const ann of annotations) {
-    const annRange = locateExact(prose, ann.text) ?? findMatchOffset(prose, ann.text)
-    if (!annRange) continue
-    if (annRange.start < start) start = annRange.start
-    if (annRange.end > end) end = annRange.end
-  }
-
-  return prose.slice(start, end)
-}
-
 const extractSliceFromContext = (
   hit: SearchHit,
   fileContent: string,
-  ctx: FileContext
+  ctx: FileContext,
+  selectedCodes: Set<string>
 ): string | null => {
   const anchors = resolveAnchors(hit, ctx.annotations)
   if (!anchors) return null
@@ -129,20 +109,28 @@ const extractSliceFromContext = (
 
   const trimmed = trimAroundMatches(ctx.prose, anchors)
 
-  if (ctx.annotations.length === 0) return trimmed
+  const visible = selectVisibleAnnotations(ctx.annotations, selectedCodes)
+  if (visible.length === 0) return trimmed
 
-  const footed = findFootedAnnotations(trimmed, ctx.prose, ctx.annotations, hit.id)
+  const footed = findFootedAnnotations(trimmed, ctx.prose, visible, hit.id)
   if (footed.length === 0) return trimmed
 
-  const expanded = expandToAnnotations(ctx.prose, trimmed, footed)
+  const expanded = trimAroundMatches(ctx.prose, [...anchors, ...footed.map((a) => a.text)])
   return `${expanded}\n\n${formatAnnotationsBlock(footed)}`
 }
 
-export const extractSearchSlice = (hit: SearchHit, fileContent: string): string | null =>
-  extractSliceFromContext(hit, fileContent, computeFileContext(fileContent))
+const EMPTY_CODES = new Set<string>()
 
-const growHitWithContext = (hit: SearchHit, fileContent: string, ctx: FileContext): SearchHit => {
-  const grown = extractSliceFromContext(hit, fileContent, ctx)
+export const extractSearchSlice = (hit: SearchHit, fileContent: string): string | null =>
+  extractSliceFromContext(hit, fileContent, computeFileContext(fileContent), EMPTY_CODES)
+
+const growHitWithContext = (
+  hit: SearchHit,
+  fileContent: string,
+  ctx: FileContext,
+  selectedCodes: Set<string>
+): SearchHit => {
+  const grown = extractSliceFromContext(hit, fileContent, ctx, selectedCodes)
   if (!grown) return hit
   return { ...hit, text: grown }
 }
@@ -176,14 +164,16 @@ const getFileContext = (file: string, files: FileStore): FileContext | null => {
   return ctx
 }
 
-export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  deduplicateHits(
+export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
+  const selectedCodes = getSelectedCodes(files)
+  return deduplicateHits(
     hits.map((hit) => {
       const ctx = getFileContext(hit.file, files)
       if (!ctx) return hit
-      return growHitWithContext(hit, files[hit.file], ctx)
+      return growHitWithContext(hit, files[hit.file], ctx, selectedCodes)
     })
   )
+}
 
 const isHitAlive = (hit: SearchHit, files: FileStore): boolean => {
   const content = files[hit.file]
@@ -192,34 +182,47 @@ const isHitAlive = (hit: SearchHit, files: FileStore): boolean => {
   return content.includes(hit.id)
 }
 
-const regrowHitWithContext = (hit: SearchHit, fileContent: string, ctx: FileContext): SearchHit => {
+const regrowHitWithContext = (
+  hit: SearchHit,
+  fileContent: string,
+  ctx: FileContext,
+  selectedCodes: Set<string>
+): SearchHit => {
   if (!hit.text) return hit
-  return growHitWithContext({ ...hit, text: stripAnnotationsBlock(hit.text) }, fileContent, ctx)
+  return growHitWithContext(
+    { ...hit, text: stripAnnotationsBlock(hit.text) },
+    fileContent,
+    ctx,
+    selectedCodes
+  )
 }
 
-export const refreshHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  deduplicateHits(
+export const refreshHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
+  const selectedCodes = getSelectedCodes(files)
+  return deduplicateHits(
     hits
       .filter((h) => isHitAlive(h, files))
       .map((h) => {
         const ctx = getFileContext(h.file, files)
         if (!ctx) return h
-        return regrowHitWithContext(h, files[h.file], ctx)
+        return regrowHitWithContext(h, files[h.file], ctx, selectedCodes)
       })
   )
+}
 
 export const refreshHitsAsync = async (
   hits: SearchHit[],
   files: FileStore,
   isCancelled: () => boolean
 ): Promise<SearchHit[]> => {
+  const selectedCodes = getSelectedCodes(files)
   const alive = hits.filter((h) => isHitAlive(h, files))
   const refreshed: SearchHit[] = []
 
   for (const h of alive) {
     if (isCancelled()) return refreshed
     const ctx = getFileContext(h.file, files)
-    refreshed.push(ctx ? regrowHitWithContext(h, files[h.file], ctx) : h)
+    refreshed.push(ctx ? regrowHitWithContext(h, files[h.file], ctx, selectedCodes) : h)
     await yieldToBrowser()
   }
 

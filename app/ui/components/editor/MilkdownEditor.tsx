@@ -26,18 +26,10 @@ import type { DebugOptions } from "./debug-config"
 import { useFiles } from "~/ui/hooks/useFiles"
 import {
   getAnnotations,
-  type Annotation,
+  selectVisibleAnnotations,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
-
-const isAnnotationVisible = (selected: Set<string>, annotation: Annotation): boolean =>
-  selected.size === 0 || (!!annotation.code && selected.has(annotation.code))
-
-const filterAnnotationsBySelectedCodes = (
-  annotations: Annotation[],
-  selected: Set<string>
-): Annotation[] => annotations.filter((a) => isAnnotationVisible(selected, a))
 
 const readOnlyKey = new PluginKey("readOnly")
 
@@ -77,7 +69,7 @@ const MilkdownEditorCore = ({
   const [loading, getEditor] = useInstance()
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
   const annotations = useMemo(
-    () => filterAnnotationsBySelectedCodes(getAnnotations(files, defaultValue), selectedCodes),
+    () => selectVisibleAnnotations(getAnnotations(files, defaultValue), selectedCodes),
     [files, defaultValue, selectedCodes]
   )
 
