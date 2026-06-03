@@ -85,32 +85,6 @@ const validateFileSections = (
   return null
 }
 
-const findNonBlankLine = (lines: string[], from: number, dir: 1 | -1): string => {
-  for (let j = from; j >= 0 && j < lines.length; j += dir) {
-    if (lines[j].trim()) return lines[j]
-  }
-  return ""
-}
-
-const logSectionBounds = (
-  path: string,
-  startLine: number,
-  endLine: number,
-  contentLines: string[]
-): void => {
-  const firstLine = contentLines[startLine - 1] ?? ""
-  const lastLine = contentLines[endLine - 1] ?? ""
-  const first = firstLine.trim()
-    ? firstLine
-    : `(blank, first after: ${findNonBlankLine(contentLines, startLine, 1)})`
-  const last = lastLine.trim()
-    ? lastLine
-    : `(blank, last before: ${findNonBlankLine(contentLines, endLine - 2, -1)})`
-  console.debug(`[deep-analysis] ${path} [${startLine}-${endLine}]`)
-  console.debug(`[deep-analysis]   first: ${first}`)
-  console.debug(`[deep-analysis]   last:  ${last}`)
-}
-
 const applyAnnotationsEager = async (
   path: string,
   ops: unknown[]
@@ -120,11 +94,7 @@ const applyAnnotationsEager = async (
     return { status: "error", output: "patch_annotations handler not registered", mutations: [] }
 
   const files = getViewableFiles()
-  console.debug(`[deep-fuzzy] eager: ${ops.length} ops for ${path}`)
   const result = await handler(files, { path, operations: ops })
-  console.debug(
-    `[deep-fuzzy] eager: result=${result.status} — ${String(result.output).slice(0, 120)}`
-  )
 
   if (result.status === "error")
     return { status: "error", output: String(result.output), mutations: [] }
@@ -222,9 +192,6 @@ const handleAnnotation =
         startLine,
         endLine
       )
-      console.debug(
-        `[deep-analysis-replace] write: ${addOps.length} to add on ${path} [${startLine}-${endLine}] (${rawAddOps.length - addOps.length} dropped for locked overlap)`
-      )
 
       const ops = [...clearResult.ops, ...addOps]
       if (ops.length === 0)
@@ -309,14 +276,6 @@ const processComposite = async (
   const prepared = prepareTargetContent(composite.content)
   const { sentences, positions } = numberSectionWithPositions(prepared)
 
-  const segmentSummary = composite.segments
-    .map((s) => `${s.path} [${s.startLine}-${s.endLine}]`)
-    .join(", ")
-  console.debug(`[deep-analysis-format] composite segments: ${segmentSummary}`)
-  console.debug(
-    `[deep-analysis-format] numbered sentences (${sentences.length}):\n${sentences.map((s, i) => `  ${i + 1}: ${s}`).join("\n")}`
-  )
-
   if (sentences.length === 0) {
     return composite.segments.map((seg) => ({
       section: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
@@ -326,11 +285,6 @@ const processComposite = async (
         mutations: [],
       },
     }))
-  }
-
-  for (const seg of composite.segments) {
-    const content = getFileView(seg.path)
-    if (content) logSectionBounds(seg.path, seg.startLine, seg.endLine, content.split("\n"))
   }
 
   const name = composite.segments[0]?.path.split("/").pop() ?? "section"
@@ -380,11 +334,6 @@ const processComposite = async (
 
   const sentenceMap = buildSentenceSegmentMap(composite, positions)
   const grouped = groupAnnotationsBySegment(pipelineResult.annotations, sentenceMap)
-
-  const withReview = pipelineResult.annotations.filter((a) => a.review !== undefined).length
-  console.debug(
-    `[deep-analysis] result: ${pipelineResult.annotations.length} surviving, ${withReview} with review`
-  )
 
   thinkWithName(WRITING, name)
 

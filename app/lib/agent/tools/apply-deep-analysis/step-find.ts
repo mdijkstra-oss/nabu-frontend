@@ -8,7 +8,7 @@ import { errorMessage } from "~/lib/utils/error"
 import { think, FINDING, CONSENSUS } from "./thoughts"
 import { buildFindCall, buildPrefixedFindSchema, extractSourceIds } from "./messages"
 import { resolveToGlobal } from "./format"
-import { groupBySpan, filterOverlappingSpans } from "./consensus"
+import { filterOverlappingSpans } from "./consensus"
 import { FIND_ENDPOINT, FIND_RUNS, FIND_CONCURRENCY } from "./def"
 
 export interface FindStepResult {
@@ -192,27 +192,12 @@ export const findAllDimensions = async (
   think(CONSENSUS)
   const allAnnotations: Annotation[] = []
 
-  for (let callIdx = 0; callIdx < runsPerCall.length; callIdx++) {
-    const runs = runsPerCall[callIdx]
-    const runSummary = runs.map((r, i) => `run-${i}(m${i % 2}):${r.length}`).join(", ")
-    console.debug(`[deep-analysis] call-${callIdx} find: ${runSummary}`)
-
+  for (const runs of runsPerCall) {
     if (runs.length === 0) continue
-
     allAnnotations.push(...voteSpans(runs))
   }
 
   const filtered = filterOverlappingSpans(allAnnotations)
-
-  console.debug(`[deep-analysis] containment filter: ${allAnnotations.length} → ${filtered.length}`)
-
-  const codedSpans = groupBySpan(
-    filtered.map((a) => ({ start: a.start, end: a.end, analysis_source_id: a.code }))
-  )
-  for (const cs of codedSpans) {
-    console.debug(`[deep-analysis]   [${cs.start}-${cs.end}] ${cs.codings.join(", ")}`)
-  }
-  console.debug(`[deep-analysis] find → ${filtered.length} annotations`)
 
   return { annotations: filtered, errors }
 }

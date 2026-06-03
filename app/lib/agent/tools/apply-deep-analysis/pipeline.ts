@@ -64,8 +64,6 @@ export const runAnalysisPipeline = async (
 
   const batches = groupByCode(findResult.annotations)
 
-  console.debug(`[deep-analysis] batches: ${batches.length}`)
-
   think(REVISITING)
   const { results: batchResults, failures } = await processPool(
     batches,
@@ -83,10 +81,6 @@ export const runAnalysisPipeline = async (
     allErrors.push(...br.errors)
   }
   for (const f of failures) allErrors.push(errorMessage(f.error))
-
-  console.debug(
-    `[deep-analysis] post-pipeline: ${surviving.length} surviving from ${findResult.annotations.length} found`
-  )
 
   return { annotations: surviving, errors: allErrors }
 }

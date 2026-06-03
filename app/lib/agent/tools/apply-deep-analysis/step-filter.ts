@@ -105,12 +105,10 @@ export const filterAnnotations = async (
   const errors: string[] = []
   const perModelJudgments: Map<string, Judgment>[] = []
 
-  for (let ri = 0; ri < results.length; ri++) {
-    const result = results[ri]
+  for (const result of results) {
     const judgments = new Map<string, Judgment>()
     if (!result.ok) {
       errors.push(result.error)
-      console.debug(`[deep-analysis] filter model-${ri} error: ${result.error}`)
     } else {
       for (const r of result.data.results) {
         const m = mapping.find((entry) => entry.index === r.id)
@@ -121,17 +119,8 @@ export const filterAnnotations = async (
     perModelJudgments.push(judgments)
   }
 
-  const modelSizes = perModelJudgments.map((m, i) => `model-${i}:${m.size}`).join(", ")
-  console.debug(`[deep-analysis] filter votes: ${modelSizes}, errors: ${errors.length}`)
-  for (let i = 0; i < perModelJudgments.length; i++) {
-    console.debug(
-      `[deep-analysis] filter model-${i} keys: ${[...perModelJudgments[i].keys()].sort().join(", ")}`
-    )
-  }
-
   const surviving: Annotation[] = []
   const removed: Annotation[] = []
-  let underVoted = 0
 
   for (const a of annotations) {
     const key = annotationKey(a)
@@ -139,11 +128,6 @@ export const filterAnnotations = async (
     for (const judgments of perModelJudgments) {
       const entry = judgments.get(key)
       if (entry) votes.push(entry)
-    }
-
-    if (votes.length < FILTER_RUNS) {
-      underVoted++
-      console.debug(`[deep-analysis] filter under-voted: ${key} (${votes.length}/${FILTER_RUNS})`)
     }
 
     if (votes.length === 0) {
@@ -166,8 +150,6 @@ export const filterAnnotations = async (
         throw new Error(`unknown filter outcome: ${merged.outcome}`)
     }
   }
-
-  if (underVoted > 0) console.debug(`[deep-analysis] filter: ${underVoted} under-voted annotations`)
 
   return { surviving, removed, errors }
 }

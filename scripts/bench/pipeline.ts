@@ -5,7 +5,6 @@ import {
   buildFindCall,
   buildFindResultSchema,
   extractSourceIds,
-  buildSourceTitleMap,
   partitionSources,
   buildCallList,
 } from "~/lib/agent/tools/apply-deep-analysis/messages"
@@ -166,9 +165,6 @@ const runDimensionPipeline = async (
 
   const { agreed, disputed } = voteSpans(findRuns)
 
-  const titles = buildSourceTitleMap(sources, resolve)
-  console.debug(`[bench] vote: ${agreed.length} agreed, ${disputed.length} disputed`)
-
   return { agreed, disputed, errors }
 }
 
@@ -253,8 +249,6 @@ export const analyzeFile = async ({
       results: analysisResults,
     })
 
-    const codeCount = new Set(mapped.map((r) => r.analysis_source_id)).size
-    console.debug(`[bench] section ${chunk.startLine}-${chunk.endLine}: ${mapped.length} codings across ${codeCount} codes`)
   }
 
   return sections
