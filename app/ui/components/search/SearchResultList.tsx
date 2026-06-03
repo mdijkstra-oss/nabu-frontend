@@ -47,8 +47,19 @@ const hitHasId = (hit: SearchHit): hit is SearchHit & { id: string } => hit.id !
 const hitHasText = (hit: SearchHit): hit is SearchHit & { text: string } => hit.text !== undefined
 const hitIsFileOnly = (hit: SearchHit): boolean => !hitHasId(hit) && !hitHasText(hit)
 
-const hitKey = (hit: SearchHit, index: number): string =>
-  hit.id ?? (hit.text ? `text-${index}` : `file-${index}`)
+const hitKey = (hit: SearchHit, index: number): string => {
+  if (hit.id) return hit.id
+  if (hit.text) return `text:${hit.text.slice(0, 64)}`
+  return `file:${hit.file}:${index}`
+}
+
+const groupKey = (group: RunGroup): string => {
+  const head = group.hits[0]
+  if (!head) return group.file
+  if (head.id) return `${group.file}\0${head.id}`
+  if (head.text) return `${group.file}\0${head.text.slice(0, 64)}`
+  return group.file
+}
 
 const buildFileUrl = (projectId: string, file: string): string =>
   `/project/${projectId}/file/${encodeURIComponent(file)}`
@@ -189,30 +200,37 @@ export const SearchResultList = ({
   onNavigate,
 }: SearchResultListProps) => {
   const throttledFiles = useThrottledValue(files, 500)
-  const [liveHits, setLiveHits] = useState<SearchHit[]>(hits)
-  const cancelRef = useRef(false)
+  const hitsRef = useRef(hits)
+  useEffect(() => {
+    hitsRef.current = hits
+  })
+  const [refreshed, setRefreshed] = useState<{ source: SearchHit[]; output: SearchHit[] } | null>(
+    null
+  )
 
   useEffect(() => {
-    cancelRef.current = true
-    cancelRef.current = false
-    const isCancelled = () => cancelRef.current
+    const startingHits = hitsRef.current
+    let cancelled = false
+    const isCancelled = () => cancelled
 
-    refreshHitsAsync(hits, throttledFiles, isCancelled).then((refreshed) => {
-      if (!isCancelled()) setLiveHits(refreshed)
+    refreshHitsAsync(startingHits, throttledFiles, isCancelled).then((output) => {
+      if (cancelled) return
+      setRefreshed({ source: startingHits, output })
     })
 
     return () => {
-      cancelRef.current = true
+      cancelled = true
     }
-  }, [hits, throttledFiles])
+  }, [throttledFiles])
 
+  const liveHits = refreshed && refreshed.source === hits ? refreshed.output : hits
   const groups = useMemo(() => groupByRun(liveHits), [liveHits])
 
   return (
     <div className="flex w-full flex-col items-start gap-6">
-      {groups.map((group, i) => (
+      {groups.map((group) => (
         <RunGroupCard
-          key={`${group.file}-${i}`}
+          key={groupKey(group)}
           group={group}
           files={files}
           projectId={projectId}
