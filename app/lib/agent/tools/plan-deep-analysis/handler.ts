@@ -3,7 +3,13 @@ import { planDeepAnalysisTool, PlanDeepAnalysisArgs } from "./def"
 import { registerTool, tool } from "../../executors/tool"
 import { showProgress } from "../../client/store"
 import { activatePlan } from "../../executors/modes"
-import { buildAutoSteps, buildExecRules, toSectionMatches, bucketSearchSections } from "./format"
+import {
+  buildAutoSteps,
+  buildExecRules,
+  toSectionMatches,
+  bucketSearchSections,
+  sortLabeledByInputOrder,
+} from "./format"
 import type { LabeledTarget, SourceEntry, SectionEntry, ScoredSection } from "./format"
 import { findMatchOffset } from "~/lib/text/find"
 import { parseCodeBlocks, extractProse, mapProseOffset } from "~/lib/data-blocks/parse"
@@ -141,10 +147,14 @@ registerTool(
         return { status: "error", output: errorMessage(e), mutations: [] }
       }
 
-      pushTargetBlocks(labeled)
+      const orderedLabeled = sortLabeledByInputOrder(
+        labeled,
+        explicitFiles.map((f) => f.path)
+      )
+      pushTargetBlocks(orderedLabeled)
       injectMemory()
 
-      const fileMatches = toSectionMatches(labeled)
+      const fileMatches = toSectionMatches(orderedLabeled)
 
       const scoredSections = toScoredSections(orderedHits)
       const searchMatches = bucketSearchSections(scoredSections)

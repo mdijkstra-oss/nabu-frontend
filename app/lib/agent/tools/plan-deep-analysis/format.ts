@@ -46,6 +46,22 @@ export const toSectionMatches = (labeled: LabeledTarget[]): SectionMatch[] =>
     sections: t.ranges.map((r) => ({ path: t.path, startLine: r.startLine, endLine: r.endLine })),
   }))
 
+const firstStartLine = (t: LabeledTarget): number => t.ranges[0]?.startLine ?? 0
+
+export const sortLabeledByInputOrder = (
+  labeled: readonly LabeledTarget[],
+  inputPaths: readonly string[]
+): LabeledTarget[] => {
+  const pathOrder = new Map(inputPaths.map((p, i) => [p, i]))
+  const indexOf = (path: string): number => pathOrder.get(path) ?? Number.MAX_SAFE_INTEGER
+  return [...labeled].sort((a, b) => {
+    const pa = indexOf(a.path)
+    const pb = indexOf(b.path)
+    if (pa !== pb) return pa - pb
+    return firstStartLine(a) - firstStartLine(b)
+  })
+}
+
 export const buildAutoSteps = (
   matches: SectionMatch[],
   sources: SourceEntry[],

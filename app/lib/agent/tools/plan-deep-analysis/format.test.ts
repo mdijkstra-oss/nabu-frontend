@@ -6,6 +6,7 @@ import {
   toSectionMatches,
   buildAutoSteps,
   bucketSearchSections,
+  sortLabeledByInputOrder,
 } from "./format"
 
 const target = (overrides: Partial<LabeledTarget> = {}): LabeledTarget => ({
@@ -258,5 +259,69 @@ describe("bucketSearchSections", () => {
 
   cases.forEach(({ name, input, check }) => {
     it(name, () => check(bucketSearchSections(input)))
+  })
+})
+
+describe("sortLabeledByInputOrder", () => {
+  const labeled = (path: string, startLine: number, label = "L"): LabeledTarget => ({
+    path,
+    label,
+    ranges: [{ startLine, endLine: startLine + 10 }],
+  })
+
+  const keys = (out: LabeledTarget[]): string[] =>
+    out.map((t) => `${t.path}:${t.ranges[0]?.startLine}`)
+
+  const cases = [
+    {
+      name: "single file: composites sorted by startLine ascending",
+      labeled: [labeled("a.md", 800), labeled("a.md", 1), labeled("a.md", 400)],
+      inputPaths: ["a.md"],
+      expected: ["a.md:1", "a.md:400", "a.md:800"],
+    },
+    {
+      name: "multi-file: input order respected across files",
+      labeled: [labeled("b.md", 50), labeled("a.md", 50), labeled("c.md", 50)],
+      inputPaths: ["a.md", "b.md", "c.md"],
+      expected: ["a.md:50", "b.md:50", "c.md:50"],
+    },
+    {
+      name: "multi-file: within-file startLine sorted, files in input order",
+      labeled: [labeled("b.md", 100), labeled("a.md", 500), labeled("b.md", 1), labeled("a.md", 1)],
+      inputPaths: ["a.md", "b.md"],
+      expected: ["a.md:1", "a.md:500", "b.md:1", "b.md:100"],
+    },
+    {
+      name: "unknown path sinks to end",
+      labeled: [labeled("rogue.md", 1), labeled("a.md", 100)],
+      inputPaths: ["a.md"],
+      expected: ["a.md:100", "rogue.md:1"],
+    },
+    {
+      name: "empty labeled returns empty",
+      labeled: [],
+      inputPaths: ["a.md"],
+      expected: [],
+    },
+    {
+      name: "missing ranges treated as startLine 0",
+      labeled: [{ path: "a.md", label: "x", ranges: [] }, labeled("a.md", 5)],
+      inputPaths: ["a.md"],
+      expected: ["a.md:undefined", "a.md:5"],
+    },
+  ]
+
+  cases.forEach(({ name, labeled: input, inputPaths, expected }) => {
+    it(name, () => {
+      const out = sortLabeledByInputOrder(input, inputPaths)
+      expect(keys(out)).toEqual(expected)
+    })
+  })
+
+  it("does not mutate input", () => {
+    const input = [labeled("a.md", 800), labeled("a.md", 1)]
+    const snapshot = JSON.stringify(input)
+    sortLabeledByInputOrder(input, ["a.md"])
+    expect(JSON.stringify(input)).toBe(snapshot)
   })
 })
