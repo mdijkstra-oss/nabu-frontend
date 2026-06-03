@@ -3,7 +3,7 @@ import { findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
 import { getBlock } from "~/lib/data-blocks/query"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
 import type { FileStore } from "~/lib/files/store"
-import { findIn, findFileFor, createFileStoreSelector } from "~/lib/files/collect"
+import { findIn, findFileFor } from "~/lib/files/collect"
 import { wilsonUpperBound, wilsonLowerBound } from "~/lib/utils/wilson"
 
 export type Annotation = Omit<StoredAnnotation, "color"> & { color: string }
@@ -54,33 +54,24 @@ export interface GlobalAnnotationCount {
   fileCount: number
 }
 
-interface PerFileAnnotationCounts {
-  countByCode: Map<string, number>
-}
-
-const extractPerFileAnnotationCounts = (raw: string): PerFileAnnotationCounts => {
-  const countByCode = new Map<string, number>()
-  for (const a of getStoredAnnotations(raw)) {
-    if (!a.code) continue
-    countByCode.set(a.code, (countByCode.get(a.code) ?? 0) + 1)
-  }
-  return { countByCode }
-}
-
-export const getAnnotationGlobalCountsByCode = createFileStoreSelector<
-  PerFileAnnotationCounts,
-  Record<string, GlobalAnnotationCount>
->({
-  extract: extractPerFileAnnotationCounts,
-  initial: () => ({}),
-  fold: (acc, partial) => {
-    for (const [code, count] of partial.countByCode) {
-      acc[code] = acc[code] ?? { count: 0, fileCount: 0 }
-      acc[code].count += count
-      acc[code].fileCount += 1
+export const getAnnotationGlobalCountsByCode = (
+  files: FileStore
+): Record<string, GlobalAnnotationCount> => {
+  const result: Record<string, GlobalAnnotationCount> = {}
+  for (const raw of Object.values(files)) {
+    const codesInFile = new Set<string>()
+    for (const a of getStoredAnnotations(raw)) {
+      if (!a.code) continue
+      result[a.code] = result[a.code] ?? { count: 0, fileCount: 0 }
+      result[a.code].count += 1
+      codesInFile.add(a.code)
     }
-  },
-})
+    codesInFile.forEach((code) => {
+      result[code].fileCount += 1
+    })
+  }
+  return result
+}
 
 export const isLocked = (a: { locked?: boolean }): boolean => a.locked === true
 
@@ -95,37 +86,20 @@ export interface ReviewStat {
   severity: ReviewSeverity
 }
 
-interface PerFileReviewTallies {
-  totals: Map<string, number>
-  reviewed: Map<string, number>
-}
-
-const extractPerFileReviewTallies = (raw: string): PerFileReviewTallies => {
-  const totals = new Map<string, number>()
-  const reviewed = new Map<string, number>()
-  for (const a of getStoredAnnotations(raw)) {
-    if (!a.code || !a.vote) continue
-    totals.set(a.code, (totals.get(a.code) ?? 0) + 1)
-    if (hasStoredReview(a)) reviewed.set(a.code, (reviewed.get(a.code) ?? 0) + 1)
+const collectReviewTallies = (
+  files: FileStore
+): { totals: Record<string, number>; reviewed: Record<string, number> } => {
+  const totals: Record<string, number> = {}
+  const reviewed: Record<string, number> = {}
+  for (const raw of Object.values(files)) {
+    for (const a of getStoredAnnotations(raw)) {
+      if (!a.code || !a.vote) continue
+      totals[a.code] = (totals[a.code] ?? 0) + 1
+      if (hasStoredReview(a)) reviewed[a.code] = (reviewed[a.code] ?? 0) + 1
+    }
   }
   return { totals, reviewed }
 }
-
-const collectReviewTallies = createFileStoreSelector<
-  PerFileReviewTallies,
-  { totals: Record<string, number>; reviewed: Record<string, number> }
->({
-  extract: extractPerFileReviewTallies,
-  initial: () => ({ totals: {}, reviewed: {} }),
-  fold: (acc, partial) => {
-    for (const [code, count] of partial.totals) {
-      acc.totals[code] = (acc.totals[code] ?? 0) + count
-    }
-    for (const [code, count] of partial.reviewed) {
-      acc.reviewed[code] = (acc.reviewed[code] ?? 0) + count
-    }
-  },
-})
 
 const isReviewOutlier = (
   code: string,
@@ -160,27 +134,16 @@ const toSeverity = (outlier: boolean, total: number): ReviewSeverity => {
   return total < LOW_CONFIDENCE_THRESHOLD ? "warning" : "danger"
 }
 
-const extractPerFileReviewedCounts = (raw: string): Map<string, number> => {
-  const counts = new Map<string, number>()
-  for (const a of getStoredAnnotations(raw)) {
-    if (!a.code || !hasStoredReview(a)) continue
-    counts.set(a.code, (counts.get(a.code) ?? 0) + 1)
-  }
-  return counts
-}
-
-export const getReviewedCountsByCode = createFileStoreSelector<
-  Map<string, number>,
-  Record<string, number>
->({
-  extract: extractPerFileReviewedCounts,
-  initial: () => ({}),
-  fold: (acc, partial) => {
-    for (const [code, count] of partial) {
-      acc[code] = (acc[code] ?? 0) + count
+export const getReviewedCountsByCode = (files: FileStore): Record<string, number> => {
+  const result: Record<string, number> = {}
+  for (const raw of Object.values(files)) {
+    for (const a of getStoredAnnotations(raw)) {
+      if (!a.code || !hasStoredReview(a)) continue
+      result[a.code] = (result[a.code] ?? 0) + 1
     }
-  },
-})
+  }
+  return result
+}
 
 export const getReviewStatsByCode = (files: FileStore): Record<string, ReviewStat> => {
   const { totals, reviewed } = collectReviewTallies(files)

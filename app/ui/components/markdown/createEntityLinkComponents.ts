@@ -3,14 +3,8 @@
 import type { Components } from "react-markdown"
 import { createElement } from "react"
 import { FileText, MapPin, Search } from "lucide-react"
-import {
-  findDepFile,
-  resolveEntityLink,
-  type EntityIcons,
-  type ResolvedLink,
-} from "~/lib/markdown/resolve"
+import { resolveEntityLink, type EntityIcons, type ResolvedLink } from "~/lib/markdown/resolve"
 import type { FileStore } from "~/lib/files/store"
-import { createCappedCache } from "~/lib/utils/cache"
 import { EntityLink } from "./EntityLink"
 
 interface EntityLinkContext {
@@ -25,24 +19,22 @@ const entityIcons: EntityIcons = {
   search: Search,
 }
 
-const linkCache = createCappedCache<string, ResolvedLink | null>(2000)
-
-const buildCacheKey = (href: string, content: string): string => `${href}\x00${content}`
+let cachedFiles: FileStore | null = null
+let linkCache = new Map<string, ResolvedLink | null>()
 
 const getCachedResolution = (
   href: string,
   files: FileStore,
   projectId: string
 ): ResolvedLink | null => {
-  const depFile = findDepFile(href, files)
-  if (!depFile) return resolveEntityLink(href, files, projectId, entityIcons)
-  const content = files[depFile]
-  if (content === undefined) return null
-  const key = buildCacheKey(href, content)
-  const cached = linkCache.get(key)
+  if (files !== cachedFiles) {
+    cachedFiles = files
+    linkCache = new Map()
+  }
+  const cached = linkCache.get(href)
   if (cached !== undefined) return cached
   const resolved = resolveEntityLink(href, files, projectId, entityIcons)
-  linkCache.set(key, resolved)
+  linkCache.set(href, resolved)
   return resolved
 }
 
