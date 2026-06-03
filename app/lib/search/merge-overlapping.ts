@@ -10,6 +10,8 @@ interface Range {
 
 const locateInProse = (prose: string, text: string): Range | null => {
   const clean = extractProse(text)
+  const idx = prose.indexOf(clean)
+  if (idx !== -1) return { start: idx, end: idx + clean.length }
   return findMatchOffset(prose, clean)
 }
 
@@ -31,63 +33,83 @@ const groupByFile = (hits: SearchHit[]): Map<string, IndexedHit[]> => {
   return groups
 }
 
+interface LocatedHit {
+  hit: SearchHit
+  original: number
+  range: Range
+}
+
+interface RunningMerge {
+  start: number
+  end: number
+  bestScore: number
+  earliestOriginal: number
+  anchorHit: SearchHit
+  anchorRange: Range
+  mergedCount: number
+}
+
+const startMerge = (located: LocatedHit): RunningMerge => ({
+  start: located.range.start,
+  end: located.range.end,
+  bestScore: located.hit.score ?? 0,
+  earliestOriginal: located.original,
+  anchorHit: located.hit,
+  anchorRange: located.range,
+  mergedCount: 1,
+})
+
+const absorbInto = (run: RunningMerge, next: LocatedHit): void => {
+  run.start = Math.min(run.start, next.range.start)
+  run.end = Math.max(run.end, next.range.end)
+  run.bestScore = Math.max(run.bestScore, next.hit.score ?? 0)
+  if (next.original < run.earliestOriginal) {
+    run.earliestOriginal = next.original
+    run.anchorHit = next.hit
+    run.anchorRange = next.range
+  }
+  run.mergedCount++
+}
+
+const emitMerge = (run: RunningMerge, prose: string): IndexedHit => {
+  if (run.mergedCount === 1) {
+    return { hit: run.anchorHit, original: run.earliestOriginal }
+  }
+  return {
+    hit: { ...run.anchorHit, text: prose.slice(run.start, run.end), score: run.bestScore },
+    original: run.earliestOriginal,
+  }
+}
+
 const mergeFileGroup = (group: IndexedHit[], prose: string): IndexedHit[] => {
-  const ranges = new Map<number, Range>()
-  const absorbed = new Set<number>()
   const result: IndexedHit[] = []
+  const located: LocatedHit[] = []
 
-  const getRange = (idx: number, hit: SearchHit): Range | null => {
-    const cached = ranges.get(idx)
-    if (cached) return cached
-    if (!hit.text) return null
-    const range = locateInProse(prose, hit.text)
-    if (range) ranges.set(idx, range)
-    return range
-  }
-
-  for (let i = 0; i < group.length; i++) {
-    if (absorbed.has(i)) continue
-    const { hit } = group[i]
-    if (!hit.text) {
-      result.push(group[i])
+  for (const item of group) {
+    if (!item.hit.text) {
+      result.push(item)
       continue
     }
-
-    const range = getRange(i, hit)
+    const range = locateInProse(prose, item.hit.text)
     if (!range) {
-      result.push(group[i])
+      result.push(item)
       continue
     }
-
-    let mergedStart = range.start
-    let mergedEnd = range.end
-    let bestScore = hit.score ?? 0
-
-    for (let j = i + 1; j < group.length; j++) {
-      if (absorbed.has(j)) continue
-      if (!group[j].hit.text) continue
-
-      const otherRange = getRange(j, group[j].hit)
-      if (!otherRange) continue
-
-      if (rangesOverlap({ start: mergedStart, end: mergedEnd }, otherRange)) {
-        mergedStart = Math.min(mergedStart, otherRange.start)
-        mergedEnd = Math.max(mergedEnd, otherRange.end)
-        bestScore = Math.max(bestScore, group[j].hit.score ?? 0)
-        absorbed.add(j)
-      }
-    }
-
-    const isUnchanged = mergedStart === range.start && mergedEnd === range.end
-    if (isUnchanged) {
-      result.push(group[i])
-    } else {
-      result.push({
-        hit: { ...hit, text: prose.slice(mergedStart, mergedEnd), score: bestScore },
-        original: group[i].original,
-      })
-    }
+    located.push({ hit: item.hit, original: item.original, range })
   }
+
+  located.sort((a, b) => a.range.start - b.range.start)
+
+  let run: RunningMerge | null = null
+  for (const item of located) {
+    if (run && rangesOverlap({ start: run.start, end: run.end }, item.range)) {
+      absorbInto(run, item)
+      continue
+    }
+    if (run) result.push(emitMerge(run, prose))
+    run = startMerge(item)
+  }
+  if (run) result.push(emitMerge(run, prose))
 
   return result
 }
