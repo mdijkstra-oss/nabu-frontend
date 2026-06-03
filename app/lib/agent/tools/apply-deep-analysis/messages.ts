@@ -191,6 +191,9 @@ const FIND_CTA =
 export const FILTER_CTA =
   "For each coded section, judge whether the passage satisfies the code definitions. Return your judgment as JSON."
 
+export const ADJUDICATE_CTA =
+  "For each contested passage, render a verdict: keep, reject, or inconsistent. Return your verdicts as JSON."
+
 export const buildFilterSchema = (validCodes: string[]) =>
   z.object({
     results: z.array(
@@ -198,6 +201,18 @@ export const buildFilterSchema = (validCodes: string[]) =>
         id: z.number().int().min(1),
         code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
         judgment: z.enum(["remove", "keep"]),
+        reason: z.string(),
+      })
+    ),
+  })
+
+export const buildAdjudicateSchema = (validCodes: string[]) =>
+  z.object({
+    results: z.array(
+      z.object({
+        id: z.number().int().min(1),
+        code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
+        judgment: z.enum(["keep", "reject", "inconsistent"]),
         reason: z.string(),
       })
     ),

@@ -49,6 +49,13 @@ export const FILTERING = [
   "Giving the ambiguous ones a harder look…",
 ] as const
 
+export const ADJUDICATING = [
+  "Settling the split decisions…",
+  "Adjudicating the contested calls…",
+  "Hearing the appeals…",
+  "Rendering verdicts on the disagreements…",
+] as const
+
 export const WRITING = [
   "Writing into",
   "Committing results to",

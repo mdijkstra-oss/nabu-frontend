@@ -3,10 +3,11 @@ import type { ScopedSources, ContentResolver } from "./messages"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
-import { think, REVISITING, FILTERING } from "./thoughts"
+import { think, REVISITING, FILTERING, ADJUDICATING } from "./thoughts"
 import { groupByCode } from "./step-batch"
 import { findAllDimensions } from "./step-find"
 import { filterAnnotations } from "./step-filter"
+import { adjudicateAnnotations } from "./step-adjudicate"
 import { POST_FIND_CONCURRENCY } from "./def"
 
 export interface PipelineResult {
@@ -82,5 +83,16 @@ export const runAnalysisPipeline = async (
   }
   for (const f of failures) allErrors.push(errorMessage(f.error))
 
-  return { annotations: surviving, errors: allErrors }
+  think(ADJUDICATING)
+  const adjudicated = await adjudicateAnnotations(
+    surviving,
+    sentences,
+    sources,
+    leadingCtx,
+    trailingCtx,
+    resolve
+  )
+  allErrors.push(...adjudicated.errors)
+
+  return { annotations: adjudicated.annotations, errors: allErrors }
 }
