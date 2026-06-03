@@ -259,14 +259,31 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
     }
   }, [scheduleUpdate])
 
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const cancelHide = useCallback(() => {
+    if (hideTimerRef.current !== null) {
+      clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleHide = useCallback(() => {
+    cancelHide()
+    hideTimerRef.current = setTimeout(() => setHovered(false), 200)
+  }, [cancelHide])
+
+  useEffect(() => () => cancelHide(), [cancelHide])
+
   const handleContainerEnter = useCallback(() => {
+    cancelHide()
     setHovered(true)
     updateSelection()
-  }, [updateSelection])
+  }, [cancelHide, updateSelection])
 
   const handleContainerLeave = useCallback(() => {
-    setHovered(false)
-  }, [])
+    scheduleHide()
+  }, [scheduleHide])
 
   const visible = selection && hovered
   const transform = selection?.showAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)"
@@ -283,6 +300,8 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
         <div
           ref={toolbarRef}
           onMouseDown={(e) => e.preventDefault()}
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
           className="flex items-center gap-2"
           style={{
             position: "absolute",

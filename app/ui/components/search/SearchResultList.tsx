@@ -187,8 +187,8 @@ const RunGroupCard = memo(
     const hitsToRender = isFileOnlyGroup ? [{ file: group.file }] : detailHits
 
     return (
-      <div className="flex w-full flex-col items-start overflow-hidden rounded-lg border border-solid border-neutral-border bg-default-background shadow-sm">
-        <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border bg-neutral-50 px-4 py-3">
+      <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background shadow-sm">
+        <div className="flex w-full items-center gap-4 rounded-t-lg border-b border-solid border-neutral-border bg-neutral-50 px-4 py-3">
           <FileText className="text-body font-body text-brand-600" />
           <button
             type="button"

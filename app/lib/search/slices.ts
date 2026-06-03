@@ -40,6 +40,14 @@ const resolveAnchors = (hit: SearchHit, annotations: Annotation[]): string[] | n
 const isInSlice = (slice: string, annotationText: string): boolean =>
   findMatchOffset(slice, annotationText) !== null
 
+const stripLonelyEllipses = (text: string): string =>
+  text
+    .split("\n")
+    .filter((line) => line.trim() !== "…")
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\n+|\n+$/g, "")
+
 const extractSliceFromContext = (
   hit: SearchHit,
   fileContent: string,
@@ -50,7 +58,7 @@ const extractSliceFromContext = (
   if (!anchors) return null
   if (!fileContent) return hit.text ?? null
 
-  const trimmed = trimAroundMatches(ctx.prose, anchors)
+  const trimmed = stripLonelyEllipses(trimAroundMatches(ctx.prose, anchors))
 
   const visible = selectVisibleAnnotations(ctx.annotations, selectedCodes)
   const candidates = hit.id ? visible.filter((a) => a.id === hit.id) : visible
