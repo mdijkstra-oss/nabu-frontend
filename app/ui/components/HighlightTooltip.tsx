@@ -44,7 +44,7 @@ const createHeaderBackground = (colors: string[]): string => {
 }
 
 const TEXTAREA_BASE =
-  "w-full resize-none border-0 border-b border-solid border-transparent bg-transparent p-0 outline-none transition-colors"
+  "w-full resize-none overflow-hidden border-0 border-b border-solid border-transparent bg-transparent p-0 outline-none transition-colors"
 const TEXTAREA_REASON = `${TEXTAREA_BASE} text-caption font-caption text-subtext-color placeholder:text-neutral-400 hover:border-neutral-300 hover:bg-neutral-100 focus:border-neutral-400 focus:bg-neutral-100`
 const TEXTAREA_REVIEW = `${TEXTAREA_BASE} text-caption font-caption text-amber-900 placeholder:text-neutral-400 hover:border-amber-300 hover:bg-amber-50/50 focus:border-amber-400 focus:bg-amber-50/50`
 

@@ -43,6 +43,12 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     icon: <TriangleAlert />,
     defaultValue: false,
   },
+  {
+    key: "showModelIndex",
+    label: "Model index in review",
+    icon: <Bot />,
+    defaultValue: false,
+  },
 ]
 
 export type DebugOptions = Record<string, boolean>

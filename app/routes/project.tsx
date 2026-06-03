@@ -38,6 +38,7 @@ import { FileDropOverlay } from "~/ui/components/import/FileDropOverlay"
 import { useNotifications } from "~/ui/hooks/useNotifications"
 import { DEFAULT_DEBUG_OPTIONS, type DebugOptions } from "~/ui/components/editor/debug-config"
 import { setCacheSkipped } from "~/lib/utils/storage-cache"
+import { setShowModelIndex } from "~/lib/agent/tools/apply-deep-analysis/debug-flags"
 
 import { createWebSocket } from "~/lib/server/sync/websocket"
 import { applyCommand } from "~/lib/server/sync/apply"
@@ -253,6 +254,10 @@ export default function ProjectLayout() {
   useEffect(() => {
     setCacheSkipped(!!debugOptions.skipCache)
   }, [debugOptions.skipCache])
+
+  useEffect(() => {
+    setShowModelIndex(!!debugOptions.showModelIndex)
+  }, [debugOptions.showModelIndex])
 
   const toggleDebugOption = useCallback(
     (key: string) => setDebugOptions((prev) => ({ ...prev, [key]: !prev[key] })),

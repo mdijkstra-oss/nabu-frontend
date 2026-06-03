@@ -6,6 +6,7 @@ import { groupBySpan, type CodedSpan } from "./consensus"
 import { formatCodedSection, type CodedItem } from "./present"
 import { spanKey } from "./format"
 import { FILTER_ENDPOINT, FILTER_RUNS, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
+import { shouldShowModelIndex } from "./debug-flags"
 
 export interface FilterStepResult {
   surviving: Annotation[]
@@ -16,6 +17,11 @@ export interface FilterStepResult {
 interface Judgment {
   judgment: string
   reason: string
+}
+
+interface IndexedJudgment {
+  idx: number
+  judgment: Judgment
 }
 
 interface MergedJudgment {
@@ -35,23 +41,31 @@ const toCodedItems = (spans: CodedSpan[]): CodedItem[] =>
 
 const annotationKey = (a: Annotation): string => spanKey(a.start, a.end, a.code)
 
-const isKeep = (j: Judgment): boolean => j.judgment === "keep"
+const isKeep = (v: IndexedJudgment): boolean => v.judgment.judgment === "keep"
+
+const isRemove = (v: IndexedJudgment): boolean => v.judgment.judgment === "remove"
 
 const pickReason = (reasons: string[]): string => reasons[0] ?? ""
 
-const mergeVotes = (votes: Judgment[]): MergedJudgment => {
+const formatIndexedReasons = (votes: IndexedJudgment[]): string =>
+  votes.map((v) => `${v.idx}: ${v.judgment.reason}`).join("\n")
+
+const formatRemoveReview = (removes: IndexedJudgment[]): string =>
+  shouldShowModelIndex() ? formatIndexedReasons(removes) : (removes[0]?.judgment.reason ?? "")
+
+const mergeVotes = (votes: IndexedJudgment[]): MergedJudgment => {
   const keeps = votes.filter(isKeep)
-  const removes = votes.filter((j) => j.judgment === "remove")
+  const removes = votes.filter(isRemove)
 
   if (removes.length === votes.length) return { outcome: "remove", reason: "" }
 
   if (keeps.length === votes.length) {
-    const reason = pickReason(keeps.map((k) => k.reason))
+    const reason = pickReason(keeps.map((k) => k.judgment.reason))
     return { outcome: "keep", reason }
   }
 
-  const keepReason = keeps[0]?.reason ?? ""
-  const removeReason = removes[0]?.reason ?? ""
+  const keepReason = keeps[0]?.judgment.reason ?? ""
+  const removeReason = formatRemoveReview(removes)
   return { outcome: "contested", reason: keepReason, review: removeReason }
 }
 
@@ -124,10 +138,10 @@ export const filterAnnotations = async (
 
   for (const a of annotations) {
     const key = annotationKey(a)
-    const votes: Judgment[] = []
-    for (const judgments of perModelJudgments) {
-      const entry = judgments.get(key)
-      if (entry) votes.push(entry)
+    const votes: IndexedJudgment[] = []
+    for (let idx = 0; idx < perModelJudgments.length; idx++) {
+      const entry = perModelJudgments[idx].get(key)
+      if (entry) votes.push({ idx, judgment: entry })
     }
 
     if (votes.length === 0) {
