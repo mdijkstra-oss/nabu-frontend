@@ -143,6 +143,88 @@ describe("packComposites", () => {
   })
 })
 
+describe("packComposites rebalance for small composites", () => {
+  const noSep = () => ""
+
+  const seg = (path: string, startLine: number, content: string): Segment => ({
+    path,
+    startLine,
+    endLine: startLine,
+    content,
+  })
+
+  test("merges lonely small composite with neighbor producing less overflow", () => {
+    const segments: Segment[] = [
+      seg("a", 1, "a".repeat(18)),
+      seg("a", 2, "b".repeat(4)),
+      seg("a", 3, "c".repeat(17)),
+    ]
+    const result = packComposites(segments, 20, noSep)
+    expect(result).toHaveLength(2)
+    expect(result[0].content).toBe("a".repeat(18))
+    expect(result[1].content).toBe("b".repeat(4) + "c".repeat(17))
+  })
+
+  test("merges small first composite with next", () => {
+    const segments: Segment[] = [seg("a", 1, "b".repeat(4)), seg("a", 2, "c".repeat(17))]
+    const result = packComposites(segments, 20, noSep)
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toBe("b".repeat(4) + "c".repeat(17))
+  })
+
+  test("merges small last composite with prev", () => {
+    const segments: Segment[] = [seg("a", 1, "a".repeat(18)), seg("a", 2, "b".repeat(4))]
+    const result = packComposites(segments, 20, noSep)
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toBe("a".repeat(18) + "b".repeat(4))
+  })
+
+  test("no merge when no composite is small", () => {
+    const segments: Segment[] = [seg("a", 1, "a".repeat(18)), seg("a", 2, "b".repeat(15))]
+    const result = packComposites(segments, 20, noSep)
+    expect(result).toHaveLength(2)
+  })
+
+  test("multiple small composites all get absorbed by larger neighbors", () => {
+    const segments: Segment[] = [
+      seg("a", 1, "a".repeat(18)),
+      seg("a", 2, "b".repeat(3)),
+      seg("a", 3, "c".repeat(18)),
+      seg("a", 4, "d".repeat(3)),
+      seg("a", 5, "e".repeat(18)),
+    ]
+    const result = packComposites(segments, 20, noSep)
+    expect(result).toHaveLength(3)
+    for (const c of result) {
+      expect(c.content.length).toBeGreaterThanOrEqual(18)
+    }
+    const all = result.map((r) => r.content).join("")
+    expect(all).toContain("b".repeat(3))
+    expect(all).toContain("d".repeat(3))
+  })
+
+  test("single small composite alone is preserved", () => {
+    const segments: Segment[] = [seg("a", 1, "x".repeat(3))]
+    const result = packComposites(segments, 20, noSep)
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toBe("x".repeat(3))
+  })
+
+  test("char offsets remain correct after rebalance merge", () => {
+    const segments: Segment[] = [
+      seg("a", 1, "AAAAAAAAAAAAAAAAAA"),
+      seg("a", 2, "BBBB"),
+      seg("a", 3, "CCCCCCCCCCCCCCCCC"),
+    ]
+    const result = packComposites(segments, 20, noSep)
+    const merged = result[1]
+    expect(merged.segments).toHaveLength(2)
+    const [s0, s1] = merged.segments
+    expect(merged.content.slice(s0.charStart, s0.charEnd)).toBe("BBBB")
+    expect(merged.content.slice(s1.charStart, s1.charEnd)).toBe("C".repeat(17))
+  })
+})
+
 describe("resolveSegmentByChar", () => {
   const cases = [
     {
