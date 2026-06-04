@@ -82,7 +82,7 @@ describe("chunkText", () => {
     },
     {
       name: "second chunk contains trailing sentence from first chunk",
-      input: Array.from({ length: 20 }, (_, i) => `Paragraph ${i}. ${"x".repeat(200)}`).join(
+      input: Array.from({ length: 20 }, (_, i) => `Paragraph ${i}. ${"x".repeat(100)}`).join(
         "\n\n"
       ),
       check: (chunks) => {
