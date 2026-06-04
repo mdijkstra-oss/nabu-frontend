@@ -49,6 +49,12 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     icon: <Bot />,
     defaultValue: false,
   },
+  {
+    key: "skipFilter",
+    label: "Raw embeddings (skip filter)",
+    icon: <Filter />,
+    defaultValue: false,
+  },
 ]
 
 export type DebugOptions = Record<string, boolean>

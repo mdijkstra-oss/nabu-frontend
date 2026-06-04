@@ -52,7 +52,8 @@ interface ContinuationState {
 export const useSearchResults = (
   searchId: string,
   revision = 0,
-  dbReady = false
+  dbReady = false,
+  skipFilter = false
 ): SearchResults => {
   const files = useSyncExternalStore(subscribe, getFiles)
   const search = findSearchById(files, searchId)
@@ -168,7 +169,8 @@ export const useSearchResults = (
         ctx.db,
         getFiles(),
         30,
-        appendHits
+        appendHits,
+        skipFilter
       )
 
       if (cancelled) return
@@ -214,7 +216,7 @@ export const useSearchResults = (
       cancelled = true
       if (contRef.current) contRef.current.cancelled = true
     }
-  }, [searchId, searchSql, revision, dbReady, loadMore])
+  }, [searchId, searchSql, revision, dbReady, loadMore, skipFilter])
 
   return {
     search,

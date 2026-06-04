@@ -135,6 +135,31 @@ export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
   )
 }
 
+const attachAnnotationsToHit = (
+  hit: SearchHit,
+  ctx: FileContext,
+  selectedCodes: Set<string>
+): SearchHit => {
+  const hitText = hit.text
+  if (!hitText) return hit
+  const visible = selectVisibleAnnotations(ctx.annotations, selectedCodes)
+  const candidates = hit.id ? visible.filter((a) => a.id === hit.id) : visible
+  const present = candidates.filter((a) => isInSlice(hitText, a.text))
+  if (present.length === 0) return hit
+  return { ...hit, text: `${hitText}\n\n${formatAnnotationsBlock(present)}` }
+}
+
+export const attachAnnotationsOnly = (hits: SearchHit[], files: FileStore): SearchHit[] => {
+  const selectedCodes = getSelectedCodes(files)
+  return deduplicateHits(
+    hits.map((hit) => {
+      const ctx = getFileContext(hit.file, files)
+      if (!ctx) return hit
+      return attachAnnotationsToHit(hit, ctx, selectedCodes)
+    })
+  )
+}
+
 const isHitAlive = (hit: SearchHit, files: FileStore): boolean => {
   const content = files[hit.file]
   if (content === undefined) return false
