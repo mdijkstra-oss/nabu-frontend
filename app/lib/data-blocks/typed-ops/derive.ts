@@ -19,7 +19,6 @@ export interface TypedOpsSpec {
   allowedFiles?: string[]
   setFieldsSchema: unknown
   arrayOps: ArrayOpSpec[]
-  multilineFields: string[]
   immutableFields: string[]
   fuzzyFields: string[]
 }
@@ -151,28 +150,10 @@ const buildArrayOpSchemas = (spec: ArrayOpSpec): JsonSchema[] => [
   buildSetItemOpSchema(spec.singularName, spec.matchKey, spec.partialItemSchema),
 ]
 
-const buildPatchFieldOpSchema = (fieldName: string): JsonSchema => ({
-  type: "object",
-  properties: {
-    op: { type: "string", enum: [`patch_${fieldName}`] },
-    diff: {
-      type: "string",
-      minLength: 1,
-      description:
-        "V4A diff: context lines (no prefix), removed lines (- prefix), added lines (+ prefix). Start each hunk with @@. Include only 2-3 surrounding context lines per change — never reproduce the entire field. Use ... between anchors to skip large unchanged sections. Markdown list items starting with '- ' need double prefix: '+- item' to add, '-- item' to remove.",
-    },
-  },
-  required: ["op", "diff"],
-  additionalProperties: false,
-})
-
 export const deriveOpsJsonSchema = (spec: TypedOpsSpec): unknown => {
   const variants: JsonSchema[] = [buildSetOpSchema(spec.setFieldsSchema as JsonSchema)]
   for (const arrayOp of spec.arrayOps) {
     variants.push(...buildArrayOpSchemas(arrayOp))
-  }
-  for (const field of spec.multilineFields) {
-    variants.push(buildPatchFieldOpSchema(field))
   }
   return {
     type: "array",
@@ -201,7 +182,6 @@ export const deriveTypedOps = (language: string, config: BlockTypeConfig): Typed
     allowedFiles: config.allowedFiles,
     setFieldsSchema: buildSetFieldsSchema(setProps),
     arrayOps,
-    multilineFields: config.multilineFields ?? [],
     immutableFields,
     fuzzyFields: config.fuzzyFields ?? [],
   }

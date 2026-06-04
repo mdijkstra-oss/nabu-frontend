@@ -11,9 +11,12 @@ import { resolveToGlobal } from "./format"
 import { filterOverlappingSpans } from "./consensus"
 import { FIND_ENDPOINT, FIND_RUNS, FIND_CONCURRENCY } from "./def"
 
+export type FindStats = Map<string, [number, number]>
+
 export interface FindStepResult {
   annotations: Annotation[]
   errors: string[]
+  stats: FindStats
 }
 
 interface VotedSpan {
@@ -29,6 +32,8 @@ interface FindSlot {
 
 interface SlotResult {
   callIdx: number
+  runIdx: number
+  code: string
   spans: FindResult[]
 }
 
@@ -154,6 +159,8 @@ const executeFindSlot = async (
   if (!result.ok) throw new Error(result.error)
   return {
     callIdx: slot.callIdx,
+    runIdx: slot.runIdx,
+    code: sourceId,
     spans: result.data.results.flatMap((r) => {
       const start = resolveToGlobal(r.start, prefixes)
       const end = resolveToGlobal(r.end, prefixes)
@@ -161,6 +168,21 @@ const executeFindSlot = async (
       return [{ start, end, analysis_source_id: sourceId }]
     }),
   }
+}
+
+const MODEL_COUNT = 2
+
+const modelOf = (runIdx: number): number => runIdx % MODEL_COUNT
+
+const tallyFindStats = (results: readonly SlotResult[]): FindStats => {
+  const stats: FindStats = new Map()
+  for (const { code, runIdx, spans } of results) {
+    if (!code) continue
+    const entry = stats.get(code) ?? [0, 0]
+    entry[modelOf(runIdx)] += spans.length
+    stats.set(code, entry)
+  }
+  return stats
 }
 
 export const findAllDimensions = async (
@@ -187,6 +209,7 @@ export const findAllDimensions = async (
   const errors: string[] = []
   for (const f of failures) errors.push(errorMessage(f.error))
 
+  const stats = tallyFindStats(slotResults)
   const runsPerCall = groupSlotResults(slotResults, calls.length)
 
   think(CONSENSUS)
@@ -199,5 +222,5 @@ export const findAllDimensions = async (
 
   const filtered = filterOverlappingSpans(allAnnotations)
 
-  return { annotations: filtered, errors }
+  return { annotations: filtered, errors, stats }
 }

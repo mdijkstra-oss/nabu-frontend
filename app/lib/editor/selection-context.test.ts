@@ -273,12 +273,26 @@ describe("locateSelectionInFile with context", () => {
       },
     },
     {
-      name: "long selection with unmatched context returns null",
+      name: "long selection with unmatched context falls through to global match",
       selectionText: "alpha bravo charlie delta echo foxtrot golf hotel",
       context: "ignored context",
       filePath: "long.md",
       fileContent: "alpha bravo charlie delta echo foxtrot golf hotel india",
-      expected: null,
+      expected: {
+        filePath: "long.md",
+        startLine: 0,
+        endLine: 0,
+        exact: {
+          text: "alpha bravo charlie delta echo foxtrot golf hotel",
+          startOffset: 0,
+          endOffset: 49,
+        },
+        fullWords: {
+          text: "alpha bravo charlie delta echo foxtrot golf hotel",
+          startOffset: 0,
+          endOffset: 49,
+        },
+      },
     },
     {
       name: "no context provided for short selection → first match",
@@ -295,12 +309,18 @@ describe("locateSelectionInFile with context", () => {
       },
     },
     {
-      name: "context not found in file → null",
+      name: "context not found in file → fall through to global first match",
       selectionText: "cat",
       context: "entirely unrelated words that appear nowhere",
       filePath: "animals.md",
       fileContent: repeatedDoc,
-      expected: null,
+      expected: {
+        filePath: "animals.md",
+        startLine: 0,
+        endLine: 0,
+        exact: { text: "cat", startOffset: 4, endOffset: 7 },
+        fullWords: { text: "cat", startOffset: 4, endOffset: 7 },
+      },
     },
     {
       name: "partial start word with context narrows to correct region",

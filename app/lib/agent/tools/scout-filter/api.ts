@@ -28,6 +28,10 @@ export const filterTarget = async (
     return { surviving: [], excludedIndices: new Set() }
   }
 
+  if (framework.length === 0) {
+    return { surviving: paragraphs, excludedIndices: new Set() }
+  }
+
   const messages = buildScoutFilterMessages(framework, paragraphs)
   const result = await callAndParse(SCOUT_FILTER_ENDPOINT, messages, ScoutFilterResponse)
 

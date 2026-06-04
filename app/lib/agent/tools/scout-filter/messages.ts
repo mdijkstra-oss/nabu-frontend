@@ -43,8 +43,12 @@ const CTA = "Return paragraph numbers to exclude from analysis."
 export const buildScoutFilterMessages = (
   framework: string,
   paragraphs: NumberedParagraph[]
-): Message[] => [
-  { type: "message", role: "system", content: framework },
-  { type: "message", role: "system", content: formatNumberedParagraphs(paragraphs) },
-  { type: "message", role: "user", content: CTA },
-]
+): Message[] => {
+  const messages: Message[] = []
+  if (framework.length > 0) {
+    messages.push({ type: "message", role: "system", content: framework })
+  }
+  messages.push({ type: "message", role: "system", content: formatNumberedParagraphs(paragraphs) })
+  messages.push({ type: "message", role: "user", content: CTA })
+  return messages
+}

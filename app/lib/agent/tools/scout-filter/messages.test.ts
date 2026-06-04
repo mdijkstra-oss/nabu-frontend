@@ -59,11 +59,12 @@ describe("numberParagraphs", () => {
 })
 
 describe("buildScoutFilterMessages", () => {
+  const paragraphs = [
+    { index: 1, text: "First.", startLine: 1, endLine: 1 },
+    { index: 2, text: "Second.", startLine: 3, endLine: 3 },
+  ]
+
   it("produces framework + numbered paragraphs + CTA", () => {
-    const paragraphs = [
-      { index: 1, text: "First.", startLine: 1, endLine: 1 },
-      { index: 2, text: "Second.", startLine: 3, endLine: 3 },
-    ]
     const messages = buildScoutFilterMessages("The framework.", paragraphs)
 
     expect(messages).toHaveLength(3)
@@ -75,5 +76,14 @@ describe("buildScoutFilterMessages", () => {
     expect(messages[1].content).toContain("[1]\nFirst.")
     expect(messages[1].content).toContain("[2]\nSecond.")
     expect(messages[2].role).toBe("user")
+  })
+
+  it("omits framework message when framework is empty", () => {
+    const messages = buildScoutFilterMessages("", paragraphs)
+
+    expect(messages).toHaveLength(2)
+    expect(messages[0].role).toBe("system")
+    expect(messages[0].content).toContain("[1]\nFirst.")
+    expect(messages[1].role).toBe("user")
   })
 })

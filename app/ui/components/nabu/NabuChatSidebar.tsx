@@ -4,6 +4,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useMemo,
   memo,
@@ -127,15 +128,28 @@ const MessageContent = memo(
   }
 )
 
-const UserBubble = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex w-full items-end justify-end">
-    <div className="flex flex-col items-start rounded-2xl bg-brand-200 px-4 py-2 shadow-sm max-w-[95%]">
-      <div className="prose prose-sm text-body font-body text-default-font [&>*]:mb-2 [&>*:last-child]:mb-0 [&_a]:text-brand-700 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold">
-        {children}
+const UserBubble = ({
+  children,
+  scrollOnMount = false,
+}: {
+  children: React.ReactNode
+  scrollOnMount?: boolean
+}) => {
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (!scrollOnMount) return
+    ref.current?.scrollIntoView({ block: "end", behavior: "smooth" })
+  }, [scrollOnMount])
+  return (
+    <div ref={ref} className="flex w-full items-end justify-end">
+      <div className="flex flex-col items-start rounded-2xl bg-brand-200 px-4 py-2 shadow-sm max-w-[95%]">
+        <div className="prose prose-sm text-body font-body text-default-font [&>*]:mb-2 [&>*:last-child]:mb-0 [&_a]:text-brand-700 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold">
+          {children}
+        </div>
       </div>
     </div>
-  </div>
-)
+  )
+}
 
 const AssistantBubble = ({ children }: { children: React.ReactNode }) => (
   <div className="flex w-full items-start">
@@ -217,6 +231,7 @@ interface LeafRendererProps {
   currentFile: string | null
   currentFileContent: string | null
   navigate?: (url: string) => void
+  isLast?: boolean
 }
 
 const leafPropsEqual = (prev: LeafRendererProps, next: LeafRendererProps): boolean =>
@@ -227,15 +242,24 @@ const leafPropsEqual = (prev: LeafRendererProps, next: LeafRendererProps): boole
   prev.projectId === next.projectId &&
   prev.currentFile === next.currentFile &&
   prev.currentFileContent === next.currentFileContent &&
-  prev.navigate === next.navigate
+  prev.navigate === next.navigate &&
+  prev.isLast === next.isLast
 
 const LeafRenderer = memo(
-  ({ message, files, projectId, currentFile, currentFileContent, navigate }: LeafRendererProps) => {
+  ({
+    message,
+    files,
+    projectId,
+    currentFile,
+    currentFileContent,
+    navigate,
+    isLast,
+  }: LeafRendererProps) => {
     const content = displayContent(message)
     if (!content) return null
     if (message.role === "user") {
       return (
-        <UserBubble>
+        <UserBubble scrollOnMount={isLast}>
           <MessageContent
             content={content}
             files={files}
@@ -319,6 +343,7 @@ interface AskRendererProps {
   currentFileContent: string | null
   navigate?: (url: string) => void
   onSelect: (option: string) => void
+  isLast?: boolean
 }
 
 const isTypedAnswer = (message: AskMessage): boolean =>
@@ -335,7 +360,8 @@ const askPropsEqual = (prev: AskRendererProps, next: AskRendererProps): boolean 
   prev.currentFile === next.currentFile &&
   prev.currentFileContent === next.currentFileContent &&
   prev.navigate === next.navigate &&
-  prev.onSelect === next.onSelect
+  prev.onSelect === next.onSelect &&
+  prev.isLast === next.isLast
 
 const AskRenderer = memo(
   ({
@@ -346,6 +372,7 @@ const AskRenderer = memo(
     currentFileContent,
     navigate,
     onSelect,
+    isLast,
   }: AskRendererProps) => (
     <div className="flex w-full flex-col items-start gap-2 mb-3">
       <AssistantBubble>
@@ -383,7 +410,7 @@ const AskRenderer = memo(
         </div>
       )}
       {isTypedAnswer(message) && (
-        <UserBubble>
+        <UserBubble scrollOnMount={isLast}>
           <MessageContent
             content={message.selected ?? ""}
             files={files}
@@ -1055,48 +1082,53 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
           </div>
         )}
         <AnimatePresence initial={false}>
-          {segments.map(({ key, segment }) => (
-            <AnimatedListItem key={key} layout={isTyping ? false : "position"}>
-              {isPlanSegment(segment) ? (
-                <PlanSegmentRenderer
-                  items={segment.items}
-                  loading={loading}
-                  files={files}
-                  projectId={params.projectId ?? null}
-                  currentFile={currentFile}
-                  currentFileContent={currentFileContent}
-                  navigate={navigate}
-                />
-              ) : isAskSegment(segment) ? (
-                <AskRenderer
-                  message={segment}
-                  files={files}
-                  projectId={params.projectId ?? null}
-                  currentFile={currentFile}
-                  currentFileContent={currentFileContent}
-                  navigate={navigate}
-                  onSelect={respond}
-                />
-              ) : isScoutSegment(segment) ? (
-                <ScoutRenderer
-                  message={segment}
-                  files={files}
-                  projectId={params.projectId ?? null}
-                />
-              ) : isCollapsedSteps(segment) ? (
-                <CollapsedStepsIndicator count={segment.count} />
-              ) : (
-                <LeafRenderer
-                  message={segment}
-                  files={files}
-                  projectId={params.projectId ?? null}
-                  currentFile={currentFile}
-                  currentFileContent={currentFileContent}
-                  navigate={navigate}
-                />
-              )}
-            </AnimatedListItem>
-          ))}
+          {segments.map(({ key, segment }, index) => {
+            const isLast = index === segments.length - 1
+            return (
+              <AnimatedListItem key={key} layout={isTyping ? false : "position"}>
+                {isPlanSegment(segment) ? (
+                  <PlanSegmentRenderer
+                    items={segment.items}
+                    loading={loading}
+                    files={files}
+                    projectId={params.projectId ?? null}
+                    currentFile={currentFile}
+                    currentFileContent={currentFileContent}
+                    navigate={navigate}
+                  />
+                ) : isAskSegment(segment) ? (
+                  <AskRenderer
+                    message={segment}
+                    files={files}
+                    projectId={params.projectId ?? null}
+                    currentFile={currentFile}
+                    currentFileContent={currentFileContent}
+                    navigate={navigate}
+                    onSelect={respond}
+                    isLast={isLast}
+                  />
+                ) : isScoutSegment(segment) ? (
+                  <ScoutRenderer
+                    message={segment}
+                    files={files}
+                    projectId={params.projectId ?? null}
+                  />
+                ) : isCollapsedSteps(segment) ? (
+                  <CollapsedStepsIndicator count={segment.count} />
+                ) : (
+                  <LeafRenderer
+                    message={segment}
+                    files={files}
+                    projectId={params.projectId ?? null}
+                    currentFile={currentFile}
+                    currentFileContent={currentFileContent}
+                    navigate={navigate}
+                    isLast={isLast}
+                  />
+                )}
+              </AnimatedListItem>
+            )
+          })}
         </AnimatePresence>
         {isWaitingForContinue && <PlanContinuePrompt onContinue={handleContinue} />}
         {!waitingForInput && spinnerLabels && (

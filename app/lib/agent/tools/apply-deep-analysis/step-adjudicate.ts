@@ -7,9 +7,18 @@ import { formatCodedSection, type CodedItem } from "./present"
 import { spanKey } from "./format"
 import { ADJUDICATE_ENDPOINT, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
 
+export interface AdjudCounts {
+  kept: number
+  rejected: number
+  ambig: number
+}
+
+export type AdjudStats = Map<string, AdjudCounts>
+
 export interface AdjudicateStepResult {
   annotations: Annotation[]
   errors: string[]
+  stats: AdjudStats
 }
 
 export interface Verdict {
@@ -71,7 +80,7 @@ export const adjudicateAnnotations = async (
   resolve: ContentResolver
 ): Promise<AdjudicateStepResult> => {
   const contested = allSurvivors.filter(isContested)
-  if (contested.length === 0) return { annotations: allSurvivors, errors: [] }
+  if (contested.length === 0) return { annotations: allSurvivors, errors: [], stats: new Map() }
 
   const grouped = groupBySpan(toFindShape(contested))
   const caseMap = buildCaseMap(contested)
@@ -98,7 +107,7 @@ export const adjudicateAnnotations = async (
   const schema = buildAdjudicateSchema(validCodes)
   const result = await callAndParse(ADJUDICATE_ENDPOINT, messages, schema)
 
-  if (!result.ok) return { annotations: allSurvivors, errors: [result.error] }
+  if (!result.ok) return { annotations: allSurvivors, errors: [result.error], stats: new Map() }
 
   const verdicts = new Map<string, Verdict>()
   for (const r of result.data.results) {
@@ -110,6 +119,13 @@ export const adjudicateAnnotations = async (
     })
   }
 
+  const stats: AdjudStats = new Map()
+  const bump = (code: string, key: keyof AdjudCounts): void => {
+    const entry = stats.get(code) ?? { kept: 0, rejected: 0, ambig: 0 }
+    entry[key] += 1
+    stats.set(code, entry)
+  }
+
   const final: Annotation[] = []
   for (const a of allSurvivors) {
     if (!isContested(a)) {
@@ -118,12 +134,16 @@ export const adjudicateAnnotations = async (
     }
     const v = verdicts.get(spanKey(a.start, a.end, a.code))
     if (!v) {
+      bump(a.code, "ambig")
       final.push(a)
       continue
     }
     const applied = applyVerdict(a, v)
     if (applied) final.push(applied)
+    if (v.judgment === "keep") bump(a.code, "kept")
+    else if (v.judgment === "reject") bump(a.code, "rejected")
+    else if (v.judgment === "inconsistent") bump(a.code, "ambig")
   }
 
-  return { annotations: final, errors: [] }
+  return { annotations: final, errors: [], stats }
 }

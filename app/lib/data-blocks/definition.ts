@@ -40,7 +40,6 @@ export interface BlockTypeConfig<T = unknown> {
   idPaths?: IdPathConfig[]
   actorPaths?: ActorPathConfig[]
   fuzzyFields?: string[]
-  multilineFields?: string[]
   normalizeAsFile?: string[]
   patchSchema?: (schema: Record<string, unknown>) => Record<string, unknown>
   rowPath?: string

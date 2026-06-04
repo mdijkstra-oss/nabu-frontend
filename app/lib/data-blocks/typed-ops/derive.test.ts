@@ -18,7 +18,6 @@ describe("deriveTypedOps", () => {
     expectSingleton: boolean
     expectAllowedFiles?: string[]
     expectImmutableFields: string[]
-    expectMultilineFields: string[]
     expectArrayOps: string[]
     expectSetFields: string[]
   }
@@ -30,7 +29,6 @@ describe("deriveTypedOps", () => {
       expectShortName: "attributes",
       expectSingleton: true,
       expectImmutableFields: [],
-      expectMultilineFields: [],
       expectArrayOps: [],
       expectSetFields: ["tags", "date"],
     },
@@ -40,17 +38,15 @@ describe("deriveTypedOps", () => {
       expectShortName: "annotations",
       expectSingleton: true,
       expectImmutableFields: [],
-      expectMultilineFields: [],
       expectArrayOps: ["annotations"],
       expectSetFields: [],
     },
     {
-      name: "json-callout: non-singleton, id is immutable, multiline content",
+      name: "json-callout: non-singleton, id is immutable",
       language: "json-callout",
       expectShortName: "callout",
       expectSingleton: false,
       expectImmutableFields: ["id"],
-      expectMultilineFields: ["content"],
       expectArrayOps: [],
       expectSetFields: ["type", "title", "content", "color", "collapsed"],
     },
@@ -61,7 +57,6 @@ describe("deriveTypedOps", () => {
       expectSingleton: true,
       expectAllowedFiles: ["settings.hidden.md"],
       expectImmutableFields: [],
-      expectMultilineFields: [],
       expectArrayOps: ["tags", "searches"],
       expectSetFields: ["corpusDescriptions"],
     },
@@ -71,7 +66,6 @@ describe("deriveTypedOps", () => {
       expectShortName: "chart",
       expectSingleton: false,
       expectImmutableFields: ["id"],
-      expectMultilineFields: [],
       expectArrayOps: [],
       expectSetFields: ["caption", "query", "spec"],
     },
@@ -85,7 +79,6 @@ describe("deriveTypedOps", () => {
       expectSingleton,
       expectAllowedFiles,
       expectImmutableFields,
-      expectMultilineFields,
       expectArrayOps,
       expectSetFields,
     }) => {
@@ -96,7 +89,6 @@ describe("deriveTypedOps", () => {
       expect(spec.singleton).toBe(expectSingleton)
       expect(spec.allowedFiles).toEqual(expectAllowedFiles)
       expect(spec.immutableFields).toEqual(expectImmutableFields)
-      expect(spec.multilineFields).toEqual(expectMultilineFields)
       expect(spec.arrayOps.map((a) => a.fieldName)).toEqual(expectArrayOps)
 
       const setProps = (spec.setFieldsSchema as JsonSchema).properties as Record<string, unknown>
@@ -141,9 +133,9 @@ describe("deriveOpsJsonSchema", () => {
       expectIsArray: true,
     },
     {
-      name: "callout: set + patch_content",
+      name: "callout: only set op",
       language: "json-callout",
-      expectOpNames: ["set", "patch_content"],
+      expectOpNames: ["set"],
       expectIsArray: true,
     },
     {

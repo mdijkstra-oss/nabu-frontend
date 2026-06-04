@@ -101,7 +101,6 @@ interface BlockTypeConfig<T = unknown> {
   idPaths?: { path: string; prefix: string }[]
   actorPaths?: { path: string }[]
   fuzzyFields?: string[]
-  multilineFields?: string[]
   normalizeAsFile?: string[]
   patchSchema?: (schema) => schema // mutate JSON schema for patching
   rowPath?: string // project array element rows

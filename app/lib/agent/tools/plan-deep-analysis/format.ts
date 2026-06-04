@@ -145,7 +145,10 @@ const SYNTHESIS_STEP: StepDefObject = {
     multiple passages → "recurrently." No exhaustive listing.
     
     Assess confidence: confirmed / (confirmed + reviewed).
-    
+    This ratio and the 0.7 threshold are internal deliberation only.
+    Do not state the number, the formula, or the branch you took in
+    the output. The reader sees synthesis, not the scoring mechanism.
+
     If ≥ 0.7 and Research Questions exist:
       Synthesis per RQ. 150-250 words per RQ.
       State the pattern, then quote, then note if other passages

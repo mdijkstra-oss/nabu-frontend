@@ -33,7 +33,10 @@ const hasReviewNote = (a: StoredAnnotation): boolean => a.vote?.review !== undef
 const hasVoteBlock = (a: StoredAnnotation): boolean => a.vote !== undefined
 const isLocked = (a: StoredAnnotation): boolean => a.locked === true
 
-const toReviewedAnnotation = (a: StoredAnnotation, file: string): ReviewedAnnotation => ({
+const toReviewedAnnotation = (
+  a: StoredAnnotation & { id: string },
+  file: string
+): ReviewedAnnotation => ({
   id: a.id,
   text: a.text,
   reason: a.reason,
@@ -50,8 +53,8 @@ export const collectReviewedAnnotations = (
   for (const [path, raw] of Object.entries(files)) {
     for (const a of getStoredAnnotations(raw)) {
       if (isLocked(a)) continue
-      if (!matchesCode(a) || !hasReviewNote(a)) continue
-      result.push(toReviewedAnnotation(a, path))
+      if (!matchesCode(a) || !hasReviewNote(a) || !a.id) continue
+      result.push(toReviewedAnnotation(a as StoredAnnotation & { id: string }, path))
       if (result.length >= ANNOTATION_SAMPLE_SIZE) return result
     }
   }
@@ -64,7 +67,7 @@ export const collectCleanAnnotations = (files: FileStore, calloutId: string): Co
   for (const [path, raw] of Object.entries(files)) {
     for (const a of getStoredAnnotations(raw)) {
       if (isLocked(a)) continue
-      if (!matchesCode(a) || !hasVoteBlock(a) || hasReviewNote(a)) continue
+      if (!matchesCode(a) || !hasVoteBlock(a) || hasReviewNote(a) || !a.id) continue
       result.push({ id: a.id, text: a.text, reason: a.reason, file: path })
       if (result.length >= ANNOTATION_SAMPLE_SIZE) return result
     }

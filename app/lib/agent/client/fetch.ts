@@ -3,18 +3,13 @@ import type { ToolDefinition } from "../executors/tool"
 import type { BlockSchemaDefinition } from "~/lib/data-blocks/json-schema"
 import { getLlmHost, getLlmHeaders } from "~/lib/agent/env"
 import { getActiveSignal } from "~/lib/utils/signal"
-import { calculateBackoff } from "~/lib/utils/backoff"
 import { initialParseState, processLine, stateToBlocks, type ParseCallbacks } from "./parse"
 import { toSystem } from "./convert"
 import type { InputItem, ResponseFormat } from "./convert"
 import { startRawCall, completeRawCall, updateRawCallStream } from "./raw-store"
 import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 
-const RETRYABLE_STATUS = [429, 502, 503]
-const MAX_RETRIES = 3
 const MAX_FILTER_RETRIES = 2
-const STALL_TIMEOUT_MS = 120_000
-const CONNECT_TIMEOUT_MS = 60_000
 
 const RETRYABLE_ERROR_TYPES = new Set(["SAFETY", "RECITATION", "content_filter"])
 
@@ -22,29 +17,6 @@ const findRetryableError = (blocks: Block[]): ErrorBlock | undefined =>
   blocks.find(
     (b): b is ErrorBlock => b.type === "error" && RETRYABLE_ERROR_TYPES.has(b.errorType ?? "")
   )
-
-export class StallError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = "StallError"
-  }
-}
-
-export class ConnectTimeoutError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = "ConnectTimeoutError"
-  }
-}
-
-const isStallError = (err: unknown): err is StallError => err instanceof StallError
-
-const isUserAbort = (signal?: AbortSignal): boolean =>
-  signal?.aborted === true || getActiveSignal()?.aborted === true
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
-
-const isRetryable = (status: number): boolean => RETRYABLE_STATUS.includes(status)
 
 interface FetchOptions {
   url: string
@@ -57,50 +29,15 @@ const isSignal = (s: AbortSignal | null | undefined): s is AbortSignal => s != n
 const combineSignals = (...signals: (AbortSignal | null | undefined)[]): AbortSignal =>
   AbortSignal.any(signals.filter(isSignal))
 
-const fetchWithRetry = async ({ url, body, signal }: FetchOptions): Promise<Response> => {
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const connectController = new AbortController()
-    const timer = setTimeout(() => connectController.abort(), CONNECT_TIMEOUT_MS)
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: getLlmHeaders(),
-        body,
-        signal: combineSignals(connectController.signal, signal, getActiveSignal()),
-      })
-      clearTimeout(timer)
-
-      if (response.ok) return response
-
-      if (!isRetryable(response.status) || attempt === MAX_RETRIES) {
-        throw new Error(`LLM request failed: ${response.status}`)
-      }
-    } catch (err) {
-      clearTimeout(timer)
-      if (connectController.signal.aborted && !isUserAbort(signal)) {
-        throw new ConnectTimeoutError(
-          `no response from backend within ${CONNECT_TIMEOUT_MS / 1000}s — model may be out of quota`
-        )
-      }
-      throw err
-    }
-
-    const delay = calculateBackoff(attempt, { maxDelay: 10000 })
-    await sleep(delay)
-  }
-
-  throw new Error("LLM request failed: max retries exceeded")
-}
-
-const readWithTimeout = <T>(
-  reader: ReadableStreamDefaultReader<T>,
-  timeoutMs: number
-): Promise<ReadableStreamReadResult<T>> => {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new StallError(`no data for ${timeoutMs}ms`)), timeoutMs)
+const fetchOnce = async ({ url, body, signal }: FetchOptions): Promise<Response> => {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: getLlmHeaders(),
+    body,
+    signal: combineSignals(signal, getActiveSignal()),
   })
-  return Promise.race([reader.read(), timeout]).finally(() => clearTimeout(timer))
+  if (!response.ok) throw new Error(`LLM request failed: ${response.status}`)
+  return response
 }
 
 const streamToBlocks = async (response: Response, callbacks: ParseCallbacks): Promise<Block[]> => {
@@ -114,7 +51,7 @@ const streamToBlocks = async (response: Response, callbacks: ParseCallbacks): Pr
   let state = initialParseState()
   try {
     while (true) {
-      const { done, value } = await readWithTimeout(reader, STALL_TIMEOUT_MS)
+      const { done, value } = await reader.read()
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
@@ -220,7 +157,7 @@ const executeLlmCall = async (
   body: string,
   rawId: number
 ): Promise<Block[]> => {
-  const response = await fetchWithRetry({
+  const response = await fetchOnce({
     url: buildUrl(options.endpoint, options.temperature),
     body,
     signal: options.signal,
@@ -244,14 +181,7 @@ export const callLlm = async (options: CallLlmOptions): Promise<Block[]> => {
   let blocks!: Block[]
 
   for (let attempt = 0; attempt <= MAX_FILTER_RETRIES; attempt++) {
-    try {
-      blocks = await executeLlmCall(options, body, rawId)
-    } catch (err) {
-      if (!isStallError(err) || attempt === MAX_FILTER_RETRIES) throw err
-      console.warn(`[LLM ${options.endpoint}] stall detected, retry ${attempt + 1}`)
-      continue
-    }
-
+    blocks = await executeLlmCall(options, body, rawId)
     const retryable = findRetryableError(blocks)
     if (!retryable || attempt === MAX_FILTER_RETRIES) break
     console.warn(

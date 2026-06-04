@@ -8,10 +8,13 @@ import { spanKey } from "./format"
 import { FILTER_ENDPOINT, FILTER_RUNS, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
 import { shouldShowModelIndex } from "./debug-flags"
 
+export type FilterStats = Map<string, [number, number]>
+
 export interface FilterStepResult {
   surviving: Annotation[]
   removed: Annotation[]
   errors: string[]
+  stats: FilterStats
 }
 
 interface Judgment {
@@ -87,7 +90,7 @@ export const filterAnnotations = async (
   trailingCtx: string,
   resolve: ContentResolver
 ): Promise<FilterStepResult> => {
-  if (annotations.length === 0) return { surviving: [], removed: [], errors: [] }
+  if (annotations.length === 0) return { surviving: [], removed: [], errors: [], stats: new Map() }
 
   const grouped = groupBySpan(
     annotations.map((a) => ({ start: a.start, end: a.end, analysis_source_id: a.code }))
@@ -118,8 +121,10 @@ export const filterAnnotations = async (
 
   const errors: string[] = []
   const perModelJudgments: Map<string, Judgment>[] = []
+  const stats: FilterStats = new Map()
 
-  for (const result of results) {
+  for (let idx = 0; idx < results.length; idx++) {
+    const result = results[idx]
     const judgments = new Map<string, Judgment>()
     if (!result.ok) {
       errors.push(result.error)
@@ -128,6 +133,11 @@ export const filterAnnotations = async (
         const m = mapping.find((entry) => entry.index === r.id)
         if (!m) continue
         judgments.set(spanKey(m.start, m.end, r.code), { judgment: r.judgment, reason: r.reason })
+        if (r.judgment === "keep") {
+          const entry = stats.get(r.code) ?? [0, 0]
+          entry[idx] += 1
+          stats.set(r.code, entry)
+        }
       }
     }
     perModelJudgments.push(judgments)
@@ -165,5 +175,5 @@ export const filterAnnotations = async (
     }
   }
 
-  return { surviving, removed, errors }
+  return { surviving, removed, errors, stats }
 }

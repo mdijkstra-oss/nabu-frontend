@@ -177,7 +177,6 @@ const handleAnnotation =
               getStoredAnnotations(freshContent),
               freshContent,
               analyzedCodes,
-              path,
               startLine,
               endLine
             )
