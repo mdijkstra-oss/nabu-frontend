@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx vitest run *)",
+      "Bash(bun run typecheck *)",
+      "Bash(bun run test *)",
+      "Bash(bunx knip *)",
+      "Bash(bunx tsc *)"
+    ]
+  }
+}

@@ -67,6 +67,7 @@ const buildNavItems = (
             selected: hoveredNav === "codes",
             badge: annotationCount,
             badgeColor: annotationCount ? BADGE_COLOR_ACTIVE : BADGE_COLOR_EMPTY,
+            pointId: "nav:codes",
           },
         ]
       : []),

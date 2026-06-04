@@ -29,6 +29,7 @@ import { findChartById, findDocumentForChart } from "~/domain/data-blocks/chart/
 import { findTagDefinitionById } from "~/domain/data-blocks/settings/tags/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import { resolveEntityName } from "~/lib/files/selectors"
+import { toDisplayName } from "~/lib/files/filename"
 import { resolveIdentifiers } from "~/lib/markdown/linkify/entities"
 
 export interface ResolvedColors {
@@ -256,7 +257,7 @@ const resolveTextRef = (
     colors: hasSpotlight(ref) ? resolveSpotlightColors(annotationColors) : FILE_COLORS,
     icon: hasSpotlight(ref) ? icons.spotlight : icons.file,
     url: buildTextUrl(projectId, ref.documentId, ref.spotlight),
-    label: text ? normalizeSpotlightLabel(text) : ref.documentId,
+    label: text ? normalizeSpotlightLabel(text) : toDisplayName(ref.documentId),
   }
 }
 

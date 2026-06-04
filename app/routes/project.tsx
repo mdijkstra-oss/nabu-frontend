@@ -94,6 +94,7 @@ import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { countAnnotationsInRange, buildClearSelectionOps } from "~/lib/editor/annotations/merge"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 import { ActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
+import { pointAt, clearPointing } from "~/lib/ui/pointing"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getAllCodes, findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
@@ -831,6 +832,7 @@ export default function ProjectLayout() {
                             : undefined
                         )}
                         actions={codeSelectionActions}
+                        onTitleHover={(h) => (h ? pointAt(["nav:codes"]) : clearPointing())}
                       />
                     ) : null,
                 }}

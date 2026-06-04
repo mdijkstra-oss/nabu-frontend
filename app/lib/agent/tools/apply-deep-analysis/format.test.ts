@@ -5,7 +5,7 @@ import {
   extractLeadingContext,
   extractTrailingContext,
   extractSentenceContext,
-  numberSection,
+  numberSectionWithPositions,
   numberByFile,
   parsePrefixedRef,
   resolveToGlobal,
@@ -197,51 +197,43 @@ describe("extractSentenceContext", () => {
   )
 })
 
-describe("numberSection", () => {
+describe("numberSectionWithPositions", () => {
   const cases = [
     {
       name: "splits on sentence boundaries",
       text: "First sentence. Second sentence. Third.",
       expectedCount: 3,
-      numberedContains: "1: First sentence.",
     },
     {
       name: "splits on newlines",
       text: "Line one\nLine two",
       expectedCount: 2,
-      numberedContains: "2: Line two",
     },
     {
       name: "empty text",
       text: "",
       expectedCount: 0,
-      numberedContains: null,
-      numberedNotContains: null,
     },
     {
-      name: "excludes section markers from sentences but keeps as context",
+      name: "excludes section markers from sentences",
       text: `First sentence. Second sentence.\n\n${SECTION_MARKER}file.md [10-10]\n\nThird sentence.`,
       expectedCount: 3,
-      numberedContains: "3: Third sentence.",
-      numberedNotContains: "4:",
     },
   ]
 
-  cases.forEach(({ name, text, expectedCount, numberedContains, numberedNotContains }) => {
+  cases.forEach(({ name, text, expectedCount }) => {
     it(name, () => {
-      const result = numberSection(text)
+      const result = numberSectionWithPositions(text)
       expect(result.sentences).toHaveLength(expectedCount)
-      if (numberedContains) expect(result.numbered).toContain(numberedContains)
-      if (numberedNotContains) expect(result.numbered).not.toContain(numberedNotContains)
+      expect(result.positions).toHaveLength(expectedCount)
     })
   })
 
-  it("marker lines appear unnumbered in output", () => {
-    const marker = `${SECTION_MARKER}file.md [5-5]`
-    const text = `Hello world.\n\n${marker}\n\nGoodbye world.`
-    const result = numberSection(text)
-    expect(result.numbered).toContain(marker)
-    expect(result.sentences).not.toContain(marker)
+  it("positions track sentence start offsets", () => {
+    const text = "First. Second."
+    const result = numberSectionWithPositions(text)
+    expect(result.positions[0].start).toBe(0)
+    expect(result.positions[1].start).toBe(text.indexOf("Second."))
   })
 })
 
@@ -809,7 +801,6 @@ describe("numberByFile", () => {
       expectedSentenceCount: 2,
       expectedPrefixCount: 1,
       contentContains: ['<target file="test.md" prefix="a">'],
-      contentNotContains: ["<target file="],
     },
     {
       name: "multi-file with §§ marker produces two blocks",
@@ -821,16 +812,14 @@ describe("numberByFile", () => {
         '<target file="main.md" prefix="a">',
         '<target file="other.md" prefix="b">',
       ],
-      contentNotContains: [],
     },
     {
-      name: "same-file chunk gets --- separator within same block",
+      name: "same-file recurrence opens new prefix block",
       raw: `First sentence.\n\n${SECTION_MARKER}main.md [20-30]\n\nSecond sentence.`,
       firstFile: "main.md",
       expectedSentenceCount: 2,
-      expectedPrefixCount: 1,
-      contentContains: ["---"],
-      contentNotContains: [],
+      expectedPrefixCount: 2,
+      contentContains: ['<target file="main.md" prefix="a">', '<target file="main.md" prefix="b">'],
     },
   ]
 
@@ -847,11 +836,10 @@ describe("numberByFile", () => {
     }
   )
 
-  it("sentences array matches numberSection output for single file", () => {
-    const text = "First sentence. Second sentence. Third."
-    const byFile = numberByFile(text, "test.md")
-    const section = numberSection(text)
-    expect(byFile.sentences).toEqual(section.sentences)
+  it("never emits CHUNK_SEPARATOR for same-file recurrence", () => {
+    const raw = `First sentence.\n\n${SECTION_MARKER}main.md [20-30]\n\nSecond sentence.`
+    const result = numberByFile(raw, "main.md")
+    expect(result.content).not.toContain("---")
   })
 
   it("prefixes have correct offsets for multi-file", () => {
@@ -861,11 +849,17 @@ describe("numberByFile", () => {
     expect(result.prefixes[1]).toEqual({ file: "other.md", prefix: "b", offset: 2, count: 3 })
   })
 
-  it("uses prefixed numbering in content", () => {
+  it("uses inline prefixed numbering in content", () => {
     const raw = "Hello world. Goodbye world."
     const result = numberByFile(raw, "test.md")
-    expect(result.content).toContain("a1: Hello world.")
-    expect(result.content).toContain("a2: Goodbye world.")
+    expect(result.content).toContain("[a1] Hello world.")
+    expect(result.content).toContain("[a2] Goodbye world.")
+  })
+
+  it("preserves paragraph breaks within a target block", () => {
+    const raw = "First. Second.\n\nThird. Fourth."
+    const result = numberByFile(raw, "test.md")
+    expect(result.content).toContain("[a1] First. [a2] Second.\n\n[a3] Third. [a4] Fourth.")
   })
 })
 

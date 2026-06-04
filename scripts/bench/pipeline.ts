@@ -16,7 +16,7 @@ import {
   extractLeadingContext,
   extractTrailingContext,
   prepareTargetContent,
-  numberSection,
+  numberSectionWithPositions,
   toAnalysisResults,
   mapResults,
   type AnalysisResult,
@@ -189,7 +189,7 @@ const prepareSectionWithContext = (
   const leadingCtx = prepareTargetContent(extractLeadingContext(content, startLine, CONTEXT_OVERLAP_CHARS))
   const trailingCtx = prepareTargetContent(extractTrailingContext(content, endLine, CONTEXT_OVERLAP_CHARS))
   const section = prepareTargetContent(rawSection)
-  const { sentences } = numberSection(section)
+  const { sentences } = numberSectionWithPositions(section)
   return { rawSection, leadingCtx, trailingCtx, sentences }
 }
 

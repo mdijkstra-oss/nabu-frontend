@@ -12,7 +12,7 @@ import { growHits } from "./slices"
 
 export { formatNumberedPassage } from "~/lib/text/format"
 
-export const FILTER_BATCH_SIZE = 10
+export const FILTER_BATCH_SIZE = 5
 export const FILTER_CONCURRENCY = 5
 
 const SEMANTIC_FILTER_ENDPOINT = "/semantic-filter"
@@ -60,7 +60,7 @@ const prepareHit = (hit: SearchHit): PreparedHit | null => {
   if (!hit.text) return null
   const sentences = splitSentences(hit.text)
   if (sentences.length === 0) return null
-  return { hit, sentences, numbered: formatNumberedPassage(sentences) }
+  return { hit, sentences, numbered: formatNumberedPassage(hit.text) }
 }
 
 const FilterMatchSchema = z.object({
@@ -89,8 +89,8 @@ const groupMatchesByLabel = (
   return labels.map((l) => groups.get(l) ?? [])
 }
 
-const formatBatchPassage = (prepared: PreparedHit[], labels: string[]): string =>
-  prepared.map((p, i) => `[${labels[i]}]\n${p.numbered}`).join("\n\n")
+const formatHitTarget = (numbered: string, label: string): string =>
+  `<target id="${label}">\n${numbered}\n</target>`
 
 const MAX_SELECTED_RATIO = 0.4
 
@@ -106,7 +106,7 @@ const callSemanticFilterBatch = async (
   const labels = prepared.map((_, i) => toLetter(i))
   const messages = [
     toSystem(`<search_intent>${intent}</search_intent>`),
-    toSystem(formatBatchPassage(prepared, labels)),
+    ...prepared.map((p, i) => toSystem(formatHitTarget(p.numbered, labels[i]))),
     toSystem(FILTER_CALL_TO_ACTION),
   ]
 

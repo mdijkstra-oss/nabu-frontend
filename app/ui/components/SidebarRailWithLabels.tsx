@@ -9,6 +9,7 @@ interface NavItemProps extends React.HTMLAttributes<HTMLDivElement> {
   icon?: ReactNode
   children?: ReactNode
   selected?: boolean
+  pointed?: boolean
   badge?: number
   badgeColor?: string
   className?: string
@@ -19,6 +20,7 @@ const NavItem = React.forwardRef<HTMLDivElement, NavItemProps>(function NavItem(
     icon = <CircleDashed />,
     children,
     selected = false,
+    pointed = false,
     badge,
     badgeColor,
     className,
@@ -33,6 +35,9 @@ const NavItem = React.forwardRef<HTMLDivElement, NavItemProps>(function NavItem(
         {
           "bg-brand-50": selected,
         },
+        {
+          "bg-[var(--orange-9)]/70 hover:bg-[var(--orange-9)]/70": pointed,
+        },
         className
       )}
       ref={ref}
@@ -43,7 +48,11 @@ const NavItem = React.forwardRef<HTMLDivElement, NavItemProps>(function NavItem(
           <SubframeCore.IconWrapper
             className={cn(
               "text-heading-2 font-heading-2 text-subtext-color group-hover/8815d632:text-default-font group-active/8815d632:text-default-font",
-              { "text-default-font": selected }
+              { "text-default-font": selected },
+              {
+                "text-white group-hover/8815d632:text-white group-active/8815d632:text-white":
+                  pointed,
+              }
             )}
           >
             {icon}
@@ -62,7 +71,11 @@ const NavItem = React.forwardRef<HTMLDivElement, NavItemProps>(function NavItem(
         <span
           className={cn(
             "line-clamp-1 w-full text-caption-bold font-caption-bold text-subtext-color text-center group-hover/8815d632:text-default-font group-active/8815d632:text-default-font",
-            { "text-default-font": selected }
+            { "text-default-font": selected },
+            {
+              "text-white group-hover/8815d632:text-white group-active/8815d632:text-white":
+                pointed,
+            }
           )}
         >
           {children}

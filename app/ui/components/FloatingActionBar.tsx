@@ -19,6 +19,7 @@ export interface ActionBarProps {
   detail?: ReactNode
   titleAction?: { label: string; onClick: () => void }
   actions: readonly ActionBarAction[]
+  onTitleHover?: (hovering: boolean) => void
 }
 
 const springTransition = { type: "spring" as const, stiffness: 500, damping: 28 }
@@ -73,7 +74,7 @@ export function ActionBarButton({
   )
 }
 
-export function ActionBar({ title, detail, titleAction, actions }: ActionBarProps) {
+export function ActionBar({ title, detail, titleAction, actions, onTitleHover }: ActionBarProps) {
   const [showDetail, setShowDetail] = useState(false)
   const [detailHovered, setDetailHovered] = useState(false)
   const [frozenGrid, setFrozenGrid] = useState<{
@@ -142,7 +143,11 @@ export function ActionBar({ title, detail, titleAction, actions }: ActionBarProp
           className="flex items-center gap-2"
           onMouseEnter={detail ? () => setShowDetail(true) : undefined}
         >
-          <span className="text-caption-bold font-caption-bold text-default-font cursor-default">
+          <span
+            className="-mx-2 -my-1 px-2 py-1 text-caption-bold font-caption-bold text-default-font cursor-default"
+            onMouseEnter={onTitleHover ? () => onTitleHover(true) : undefined}
+            onMouseLeave={onTitleHover ? () => onTitleHover(false) : undefined}
+          >
             {title}
           </span>
           {titleAction && (

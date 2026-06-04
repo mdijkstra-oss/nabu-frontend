@@ -36,21 +36,26 @@ describe("splitSentences", () => {
 })
 
 describe("formatNumberedPassage", () => {
-  const cases: { name: string; sentences: string[]; expected: string }[] = [
+  const cases: { name: string; text: string; expected: string }[] = [
     {
-      name: "numbers from 1",
-      sentences: ["Alpha.", "Beta.", "Gamma."],
-      expected: "1: Alpha.\n2: Beta.\n3: Gamma.",
+      name: "numbers from 1 inline",
+      text: "Alpha. Beta. Gamma.",
+      expected: "[1] Alpha. [2] Beta. [3] Gamma.",
     },
     {
       name: "single sentence",
-      sentences: ["Only one."],
-      expected: "1: Only one.",
+      text: "Only one.",
+      expected: "[1] Only one.",
+    },
+    {
+      name: "preserves paragraph breaks",
+      text: "First. Second.\n\nThird.",
+      expected: "[1] First. [2] Second.\n\n[3] Third.",
     },
   ]
 
-  it.each(cases)("$name", ({ sentences, expected }) => {
-    expect(formatNumberedPassage(sentences)).toBe(expected)
+  it.each(cases)("$name", ({ text, expected }) => {
+    expect(formatNumberedPassage(text)).toBe(expected)
   })
 })
 

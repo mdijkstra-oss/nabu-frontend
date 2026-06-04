@@ -59,7 +59,7 @@ const extractLines = (content: string, startLine: number, endLine: number): stri
 const splitSentences = splitBySentences()
 const numberSection = (text: string): { sentences: string[]; numbered: string } => {
   const sentences = splitSentences(text).map((s) => s.text)
-  return { sentences, numbered: formatNumberedPassage(sentences) }
+  return { sentences, numbered: formatNumberedPassage(text) }
 }
 
 const inputPath = process.argv[2]

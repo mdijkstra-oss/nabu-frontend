@@ -13,7 +13,7 @@
     {
       "type": "message",
       "role": "system",
-      "content": "<target file=\"target\" prefix=\"a\">\na1: De minister-president kondigde vandaag nieuwe maatregelen aan.\na2: Burgers moeten anderhalve meter afstand houden.\na3: Restaurants blijven gesloten tot nader order.\na4: Het coronadashboard wordt verder uitgebreid.\na5: We vragen iedereen thuis te blijven bij klachten.\n</target>"
+      "content": "<target file=\"target\" prefix=\"a\">\n[a1] De minister-president kondigde vandaag nieuwe maatregelen aan. [a2] Burgers moeten anderhalve meter afstand houden. [a3] Restaurants blijven gesloten tot nader order. [a4] Het coronadashboard wordt verder uitgebreid. [a5] We vragen iedereen thuis te blijven bij klachten.\n</target>"
     },
     {
       "type": "message",

@@ -1,6 +1,7 @@
 import { splitBySentences } from "~/lib/text/split"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { stripMarkdown } from "~/lib/text/strip"
+import { formatNumberedPassage } from "~/lib/text/format"
 import type { PostAction } from "./def"
 import type { FindResult } from "./consensus"
 import type { Annotation } from "./types"
@@ -106,8 +107,6 @@ const splitSentenceTexts = splitBySentences()
 
 const isSectionMarker = (text: string): boolean => text.startsWith(SECTION_MARKER)
 
-const CHUNK_SEPARATOR = "---"
-
 export const letterForIndex = (i: number): string => String.fromCharCode(97 + i)
 
 export const parseFileFromMarker = (marker: string): string => {
@@ -122,52 +121,46 @@ interface NumberByFileResult {
   prefixes: FilePrefix[]
 }
 
+interface FileChunk {
+  file: string
+  segments: { text: string; start: number; end: number }[]
+}
+
+const splitChunks = (
+  segments: { text: string; start: number; end: number }[],
+  firstFile: string
+): FileChunk[] => {
+  const chunks: FileChunk[] = [{ file: firstFile, segments: [] }]
+  for (const s of segments) {
+    if (isSectionMarker(s.text)) {
+      chunks.push({ file: parseFileFromMarker(s.text), segments: [] })
+    } else {
+      chunks[chunks.length - 1].segments.push(s)
+    }
+  }
+  return chunks.filter((c) => c.segments.length > 0)
+}
+
+const sliceChunkProse = (prepared: string, segments: { start: number; end: number }[]): string =>
+  prepared.slice(segments[0].start, segments[segments.length - 1].end)
+
 export const numberByFile = (raw: string, firstFile: string): NumberByFileResult => {
   const prepared = prepareTargetContent(raw)
   const all = splitSentenceTexts(prepared)
+  const chunks = splitChunks(all, firstFile)
 
   const sentences: string[] = []
   const prefixes: FilePrefix[] = []
   const blocks: string[] = []
 
-  let currentFile = firstFile
-  let fileIdx = 0
-  let fileLines: string[] = []
-  let fileOffset = sentences.length
-  let fileCount = 0
-
-  const flushBlock = (): void => {
-    if (fileCount > 0 || fileLines.length > 0) {
-      const prefix = letterForIndex(fileIdx)
-      prefixes.push({ file: currentFile, prefix, offset: fileOffset, count: fileCount })
-      blocks.push(
-        `<target file="${currentFile}" prefix="${prefix}">\n${fileLines.join("\n")}\n</target>`
-      )
-      fileIdx++
-    }
-  }
-
-  for (const s of all) {
-    if (isSectionMarker(s.text)) {
-      const newFile = parseFileFromMarker(s.text)
-      if (newFile === currentFile) {
-        fileLines.push(CHUNK_SEPARATOR)
-      } else {
-        flushBlock()
-        currentFile = newFile
-        fileLines = []
-        fileOffset = sentences.length
-        fileCount = 0
-      }
-    } else {
-      sentences.push(s.text)
-      const prefix = letterForIndex(fileIdx)
-      fileCount++
-      fileLines.push(`${prefix}${fileCount}: ${s.text}`)
-    }
-  }
-
-  flushBlock()
+  chunks.forEach((chunk, fileIdx) => {
+    const prefix = letterForIndex(fileIdx)
+    const offset = sentences.length
+    const numbered = formatNumberedPassage(sliceChunkProse(prepared, chunk.segments), { prefix })
+    prefixes.push({ file: chunk.file, prefix, offset, count: chunk.segments.length })
+    blocks.push(`<target file="${chunk.file}" prefix="${prefix}">\n${numbered}\n</target>`)
+    for (const s of chunk.segments) sentences.push(s.text)
+  })
 
   return { content: blocks.join("\n\n"), sentences, prefixes }
 }
@@ -195,38 +188,18 @@ export const resolveToGlobal = (ref: string, prefixes: readonly FilePrefix[]): n
   return entry.offset + parsed.index
 }
 
-export const numberSection = (text: string): { sentences: string[]; numbered: string } => {
-  const all = splitSentenceTexts(text)
-  const sentences: string[] = []
-  const lines: string[] = []
-  for (const s of all) {
-    if (isSectionMarker(s.text)) {
-      lines.push(s.text)
-    } else {
-      sentences.push(s.text)
-      lines.push(`${sentences.length}: ${s.text}`)
-    }
-  }
-  return { sentences, numbered: lines.join("\n") }
-}
-
 export const numberSectionWithPositions = (
   text: string
-): { sentences: string[]; numbered: string; positions: { start: number }[] } => {
+): { sentences: string[]; positions: { start: number }[] } => {
   const all = splitSentenceTexts(text)
   const sentences: string[] = []
   const positions: { start: number }[] = []
-  const lines: string[] = []
   for (const s of all) {
-    if (isSectionMarker(s.text)) {
-      lines.push(s.text)
-    } else {
-      sentences.push(s.text)
-      positions.push({ start: s.start })
-      lines.push(`${sentences.length}: ${s.text}`)
-    }
+    if (isSectionMarker(s.text)) continue
+    sentences.push(s.text)
+    positions.push({ start: s.start })
   }
-  return { sentences, numbered: lines.join("\n"), positions }
+  return { sentences, positions }
 }
 
 export const mapResults = (sentences: string[], results: AnalysisResult[]): MappedResult[] =>

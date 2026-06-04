@@ -1,12 +1,20 @@
 "use client"
 
-import { useState, useMemo, useCallback, useSyncExternalStore } from "react"
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useSyncExternalStore,
+  useLayoutEffect,
+  useRef,
+} from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { CheckSquare, ExternalLink, Search } from "lucide-react"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { CheckableWrap } from "~/ui/components/CheckableWrap"
 import { matchesAny } from "~/lib/utils/filter"
+import { computeBestWindowScrollTop, type Position } from "~/lib/ui/window-fit"
 import { solidBackground, hoveredElementBorder } from "~/ui/theme/radix"
 import type {
   GlobalAnnotationCount,
@@ -51,6 +59,13 @@ const filterCategories = (categories: CodeCategory[], query: string): CodeCatego
 }
 
 const EMPTY_COUNT: GlobalAnnotationCount = { count: 0, fileCount: 0 }
+
+const readRowPositions = (container: HTMLElement): Position[] =>
+  Array.from(container.querySelectorAll<HTMLElement>("[data-code-id]")).map((node) => ({
+    id: node.dataset.codeId ?? "",
+    top: node.offsetTop,
+    height: node.offsetHeight,
+  }))
 
 const SearchCodeButton = ({
   code,
@@ -106,9 +121,27 @@ export const CodesSidebar = ({
 }: CodesSidebarProps) => {
   const [searchValue, setSearchValue] = useState("")
   const [hoveredCode, setHoveredCode] = useState<Code | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const hasAutoScrolled = useRef(false)
 
   const files = useSyncExternalStore(subscribe, getFiles)
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
+
+  useLayoutEffect(() => {
+    if (hasAutoScrolled.current) return
+    const el = scrollRef.current
+    if (!el) return
+    const positions = readRowPositions(el)
+    if (positions.length === 0) return
+    const target = computeBestWindowScrollTop(
+      positions,
+      selectedCodes,
+      el.clientHeight,
+      el.scrollHeight
+    )
+    if (target !== null) el.scrollTop = target
+    hasAutoScrolled.current = true
+  })
 
   const toggleCode = useCallback(
     (id: string) => {
@@ -135,7 +168,10 @@ export const CodesSidebar = ({
         />
       </div>
 
-      <div className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-4 px-4 py-4 overflow-auto">
+      <div
+        ref={scrollRef}
+        className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-4 px-4 py-4 overflow-auto"
+      >
         {filteredCategories.map((category) => (
           <div key={category.fileId} className="flex w-full flex-col items-start gap-2">
             <span
@@ -145,24 +181,25 @@ export const CodesSidebar = ({
               {category.name}
             </span>
             {category.codes.map((code) => (
-              <CheckableWrap
-                key={code.id}
-                color={code.color}
-                checked={selectedCodes.has(code.id)}
-                onToggle={() => toggleCode(code.id)}
-              >
-                <CodeItem
-                  code={code}
-                  count={annotationCounts[code.id]}
-                  reviewStat={reviewStats?.[code.id]}
-                  debugReview={debugReview}
-                  highlighted={code.id === hoveredCode?.id}
-                  onMouseEnter={() => setHoveredCode(code)}
-                  onClick={() => toggleCode(code.id)}
-                  onCountClick={() => onSearchCodeInFile?.(code)}
-                  onSearchUnsure={() => onSearchUnsure?.(code)}
-                />
-              </CheckableWrap>
+              <div key={code.id} data-code-id={code.id} className="w-full">
+                <CheckableWrap
+                  color={code.color}
+                  checked={selectedCodes.has(code.id)}
+                  onToggle={() => toggleCode(code.id)}
+                >
+                  <CodeItem
+                    code={code}
+                    count={annotationCounts[code.id]}
+                    reviewStat={reviewStats?.[code.id]}
+                    debugReview={debugReview}
+                    highlighted={code.id === hoveredCode?.id}
+                    onMouseEnter={() => setHoveredCode(code)}
+                    onClick={() => toggleCode(code.id)}
+                    onCountClick={() => onSearchCodeInFile?.(code)}
+                    onSearchUnsure={() => onSearchUnsure?.(code)}
+                  />
+                </CheckableWrap>
+              </div>
             ))}
           </div>
         ))}
