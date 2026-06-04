@@ -1,24 +1,28 @@
 import { z } from "zod"
 import { callAndParse } from "~/lib/agent/client/call-parse"
 import { toSystem } from "~/lib/agent/client/convert"
+import { HydeListSchema } from "./hyde-schema"
 
-export const FileHydeResponseSchema = z.object({
+const FileHydeResponseSchema = z.object({
   highlight: z.string(),
-  inclusions: z.array(z.string()).min(3).max(5),
+  hydes: HydeListSchema,
 })
 
-export type FileHydeResponse = z.infer<typeof FileHydeResponseSchema>
+export interface FileHydeResult {
+  highlight: string
+  inclusions: string[]
+}
 
 const FILE_HYDE_ENDPOINT = "/file-hyde"
 
 const formatCallToAction = (language: string): string =>
-  `Generate the highlight and inclusion passages now in ${language}. Return valid JSON only.`
+  `Generate the highlight and passages now in ${language}. Return valid JSON only.`
 
 export const generateFileHydes = async (
   fileContent: string,
   filename: string,
   language: string
-): Promise<FileHydeResponse> => {
+): Promise<FileHydeResult> => {
   const result = await callAndParse(
     FILE_HYDE_ENDPOINT,
     [
@@ -31,5 +35,8 @@ export const generateFileHydes = async (
 
   if (!result.ok) throw new Error(`File HyDE generation failed: ${result.error}`)
 
-  return result.data
+  return {
+    highlight: result.data.highlight,
+    inclusions: result.data.hydes.map((h) => h.text),
+  }
 }
