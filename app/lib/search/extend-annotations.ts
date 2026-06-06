@@ -24,22 +24,41 @@ const fileAnnotations = (file: string, files: FileStore): Annotation[] => {
   return parseAnnotations(content)
 }
 
-export const extendRangeForAnnotations = (
+interface ExtendResult {
+  range: ByteRange
+  included: Annotation[]
+}
+
+const formatAnnotationsBlock = (annotations: Annotation[]): string =>
+  "```json-annotations\n" + JSON.stringify({ annotations }) + "\n```"
+
+export const extendAndCollect = (
   range: ByteRange,
   annotations: Annotation[],
   source: string
-): ByteRange => {
-  let { start, end } = range
+): ExtendResult => {
+  const resolved: { ann: Annotation; offset: ByteRange }[] = []
   for (const ann of annotations) {
     const offset = findMatchOffset(source, ann.text)
-    if (!offset) continue
+    if (offset) resolved.push({ ann, offset })
+  }
+  let { start, end } = range
+  for (const { offset } of resolved) {
     if (overlaps(offset, { start, end })) {
       start = Math.min(start, offset.start)
       end = Math.max(end, offset.end)
     }
   }
-  return { start, end }
+  const extended = { start, end }
+  const included = resolved.filter(({ offset }) => overlaps(offset, extended)).map(({ ann }) => ann)
+  return { range: extended, included }
 }
+
+export const extendRangeForAnnotations = (
+  range: ByteRange,
+  annotations: Annotation[],
+  source: string
+): ByteRange => extendAndCollect(range, annotations, source).range
 
 export const extendRegionsForAnnotations = (hits: SearchHit[], files: FileStore): SearchHit[] => {
   const selectedCodes = getSelectedCodes(files)
@@ -68,17 +87,21 @@ export const extendRegionsForAnnotations = (hits: SearchHit[], files: FileStore)
     if (annotations.length === 0) return hit
     const source = getSource(hit.file)
     if (source === null) return hit
-    const extended = extendRangeForAnnotations(
+    const { range: extended, included } = extendAndCollect(
       { start: hit.chunkStart, end: hit.chunkEnd },
       annotations,
       source
     )
-    if (extended.start === hit.chunkStart && extended.end === hit.chunkEnd) return hit
+    const rangeUnchanged = extended.start === hit.chunkStart && extended.end === hit.chunkEnd
+    if (rangeUnchanged && included.length === 0) return hit
+    const baseText = source.slice(extended.start, extended.end)
+    const text =
+      included.length > 0 ? `${baseText}\n\n${formatAnnotationsBlock(included)}` : baseText
     return {
       ...hit,
       chunkStart: extended.start,
       chunkEnd: extended.end,
-      text: source.slice(extended.start, extended.end),
+      text,
     }
   })
 }

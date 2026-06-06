@@ -430,8 +430,12 @@ Each stage lives in its own file. Toggles short-circuit the stage to identity. `
 
 **Stage 6 — Annotation extend** (`lib/search/extend-annotations.ts`)
 
-- For each hit: resolve each visible file annotation's text to a byte range via `findMatchOffset(source, ann.text)`. If the annotation range partially intersects `[hit.chunkStart, hit.chunkEnd]`, extend the hit to swallow the full annotation. Re-slice `hit.text` from source.
-- Annotations entirely inside or entirely outside the hit produce no change. Annotations referencing text inside a code block (stripped from source) silently miss — acceptable; they weren't searchable anyway.
+- For each hit: resolve each visible file annotation's text to a byte range via `findMatchOffset(source, ann.text)`.
+- `extendAndCollect`:
+  - If an annotation range partially intersects `[hit.chunkStart, hit.chunkEnd]`, extend the hit to swallow the full annotation.
+  - Collect every annotation whose offset intersects the extended range (including ones entirely inside the original range).
+- Re-slice `hit.text` from source by the extended range, then append a ` ```json-annotations\n{...}\n``` ` block listing the collected annotations so the LLM filter sees which codings live in this region.
+- Annotations entirely outside the hit produce no change. Annotations referencing text inside a code block (stripped from source) silently miss — acceptable; they weren't searchable anyway.
 - Skip toggle: `skipAnnotationExtend`.
 
 **Paging** (`lib/search/paging.ts`): LIMIT/OFFSET rewrites for streaming. Applies at the SQL boundary, not part of the chain.

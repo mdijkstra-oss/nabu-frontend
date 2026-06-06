@@ -5,7 +5,7 @@
 //   mergeStage           → SearchHit[]   (Stage 3)  [skipMerge]               seed-and-grow (score-ratio gate) + reslice from source
 //   verdict              → SearchHit[]   (Stage 4)  [skipFilter]              streaming LLM filter, attaches matchRanges
 //   trim                 → SearchHit[]   (Stage 5)  [skipTrim]                trim within hit.text using matchRanges
-//   extendForAnnotations → SearchHit[]   (Stage 6)  [skipAnnotationExtend]    grow byte range to swallow overlapping annotations
+//   extendForAnnotations → SearchHit[]   (Stage 6)  [skipAnnotationExtend]    grow byte range to swallow overlapping annotations + append `json-annotations` block to text
 //
 // Each stage lives in its own file. Toggles short-circuit a stage to a pass-through.
 // verdict is the only async/batched/streaming step; per-batch tail (trim → extend) fires via onResults.
