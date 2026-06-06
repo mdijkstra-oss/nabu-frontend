@@ -85,9 +85,9 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
-    key: "skipRegions",
-    label: "Skip region merge (raw chunk hits)",
-    description: "Skip merging contiguous chunks into regions. Show raw chunk hits.",
+    key: "skipMerge",
+    label: "Skip merge (capped chunks, no fuse)",
+    description: "Skip merging byte-overlapping chunks into regions. Cap-by-file still runs.",
     icon: <Filter />,
     defaultValue: false,
   },

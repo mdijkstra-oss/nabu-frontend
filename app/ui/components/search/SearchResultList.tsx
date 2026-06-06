@@ -93,12 +93,14 @@ const SearchSlicePreview = ({
   filePath,
   matches,
   score,
+  constituentScores,
   onNavigate,
 }: {
   text: string
   filePath: string
   matches?: string[]
   score?: number
+  constituentScores?: number[]
   onNavigate?: () => void
 }) => {
   const debugOptions = useDebugOptions()
@@ -117,6 +119,11 @@ const SearchSlicePreview = ({
         {debugOptions.showHitScore && score !== undefined && (
           <div className="px-1 text-[12px] font-mono font-bold text-neutral-700">
             score: {score.toFixed(4)}
+            {constituentScores && constituentScores.length > 1 && (
+              <span className="ml-2 text-neutral-500">
+                [{constituentScores.map((s) => s.toFixed(4)).join(", ")}]
+              </span>
+            )}
           </div>
         )}
         {debugOptions.renderAsJson && (
@@ -198,6 +205,7 @@ const RunGroupCard = memo(
                 filePath={hit.file}
                 matches={hit.matches}
                 score={hit.score}
+                constituentScores={hit.constituentScores}
                 onNavigate={() => onNavigate?.(buildHitUrl(projectId, hit))}
               />
             ) : null

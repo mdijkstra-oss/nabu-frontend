@@ -1,10 +1,11 @@
 // Search pipeline — linear chain.
 //
-//   probe                → SearchHit[]   (Stage 1)  raw chunk hits from vector search
-//   groupAdjacent        → SearchHit[]   (Stage 2)  [skipRegions]            cap-by-file + byte-overlap merge
-//   verdict              → SearchHit[]   (Stage 3)  [skipFilter]   streaming LLM filter, attaches matchRanges
-//   trim                 → SearchHit[]   (Stage 4)  [skipTrim]               trim within hit.text using matchRanges
-//   extendForAnnotations → SearchHit[]   (Stage 5)  [skipAnnotationExtend]   grow byte range to swallow overlapping annotations
+//   probe                → SearchHit[]   (Stage 1)                            raw chunk hits from vector search
+//   capStage             → SearchHit[]   (Stage 2)                            cap per file (always; limiting, not merging)
+//   mergeStage           → SearchHit[]   (Stage 3)  [skipMerge]               seed-and-grow (score-ratio gate) + reslice from source
+//   verdict              → SearchHit[]   (Stage 4)  [skipFilter]              streaming LLM filter, attaches matchRanges
+//   trim                 → SearchHit[]   (Stage 5)  [skipTrim]                trim within hit.text using matchRanges
+//   extendForAnnotations → SearchHit[]   (Stage 6)  [skipAnnotationExtend]    grow byte range to swallow overlapping annotations
 //
 // Each stage lives in its own file. Toggles short-circuit a stage to a pass-through.
 // verdict is the only async/batched/streaming step; per-batch tail (trim → extend) fires via onResults.
@@ -19,7 +20,8 @@ import { ok, err } from "~/lib/fp/result"
 import { resolveSemanticSql } from "./resolve-semantic"
 import { sqlQueriesFilesTable } from "./semantic"
 import { probe } from "./probe"
-import { groupAdjacent } from "./group-adjacent"
+import { capStage } from "./cap"
+import { mergeStage } from "./merge"
 import { verdict, FILTER_BATCH_SIZE } from "./verdict"
 import { trim } from "./trim"
 import { extendRegionsForAnnotations } from "./extend-annotations"
@@ -59,8 +61,10 @@ export const mergeByScore = (sorted: SearchHit[], incoming: SearchHit[]): Search
   return merged
 }
 
-const applyGroup = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  isDebugOn("skipRegions") ? hits : groupAdjacent(hits, files)
+const applyCap = (hits: SearchHit[], files: FileStore): SearchHit[] => capStage(hits, files)
+
+const applyMerge = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  isDebugOn("skipMerge") ? hits : mergeStage(hits, files)
 
 const applyTrim = (hits: SearchHit[]): SearchHit[] => (isDebugOn("skipTrim") ? hits : trim(hits))
 
@@ -126,7 +130,7 @@ const buildResult = async ({
   const { rawHits: rawProbeHits, hydes, isSemantic, embeddings } = probeOutput
   const resolvedHighlight = probeOutput.highlight
 
-  const grouped = applyGroup(rawProbeHits, files)
+  const grouped = applyMerge(applyCap(rawProbeHits, files), files)
 
   if (grouped.length === 0) {
     return ok({
