@@ -17,9 +17,10 @@ import {
   serializeSpotlightParam,
 } from "~/lib/editor/spotlight/serialize"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
-import { normalizeMatchWhitespace } from "~/lib/text/trim-around"
 import { splitSentences } from "~/lib/text/split"
 import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
+
+const normalizeMatchWhitespace = (match: string): string => match.replace(/\n\n+/g, " ")
 
 export interface SearchResultListProps {
   hits: SearchHit[]
