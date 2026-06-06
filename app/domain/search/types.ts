@@ -8,6 +8,8 @@ export const SearchHitSchema = z.object({
   text: z.string().optional(),
   score: z.number().optional(),
   constituentScores: z.array(z.number()).optional(),
+  splitIndex: z.number().int().optional(),
+  splitTotal: z.number().int().optional(),
   matches: z.array(z.string()).optional(),
   matchRanges: z.array(z.object({ start: z.number().int(), end: z.number().int() })).optional(),
   chunkStart: z.number().int().optional(),

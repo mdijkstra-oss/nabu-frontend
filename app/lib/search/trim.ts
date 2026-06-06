@@ -21,7 +21,13 @@ const trimHit = (hit: SearchHit): SearchHit[] => {
   if (!trimmed) return [hit]
   const parts = splitTrimmedText(trimmed)
   if (parts.length === 0) return []
-  return parts.map((text) => ({ ...hit, text }))
+  if (parts.length === 1) return [{ ...hit, text: parts[0] }]
+  return parts.map((text, i) => ({
+    ...hit,
+    text,
+    splitIndex: i,
+    splitTotal: parts.length,
+  }))
 }
 
 export const trim = (hits: SearchHit[]): SearchHit[] => hits.flatMap(trimHit)

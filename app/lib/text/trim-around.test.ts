@@ -65,13 +65,14 @@ describe("trimAroundMatches", () => {
       },
     },
     {
-      name: "two nearby matches → merged into one region",
+      name: "two nearby matches → split into two regions (no gap-budget merging)",
       text: doc,
       matches: ["conducted interviews with 40 participants", "recordings were transcribed"],
       check: (r) => {
-        expect(r).not.toContain(SEP)
-        expect(r).toContain("We conducted interviews")
-        expect(r).toContain("transcribed and coded")
+        const parts = r.split(SEP)
+        expect(parts.length).toBe(2)
+        expect(parts[0]).toContain("We conducted interviews")
+        expect(parts[1]).toContain("transcribed and coded")
       },
     },
     {
@@ -130,14 +131,14 @@ describe("trimAroundMatches", () => {
       },
     },
     {
-      name: "adjacent matches merge via gap budget",
+      name: "non-adjacent matches split (gap-budget merging removed)",
       text: "Before.\n\nMatch one.\n\nSmall gap.\n\nMatch two.\n\nAfter.",
       matches: ["Match one.", "Match two."],
       check: (r) => {
-        expect(r).not.toContain(SEP)
-        expect(r).toContain("Match one.")
-        expect(r).toContain("Small gap.")
-        expect(r).toContain("Match two.")
+        const parts = r.split(SEP)
+        expect(parts.length).toBe(2)
+        expect(parts[0]).toContain("Match one.")
+        expect(parts[1]).toContain("Match two.")
       },
     },
     {

@@ -88,12 +88,16 @@ const matchToSpotlights = (text: string): Spotlight[] => {
 
 const matchesToSpotlights = (matches: string[]): Spotlight[] => matches.flatMap(matchToSpotlights)
 
+const splitLabel = (index: number, total: number): string => `part ${index + 1}/${total}`
+
 const SearchSlicePreview = ({
   text,
   filePath,
   matches,
   score,
   constituentScores,
+  splitIndex,
+  splitTotal,
   onNavigate,
 }: {
   text: string
@@ -101,6 +105,8 @@ const SearchSlicePreview = ({
   matches?: string[]
   score?: number
   constituentScores?: number[]
+  splitIndex?: number
+  splitTotal?: number
   onNavigate?: () => void
 }) => {
   const debugOptions = useDebugOptions()
@@ -119,6 +125,9 @@ const SearchSlicePreview = ({
         {debugOptions.showHitScore && score !== undefined && (
           <div className="px-1 text-[12px] font-mono font-bold text-neutral-700">
             score: {score.toFixed(4)}
+            {splitTotal !== undefined && splitTotal > 1 && splitIndex !== undefined && (
+              <span className="ml-2 text-neutral-500">{splitLabel(splitIndex, splitTotal)}</span>
+            )}
             {constituentScores && constituentScores.length > 1 && (
               <span className="ml-2 text-neutral-500">
                 [{constituentScores.map((s) => s.toFixed(4)).join(", ")}]
@@ -206,6 +215,8 @@ const RunGroupCard = memo(
                 matches={hit.matches}
                 score={hit.score}
                 constituentScores={hit.constituentScores}
+                splitIndex={hit.splitIndex}
+                splitTotal={hit.splitTotal}
                 onNavigate={() => onNavigate?.(buildHitUrl(projectId, hit))}
               />
             ) : null

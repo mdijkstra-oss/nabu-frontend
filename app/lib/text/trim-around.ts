@@ -55,26 +55,6 @@ const locateAll = (sentenceTexts: string[], matches: string[]): Range[] =>
     .map((m) => locateMatch(sentenceTexts, normalizeMatchWhitespace(m)))
     .filter((r): r is Range => r !== null)
 
-const gapWordCount = (segments: Segment[], a: Range, b: Range): number => {
-  let total = 0
-  for (let i = a.end + 1; i < b.start; i++) total += wordCount(segments[i].text)
-  return total
-}
-
-const mergeClose = (ranges: Range[], segments: Segment[], budget: number): Range[] => {
-  if (ranges.length <= 1) return ranges
-  const merged: Range[] = [{ ...ranges[0] }]
-  for (let i = 1; i < ranges.length; i++) {
-    const prev = merged[merged.length - 1]
-    if (gapWordCount(segments, prev, ranges[i]) <= 2 * budget) {
-      prev.end = ranges[i].end
-    } else {
-      merged.push({ ...ranges[i] })
-    }
-  }
-  return merged
-}
-
 interface ExpandedEdge {
   boundary: number
   truncated: { index: number; words: number } | null
@@ -167,8 +147,7 @@ export const trimAroundMatches = (text: string, matches: string[]): string => {
   const matchRanges = locateAll(sentenceTexts, matches)
   if (matchRanges.length === 0) return ""
 
-  const merged = mergeRanges(matchRanges)
-  const regions = mergeClose(merged, segments, CONTEXT_BUDGET)
+  const regions = mergeRanges(matchRanges)
 
   return regions
     .map((r, i) =>
@@ -200,8 +179,7 @@ export const trimByRanges = (text: string, ranges: SentenceRange[]): string => {
     .filter((r): r is Range => r !== null)
   if (clamped.length === 0) return ""
 
-  const merged = mergeRanges(clamped)
-  const regions = mergeClose(merged, segments, CONTEXT_BUDGET)
+  const regions = mergeRanges(clamped)
 
   return regions
     .map((r, i) =>
