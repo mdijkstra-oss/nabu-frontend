@@ -49,6 +49,11 @@ export const splitBySentences = (lang = "en"): Splitter => {
   return (text) => collectSegments(segmenter, text, text)
 }
 
+const defaultSentenceSplitter = splitBySentences()
+
+export const splitSentences = (text: string): string[] =>
+  defaultSentenceSplitter(text).map((s) => s.text)
+
 export const splitMarkdownBySentences = (lang = "en"): Splitter => {
   const segmenter = buildSegmenter(lang)
   return (text) => collectSegments(segmenter, neutralizeMarkdown(text), text)

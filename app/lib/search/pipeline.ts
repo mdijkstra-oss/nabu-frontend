@@ -1,15 +1,28 @@
+// Search pipeline — linear chain.
+//
+//   probe                → SearchHit[]   (Stage 1)  raw chunk hits from vector search
+//   groupAdjacent        → SearchHit[]   (Stage 2)  [skipRegions]            cap-by-file + byte-overlap merge
+//   verdict              → SearchHit[]   (Stage 3)  [skipFilter]   streaming LLM filter, attaches matchRanges
+//   trim                 → SearchHit[]   (Stage 4)  [skipTrim]               trim within hit.text using matchRanges
+//   extendForAnnotations → SearchHit[]   (Stage 5)  [skipAnnotationExtend]   grow byte range to swallow overlapping annotations
+//
+// Each stage lives in its own file. Toggles short-circuit a stage to a pass-through.
+// verdict is the only async/batched/streaming step; per-batch tail (trim → extend) fires via onResults.
+
 import type { Result } from "~/lib/fp/result"
 import type { SearchHit, EmbeddingsCache } from "~/domain/search/types"
-import type { HydeQuery, HybridSearchPlan } from "./semantic"
-import type { ResolvedQuery, SemanticContext } from "./resolve-semantic"
+import type { HydeQuery } from "./semantic"
+import type { SemanticContext, ResolvedQuery } from "./resolve-semantic"
 import type { FileStore } from "~/lib/files/store"
 import type { Database } from "~/lib/db/types"
 import { ok, err } from "~/lib/fp/result"
 import { resolveSemanticSql } from "./resolve-semantic"
-import { executeSearch, executeHybridLocal } from "./execute"
-import { sanitizeSemanticError, sqlQueriesFilesTable } from "./semantic"
-import { filterParallel, FILTER_BATCH_SIZE } from "./filter-hits"
-import { growHits, attachAnnotationsOnly } from "./slices"
+import { sqlQueriesFilesTable } from "./semantic"
+import { probe } from "./probe"
+import { groupAdjacent } from "./group-adjacent"
+import { verdict, FILTER_BATCH_SIZE } from "./verdict"
+import { trim } from "./trim"
+import { extendRegionsForAnnotations } from "./extend-annotations"
 import { isDebugOn } from "~/lib/debug/options"
 
 export const MAX_BARREN_BATCHES = 10
@@ -46,168 +59,145 @@ export const mergeByScore = (sorted: SearchHit[], incoming: SearchHit[]): Search
   return merged
 }
 
-interface Executed {
-  rawHits: SearchHit[]
-  hydes: HydeQuery[]
-  isSemantic: boolean
-  embeddings?: EmbeddingsCache
-  highlight?: string
-}
+const applyGroup = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  isDebugOn("skipRegions") ? hits : groupAdjacent(hits, files)
 
-const executePlain = async (
-  sql: string,
-  db: Database
-): Promise<Result<Executed, PipelineError>> => {
-  const result = await executeSearch(db, sql)
-  if (!result.ok) return err({ message: sanitizeSemanticError(result.error.message) })
-  return ok({ rawHits: result.value, hydes: [], isSemantic: false })
-}
+const applyTrim = (hits: SearchHit[]): SearchHit[] => (isDebugOn("skipTrim") ? hits : trim(hits))
 
-const executeHybrid = async (
-  plan: HybridSearchPlan,
-  embeddings: EmbeddingsCache,
-  highlight: string | undefined,
-  db: Database
-): Promise<Result<Executed, PipelineError>> => {
-  if (plan.hydes.length === 0)
-    return err({ message: "Embedding resolution produced no search vectors" })
+const applyExtend = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  isDebugOn("skipAnnotationExtend") ? hits : extendRegionsForAnnotations(hits, files)
 
-  const result = await executeHybridLocal(db, plan)
-  if (!result.ok) return err({ message: sanitizeSemanticError(result.error.message) })
-  return ok({ rawHits: result.value, hydes: plan.hydes, isSemantic: true, embeddings, highlight })
-}
+const tail = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  applyExtend(applyTrim(hits), files)
 
-const dispatchExecution = (
-  resolved: ResolvedQuery,
-  db: Database
-): Promise<Result<Executed, PipelineError>> =>
-  resolved.type === "plain"
-    ? executePlain(resolved.sql, db)
-    : executeHybrid(resolved.plan, resolved.embeddings, resolved.highlight, db)
+export const extractSignalTexts = (hydes: HydeQuery[]): string[] =>
+  hydes.filter((h) => h.type === "signal").map((h) => h.text)
 
-const filterWithBudget = async (
-  rawHits: SearchHit[],
-  highlight: string,
+const runVerdictWithTail = async (
+  hits: SearchHit[],
+  intent: string,
   signals: string[],
   files: FileStore,
   target: number,
-  onResults?: (hits: SearchHit[]) => void
+  onResults?: (batch: SearchHit[]) => void
 ) => {
   const collected: SearchHit[] = []
-  const collectAndForward = (batch: SearchHit[]) => {
-    collected.push(...batch)
-    onResults?.(batch)
+  const onBatch = (batch: SearchHit[]) => {
+    const out = tail(batch, files)
+    collected.push(...out)
+    onResults?.(out)
   }
 
-  const { consumed, barren } = await filterParallel(
-    rawHits,
-    highlight,
-    signals,
-    files,
-    collectAndForward,
-    {
-      target,
-      maxBarren: isDebugOn("skipBarrenCheck") ? undefined : MAX_BARREN_BATCHES,
-    }
-  )
+  const { consumed, barren } = await verdict(hits, intent, signals, onBatch, {
+    target,
+    maxBarren: isDebugOn("skipBarrenCheck") ? undefined : MAX_BARREN_BATCHES,
+  })
 
-  const rawConsumed = Math.min(consumed * FILTER_BATCH_SIZE, rawHits.length)
-  const rawRemaining = rawHits.slice(rawConsumed)
+  const rawConsumed = Math.min(consumed * FILTER_BATCH_SIZE, hits.length)
+  const rawRemaining = hits.slice(rawConsumed)
   const exhausted = rawRemaining.length === 0 || barren
 
   return { hits: sortByScore(collected), rawRemaining, exhausted }
 }
 
-export const extractSignalTexts = (hydes: HydeQuery[]): string[] =>
-  hydes.filter((h) => h.type === "signal").map((h) => h.text)
+interface BuildResultArgs {
+  probeOutput: {
+    rawHits: SearchHit[]
+    hydes: HydeQuery[]
+    isSemantic: boolean
+    embeddings?: EmbeddingsCache
+    highlight?: string
+  }
+  sql: string
+  highlight: string
+  files: FileStore
+  target: number
+  onResults?: (batch: SearchHit[]) => void
+}
 
-const buildResult = (
-  executed: Executed,
-  sql: string,
-  highlight: string,
-  files: FileStore,
-  target: number,
-  onResults?: (hits: SearchHit[]) => void
-): Promise<Result<PipelineResult, PipelineError>> => {
-  const { rawHits, hydes, isSemantic, embeddings } = executed
-  const skipFilter = isDebugOn("skipFilter")
-  const resolvedHighlight = executed.highlight
+const buildResult = async ({
+  probeOutput,
+  sql,
+  highlight,
+  files,
+  target,
+  onResults,
+}: BuildResultArgs): Promise<Result<PipelineResult, PipelineError>> => {
+  const { rawHits: rawProbeHits, hydes, isSemantic, embeddings } = probeOutput
+  const resolvedHighlight = probeOutput.highlight
 
-  if (rawHits.length === 0)
-    return Promise.resolve(
-      ok({
-        hits: [],
-        rawRemaining: [],
-        hydes,
-        isSemantic,
-        embeddings,
-        highlight: resolvedHighlight,
-        needsFiltering: false,
-        exhausted: true,
-      })
-    )
+  const grouped = applyGroup(rawProbeHits, files)
 
-  if (skipFilter) {
-    const hits = attachAnnotationsOnly(rawHits, files)
-    onResults?.(hits)
-    return Promise.resolve(
-      ok({
-        hits,
-        rawRemaining: [],
-        hydes,
-        isSemantic,
-        embeddings,
-        highlight: resolvedHighlight,
-        needsFiltering: false,
-        exhausted: true,
-      })
-    )
+  if (grouped.length === 0) {
+    return ok({
+      hits: [],
+      rawRemaining: [],
+      hydes,
+      isSemantic,
+      embeddings,
+      highlight: resolvedHighlight,
+      needsFiltering: false,
+      exhausted: true,
+    })
   }
 
-  const needsFiltering = sqlQueriesFilesTable(sql)
+  const skipFilter = isDebugOn("skipFilter")
+  const needsFiltering = !skipFilter && sqlQueriesFilesTable(sql)
 
   if (!needsFiltering) {
-    const hits = growHits(rawHits, files)
+    const hits = tail(grouped, files)
     onResults?.(hits)
-    return Promise.resolve(
-      ok({
-        hits,
-        rawRemaining: [],
-        hydes,
-        isSemantic,
-        embeddings,
-        highlight: resolvedHighlight,
-        needsFiltering: false,
-        exhausted: true,
-      })
-    )
+    return ok({
+      hits,
+      rawRemaining: [],
+      hydes,
+      isSemantic,
+      embeddings,
+      highlight: resolvedHighlight,
+      needsFiltering: false,
+      exhausted: true,
+    })
   }
 
   const effectiveHighlight = resolvedHighlight || highlight
-  if (!effectiveHighlight)
-    return Promise.resolve(
-      err({
-        message: "Semantic filtering requires a highlight but none was resolved or provided",
-      })
-    )
+  if (!effectiveHighlight) {
+    return err({
+      message: "Semantic filtering requires a highlight but none was resolved or provided",
+    })
+  }
 
-  return filterWithBudget(
-    rawHits,
+  const filtered = await runVerdictWithTail(
+    grouped,
     effectiveHighlight,
     extractSignalTexts(hydes),
     files,
     target,
     onResults
-  ).then((filtered) =>
-    ok({
-      ...filtered,
-      hydes,
-      isSemantic,
-      embeddings,
-      highlight: resolvedHighlight,
-      needsFiltering: true,
-    })
   )
+
+  return ok({
+    ...filtered,
+    hydes,
+    isSemantic,
+    embeddings,
+    highlight: resolvedHighlight,
+    needsFiltering: true,
+  })
+}
+
+export const runSearchPipeline = async (
+  sql: string,
+  highlight: string,
+  ctx: SemanticContext,
+  files: FileStore,
+  target: number,
+  onResults?: (batch: SearchHit[]) => void
+): Promise<Result<PipelineResult, PipelineError>> => {
+  const resolved = await resolveSemanticSql(sql, ctx)
+  if (!resolved.ok) return err({ message: resolved.error.message })
+  const probed = await probe(resolved.value, ctx.db)
+  if (!probed.ok) return err(probed.error)
+  return buildResult({ probeOutput: probed.value, sql, highlight, files, target, onResults })
 }
 
 export const executeResolvedSearch = async (
@@ -217,22 +207,11 @@ export const executeResolvedSearch = async (
   db: Database,
   files: FileStore,
   target: number,
-  onResults?: (hits: SearchHit[]) => void
+  onResults?: (batch: SearchHit[]) => void
 ): Promise<Result<PipelineResult, PipelineError>> => {
-  const executed = await dispatchExecution(resolved, db)
-  if (!executed.ok) return err(executed.error)
-  return buildResult(executed.value, sql, highlight, files, target, onResults)
+  const probed = await probe(resolved, db)
+  if (!probed.ok) return err(probed.error)
+  return buildResult({ probeOutput: probed.value, sql, highlight, files, target, onResults })
 }
 
-export const runSearchPipeline = async (
-  sql: string,
-  highlight: string,
-  ctx: SemanticContext,
-  files: FileStore,
-  target: number,
-  onResults?: (hits: SearchHit[]) => void
-): Promise<Result<PipelineResult, PipelineError>> => {
-  const resolved = await resolveSemanticSql(sql, ctx)
-  if (!resolved.ok) return err({ message: resolved.error.message })
-  return executeResolvedSearch(resolved.value, sql, highlight, ctx.db, files, target, onResults)
-}
+export const runVerdictTail = runVerdictWithTail

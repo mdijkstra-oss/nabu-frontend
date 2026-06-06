@@ -3,16 +3,31 @@ import { diffChunks, type EmbeddingEntry } from "./diff"
 import type { Chunk } from "./chunk"
 
 describe("diffChunks", () => {
-  const entry = (hash: string, text: string): EmbeddingEntry => ({
+  const entry = (
+    hash: string,
+    text: string,
+    chunkStart = 0,
+    chunkEnd: number = text.length
+  ): EmbeddingEntry => ({
     hash,
     text,
     embedding: [0.1, 0.2],
+    chunkStart,
+    chunkEnd,
   })
 
-  const chunk = (hash: string, text: string, index: number): Chunk => ({
+  const chunk = (
+    hash: string,
+    text: string,
+    index: number,
+    chunkStart = 0,
+    chunkEnd: number = text.length
+  ): Chunk => ({
     hash,
     text,
     index,
+    chunkStart,
+    chunkEnd,
   })
 
   const cases: {
@@ -55,6 +70,13 @@ describe("diffChunks", () => {
       existing: [entry("aaa", "hello")],
       current: [],
       expectedKeep: [],
+      expectedNeeded: [],
+    },
+    {
+      name: "kept entries are re-stamped with current chunk offsets",
+      existing: [entry("aaa", "hello", 100, 105)],
+      current: [chunk("aaa", "hello", 0, 200, 205)],
+      expectedKeep: [entry("aaa", "hello", 200, 205)],
       expectedNeeded: [],
     },
   ]

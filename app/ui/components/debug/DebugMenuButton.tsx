@@ -24,6 +24,7 @@ const isActive = (options: DebugOptions, key: string): boolean => options[key] ?
 const renderToggleItem = (
   key: string,
   label: string,
+  description: string,
   icon: ReactNode,
   active: boolean,
   onToggle: (key: string) => void
@@ -32,6 +33,7 @@ const renderToggleItem = (
     key={key}
     icon={active ? <Check /> : icon}
     onClick={() => onToggle(key)}
+    title={description}
   >
     {label}
   </DropdownMenu.DropdownItem>
@@ -70,12 +72,27 @@ export const DebugMenuButton = ({
             </>
           )}
           {DEBUG_TOGGLES.map((t) =>
-            renderToggleItem(t.key, t.label, t.icon, isActive(debugOptions, t.key), onToggleOption)
+            renderToggleItem(
+              t.key,
+              t.label,
+              t.description,
+              t.icon,
+              isActive(debugOptions, t.key),
+              onToggleOption
+            )
           )}
-          <DropdownMenu.DropdownItem icon={<Minimize />} onClick={onRequestCompaction}>
+          <DropdownMenu.DropdownItem
+            icon={<Minimize />}
+            onClick={onRequestCompaction}
+            title="Run agent context compaction right now."
+          >
             Force compaction
           </DropdownMenu.DropdownItem>
-          <DropdownMenu.DropdownItem icon={<Trash2 />} onClick={clearAllCaches}>
+          <DropdownMenu.DropdownItem
+            icon={<Trash2 />}
+            onClick={clearAllCaches}
+            title="Wipe all local IndexedDB caches. Will refetch on next use."
+          >
             Clear IndexedDB caches
           </DropdownMenu.DropdownItem>
         </DropdownMenu>

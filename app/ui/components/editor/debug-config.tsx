@@ -5,66 +5,124 @@ import type { DebugOptions } from "~/lib/debug/options"
 interface DebugToggle {
   key: string
   label: string
+  description: string
   icon: ReactNode
   defaultValue: boolean
 }
 
+// WHY: consumers read these flags via useDebugOptions()/isDebugOn(key) at the
+// point of use. Do not thread a per-toggle prop through component trees — add
+// the entry here and read it inline where it matters.
 export const DEBUG_TOGGLES: DebugToggle[] = [
-  { key: "expanded", label: "Hidden files", icon: <Bug />, defaultValue: false },
+  {
+    key: "expanded",
+    label: "Hidden files",
+    description: "Show hidden files in the project tree.",
+    icon: <Bug />,
+    defaultValue: false,
+  },
   {
     key: "persistToServer",
     label: "Server persistence",
+    description: "Sync chat blocks to the server. Off keeps everything local.",
     icon: <Cloud />,
     defaultValue: true,
   },
-  { key: "renderAsJson", label: "JSON rendering", icon: <Code />, defaultValue: false },
-  { key: "showStreamPanel", label: "Stream panel", icon: <Activity />, defaultValue: false },
+  {
+    key: "renderAsJson",
+    label: "JSON rendering",
+    description: "Render search results as raw JSON instead of formatted UI.",
+    icon: <Code />,
+    defaultValue: false,
+  },
+  {
+    key: "showStreamPanel",
+    label: "Stream panel",
+    description: "Open the agent block stream debug panel.",
+    icon: <Activity />,
+    defaultValue: false,
+  },
   {
     key: "reasoningSummaryAuto",
     label: "Reasoning summary",
+    description: "Use auto reasoning summary verbosity instead of concise.",
     icon: <Bot />,
     defaultValue: false,
   },
-  { key: "stepCompaction", label: "Step compaction", icon: <Filter />, defaultValue: false },
+  {
+    key: "stepCompaction",
+    label: "Step compaction",
+    description: "Fade blocks that have been compacted out of agent context.",
+    icon: <Filter />,
+    defaultValue: false,
+  },
   {
     key: "skipCache",
     label: "Skip cache",
+    description: "Bypass the local embedding/result cache and refetch.",
     icon: <Filter />,
     defaultValue: false,
   },
   {
     key: "showQueryResults",
     label: "Query results",
+    description: "Show raw query result rows below chart blocks.",
     icon: <Table />,
     defaultValue: false,
   },
   {
     key: "showReviewStats",
     label: "Review stats",
+    description: "Show per-model agreement stats on reviewed annotations.",
     icon: <TriangleAlert />,
     defaultValue: false,
   },
   {
     key: "showModelIndex",
     label: "Model index in review",
+    description: "Show the model index alongside each reviewer pick.",
     icon: <Bot />,
+    defaultValue: false,
+  },
+  {
+    key: "skipRegions",
+    label: "Skip region merge (raw chunk hits)",
+    description: "Skip merging contiguous chunks into regions. Show raw chunk hits.",
+    icon: <Filter />,
     defaultValue: false,
   },
   {
     key: "skipFilter",
     label: "Raw embeddings (skip filter)",
+    description: "Skip the semantic filter step. Return raw embedding matches.",
+    icon: <Filter />,
+    defaultValue: false,
+  },
+  {
+    key: "skipAnnotationExtend",
+    label: "Skip annotation extension",
+    description: "Don't extend hits to cover overlapping annotation ranges.",
+    icon: <Filter />,
+    defaultValue: false,
+  },
+  {
+    key: "showHitScore",
+    label: "Show hit score",
+    description: "Show the score below each search result block (bold, 4 decimals).",
     icon: <Filter />,
     defaultValue: false,
   },
   {
     key: "skipBarrenCheck",
     label: "Skip barren cutoff (keep filtering)",
+    description: "Don't stop early when batches return no hits. Keep filtering.",
     icon: <Filter />,
     defaultValue: false,
   },
   {
     key: "fileSpecificCandidates",
     label: "File-specific candidates",
+    description: "Enable per-file candidate search on the current file.",
     icon: <Filter />,
     defaultValue: false,
   },

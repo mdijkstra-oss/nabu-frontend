@@ -1,6 +1,5 @@
 import { getFiles, getFileRaw } from "~/lib/files/store"
 import { subscribeContentChanges } from "~/lib/files/subscribe-content"
-import { toProseFns } from "~/domain/data-blocks/prose-registry"
 import { getDatabase } from "~/domain/db/database"
 import { startCorpusSync } from "~/lib/corpus/sync-topics"
 import { fetchLanguageStats, filterSignificantLanguages } from "~/lib/search/resolve-semantic"
@@ -45,7 +44,6 @@ export const startTopicAssignment = async (onProgress?: OnSyncProgress): Promise
       return raw || undefined
     },
     subscribe: subscribeContentChanges,
-    toProseFns,
     getSignificantLanguages,
     onProgress,
   })

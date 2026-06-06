@@ -6,7 +6,17 @@ const attrs = (type: string, subject: string): string =>
   block("json-attributes", JSON.stringify({ type, subject, hash: "abc" }))
 
 const embedding = (text: string, language = "eng"): string =>
-  block("json-embeddings", JSON.stringify({ hash: "h", text, embedding: [0.1], language }))
+  block(
+    "json-embeddings",
+    JSON.stringify({
+      hash: "h",
+      text,
+      embedding: [0.1],
+      chunkStart: 0,
+      chunkEnd: text.length,
+      language,
+    })
+  )
 
 const doc = (type: string, subject: string): string => `# Doc\n\n${attrs(type, subject)}`
 

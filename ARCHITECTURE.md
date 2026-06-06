@@ -164,12 +164,11 @@ Prefixes are declared per block via `idPaths[].prefix` (multiple paths allowed f
 
 This is what `block-tools` (the auto-generated `patch_*`, `add_*`, `delete_*`, `move_*` tools) calls behind the scenes.
 
-### 3.6 prose-registry vs. registry
+### 3.6 Registry
 
-| File                                   | Purpose                                                                                                                                                                                  |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lib/data-blocks/registry.ts`          | The block-type registry; what every block-aware engine consults                                                                                                                          |
-| `domain/data-blocks/prose-registry.ts` | Maps block type → "prose representation" function for LLM context. Today only `json-callout` has one (`callout/toProse.ts`) — turns `{id,title,content}` into `<analysis>...</analysis>` |
+The block-type registry (`lib/data-blocks/registry.ts`) is what every block-aware engine consults to enumerate types, look up configs, find by prefix, etc.
+
+There used to be a separate `domain/data-blocks/prose-registry.ts` that mapped block types → "prose representation" functions (only `json-callout` had one). It was used by the embedding and corpus pipelines to inline callout prose into the embedded text. That registry has been deleted: embedding source is now `extractProse(file)` (drops all code blocks, prose only). See §8.1.
 
 ---
 
@@ -356,45 +355,125 @@ End-to-end entry points:
 - User: `routes/project.search.tsx` → `useSearchResults()` → `lib/search/pipeline.ts::runSearchPipeline`
 - LLM: `lib/agent/tools/search/handler.ts::handleSearch` → same pipeline, then saves the search via `saveNewSearch()`
 
-### 8.1 What runs
+### 8.1 Mental model — chunks as probes, regions as results
 
-`lib/search/pipeline.ts::runSearchPipeline(sql, highlight, ctx, files, target)`:
+Chunks of `extractProse(file)` are stored as embedding vectors with their byte offsets (`chunkStart`, `chunkEnd`). They are **probes**: ways to find candidate regions of the source. A search **hit** is a region of the source — not a chunk. Multiple probes hitting overlapping bytes collapse into one region. The LLM sees source-slice text, never chunk-text. This eliminates the "chunk universe vs prose universe" mismatch and the "section becomes entire file" failure mode that the old `trimAroundMatches`-based locate had.
 
-1. **Resolve semantic** (`lib/search/resolve-semantic.ts`):
-   - Extract `SEMANTIC(...)` tokens from the SQL (`semantic.ts::extractSemanticTokens`)
-   - Determine significant languages from the corpus (>10% of files by language)
-   - For each (language × query token) generate **3 HyDEs** (hypothetical document embeddings) — short LLM-generated passages that would answer the query. Cached in `EmbeddingsCache` keyed by source-hash + language set.
-   - `generateHydesForDescription` (corpus-aware) and `generateGenericHydes` (language-only) feed into the `/hyde-generator` endpoint
-   - Embed each HyDE via `fetchEmbeddingBatch` → `/embeddings`
-2. **Execute** (`lib/search/execute.ts`):
-   - Rewrite the SQL with `list_cosine_similarity(embedding, $vec)` per HyDE
-   - Run each variant; merge ranked lists
-3. **Fuse** (`lib/search/fusion.ts`): Reciprocal Rank Fusion, `k=60`
-4. **Slice** (`lib/search/slices.ts`): For each hit, locate the anchor in prose, trim to surrounding sentences, expand to include annotations that overlap the trimmed range
-5. **Merge overlapping** (`lib/search/merge-overlapping.ts`): consolidate adjacent ranges per file, keep best score
-6. **Filter** (`lib/search/filter-hits.ts::filterParallel`): final semantic filter via LLM, batched (size 10, concurrency 5)
-7. **Page** (`lib/search/paging.ts`): LIMIT/OFFSET rewrites for streaming
+The same source representation is used everywhere downstream: embedding source = corpus excerpt source = region slice source = `extractProse(file)`. No `toEmbeddableText`, no `toProseFns`, no callout inlining.
 
-### 8.2 Parallelism (commit 9ca128b)
+### 8.2 The pipeline file is the map
+
+`lib/search/pipeline.ts` is a thin chain. The top-of-file comment is the literal map:
+
+```
+probe                → SearchHit[]   (Stage 1)
+groupAdjacent        → SearchHit[]   (Stage 2)  [skipRegions]
+verdict              → SearchHit[]   (Stage 3)  [skipFilter]            streaming, batched, async
+trim                 → SearchHit[]   (Stage 4)  [skipTrim]
+extendForAnnotations → SearchHit[]   (Stage 5)  [skipAnnotationExtend]
+```
+
+Each stage lives in its own file. Toggles short-circuit the stage to identity. `verdict` is the only async/batched/streaming step; per-batch tail (`trim` → `extendForAnnotations`) fires through `onResults` as batches complete.
+
+`runSearchPipeline(sql, highlight, ctx, files, target, onResults?)`:
+
+**Stage 0 — Resolve semantic** (`lib/search/resolve-semantic.ts`)
+
+- Extract `SEMANTIC(...)` tokens from the SQL (`semantic.ts::extractSemanticTokens`)
+- Determine significant languages from the corpus (>10% of files by language)
+- For each (language × query token) generate **3 HyDEs** (hypothetical document embeddings) — short LLM-generated passages that would answer the query. Cached in `EmbeddingsCache` keyed by source-hash + language set.
+- `generateHydesForDescription` (corpus-aware) and `generateGenericHydes` (language-only) feed into the `/hyde-generator` endpoint
+- Embed each HyDE via `fetchEmbeddingBatch` → `/embeddings`
+
+**Stage 1 — Probe** (`lib/search/probe.ts`)
+
+- Wraps `execute.ts::executeSearch` (plain SQL) / `executeHybridLocal` (semantic, RRF-fused).
+- Cosine query rewriting: `semantic.ts::buildCosineBase` auto-injects `chunkStart, chunkEnd, list_cosine_similarity(...) AS _semantic_score` into the SELECT list — so any cosine query returns offsets regardless of how it was written. Hydes fan out, each runs `ORDER BY _semantic_score DESC LIMIT 200`. Then `fusion.ts::fuseCosineResults` Reciprocal Rank Fusion (`k=60`) into a single sorted list.
+- Output: `SearchHit{file, chunkStart, chunkEnd, score, text}` sorted by RRF score desc. `text` = `source.slice(chunkStart, chunkEnd)`.
+
+**Stage 2 — Group adjacent** (`lib/search/group-adjacent.ts`)
+
+- Two passes: **cap by file (score-sorted)** then **merge adjacent (position-sorted)**.
+- Cap (`capByFile`): walk hits by score desc; for each file, accept while `accepted_count < cap`, otherwise skip. `cap = min(total_chunks, max(FLOOR, ceil(RATIO × total_chunks)))` — defaults `FLOOR=10`, `RATIO=0.5`. Total chunks per file come from `source.ts::getTotalChunks` (counts companion `json-embeddings` blocks).
+- Merge (`mergeAdjacent`): within each file, sort accepted hits by `chunkStart`. Walk left-to-right with a running `[start, end]` region. Extend whenever `next.chunkStart <= run.end`. No size cap — chained overlap is kept whole. Region `score = max` of constituents; `anchor` = whichever constituent had the highest score.
+- Score decides who's in the set; position decides who merges. Skip toggle: `skipRegions`.
+
+**Stage 3 — Verdict (LLM filter)** (`lib/search/verdict.ts`)
+
+- For each region, send `region.text` (source slice) to `/semantic-filter` as a numbered passage. Two-model run (`FILTER_RUNS=2`) batched by `FILTER_BATCH_SIZE=5`, parallelized via `processPool` at `FILTER_CONCURRENCY=5`. Per-model cache keyed by (model index, intent, signals, numbered-passage).
+- LLM returns sentence-index ranges within the region. Attached as `hit.matchRanges` (0-based `{start, end}` per range). Derives `hit.matches` (joined sentence text — kept for editor underline) via `extractMatchTexts`.
+- Drops hits the LLM rejected (empty match groups). Streams approved batches via `onBatch` callback.
+- Overselection guard: if matches cover > `MAX_SELECTED_RATIO = 0.4` of the region's sentences, that run is discarded as too greedy.
+- Pool stops early on `target` reached or `maxBarren` consecutive empty batches.
+- Skip toggle: `skipFilter`.
+
+**Stage 4 — Trim** (`lib/search/trim.ts`)
+
+- `flatMap` over hits. For each hit with `matchRanges`: apply `text/trim-around.ts::trimByRanges(hit.text, matchRanges)` to keep only the picked sentences with context shoulders (`mergeRanges` → `mergeClose` → `renderRegion`).
+- Splits one hit into multiple regions when matchRanges are far apart (separated by `SEPARATOR`).
+- Skip toggle: `skipTrim`.
+
+**Stage 5 — Annotation extend** (`lib/search/extend-annotations.ts`)
+
+- For each hit: resolve each visible file annotation's text to a byte range via `findMatchOffset(source, ann.text)`. If the annotation range partially intersects `[hit.chunkStart, hit.chunkEnd]`, extend the hit to swallow the full annotation. Re-slice `hit.text` from source.
+- Annotations entirely inside or entirely outside the hit produce no change. Annotations referencing text inside a code block (stripped from source) silently miss — acceptable; they weren't searchable anyway.
+- Skip toggle: `skipAnnotationExtend`.
+
+**Paging** (`lib/search/paging.ts`): LIMIT/OFFSET rewrites for streaming. Applies at the SQL boundary, not part of the chain.
+
+### 8.3 Uniform output shape
+
+Every stage emits the same shape:
+
+```
+SearchHit { file, chunkStart?, chunkEnd?, score?, text?, matches?, matchRanges? }
+```
+
+Render layer reads `text` and highlights `matches` if present. Identical handling for every stage's output. Each skip toggle hands the previous stage's output straight to render.
+
+### 8.4 Chunk storage
+
+`lib/embeddings/chunk.ts::chunkText(text)` slides a `CHUNK_CHARS = 1600` window with `CHUNK_STRIDE_CHARS = 1280` (20% overlap), aligning cuts to whitespace within `CHUNK_WORD_TOLERANCE = 160`. Emits `Chunk { index, text, hash, chunkStart, chunkEnd }`. Offsets are byte positions in `text.trim()`, shifted by leading-whitespace count back to original-source coordinates.
+
+The overlap exists for **recall** (boundary semantics), not dedup. Regions handle dedup structurally via integer-range merge — the chunk-overlap region produces overlapping byte ranges that `mergeAdjacent` collapses into one. Chunk overlap could be tuned independently; the pipeline is correct for any stride.
+
+Companion file `<name>.embeddings.hidden.md` stores `EmbeddingEntry { hash, text, embedding, chunkStart, chunkEnd, language? }` per `json-embeddings` block. `diffChunks` re-stamps `chunkStart`/`chunkEnd` from the current chunk onto kept entries on every sync, so offsets stay fresh even when the embedding vector itself is unchanged.
+
+### 8.5 Embeddings table (DuckDB)
+
+- Projection name `files` (`tableName: "files"`), language `json-embeddings`. Schema is `EmbeddingRowSchema` (`domain/embeddings/schema.ts`) → DDL auto-derived.
+- Hidden from LLM-facing schema: `hash`, `embedding`. Visible: `file`, `text`, `chunkStart`, `chunkEnd`, `language`.
+- `fileMapper` maps `<name>.embeddings.hidden.md` → `<name>.md` so joins work.
+
+### 8.6 Source slice helper
+
+`lib/search/source.ts::getEmbeddableSource(file, files)` returns `extractProse(files[file])` with a content-keyed cap-cache (500 entries). `sliceSource(source, start, end) = source.slice(start, end)`. `getTotalChunks(file, files)` counts companion `json-embeddings` blocks via `fastParseBlockContents` (with a 500-entry cap-cache).
+
+### 8.7 Parallelism
 
 - HyDE generation: `processPool()` with warmup
-- Filter: `filterParallel` batches
+- Filter: `filterParallel` batches (size 5, concurrency 5)
 - Hit refresh: `slices.ts::refreshHitsAsync` yields to the browser between hits (`yieldToBrowser()`) so the UI stays responsive on large result sets
 
-### 8.3 Embeddings
-
-- `lib/embeddings/` — embed client, batching
-- `domain/embeddings/` — schema + init
-- Stored embeddings live in a hidden `.embeddings.hidden.md` companion file projected into a DuckDB table with hidden `hash` and `embedding` columns
-- The embeddings projection maps `<name>.embeddings.hidden.md` → `<name>.md` for joins
-
-### 8.4 Intent
+### 8.8 Intent
 
 `lib/search/intent.ts::generateSearchIntent` is a separate query-understanding LLM step (its product is a structured intent, not a HyDE).
 
-### 8.5 `format-hydes.ts`
+### 8.9 `format-hydes.ts`
 
 Debug output for HyDE queries — surfaces what passages were generated and embedded for each query.
+
+### 8.10 Debug toggles
+
+`isDebugOn(key)` from `lib/debug/options.ts`. UI list in `ui/components/editor/debug-config.tsx`:
+
+| Toggle                   | Effect                                                            |
+| ------------------------ | ----------------------------------------------------------------- |
+| `skipRegions`            | Stage 2 bypassed — render raw probe hits                          |
+| `skipFilter`             | Stage 3 bypassed — render Stage 2 regions as-is                   |
+| `skipAnnotationExtend`   | Stage 4 bypassed                                                  |
+| `skipBarrenCheck`        | Don't stop filter early when N consecutive batches return nothing |
+| `fileSpecificCandidates` | UI behavior for candidate search                                  |
 
 ---
 
@@ -804,6 +883,8 @@ The codebase has a real memo backbone for hot paths. Pattern: content string →
 - `lib/text/find.ts::getDocTokens` — 500 entries (fuzzy tokenization)
 - `lib/data-blocks/query.ts` — 3000 entries (block JSON recovery)
 - `lib/search/slices.ts::getFileContext` — 500 entries (sentence split + annotation parse)
+- `lib/search/source.ts::getEmbeddableSource` — 500 entries (`extractProse(file)`)
+- `lib/search/source.ts::getTotalChunks` — 500 entries (companion chunk count)
 
 Reach for `createCappedCache` when adding a new pure transform over file content that lands on a hot path.
 
@@ -825,7 +906,8 @@ There is no Reselect / `createSelector`. Selectors above the capped-cache layer 
 - **Block-tools are generated**, not hand-written. The set of `patch_<lang>` tools grows automatically when you add a block type.
 - **User patches bypass mutation-history.** If you need to track a UI-initiated change, push it manually.
 - **Singletons + rowPath** is the trick for "this is one block, but each array element is a row".
-- **The corpus is the search input.** `domain/corpus/` extracts prose descriptions per file via `toProseFns` (only callout has one today). The HyDE generator uses these descriptions.
+- **The corpus is the search input.** `domain/corpus/` extracts prose descriptions per file. Excerpts are computed via `extractProse(file)` (drops all code blocks). The HyDE generator uses these descriptions.
+- **Search hits are regions of source, not chunks.** Chunks are probes; multiple probes hitting overlapping bytes collapse via `regions.ts::mergeAdjacent`. The LLM filter and the render layer see `extractProse(file)` slices, not chunk text.
 - **Sql safety lives in `lib/sql/`**, but the LLM prompt also explains what to do (`lib/agent/tools/sql-describe.ts`). Both layers matter.
 - **Hidden files** (`*.hidden.md`, `*.embeddings.hidden.md`) are protected by `checkHiddenFileGuard()` in the LLM executor. Only specific tools (apply-deep-analysis result writes, embeddings sync) can write them.
 
@@ -833,25 +915,29 @@ There is no Reselect / `createSelector`. Selectors above the capped-cache layer 
 
 ## 16. Quick "where do I look first?" index
 
-| If you're asking…                          | Look at…                                                                                  |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| What block types exist?                    | `lib/data-blocks/registry.ts`                                                             |
-| How is block X validated?                  | `domain/data-blocks/<x>/schema.ts` then `lib/data-blocks/validate.ts`                     |
-| How does block X get into DuckDB?          | `BlockTypeConfig.projected/tableName/rowPath`, then `lib/db/ddl.ts` + `lib/db/extract.ts` |
-| Which tools can the LLM call?              | `lib/agent/executors/index.ts` (imports = the set)                                        |
-| How do I add a tool?                       | Write `handler.ts` with `registerTool`, add import to `executors/index.ts`                |
-| How is a chart rendered?                   | `lib/editor/chart-blocks/view.tsx` → DuckDB query → `renderers/dispatch.ts`               |
-| How does a pill get its color?             | `lib/markdown/resolve.ts::resolveEntityLink`                                              |
-| Where is the file store?                   | `lib/files/store.ts`                                                                      |
-| What does a `+<< file.md` mean?            | `lib/patch/resolve/range-expand.ts`                                                       |
-| What does `FUZZY[[...]]` mean?             | `lib/patch/resolve/fuzzy-match.ts`                                                        |
-| What does HyDE mean here?                  | `lib/search/resolve-semantic.ts` + `lib/corpus/generate-hydes.ts`                         |
-| Where does the agent loop live?            | `lib/agent/agent-loop.ts`, runner in `lib/agent/runner.ts`                                |
-| Where are nudges?                          | `lib/agent/steering/nudge-tools.ts` + `steering/nudges/`                                  |
-| Where is the route table?                  | `app/routes.ts`, root in `app/root.tsx`                                                   |
-| What gets recorded in history?             | Only LLM mutations, in `lib/mutation-history/`                                            |
-| Where's the LLM-visible DB schema?         | `domain/db/database.ts::getDatabaseSchema` (cached, hidden-cols filtered)                 |
-| How does an entity get scrolled into view? | `ui/hooks/useScrollToEntity.ts` (looks for `[data-id]`)                                   |
+| If you're asking…                          | Look at…                                                                                                                           |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| What block types exist?                    | `lib/data-blocks/registry.ts`                                                                                                      |
+| How is block X validated?                  | `domain/data-blocks/<x>/schema.ts` then `lib/data-blocks/validate.ts`                                                              |
+| How does block X get into DuckDB?          | `BlockTypeConfig.projected/tableName/rowPath`, then `lib/db/ddl.ts` + `lib/db/extract.ts`                                          |
+| Which tools can the LLM call?              | `lib/agent/executors/index.ts` (imports = the set)                                                                                 |
+| How do I add a tool?                       | Write `handler.ts` with `registerTool`, add import to `executors/index.ts`                                                         |
+| How is a chart rendered?                   | `lib/editor/chart-blocks/view.tsx` → DuckDB query → `renderers/dispatch.ts`                                                        |
+| How does a pill get its color?             | `lib/markdown/resolve.ts::resolveEntityLink`                                                                                       |
+| Where is the file store?                   | `lib/files/store.ts`                                                                                                               |
+| What does a `+<< file.md` mean?            | `lib/patch/resolve/range-expand.ts`                                                                                                |
+| What does `FUZZY[[...]]` mean?             | `lib/patch/resolve/fuzzy-match.ts`                                                                                                 |
+| What does HyDE mean here?                  | `lib/search/resolve-semantic.ts` + `lib/corpus/generate-hydes.ts`                                                                  |
+| How are search hits grouped into regions?  | `lib/search/group-adjacent.ts` — cap-by-file (score-sorted) then merge-adjacent (position-sorted, no size cap)                     |
+| Where do search regions get their text?    | `lib/search/source.ts::getEmbeddableSource` (= `extractProse(file)`) sliced by `chunkStart`/`chunkEnd`                             |
+| Where does the LLM filter pick highlights? | `lib/search/verdict.ts` — returns sentence-index `matchRanges`; `lib/search/trim.ts` applies `trimByRanges` and split-by-SEPARATOR |
+| How do annotations extend a region?        | `lib/search/extend-annotations.ts::extendRegionsForAnnotations`                                                                    |
+| Where does the agent loop live?            | `lib/agent/agent-loop.ts`, runner in `lib/agent/runner.ts`                                                                         |
+| Where are nudges?                          | `lib/agent/steering/nudge-tools.ts` + `steering/nudges/`                                                                           |
+| Where is the route table?                  | `app/routes.ts`, root in `app/root.tsx`                                                                                            |
+| What gets recorded in history?             | Only LLM mutations, in `lib/mutation-history/`                                                                                     |
+| Where's the LLM-visible DB schema?         | `domain/db/database.ts::getDatabaseSchema` (cached, hidden-cols filtered)                                                          |
+| How does an entity get scrolled into view? | `ui/hooks/useScrollToEntity.ts` (looks for `[data-id]`)                                                                            |
 
 ---
 

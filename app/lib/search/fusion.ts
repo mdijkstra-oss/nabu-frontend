@@ -3,6 +3,8 @@ export interface ScoredChunk {
   text?: string
   hash?: string
   score: number
+  chunkStart?: number
+  chunkEnd?: number
 }
 
 export const RRF_K = 60
@@ -58,6 +60,15 @@ export const fuseCosineResults = (
   return sliced.flatMap(([key, score]) => {
     const chunk = chunkLookup.get(key)
     if (!chunk) return []
-    return [{ file: chunk.file, text: chunk.text, hash: chunk.hash, score }]
+    return [
+      {
+        file: chunk.file,
+        text: chunk.text,
+        hash: chunk.hash,
+        chunkStart: chunk.chunkStart,
+        chunkEnd: chunk.chunkEnd,
+        score,
+      },
+    ]
   })
 }

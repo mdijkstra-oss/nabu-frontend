@@ -7,17 +7,15 @@ import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import { updateSearchCache } from "~/lib/agent/tools/search/settings"
 import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
-import { filterParallel, FILTER_BATCH_SIZE } from "~/lib/search/filter-hits"
 import {
   executeResolvedSearch,
   extractSignalTexts,
   mergeByScore,
-  MAX_BARREN_BATCHES,
+  runVerdictTail,
 } from "~/lib/search/pipeline"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery } from "~/lib/search/semantic"
 import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
-import { isDebugOn } from "~/lib/debug/options"
 
 export type SearchPhase = "idle" | "resolving" | "searching" | "filtering" | "done"
 
@@ -88,21 +86,20 @@ export const useSearchResults = (
       }))
     }
 
-    const { consumed, barren } = await filterParallel(
+    const { rawRemaining, exhausted } = await runVerdictTail(
       state.remaining,
       state.highlight,
       state.signals,
       getFiles(),
-      appendHits,
-      { target: 30, maxBarren: isDebugOn("skipBarrenCheck") ? undefined : MAX_BARREN_BATCHES }
+      30,
+      appendHits
     )
 
     state.loading = false
     if (state.cancelled) return
 
-    const rawConsumed = Math.min(consumed * FILTER_BATCH_SIZE, state.remaining.length)
-    state.remaining = state.remaining.slice(rawConsumed)
-    const hasMore = state.remaining.length > 0 && !barren
+    state.remaining = rawRemaining
+    const hasMore = !exhausted
     setSettled((prev) => ({ ...prev, phase: hasMore ? "idle" : "done", hasMore }))
   }, [])
 

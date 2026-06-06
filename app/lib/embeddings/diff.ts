@@ -4,6 +4,8 @@ export interface EmbeddingEntry {
   hash: string
   text: string
   embedding: number[]
+  chunkStart: number
+  chunkEnd: number
   language?: string
 }
 
@@ -21,7 +23,7 @@ export const diffChunks = (existing: EmbeddingEntry[], current: Chunk[]): DiffRe
   for (const chunk of current) {
     const entry = existingByHash.get(chunk.hash)
     if (entry) {
-      keep.push(entry)
+      keep.push({ ...entry, chunkStart: chunk.chunkStart, chunkEnd: chunk.chunkEnd })
     } else {
       needed.push(chunk)
     }

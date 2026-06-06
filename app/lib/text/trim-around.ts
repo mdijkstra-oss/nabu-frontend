@@ -176,3 +176,36 @@ export const trimAroundMatches = (text: string, matches: string[]): string => {
     )
     .join(SEPARATOR)
 }
+
+export interface SentenceRange {
+  start: number
+  end: number
+}
+
+const clampRange = (range: SentenceRange, segmentCount: number): Range | null => {
+  if (segmentCount === 0) return null
+  const start = Math.max(0, Math.min(range.start, segmentCount - 1))
+  const end = Math.max(start, Math.min(range.end, segmentCount - 1))
+  return { start, end }
+}
+
+export const trimByRanges = (text: string, ranges: SentenceRange[]): string => {
+  if (ranges.length === 0) return text
+
+  const segments = splitSentenceSegments(text)
+  if (segments.length === 0) return text
+
+  const clamped = ranges
+    .map((r) => clampRange(r, segments.length))
+    .filter((r): r is Range => r !== null)
+  if (clamped.length === 0) return ""
+
+  const merged = mergeRanges(clamped)
+  const regions = mergeClose(merged, segments, CONTEXT_BUDGET)
+
+  return regions
+    .map((r, i) =>
+      renderRegion(text, segments, r, CONTEXT_BUDGET, i === 0, i === regions.length - 1)
+    )
+    .join(SEPARATOR)
+}

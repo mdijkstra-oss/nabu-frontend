@@ -1,16 +1,12 @@
 import { z } from "zod"
 import type { SearchHit } from "~/domain/search/types"
-import type { FileStore } from "~/lib/files/store"
 import type { PoolResult } from "~/lib/utils/pool"
 import { toSystem } from "~/lib/agent/client/convert"
 import { callAndParse } from "~/lib/agent/client/call-parse"
 import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
-import { splitBySentences } from "~/lib/text/split"
+import { splitSentences } from "~/lib/text/split"
 import { formatNumberedPassage } from "~/lib/text/format"
 import { processPool } from "~/lib/utils/pool"
-import { growHits } from "./slices"
-
-export { formatNumberedPassage } from "~/lib/text/format"
 
 export const FILTER_BATCH_SIZE = 5
 export const FILTER_CONCURRENCY = 5
@@ -20,15 +16,12 @@ const SEMANTIC_FILTER_ENDPOINT = "/semantic-filter"
 const MIN_WORD_COUNT = 3
 const WORD_SPLIT_RE = /\s+/
 
-const hasEnoughWords = (text: string): boolean => text.split(WORD_SPLIT_RE).length >= MIN_WORD_COUNT
-
 const FILTER_CALL_TO_ACTION =
   "Return { matches: [{ id, start, end }, ...] } where id is the passage letter and start/end are 1-based sentence numbers."
 
-const splitSentenceTexts = splitBySentences()
+const MAX_SELECTED_RATIO = 0.4
 
-export const splitSentences = (text: string): string[] =>
-  splitSentenceTexts(text).map((s) => s.text)
+const hasEnoughWords = (text: string): boolean => text.split(WORD_SPLIT_RE).length >= MIN_WORD_COUNT
 
 export const toLetter = (index: number): string => {
   let result = ""
@@ -94,8 +87,6 @@ const groupMatchesByLabel = (
 
 const formatHitTarget = (numbered: string, label: string): string =>
   `<target id="${label}">\n${numbered}\n</target>`
-
-const MAX_SELECTED_RATIO = 0.4
 
 const countSelectedSentences = (groups: number[][]): number => new Set(groups.flat()).size
 
@@ -221,16 +212,22 @@ const runAllModels = async (
   return prepared.map((_, hitIdx) => unionGroupsAcrossRuns(runs.map((r) => r[hitIdx] ?? [])))
 }
 
+const groupToRange = (group: number[]): { start: number; end: number } => ({
+  start: group[0] - 1,
+  end: group[group.length - 1] - 1,
+})
+
 const reconstructBatchHits = (prepared: PreparedHit[], results: number[][][]): SearchHit[] =>
   prepared.flatMap((p, i) => {
     const groups = results[i]
     if (!groups || groups.length === 0) return []
     const matches = extractMatchTexts(p.sentences, groups)
     if (matches.length === 0) return []
-    return [{ ...p.hit, matches }]
+    const matchRanges = groups.map(groupToRange)
+    return [{ ...p.hit, matches, matchRanges }]
   })
 
-const filterBatch = async (
+const verdictBatch = async (
   hits: SearchHit[],
   intent: string,
   signals: string[]
@@ -243,7 +240,7 @@ const filterBatch = async (
     const passThrough = hits.filter((h) => !h.text)
     return [...passThrough, ...reconstructBatchHits(prepared, results)]
   } catch (e) {
-    console.error("[FILTER] batch failed", e)
+    console.error("[verdict] batch failed", e)
     return []
   }
 }
@@ -256,36 +253,20 @@ const chunkHits = (hits: SearchHit[]): SearchHit[][] => {
   return chunks
 }
 
-const filterAndGrowBatch = async (
-  hits: SearchHit[],
-  intent: string,
-  signals: string[],
-  files: FileStore
-): Promise<SearchHit[]> => {
-  const filtered = await filterBatch(hits, intent, signals)
-  return growHits(filtered, files)
-}
-
-export interface FilterOptions {
+export interface VerdictOptions {
   target?: number
   maxBarren?: number
 }
 
-export const filterParallel = (
+export const verdict = (
   hits: SearchHit[],
   intent: string,
   signals: string[],
-  files: FileStore,
-  onResults: (results: SearchHit[]) => void,
-  opts?: FilterOptions
+  onBatch: (batch: SearchHit[]) => void,
+  opts?: VerdictOptions
 ): Promise<PoolResult<SearchHit[], SearchHit>> =>
-  processPool(
-    chunkHits(hits),
-    (chunk) => filterAndGrowBatch(chunk, intent, signals, files),
-    onResults,
-    {
-      concurrency: FILTER_CONCURRENCY,
-      target: opts?.target,
-      maxBarren: opts?.maxBarren,
-    }
-  )
+  processPool(chunkHits(hits), (chunk) => verdictBatch(chunk, intent, signals), onBatch, {
+    concurrency: FILTER_CONCURRENCY,
+    target: opts?.target,
+    maxBarren: opts?.maxBarren,
+  })

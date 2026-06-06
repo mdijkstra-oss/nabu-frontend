@@ -6,7 +6,7 @@ import { TagBadge } from "~/ui/components/TagBadge"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
-import { refreshHitsAsync } from "~/lib/search/slices"
+import { refreshHitsAsync } from "~/lib/search/refresh"
 import { useThrottledValue } from "~/ui/hooks/useThrottledValue"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
@@ -18,7 +18,7 @@ import {
 } from "~/lib/editor/spotlight/serialize"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
 import { normalizeMatchWhitespace } from "~/lib/text/trim-around"
-import { splitSentences } from "~/lib/search/filter-hits"
+import { splitSentences } from "~/lib/text/split"
 import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
 
 export interface SearchResultListProps {
@@ -92,11 +92,13 @@ const SearchSlicePreview = ({
   text,
   filePath,
   matches,
+  score,
   onNavigate,
 }: {
   text: string
   filePath: string
   matches?: string[]
+  score?: number
   onNavigate?: () => void
 }) => {
   const debugOptions = useDebugOptions()
@@ -112,6 +114,11 @@ const SearchSlicePreview = ({
             spotlight={matches ? matchesToSpotlights(matches) : null}
           />
         </div>
+        {debugOptions.showHitScore && score !== undefined && (
+          <div className="px-1 text-[12px] font-mono font-bold text-neutral-700">
+            score: {score.toFixed(4)}
+          </div>
+        )}
         {debugOptions.renderAsJson && (
           <pre className="overflow-x-auto rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2 text-[12px] leading-snug font-mono text-neutral-700 whitespace-pre-wrap">
             {text}
@@ -190,6 +197,7 @@ const RunGroupCard = memo(
                 text={hit.text}
                 filePath={hit.file}
                 matches={hit.matches}
+                score={hit.score}
                 onNavigate={() => onNavigate?.(buildHitUrl(projectId, hit))}
               />
             ) : null

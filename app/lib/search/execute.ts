@@ -15,6 +15,8 @@ const toHit = (row: RawRow): SearchHit => ({
   file: String(row.file),
   ...(row.id !== undefined ? { id: String(row.id) } : {}),
   ...(row.text !== undefined ? { text: String(row.text) } : {}),
+  ...(row.chunkStart !== undefined ? { chunkStart: Number(row.chunkStart) } : {}),
+  ...(row.chunkEnd !== undefined ? { chunkEnd: Number(row.chunkEnd) } : {}),
 })
 
 export const executeSearch = async (
@@ -39,6 +41,8 @@ const toScoredChunk = (row: RawRow): ScoredChunk => ({
   text: row.text !== undefined ? String(row.text) : undefined,
   hash: row.hash !== undefined ? String(row.hash) : undefined,
   score: Number(row._semantic_score ?? 0),
+  chunkStart: row.chunkStart !== undefined ? Number(row.chunkStart) : undefined,
+  chunkEnd: row.chunkEnd !== undefined ? Number(row.chunkEnd) : undefined,
 })
 
 const runScoredQuery = async (
@@ -53,6 +57,8 @@ const runScoredQuery = async (
 export const chunkToHit = (chunk: ScoredChunk): SearchHit => ({
   file: chunk.file,
   ...(chunk.text !== undefined ? { text: chunk.text } : {}),
+  ...(chunk.chunkStart !== undefined ? { chunkStart: chunk.chunkStart } : {}),
+  ...(chunk.chunkEnd !== undefined ? { chunkEnd: chunk.chunkEnd } : {}),
   score: chunk.score,
 })
 

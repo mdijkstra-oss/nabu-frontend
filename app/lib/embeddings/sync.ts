@@ -3,15 +3,13 @@ import { debounce } from "~/lib/utils/debounce"
 import { processPool } from "~/lib/utils/pool"
 import { isEmbeddableFile } from "./filter"
 import { companionFilename, buildCompanionMarkdown, parseCompanionEntries } from "./companion"
-import { toEmbeddableText } from "./text"
+import { extractProse } from "~/lib/data-blocks/parse"
 import { chunkText } from "./chunk"
 import { diffChunks, type EmbeddingEntry } from "./diff"
 import { fetchEmbeddingBatch } from "./client"
 import { EMBEDDING_SYNC_DEBOUNCE, MAX_EMBEDDING_BATCH_SIZE } from "./constants"
 
 import { detectLanguage } from "~/lib/language/detect"
-
-type ToProseFn = (block: unknown) => string | null
 
 interface EmbeddingSyncDeps {
   getFiles: () => FileStore
@@ -20,7 +18,6 @@ interface EmbeddingSyncDeps {
   deleteFile: (f: string) => void
   subscribe: (listener: () => void) => () => void
   baseUrl: string
-  toProseFns: Record<string, ToProseFn>
   onProgress?: (processed: number, total: number) => void
 }
 
@@ -28,6 +25,8 @@ interface NeededChunk {
   index: number
   text: string
   hash: string
+  chunkStart: number
+  chunkEnd: number
 }
 
 interface FileChunks {
@@ -50,10 +49,9 @@ const findDeletedFiles = (prev: FileStore, next: FileStore): string[] =>
 const prepareFile = (
   filename: string,
   content: string,
-  companionContent: string | undefined,
-  toProseFns: Record<string, ToProseFn>
+  companionContent: string | undefined
 ): FileChunks => {
-  const embeddableText = toEmbeddableText(content, toProseFns)
+  const embeddableText = extractProse(content)
   const chunks = chunkText(embeddableText)
   const existing = companionContent ? parseCompanionEntries(companionContent) : []
   const { keep, needed } = diffChunks(existing, chunks)
@@ -77,6 +75,8 @@ const toEntryWithEmbedding = (chunk: NeededChunk, embedding: number[]): Embeddin
     hash: chunk.hash,
     text: chunk.text,
     embedding,
+    chunkStart: chunk.chunkStart,
+    chunkEnd: chunk.chunkEnd,
     ...(language ? { language } : {}),
   }
 }
@@ -129,7 +129,7 @@ const processSync = async (
   const fileChunks = dirty.map((filename) => {
     const content = next[filename]
     const companion = deps.getFile(companionFilename(filename))
-    return prepareFile(filename, content, companion, deps.toProseFns)
+    return prepareFile(filename, content, companion)
   })
 
   const allTagged = tagNeededChunks(fileChunks)

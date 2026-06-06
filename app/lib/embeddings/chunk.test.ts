@@ -138,6 +138,46 @@ describe("chunkText", () => {
         expect(chunks[0].text).toHaveLength(CHUNK_CHARS)
       },
     },
+    {
+      name: "single chunk records start=0 and end=text.length",
+      input: "Hello world. This is a test.",
+      check: (chunks) => {
+        expect(chunks).toHaveLength(1)
+        expect(chunks[0].chunkStart).toBe(0)
+        expect(chunks[0].chunkEnd).toBe("Hello world. This is a test.".length)
+      },
+    },
+    {
+      name: "leading whitespace shifts offsets",
+      input: "   hello world   ",
+      check: (chunks) => {
+        expect(chunks).toHaveLength(1)
+        expect(chunks[0].chunkStart).toBe(3)
+        expect(chunks[0].chunkEnd).toBe(3 + "hello world".length)
+      },
+    },
+    {
+      name: "multi-chunk offsets satisfy text === source.slice(chunkStart, chunkEnd)",
+      input: "word ".repeat(800),
+      check: (chunks) => {
+        const source = "word ".repeat(800)
+        expect(chunks.length).toBeGreaterThan(1)
+        for (const chunk of chunks) {
+          expect(source.slice(chunk.chunkStart, chunk.chunkEnd)).toBe(chunk.text)
+        }
+      },
+    },
+    {
+      name: "multi-chunk offsets monotonic and last reaches end",
+      input: "word ".repeat(800),
+      check: (chunks) => {
+        const source = "word ".repeat(800).trimEnd()
+        for (let i = 1; i < chunks.length; i++) {
+          expect(chunks[i].chunkStart).toBeGreaterThan(chunks[i - 1].chunkStart)
+        }
+        expect(chunks[chunks.length - 1].chunkEnd).toBe(source.length)
+      },
+    },
   ]
 
   it.each(cases)("$name", ({ input, check }) => check(chunkText(input)))

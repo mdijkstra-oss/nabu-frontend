@@ -178,6 +178,7 @@ const CollapsibleBlock = ({
             checked={selected}
             onClick={handleToggle}
             readOnly
+            title="Select block for copy"
             className="w-3 h-3 accent-neutral-500 cursor-pointer"
           />
           <button

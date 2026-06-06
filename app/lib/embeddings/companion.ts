@@ -22,7 +22,9 @@ export const buildCompanionMarkdown = (entries: EmbeddingEntry[]): string =>
 const isValidEntry = (parsed: Record<string, unknown>): boolean =>
   typeof parsed.hash === "string" &&
   typeof parsed.text === "string" &&
-  Array.isArray(parsed.embedding)
+  Array.isArray(parsed.embedding) &&
+  typeof parsed.chunkStart === "number" &&
+  typeof parsed.chunkEnd === "number"
 
 const parseEntry = (content: string): EmbeddingEntry | null => {
   try {

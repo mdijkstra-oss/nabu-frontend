@@ -5,6 +5,14 @@ export interface Chunk {
   index: number
   text: string
   hash: string
+  chunkStart: number
+  chunkEnd: number
+}
+
+interface Window {
+  text: string
+  start: number
+  end: number
 }
 
 const isWhitespace = (ch: string): boolean => /\s/.test(ch)
@@ -31,25 +39,34 @@ const adjustEnd = (text: string, nominal: number, tolerance: number): number => 
   return ws === null ? nominal : ws
 }
 
-const sliceWindows = (text: string): string[] => {
-  if (text.length <= CHUNK_CHARS) return [text]
-  const windows: string[] = []
+const sliceWindows = (text: string): Window[] => {
+  if (text.length <= CHUNK_CHARS) return [{ text, start: 0, end: text.length }]
+  const windows: Window[] = []
   for (let nominal = 0; nominal < text.length; nominal += CHUNK_STRIDE_CHARS) {
     const start = adjustStart(text, nominal, CHUNK_WORD_TOLERANCE)
     const nominalEnd = Math.min(nominal + CHUNK_CHARS, text.length)
     const end = adjustEnd(text, nominalEnd, CHUNK_WORD_TOLERANCE)
-    windows.push(text.slice(start, end))
+    windows.push({ text: text.slice(start, end), start, end })
     if (nominalEnd === text.length) break
   }
   return windows
 }
 
+const countLeadingWhitespace = (text: string): number => {
+  let i = 0
+  while (i < text.length && /\s/.test(text[i])) i++
+  return i
+}
+
 export const chunkText = (text: string): Chunk[] => {
   const trimmed = text.trim()
   if (trimmed.length === 0) return []
-  return sliceWindows(trimmed).map((text, index) => ({
+  const leadingTrim = countLeadingWhitespace(text)
+  return sliceWindows(trimmed).map((window, index) => ({
     index,
-    text,
-    hash: hashChunk(text),
+    text: window.text,
+    hash: hashChunk(window.text),
+    chunkStart: window.start + leadingTrim,
+    chunkEnd: window.end + leadingTrim,
   }))
 }

@@ -8,6 +8,9 @@ export const SearchHitSchema = z.object({
   text: z.string().optional(),
   score: z.number().optional(),
   matches: z.array(z.string()).optional(),
+  matchRanges: z.array(z.object({ start: z.number().int(), end: z.number().int() })).optional(),
+  chunkStart: z.number().int().optional(),
+  chunkEnd: z.number().int().optional(),
 })
 
 export type SearchHit = z.infer<typeof SearchHitSchema>

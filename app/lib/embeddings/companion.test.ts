@@ -50,8 +50,20 @@ describe("roundtrip", () => {
       name: "build then parse recovers entries",
       check: () => {
         const entries: EmbeddingEntry[] = [
-          { hash: "aaa", text: "hello world", embedding: [0.1, 0.2, 0.3] },
-          { hash: "bbb", text: "goodbye", embedding: [0.4, 0.5, 0.6] },
+          {
+            hash: "aaa",
+            text: "hello world",
+            embedding: [0.1, 0.2, 0.3],
+            chunkStart: 0,
+            chunkEnd: 11,
+          },
+          {
+            hash: "bbb",
+            text: "goodbye",
+            embedding: [0.4, 0.5, 0.6],
+            chunkStart: 13,
+            chunkEnd: 20,
+          },
         ]
         expect(parseCompanionEntries(buildCompanionMarkdown(entries))).toEqual(entries)
       },
@@ -59,7 +71,9 @@ describe("roundtrip", () => {
     {
       name: "single entry roundtrip",
       check: () => {
-        const entries: EmbeddingEntry[] = [{ hash: "abc", text: "solo", embedding: [1.0] }]
+        const entries: EmbeddingEntry[] = [
+          { hash: "abc", text: "solo", embedding: [1.0], chunkStart: 0, chunkEnd: 4 },
+        ]
         const markdown = buildCompanionMarkdown(entries)
         expect(markdown).toContain("```json-embeddings")
         expect(parseCompanionEntries(markdown)).toEqual(entries)
@@ -99,8 +113,9 @@ describe("fastParseBlockContents", () => {
   const cases: { name: string; input: string; expected: string[] }[] = [
     {
       name: "single block",
-      input: '```json-embeddings\n{"hash":"a","text":"hi","embedding":[0.1]}\n```',
-      expected: ['{"hash":"a","text":"hi","embedding":[0.1]}'],
+      input:
+        '```json-embeddings\n{"hash":"a","text":"hi","embedding":[0.1],"chunkStart":0,"chunkEnd":2}\n```',
+      expected: ['{"hash":"a","text":"hi","embedding":[0.1],"chunkStart":0,"chunkEnd":2}'],
     },
     {
       name: "multiple blocks",
@@ -120,12 +135,12 @@ describe("fastParseBlockContents", () => {
     {
       name: "roundtrip with buildCompanionMarkdown",
       input: buildCompanionMarkdown([
-        { hash: "aaa", text: "hello", embedding: [0.1, 0.2] },
-        { hash: "bbb", text: "world", embedding: [0.3, 0.4] },
+        { hash: "aaa", text: "hello", embedding: [0.1, 0.2], chunkStart: 0, chunkEnd: 5 },
+        { hash: "bbb", text: "world", embedding: [0.3, 0.4], chunkStart: 6, chunkEnd: 11 },
       ]),
       expected: [
-        '{"hash":"aaa","text":"hello","embedding":[0.1,0.2]}',
-        '{"hash":"bbb","text":"world","embedding":[0.3,0.4]}',
+        '{"hash":"aaa","text":"hello","embedding":[0.1,0.2],"chunkStart":0,"chunkEnd":5}',
+        '{"hash":"bbb","text":"world","embedding":[0.3,0.4],"chunkStart":6,"chunkEnd":11}',
       ],
     },
   ]

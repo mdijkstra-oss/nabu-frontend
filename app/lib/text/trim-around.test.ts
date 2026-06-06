@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { trimAroundMatches } from "./trim-around"
+import { trimAroundMatches, trimByRanges } from "./trim-around"
 
 const SEP = "\n\n<!--SPLIT-->\n\n"
 
@@ -187,5 +187,98 @@ describe("trimAroundMatches", () => {
 
   it.each(cases)("$name", ({ text, matches, check }) => {
     check(trimAroundMatches(text, matches))
+  })
+})
+
+describe("trimByRanges", () => {
+  const passages = [
+    "Alpha sentence.",
+    "Beta sentence with more detail.",
+    "Gamma sentence in the middle.",
+    "Delta sentence after gamma.",
+    "Epsilon sentence with content.",
+    "Zeta finale.",
+  ].join(" ")
+
+  const cases: {
+    name: string
+    text: string
+    ranges: { start: number; end: number }[]
+    check: (result: string) => void
+  }[] = [
+    {
+      name: "empty ranges → returns original text",
+      text: passages,
+      ranges: [],
+      check: (r) => expect(r).toBe(passages),
+    },
+    {
+      name: "empty text → returns empty",
+      text: "",
+      ranges: [{ start: 0, end: 0 }],
+      check: (r) => expect(r).toBe(""),
+    },
+    {
+      name: "single range produces region with context shoulders",
+      text: passages,
+      ranges: [{ start: 2, end: 2 }],
+      check: (r) => {
+        expect(r).toContain("Gamma sentence in the middle.")
+        expect(r).toContain("Beta sentence with more detail.")
+        expect(r).toContain("Delta sentence after gamma.")
+      },
+    },
+    {
+      name: "two distant ranges produce two regions separated by SEPARATOR",
+      text: [
+        "First.",
+        ...Array.from({ length: 20 }, (_, i) => `Filler sentence number ${i}.`),
+        "Middle.",
+        ...Array.from({ length: 20 }, (_, i) => `Other filler ${i}.`),
+        "Last.",
+      ].join(" "),
+      ranges: [
+        { start: 0, end: 0 },
+        { start: 42, end: 42 },
+      ],
+      check: (r) => {
+        expect(r.split(SEP)).toHaveLength(2)
+      },
+    },
+    {
+      name: "adjacent ranges merge into one region",
+      text: passages,
+      ranges: [
+        { start: 1, end: 1 },
+        { start: 2, end: 2 },
+      ],
+      check: (r) => {
+        expect(r.split(SEP)).toHaveLength(1)
+        expect(r).toContain("Beta sentence with more detail.")
+        expect(r).toContain("Gamma sentence in the middle.")
+      },
+    },
+    {
+      name: "out-of-bounds ranges are clamped",
+      text: passages,
+      ranges: [{ start: 100, end: 200 }],
+      check: (r) => {
+        expect(r).toContain("Zeta finale.")
+      },
+    },
+    {
+      name: "range covering all sentences returns full text",
+      text: "A. B. C.",
+      ranges: [{ start: 0, end: 2 }],
+      check: (r) => {
+        expect(r).toContain("A")
+        expect(r).toContain("B")
+        expect(r).toContain("C")
+      },
+    },
+  ]
+
+  it.each(cases)("$name", ({ text, ranges, check }) => {
+    check(trimByRanges(text, ranges))
   })
 })
