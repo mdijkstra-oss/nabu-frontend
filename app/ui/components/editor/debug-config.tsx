@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { Bug, Cloud, Code, Activity, Bot, Filter, Table, TriangleAlert } from "lucide-react"
+import type { DebugOptions } from "~/lib/debug/options"
 
 interface DebugToggle {
   key: string
@@ -56,6 +57,12 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
+    key: "skipMerge",
+    label: "Skip overlap merge (each embedding = target)",
+    icon: <Filter />,
+    defaultValue: false,
+  },
+  {
     key: "skipBarrenCheck",
     label: "Skip barren cutoff (keep filtering)",
     icon: <Filter />,
@@ -69,7 +76,7 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
   },
 ]
 
-export type DebugOptions = Record<string, boolean>
+export type { DebugOptions } from "~/lib/debug/options"
 
 export const DEFAULT_DEBUG_OPTIONS: DebugOptions = Object.fromEntries(
   DEBUG_TOGGLES.map((t) => [t.key, t.defaultValue])

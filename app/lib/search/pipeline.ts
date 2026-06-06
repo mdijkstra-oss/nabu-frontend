@@ -11,6 +11,7 @@ import { sanitizeSemanticError, sqlQueriesFilesTable } from "./semantic"
 import { filterParallel, FILTER_BATCH_SIZE } from "./filter-hits"
 import { growHits, attachAnnotationsOnly } from "./slices"
 import { mergeOverlappingHits } from "./merge-overlapping"
+import { isDebugOn } from "~/lib/debug/options"
 
 export const MAX_BARREN_BATCHES = 10
 
@@ -91,8 +92,7 @@ const filterWithBudget = async (
   signals: string[],
   files: FileStore,
   target: number,
-  onResults?: (hits: SearchHit[]) => void,
-  skipBarrenCheck = false
+  onResults?: (hits: SearchHit[]) => void
 ) => {
   const collected: SearchHit[] = []
   const collectAndForward = (batch: SearchHit[]) => {
@@ -108,7 +108,7 @@ const filterWithBudget = async (
     collectAndForward,
     {
       target,
-      maxBarren: skipBarrenCheck ? undefined : MAX_BARREN_BATCHES,
+      maxBarren: isDebugOn("skipBarrenCheck") ? undefined : MAX_BARREN_BATCHES,
     }
   )
 
@@ -128,12 +128,12 @@ const buildResult = (
   highlight: string,
   files: FileStore,
   target: number,
-  onResults?: (hits: SearchHit[]) => void,
-  skipFilter = false,
-  skipBarrenCheck = false
+  onResults?: (hits: SearchHit[]) => void
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const { rawHits: rawUnmerged, hydes, isSemantic, embeddings } = executed
-  const rawHits = skipFilter ? rawUnmerged : mergeOverlappingHits(rawUnmerged, files)
+  const skipFilter = isDebugOn("skipFilter")
+  const skipMerge = isDebugOn("skipMerge")
+  const rawHits = skipFilter || skipMerge ? rawUnmerged : mergeOverlappingHits(rawUnmerged, files)
   const resolvedHighlight = executed.highlight
 
   if (rawHits.length === 0)
@@ -200,8 +200,7 @@ const buildResult = (
     extractSignalTexts(hydes),
     files,
     target,
-    onResults,
-    skipBarrenCheck
+    onResults
   ).then((filtered) =>
     ok({
       ...filtered,
@@ -221,22 +220,11 @@ export const executeResolvedSearch = async (
   db: Database,
   files: FileStore,
   target: number,
-  onResults?: (hits: SearchHit[]) => void,
-  skipFilter = false,
-  skipBarrenCheck = false
+  onResults?: (hits: SearchHit[]) => void
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const executed = await dispatchExecution(resolved, db)
   if (!executed.ok) return err(executed.error)
-  return buildResult(
-    executed.value,
-    sql,
-    highlight,
-    files,
-    target,
-    onResults,
-    skipFilter,
-    skipBarrenCheck
-  )
+  return buildResult(executed.value, sql, highlight, files, target, onResults)
 }
 
 export const runSearchPipeline = async (
@@ -245,21 +233,9 @@ export const runSearchPipeline = async (
   ctx: SemanticContext,
   files: FileStore,
   target: number,
-  onResults?: (hits: SearchHit[]) => void,
-  skipFilter = false,
-  skipBarrenCheck = false
+  onResults?: (hits: SearchHit[]) => void
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const resolved = await resolveSemanticSql(sql, ctx)
   if (!resolved.ok) return err({ message: resolved.error.message })
-  return executeResolvedSearch(
-    resolved.value,
-    sql,
-    highlight,
-    ctx.db,
-    files,
-    target,
-    onResults,
-    skipFilter,
-    skipBarrenCheck
-  )
+  return executeResolvedSearch(resolved.value, sql, highlight, ctx.db, files, target, onResults)
 }

@@ -37,6 +37,7 @@ import { DebugStreamPanel } from "~/ui/components/debug/DebugStreamPanel"
 import { FileDropOverlay } from "~/ui/components/import/FileDropOverlay"
 import { useNotifications } from "~/ui/hooks/useNotifications"
 import { DEFAULT_DEBUG_OPTIONS, type DebugOptions } from "~/ui/components/editor/debug-config"
+import { publishDebugOptions } from "~/lib/debug/options"
 import { setCacheSkipped } from "~/lib/utils/storage-cache"
 import { setShowModelIndex } from "~/lib/agent/tools/apply-deep-analysis/debug-flags"
 
@@ -234,7 +235,11 @@ export default function ProjectLayout() {
   const [searchValue, setSearchValue] = useState("")
   const [exhibitSearchValue, setExhibitSearchValue] = useState("")
   const [docSortMode, setDocSortMode] = useState<DocSortMode>(() => getSettings().docSortMode)
-  const [debugOptions, setDebugOptions] = useState<DebugOptions>(loadDebugOptions)
+  const [debugOptions, setDebugOptions] = useState<DebugOptions>(() => {
+    const opts = loadDebugOptions()
+    publishDebugOptions(opts)
+    return opts
+  })
   const [loading, setLoading] = useState(true)
   const chatLoading = useSyncExternalStore(subscribeLoading, getLoading, getLoading)
   const [statusLabel, setStatusLabel] = useState("Connecting...")
@@ -250,6 +255,7 @@ export default function ProjectLayout() {
 
   useEffect(() => {
     saveDebugOptions(debugOptions)
+    publishDebugOptions(debugOptions)
   }, [debugOptions])
 
   useEffect(() => {

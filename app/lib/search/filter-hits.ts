@@ -23,7 +23,7 @@ const WORD_SPLIT_RE = /\s+/
 const hasEnoughWords = (text: string): boolean => text.split(WORD_SPLIT_RE).length >= MIN_WORD_COUNT
 
 const FILTER_CALL_TO_ACTION =
-  "Return matching sentence ranges as an array of { id, start, end } where id is the passage letter and start/end are 1-based sentence numbers."
+  "Return { matches: [{ id, start, end }, ...] } where id is the passage letter and start/end are 1-based sentence numbers."
 
 const splitSentenceTexts = splitBySentences()
 
@@ -70,7 +70,9 @@ const FilterMatchSchema = z.object({
   end: z.number().int().min(1),
 })
 
-const FilterResponseSchema = z.array(FilterMatchSchema)
+const FilterResponseSchema = z.object({
+  matches: z.array(FilterMatchSchema),
+})
 
 const expandRange = (start: number, end: number): number[] => {
   const indices: number[] = []
@@ -79,7 +81,7 @@ const expandRange = (start: number, end: number): number[] => {
 }
 
 const groupMatchesByLabel = (
-  matches: z.infer<typeof FilterResponseSchema>,
+  matches: z.infer<typeof FilterResponseSchema>["matches"],
   labels: string[]
 ): number[][][] => {
   const groups = new Map<string, number[][]>(labels.map((l) => [l, []]))
@@ -121,7 +123,7 @@ const callSemanticFilterBatch = async (
   const result = await callAndParse(endpoint, messages, FilterResponseSchema)
   if (!result.ok) return prepared.map(() => [])
 
-  const grouped = groupMatchesByLabel(result.data, labels)
+  const grouped = groupMatchesByLabel(result.data.matches, labels)
   return grouped.map((groups, i) =>
     isOverselected(groups, prepared[i].sentences.length) ? [] : groups
   )

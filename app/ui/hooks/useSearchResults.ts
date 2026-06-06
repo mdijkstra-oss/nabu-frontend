@@ -16,6 +16,8 @@ import {
 } from "~/lib/search/pipeline"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery } from "~/lib/search/semantic"
+import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
+import { isDebugOn } from "~/lib/debug/options"
 
 export type SearchPhase = "idle" | "resolving" | "searching" | "filtering" | "done"
 
@@ -58,10 +60,9 @@ interface ContinuationState {
 export const useSearchResults = (
   searchId: string,
   revision = 0,
-  dbReady = false,
-  skipFilter = false,
-  skipBarrenCheck = false
+  dbReady = false
 ): SearchResults => {
+  const debugOptions = useDebugOptions()
   const files = useSyncExternalStore(subscribe, getFiles)
   const search = findSearchById(files, searchId)
   const [settled, setSettled] = useState<SettledState>(EMPTY)
@@ -93,7 +94,7 @@ export const useSearchResults = (
       state.signals,
       getFiles(),
       appendHits,
-      { target: 30, maxBarren: skipBarrenCheck ? undefined : MAX_BARREN_BATCHES }
+      { target: 30, maxBarren: isDebugOn("skipBarrenCheck") ? undefined : MAX_BARREN_BATCHES }
     )
 
     state.loading = false
@@ -103,7 +104,7 @@ export const useSearchResults = (
     state.remaining = state.remaining.slice(rawConsumed)
     const hasMore = state.remaining.length > 0 && !barren
     setSettled((prev) => ({ ...prev, phase: hasMore ? "idle" : "done", hasMore }))
-  }, [skipBarrenCheck])
+  }, [])
 
   useEffect(() => {
     if (!searchSql || !dbReady) return
@@ -177,9 +178,7 @@ export const useSearchResults = (
         ctx.db,
         getFiles(),
         30,
-        appendHits,
-        skipFilter,
-        skipBarrenCheck
+        appendHits
       )
 
       if (cancelled) return
@@ -226,7 +225,7 @@ export const useSearchResults = (
       cancelled = true
       if (contRef.current) contRef.current.cancelled = true
     }
-  }, [searchId, searchSql, revision, dbReady, loadMore, skipFilter, skipBarrenCheck])
+  }, [searchId, searchSql, revision, dbReady, loadMore, debugOptions])
 
   return {
     search,

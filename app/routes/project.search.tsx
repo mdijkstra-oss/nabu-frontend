@@ -81,9 +81,7 @@ export default function ProjectSearch() {
   const { search, results, hydes, phase, error, hasMore, loadMore } = useSearchResults(
     params.searchId ?? "",
     revision,
-    dbReady,
-    !!debugOptions.skipFilter,
-    !!debugOptions.skipBarrenCheck
+    dbReady
   )
   const tagOptions = useMemo(() => {
     const uniqueFiles = collectUniqueFiles(results)
