@@ -35,10 +35,10 @@ describe("trimAroundMatches", () => {
       check: (r) => expect(r).toBe(doc),
     },
     {
-      name: "match not found → returns original",
+      name: "match not found → returns empty so caller can fall back",
       text: doc,
       matches: ["this text does not exist anywhere in the document at all"],
-      check: (r) => expect(r).toBe(doc),
+      check: (r) => expect(r).toBe(""),
     },
     {
       name: "empty text → returns empty",

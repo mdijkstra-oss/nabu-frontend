@@ -165,7 +165,7 @@ export const trimAroundMatches = (text: string, matches: string[]): string => {
 
   const sentenceTexts = segments.map((s) => s.text)
   const matchRanges = locateAll(sentenceTexts, matches)
-  if (matchRanges.length === 0) return text
+  if (matchRanges.length === 0) return ""
 
   const merged = mergeRanges(matchRanges)
   const regions = mergeClose(merged, segments, CONTEXT_BUDGET)

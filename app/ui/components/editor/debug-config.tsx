@@ -57,12 +57,6 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
-    key: "skipMerge",
-    label: "Skip overlap merge (each embedding = target)",
-    icon: <Filter />,
-    defaultValue: false,
-  },
-  {
     key: "skipBarrenCheck",
     label: "Skip barren cutoff (keep filtering)",
     icon: <Filter />,

@@ -10,7 +10,6 @@ import { executeSearch, executeHybridLocal } from "./execute"
 import { sanitizeSemanticError, sqlQueriesFilesTable } from "./semantic"
 import { filterParallel, FILTER_BATCH_SIZE } from "./filter-hits"
 import { growHits, attachAnnotationsOnly } from "./slices"
-import { mergeOverlappingHits } from "./merge-overlapping"
 import { isDebugOn } from "~/lib/debug/options"
 
 export const MAX_BARREN_BATCHES = 10
@@ -130,10 +129,8 @@ const buildResult = (
   target: number,
   onResults?: (hits: SearchHit[]) => void
 ): Promise<Result<PipelineResult, PipelineError>> => {
-  const { rawHits: rawUnmerged, hydes, isSemantic, embeddings } = executed
+  const { rawHits, hydes, isSemantic, embeddings } = executed
   const skipFilter = isDebugOn("skipFilter")
-  const skipMerge = isDebugOn("skipMerge")
-  const rawHits = skipFilter || skipMerge ? rawUnmerged : mergeOverlappingHits(rawUnmerged, files)
   const resolvedHighlight = executed.highlight
 
   if (rawHits.length === 0)
