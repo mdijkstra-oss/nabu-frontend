@@ -1,5 +1,7 @@
 import { hashChunk } from "./hash"
 import { CHUNK_CHARS, CHUNK_STRIDE_CHARS, CHUNK_WORD_TOLERANCE } from "./constants"
+import { splitBySentences } from "~/lib/text/split"
+import type { Segment } from "~/lib/text/types"
 
 export interface Chunk {
   index: number
@@ -52,6 +54,44 @@ const sliceWindows = (text: string): Window[] => {
   return windows
 }
 
+const splitter = splitBySentences()
+
+export const MAX_SNAP_EXTENSION = 300
+
+const snapStartToSentence = (segments: Segment[], offset: number): number => {
+  for (const seg of segments) {
+    if (offset < seg.start) return seg.start
+    if (offset < seg.end) {
+      const backDist = offset - seg.start
+      return backDist <= MAX_SNAP_EXTENSION ? seg.start : offset
+    }
+  }
+  return offset
+}
+
+const snapEndToSentence = (segments: Segment[], offset: number): number => {
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const seg = segments[i]
+    if (offset > seg.end) return seg.end
+    if (offset > seg.start) {
+      const fwdDist = seg.end - offset
+      return fwdDist <= MAX_SNAP_EXTENSION ? seg.end : offset
+    }
+  }
+  return offset
+}
+
+const snapWindowsToSentences = (text: string, windows: Window[]): Window[] => {
+  const segments = splitter(text)
+  if (segments.length === 0) return windows
+  return windows.map((w) => {
+    const start = snapStartToSentence(segments, w.start)
+    const end = snapEndToSentence(segments, w.end)
+    if (end <= start) return w
+    return { text: text.slice(start, end), start, end }
+  })
+}
+
 const countLeadingWhitespace = (text: string): number => {
   let i = 0
   while (i < text.length && /\s/.test(text[i])) i++
@@ -62,7 +102,8 @@ export const chunkText = (text: string): Chunk[] => {
   const trimmed = text.trim()
   if (trimmed.length === 0) return []
   const leadingTrim = countLeadingWhitespace(text)
-  return sliceWindows(trimmed).map((window, index) => ({
+  const windows = snapWindowsToSentences(trimmed, sliceWindows(trimmed))
+  return windows.map((window, index) => ({
     index,
     text: window.text,
     hash: hashChunk(window.text),
