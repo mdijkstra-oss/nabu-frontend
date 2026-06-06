@@ -17,7 +17,7 @@ import {
   serializeSpotlightParam,
 } from "~/lib/editor/spotlight/serialize"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
-import { normalizeMatchWhitespace, SEPARATOR } from "~/lib/text/trim-around"
+import { normalizeMatchWhitespace } from "~/lib/text/trim-around"
 import { splitSentences } from "~/lib/search/filter-hits"
 import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
 
@@ -42,25 +42,6 @@ const groupByRun = (hits: SearchHit[]): RunGroup[] => {
     else groups.push({ file: hit.file, hits: [hit] })
   }
   return groups
-}
-
-const ANNOTATION_BLOCK_RE = /\n+```json-annotations\n[\s\S]*?\n```\s*$/
-
-const expandRegions = (hit: SearchHit): SearchHit[] => {
-  if (!hit.text || !hit.text.includes(SEPARATOR)) return [hit]
-  const match = ANNOTATION_BLOCK_RE.exec(hit.text)
-  const block = match ? match[0].replace(/^\n+/, "") : ""
-  const prose = match ? hit.text.slice(0, match.index) : hit.text
-  const regions = prose.split(SEPARATOR)
-  if (regions.length === 1) return [hit]
-  return regions.map((region) => {
-    const regionMatches = hit.matches?.filter((m) => region.includes(m))
-    return {
-      ...hit,
-      text: block ? `${region.replace(/\n+$/, "")}\n\n${block}` : region,
-      matches: regionMatches && regionMatches.length > 0 ? regionMatches : undefined,
-    }
-  })
 }
 
 const hitHasId = (hit: SearchHit): hit is SearchHit & { id: string } => hit.id !== undefined
@@ -256,8 +237,7 @@ export const SearchResultList = ({
   }, [throttledFiles])
 
   const liveHits = refreshed && refreshed.source === hits ? refreshed.output : hits
-  const expandedHits = useMemo(() => liveHits.flatMap(expandRegions), [liveHits])
-  const groups = useMemo(() => groupByRun(expandedHits), [expandedHits])
+  const groups = useMemo(() => groupByRun(liveHits), [liveHits])
 
   return (
     <div className="flex w-full flex-col items-start gap-6">

@@ -86,9 +86,28 @@ describe("validateFences", () => {
       expectContains: "inline",
     },
     {
-      name: "empty fence pair",
+      name: "empty fence pair: opener has no language tag",
       markdown: "```\n```",
-      expectErrors: 0,
+      expectErrors: 1,
+      expectContains: "missing a language tag",
+    },
+    {
+      name: "fence opener missing language with content",
+      markdown: "```\nfoo\n```",
+      expectErrors: 1,
+      expectContains: "missing a language tag",
+    },
+    {
+      name: "fence opener with only whitespace after backticks",
+      markdown: "```   \nfoo\n```",
+      expectErrors: 1,
+      expectContains: "missing a language tag",
+    },
+    {
+      name: "valid pair followed by lang-less pair flags only the lang-less opener",
+      markdown: '```json-attributes\n{"a":1}\n```\n\n```\nfoo\n```',
+      expectErrors: 1,
+      expectContains: "missing a language tag",
     },
     {
       name: "braces in prose without fences are allowed",

@@ -23,6 +23,31 @@ const prettyJson = (json: string): string => {
   }
 }
 
+interface TextContentItem { type: string; content: string }
+
+const isTextContentArray = (value: unknown): value is TextContentItem[] =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.every(
+    (item): item is TextContentItem =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as { type: unknown }).type === "string" &&
+      typeof (item as { content: unknown }).content === "string"
+  )
+
+const formatRawOutput = (raw: string): string => {
+  try {
+    const parsed = JSON.parse(raw)
+    if (isTextContentArray(parsed)) {
+      return parsed.map((item) => prettyJson(item.content)).join("\n\n")
+    }
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return raw
+  }
+}
+
 const PREVIEW_LENGTH = 80
 
 const endpointLabel = (endpoint: string): string => endpoint
@@ -170,7 +195,7 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
           {call.rawResponse !== null ? (
             <Section
               label="Output"
-              displayContent={prettyJson(call.rawResponse)}
+              displayContent={formatRawOutput(call.rawResponse)}
               copyContent={call.rawResponse}
               borderColor="border-green-300"
               labelColor="text-green-600"

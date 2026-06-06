@@ -1,6 +1,7 @@
 import type { Result } from "~/lib/fp/result"
 import { ok, err } from "~/lib/fp/result"
 import { rejectSqlPatterns } from "~/lib/sql/reject"
+import type { HydeAngle } from "~/lib/corpus/hyde-schema"
 import { LIMIT_RE, extractLimit, stripPaging } from "./paging"
 
 export interface SemanticToken {
@@ -11,6 +12,7 @@ export interface SemanticToken {
 
 export interface HydeQuery {
   text: string
+  type: HydeAngle["type"]
   language: string
   cosineVector: number[]
 }

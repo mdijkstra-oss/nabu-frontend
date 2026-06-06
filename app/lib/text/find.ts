@@ -215,6 +215,99 @@ export const findWithPartialEdges = (content: string, needle: string): MatchOffs
   return { start, end }
 }
 
+interface TokenRun {
+  length: number
+  startInA: number
+  startInB: number
+}
+
+const longestTokenRun = (a: string[], b: string[]): TokenRun => {
+  if (a.length === 0 || b.length === 0) return { length: 0, startInA: 0, startInB: 0 }
+  let maxLen = 0
+  let maxStartA = 0
+  let maxStartB = 0
+  let prev = new Array(b.length + 1).fill(0)
+  for (let i = 0; i < a.length; i++) {
+    const curr = new Array(b.length + 1).fill(0)
+    for (let j = 0; j < b.length; j++) {
+      if (a[i] === b[j]) {
+        curr[j + 1] = prev[j] + 1
+        if (curr[j + 1] > maxLen) {
+          maxLen = curr[j + 1]
+          maxStartA = i - curr[j + 1] + 1
+          maxStartB = j - curr[j + 1] + 1
+        }
+      }
+    }
+    prev = curr
+  }
+  return { length: maxLen, startInA: maxStartA, startInB: maxStartB }
+}
+
+const countShared = (chunkTokens: string[], needleTokens: string[]): number => {
+  const set = new Set(chunkTokens)
+  let count = 0
+  for (const t of needleTokens) if (set.has(t)) count++
+  return count
+}
+
+export interface OwningChunkOptions {
+  minWords: number
+}
+
+export const findOwningChunk = <T extends { text: string }>(
+  chunks: T[],
+  needle: string,
+  opts: OwningChunkOptions
+): T | null => {
+  const needleTokens = tokenizeWords(needle)
+  if (needleTokens.length < opts.minWords) return null
+
+  let best: { run: number; start: number; idx: number; chunk: T } | null = null
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkTokens = tokenizeWords(chunks[i].text)
+    if (countShared(chunkTokens, needleTokens) < opts.minWords) continue
+    const { length, startInA } = longestTokenRun(chunkTokens, needleTokens)
+    if (length < opts.minWords) continue
+    if (
+      !best ||
+      length > best.run ||
+      (length === best.run && startInA < best.start) ||
+      (length === best.run && startInA === best.start && i < best.idx)
+    ) {
+      best = { run: length, start: startInA, idx: i, chunk: chunks[i] }
+    }
+  }
+  return best ? best.chunk : null
+}
+
+export const growToInclude = (text: string, needle: string): string => {
+  const chunkTokensFull = tokenize(text)
+  const needleTokensFull = tokenize(needle)
+  if (chunkTokensFull.length === 0 || needleTokensFull.length === 0) return text
+
+  const chunkWords = chunkTokensFull.map((t) => t.word)
+  const needleWords = needleTokensFull.map((t) => t.word)
+  const { length, startInA, startInB } = longestTokenRun(chunkWords, needleWords)
+  if (length === 0) return text
+
+  const matchTouchesChunkStart = startInA === 0
+  const matchTouchesChunkEnd = startInA + length === chunkWords.length
+  const annotationHeadMissing = startInB > 0
+  const annotationTailMissing = startInB + length < needleWords.length
+
+  let result = text
+  if (matchTouchesChunkEnd && annotationTailMissing) {
+    const tailStart = needleTokensFull[startInB + length - 1].end
+    result = result + needle.slice(tailStart)
+  }
+  if (matchTouchesChunkStart && annotationHeadMissing) {
+    const headEnd = needleTokensFull[startInB].start
+    result = needle.slice(0, headEnd) + result
+  }
+  return result
+}
+
 export const expandWithContext = (
   text: string,
   start: number,

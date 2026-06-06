@@ -1,8 +1,5 @@
 import { hashChunk } from "./hash"
-import { TARGET_CHUNK_SIZE, MIN_CHUNK_SIZE, CHUNK_OVERLAP_RATIO } from "./constants"
-import { splitByParagraphs, splitBySentences } from "~/lib/text/split"
-import { chunk as chunkSegments } from "~/lib/text/chunk"
-import type { Segment } from "~/lib/text/types"
+import { CHUNK_CHARS, CHUNK_STRIDE_CHARS, CHUNK_WORD_TOLERANCE } from "./constants"
 
 export interface Chunk {
   index: number
@@ -10,74 +7,49 @@ export interface Chunk {
   hash: string
 }
 
-const isHeading = (text: string): boolean => text.trimStart().startsWith("#")
+const isWhitespace = (ch: string): boolean => /\s/.test(ch)
 
-const splitSentenceSegments = splitBySentences()
-
-const offsetSegment = (seg: Segment, base: number): Segment => ({
-  text: seg.text,
-  start: base + seg.start,
-  end: base + seg.end,
-})
-
-const refineParagraph = (paragraph: Segment): Segment[] => {
-  if (paragraph.text.length <= TARGET_CHUNK_SIZE) return [paragraph]
-  const sentences = splitSentenceSegments(paragraph.text)
-  if (sentences.length <= 1) return [paragraph]
-  return sentences.map((s) => offsetSegment(s, paragraph.start))
-}
-
-const wordBoundarySlice = (text: string, targetLen: number): string => {
-  const start = text.length - targetLen
-  const spaceIdx = text.indexOf(" ", start)
-  const breakAt = spaceIdx !== -1 && spaceIdx - start < targetLen * 0.2 ? spaceIdx + 1 : start
-  return text.slice(breakAt)
-}
-
-const tailSlice = (text: string, ratio: number): string => {
-  const targetLen = Math.floor(text.length * ratio)
-  if (targetLen === 0) return ""
-
-  const sentences = splitSentenceSegments(text)
-  if (sentences.length === 0) return ""
-
-  let startIdx = sentences.length - 1
-  for (let i = sentences.length - 2; i >= 0; i--) {
-    if (text.length - sentences[i].start > targetLen) break
-    startIdx = i
+const findWhitespaceBackward = (text: string, pos: number, tolerance: number): number | null => {
+  const lo = Math.max(0, pos - tolerance)
+  for (let i = pos - 1; i >= lo; i--) {
+    if (isWhitespace(text[i])) return i
   }
-
-  const slice = text.slice(sentences[startIdx].start)
-  if (slice.length > targetLen) return wordBoundarySlice(text, targetLen)
-  return slice
+  return null
 }
 
-const addOverlap = (chunks: string[], ratio: number): string[] =>
-  chunks.map((c, i) => {
-    if (i === 0) return c
-    const overlap = tailSlice(chunks[i - 1], ratio)
-    return overlap ? overlap + "\n\n" + c : c
-  })
+const adjustStart = (text: string, nominal: number, tolerance: number): number => {
+  if (nominal === 0) return 0
+  if (isWhitespace(text[nominal - 1])) return nominal
+  const ws = findWhitespaceBackward(text, nominal, tolerance)
+  return ws === null ? nominal : ws + 1
+}
+
+const adjustEnd = (text: string, nominal: number, tolerance: number): number => {
+  if (nominal >= text.length) return text.length
+  if (isWhitespace(text[nominal])) return nominal
+  const ws = findWhitespaceBackward(text, nominal, tolerance)
+  return ws === null ? nominal : ws
+}
+
+const sliceWindows = (text: string): string[] => {
+  if (text.length <= CHUNK_CHARS) return [text]
+  const windows: string[] = []
+  for (let nominal = 0; nominal < text.length; nominal += CHUNK_STRIDE_CHARS) {
+    const start = adjustStart(text, nominal, CHUNK_WORD_TOLERANCE)
+    const nominalEnd = Math.min(nominal + CHUNK_CHARS, text.length)
+    const end = adjustEnd(text, nominalEnd, CHUNK_WORD_TOLERANCE)
+    windows.push(text.slice(start, end))
+    if (nominalEnd === text.length) break
+  }
+  return windows
+}
 
 export const chunkText = (text: string): Chunk[] => {
-  const paragraphs = splitByParagraphs(text)
-  if (paragraphs.length === 0) return []
-
-  const segments = paragraphs.flatMap(refineParagraph)
-
-  const textChunks = chunkSegments(segments, {
-    target: TARGET_CHUNK_SIZE,
-    min: MIN_CHUNK_SIZE,
-    maxSegment: TARGET_CHUNK_SIZE * 2,
-    breakBefore: (s) => isHeading(s.text),
-  })
-
-  const texts = textChunks.map((c) => text.slice(c.start, c.end).trim())
-  const overlapped = addOverlap(texts, CHUNK_OVERLAP_RATIO)
-
-  return overlapped.map((t, index) => ({
+  const trimmed = text.trim()
+  if (trimmed.length === 0) return []
+  return sliceWindows(trimmed).map((text, index) => ({
     index,
-    text: t,
-    hash: hashChunk(t),
+    text,
+    hash: hashChunk(text),
   }))
 }

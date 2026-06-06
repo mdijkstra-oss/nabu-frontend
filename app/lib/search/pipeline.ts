@@ -88,9 +88,11 @@ const dispatchExecution = (
 const filterWithBudget = async (
   rawHits: SearchHit[],
   highlight: string,
+  signals: string[],
   files: FileStore,
   target: number,
-  onResults?: (hits: SearchHit[]) => void
+  onResults?: (hits: SearchHit[]) => void,
+  skipBarrenCheck = false
 ) => {
   const collected: SearchHit[] = []
   const collectAndForward = (batch: SearchHit[]) => {
@@ -98,10 +100,17 @@ const filterWithBudget = async (
     onResults?.(batch)
   }
 
-  const { consumed, barren } = await filterParallel(rawHits, highlight, files, collectAndForward, {
-    target,
-    maxBarren: MAX_BARREN_BATCHES,
-  })
+  const { consumed, barren } = await filterParallel(
+    rawHits,
+    highlight,
+    signals,
+    files,
+    collectAndForward,
+    {
+      target,
+      maxBarren: skipBarrenCheck ? undefined : MAX_BARREN_BATCHES,
+    }
+  )
 
   const rawConsumed = Math.min(consumed * FILTER_BATCH_SIZE, rawHits.length)
   const rawRemaining = rawHits.slice(rawConsumed)
@@ -110,6 +119,9 @@ const filterWithBudget = async (
   return { hits: sortByScore(collected), rawRemaining, exhausted }
 }
 
+export const extractSignalTexts = (hydes: HydeQuery[]): string[] =>
+  hydes.filter((h) => h.type === "signal").map((h) => h.text)
+
 const buildResult = (
   executed: Executed,
   sql: string,
@@ -117,7 +129,8 @@ const buildResult = (
   files: FileStore,
   target: number,
   onResults?: (hits: SearchHit[]) => void,
-  skipFilter = false
+  skipFilter = false,
+  skipBarrenCheck = false
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const { rawHits: rawUnmerged, hydes, isSemantic, embeddings } = executed
   const rawHits = skipFilter ? rawUnmerged : mergeOverlappingHits(rawUnmerged, files)
@@ -181,7 +194,15 @@ const buildResult = (
       })
     )
 
-  return filterWithBudget(rawHits, effectiveHighlight, files, target, onResults).then((filtered) =>
+  return filterWithBudget(
+    rawHits,
+    effectiveHighlight,
+    extractSignalTexts(hydes),
+    files,
+    target,
+    onResults,
+    skipBarrenCheck
+  ).then((filtered) =>
     ok({
       ...filtered,
       hydes,
@@ -201,11 +222,21 @@ export const executeResolvedSearch = async (
   files: FileStore,
   target: number,
   onResults?: (hits: SearchHit[]) => void,
-  skipFilter = false
+  skipFilter = false,
+  skipBarrenCheck = false
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const executed = await dispatchExecution(resolved, db)
   if (!executed.ok) return err(executed.error)
-  return buildResult(executed.value, sql, highlight, files, target, onResults, skipFilter)
+  return buildResult(
+    executed.value,
+    sql,
+    highlight,
+    files,
+    target,
+    onResults,
+    skipFilter,
+    skipBarrenCheck
+  )
 }
 
 export const runSearchPipeline = async (
@@ -215,7 +246,8 @@ export const runSearchPipeline = async (
   files: FileStore,
   target: number,
   onResults?: (hits: SearchHit[]) => void,
-  skipFilter = false
+  skipFilter = false,
+  skipBarrenCheck = false
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const resolved = await resolveSemanticSql(sql, ctx)
   if (!resolved.ok) return err({ message: resolved.error.message })
@@ -227,6 +259,7 @@ export const runSearchPipeline = async (
     files,
     target,
     onResults,
-    skipFilter
+    skipFilter,
+    skipBarrenCheck
   )
 }

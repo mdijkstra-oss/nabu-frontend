@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { validateSql } from "~/lib/search/semantic"
+import { HydeAngleSchema } from "~/lib/corpus/hyde-schema"
 
 export const SearchHitSchema = z.object({
   file: z.string(),
@@ -16,7 +17,7 @@ const validSql = z.string().superRefine((sql, ctx) => {
   if (!result.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error })
 })
 
-export const InclusionsSchema = z.record(z.string(), z.array(z.string()))
+export const InclusionsSchema = z.record(z.string(), z.array(HydeAngleSchema))
 
 export type Inclusions = z.infer<typeof InclusionsSchema>
 

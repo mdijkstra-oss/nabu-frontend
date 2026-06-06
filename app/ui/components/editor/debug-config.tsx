@@ -55,6 +55,18 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     icon: <Filter />,
     defaultValue: false,
   },
+  {
+    key: "skipBarrenCheck",
+    label: "Skip barren cutoff (keep filtering)",
+    icon: <Filter />,
+    defaultValue: false,
+  },
+  {
+    key: "fileSpecificCandidates",
+    label: "File-specific candidates",
+    icon: <Filter />,
+    defaultValue: false,
+  },
 ]
 
 export type DebugOptions = Record<string, boolean>

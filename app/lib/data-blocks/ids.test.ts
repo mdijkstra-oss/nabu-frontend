@@ -199,7 +199,7 @@ describe("collectAllEntityIds", () => {
       saved: boolean
       createdAt: number
     }[]
-  ) => JSON.stringify({ tags, searches })
+  ) => JSON.stringify({ tags, searches, corpusDescriptions: [] })
 
   const extractors = [
     (raw: string) => getCallouts(raw).map((c) => c.id),

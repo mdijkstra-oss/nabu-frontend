@@ -8,7 +8,12 @@ import { buildSemanticContext } from "~/domain/corpus/init"
 import { updateSearchCache } from "~/lib/agent/tools/search/settings"
 import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
 import { filterParallel, FILTER_BATCH_SIZE } from "~/lib/search/filter-hits"
-import { executeResolvedSearch, mergeByScore, MAX_BARREN_BATCHES } from "~/lib/search/pipeline"
+import {
+  executeResolvedSearch,
+  extractSignalTexts,
+  mergeByScore,
+  MAX_BARREN_BATCHES,
+} from "~/lib/search/pipeline"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery } from "~/lib/search/semantic"
 
@@ -45,6 +50,7 @@ export interface SearchResults {
 interface ContinuationState {
   remaining: SearchHit[]
   highlight: string
+  signals: string[]
   loading: boolean
   cancelled: boolean
 }
@@ -53,7 +59,8 @@ export const useSearchResults = (
   searchId: string,
   revision = 0,
   dbReady = false,
-  skipFilter = false
+  skipFilter = false,
+  skipBarrenCheck = false
 ): SearchResults => {
   const files = useSyncExternalStore(subscribe, getFiles)
   const search = findSearchById(files, searchId)
@@ -83,9 +90,10 @@ export const useSearchResults = (
     const { consumed, barren } = await filterParallel(
       state.remaining,
       state.highlight,
+      state.signals,
       getFiles(),
       appendHits,
-      { target: 30, maxBarren: MAX_BARREN_BATCHES }
+      { target: 30, maxBarren: skipBarrenCheck ? undefined : MAX_BARREN_BATCHES }
     )
 
     state.loading = false
@@ -95,7 +103,7 @@ export const useSearchResults = (
     state.remaining = state.remaining.slice(rawConsumed)
     const hasMore = state.remaining.length > 0 && !barren
     setSettled((prev) => ({ ...prev, phase: hasMore ? "idle" : "done", hasMore }))
-  }, [])
+  }, [skipBarrenCheck])
 
   useEffect(() => {
     if (!searchSql || !dbReady) return
@@ -170,7 +178,8 @@ export const useSearchResults = (
         getFiles(),
         30,
         appendHits,
-        skipFilter
+        skipFilter,
+        skipBarrenCheck
       )
 
       if (cancelled) return
@@ -197,6 +206,7 @@ export const useSearchResults = (
         contRef.current = {
           remaining: rawRemaining,
           highlight: effectiveHighlight,
+          signals: extractSignalTexts(hydes),
           loading: false,
           cancelled,
         }
@@ -216,7 +226,7 @@ export const useSearchResults = (
       cancelled = true
       if (contRef.current) contRef.current.cancelled = true
     }
-  }, [searchId, searchSql, revision, dbReady, loadMore, skipFilter])
+  }, [searchId, searchSql, revision, dbReady, loadMore, skipFilter, skipBarrenCheck])
 
   return {
     search,

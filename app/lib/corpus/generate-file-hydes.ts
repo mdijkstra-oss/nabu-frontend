@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { callAndParse } from "~/lib/agent/client/call-parse"
 import { toSystem } from "~/lib/agent/client/convert"
-import { HydeListSchema } from "./hyde-schema"
+import { HydeListSchema, type HydeAngle } from "./hyde-schema"
 
 const FileHydeResponseSchema = z.object({
   highlight: z.string(),
@@ -10,7 +10,7 @@ const FileHydeResponseSchema = z.object({
 
 export interface FileHydeResult {
   highlight: string
-  inclusions: string[]
+  inclusions: HydeAngle[]
 }
 
 const FILE_HYDE_ENDPOINT = "/file-hyde"
@@ -37,6 +37,6 @@ export const generateFileHydes = async (
 
   return {
     highlight: result.data.highlight,
-    inclusions: result.data.hydes.map((h) => h.text),
+    inclusions: result.data.hydes,
   }
 }

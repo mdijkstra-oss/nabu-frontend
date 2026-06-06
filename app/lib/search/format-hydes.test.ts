@@ -4,6 +4,7 @@ import type { HydeQuery } from "./semantic"
 
 const hyde = (language: string, text: string): HydeQuery => ({
   text,
+  type: "direct",
   language,
   cosineVector: [],
 })

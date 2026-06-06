@@ -1,8 +1,7 @@
 import { z } from "zod"
 
-export const HYDE_ANGLES = ["direct", "hedged", "consequence"] as const
-export const HYDES_PER_ANGLE = 2
-export const HYDE_COUNT = HYDE_ANGLES.length * HYDES_PER_ANGLE
+export const HYDE_ANGLES = ["direct", "hedged", "consequence", "signal"] as const
+export const HYDE_COUNT = 9
 
 export const HydeAngleSchema = z.object({
   type: z.enum(HYDE_ANGLES),

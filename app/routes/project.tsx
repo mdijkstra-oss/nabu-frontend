@@ -73,7 +73,11 @@ import { HIDDEN_TAG_ID, HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hi
 import { buildIdentifierResolver } from "~/lib/files/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import type { SearchEntry } from "~/domain/search/types"
-import { buildFlaggedSearch, buildCandidateSearch } from "~/domain/search/queries"
+import {
+  buildFlaggedSearch,
+  buildCandidateSearch,
+  buildFileCandidateSearch,
+} from "~/domain/search/queries"
 import { collectExhibits } from "~/domain/exhibits/selectors"
 import type { ExhibitItem } from "~/domain/exhibits/types"
 import { formatShortDate } from "~/lib/format/date"
@@ -709,6 +713,15 @@ export default function ProjectLayout() {
     navigate(`/project/${params.projectId}/search/${id}`)
   }
 
+  const handleFindFileCandidates = (code: Code) => {
+    if (!currentFile || code.detail.trim().length === 0) return
+    const id = saveNewSearch(buildFileCandidateSearch(code.id, currentFile))
+    if (!id) return
+    writeSelectedCodes([code.id])
+    dismissSidebarRef.current?.()
+    navigate(`/project/${params.projectId}/search/${id}`)
+  }
+
   const handleCodeFile = (code: Code) => {
     const refs = resolveCodingFiles(files, [code.id])
     if (refs.length > 0) dispatchTask(codeWithFiles(refs))
@@ -767,6 +780,11 @@ export default function ProjectLayout() {
               onSearchCodeInFile={handleSearchCodeInFile}
               onSearchUnsure={handleSearchUnsure}
               onFindCandidates={handleFindCandidates}
+              onFindFileCandidates={
+                currentFile && debugOptions.fileSpecificCandidates
+                  ? handleFindFileCandidates
+                  : undefined
+              }
             />
           ),
         }

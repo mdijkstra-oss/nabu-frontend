@@ -230,7 +230,7 @@ describe("validateMarkdownBlocks", () => {
   })
 
   describe("file constraint validation", () => {
-    const settingsBlock = `\`\`\`json-settings\n{"tags": []}\n\`\`\``
+    const settingsBlock = `\`\`\`json-settings\n{"tags": [], "searches": [], "corpusDescriptions": []}\n\`\`\``
 
     const cases = [
       {
@@ -262,6 +262,36 @@ describe("validateMarkdownBlocks", () => {
 
     it.each(cases)("$name", ({ markdown, path, expectValid, expectErrorContains }) => {
       const result = validateMarkdownBlocks(markdown, { path })
+      expect(result.valid).toBe(expectValid)
+      if (!expectValid && expectErrorContains) {
+        expect(result.errors.some((e) => e.message.includes(expectErrorContains))).toBe(true)
+      }
+    })
+  })
+
+  describe("unknown language rejection", () => {
+    const cases = [
+      {
+        name: "rejects unknown language",
+        markdown: '# Doc\n\n```python\nprint("hi")\n```',
+        expectValid: false,
+        expectErrorContains: "not a known data-block language",
+      },
+      {
+        name: "rejects mixed known + unknown",
+        markdown: '```json-attributes\n{"tags": []}\n```\n\n```typescript\nconst x = 1\n```',
+        expectValid: false,
+        expectErrorContains: "not a known data-block language",
+      },
+      {
+        name: "accepts known language",
+        markdown: '```json-attributes\n{"tags": []}\n```',
+        expectValid: true,
+      },
+    ]
+
+    it.each(cases)("$name", ({ markdown, expectValid, expectErrorContains }) => {
+      const result = validateMarkdownBlocks(markdown)
       expect(result.valid).toBe(expectValid)
       if (!expectValid && expectErrorContains) {
         expect(result.errors.some((e) => e.message.includes(expectErrorContains))).toBe(true)

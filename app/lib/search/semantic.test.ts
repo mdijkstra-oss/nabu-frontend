@@ -349,6 +349,7 @@ describe("stripSemanticToken", () => {
 describe("buildCosineQuery", () => {
   const hyde = (language: string, vector: number[]): HydeQuery => ({
     text: "hypothetical passage",
+    type: "direct",
     language,
     cosineVector: vector,
   })
@@ -429,11 +430,13 @@ describe("buildHybridPlan", () => {
     const hydes: HydeQuery[] = [
       {
         text: "I feel so anxious all the time",
+        type: "direct",
         language: "eng",
         cosineVector: [0.1, 0.2],
       },
       {
         text: "De stress is ondraaglijk geworden",
+        type: "direct",
         language: "nld",
         cosineVector: [0.3, 0.4],
       },

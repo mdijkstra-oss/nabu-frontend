@@ -3,6 +3,7 @@ import type { Database } from "~/lib/db/types"
 import type { HydeQuery, HybridSearchPlan } from "./semantic"
 import type { EmbeddingsCache, EmbeddingsSource, Inclusions } from "~/domain/search/types"
 import type { CorpusDescription } from "~/domain/corpus/types"
+import type { HydeAngle } from "~/lib/corpus/hyde-schema"
 import { ok, err } from "~/lib/fp/result"
 import { fetchEmbeddingBatch } from "~/lib/embeddings/client"
 import { generateHydesForDescription, generateGenericHydes } from "~/lib/corpus/generate-hydes"
@@ -65,8 +66,13 @@ const fetchLanguages = async (db: Database): Promise<string[]> => {
   return filterSignificantLanguages(rows)
 }
 
-const toHydeQueries = (language: string, texts: string[], vectors: number[][]): HydeQuery[] =>
-  texts.map((text, i) => ({ text, language, cosineVector: vectors[i] }))
+const toHydeQueries = (language: string, angles: HydeAngle[], vectors: number[][]): HydeQuery[] =>
+  angles.map((angle, i) => ({
+    text: angle.text,
+    type: angle.type,
+    language,
+    cosineVector: vectors[i],
+  }))
 
 const invalid = (message: string): Result<ResolvedQuery, ResolveError> =>
   err({ type: "invalid", message })
@@ -107,7 +113,7 @@ type HydeTask = () => Promise<HydeResult[]>
 
 interface HydeResult {
   language: string
-  texts: string[]
+  angles: HydeAngle[]
 }
 
 const filterDescriptionsForLanguages = (
@@ -131,13 +137,13 @@ const resolveCorpusInclusions = async (
   const relevant = filterDescriptionsForLanguages(descriptions, languages)
 
   const descriptionTasks: HydeTask[] = relevant.map((d) => async () => {
-    const texts = await generateHydesForDescription(d, query)
-    return texts.map((t) => ({ language: d.language, texts: [t] }))
+    const angles = await generateHydesForDescription(d, query)
+    return angles.map((a) => ({ language: d.language, angles: [a] }))
   })
 
   const genericTasks: HydeTask[] = languages.map((language) => async () => {
-    const texts = await generateGenericHydes(language, query)
-    return texts.map((t) => ({ language, texts: [t] }))
+    const angles = await generateGenericHydes(language, query)
+    return angles.map((a) => ({ language, angles: [a] }))
   })
 
   const inclusions: Inclusions = {}
@@ -147,7 +153,7 @@ const resolveCorpusInclusions = async (
     [...descriptionTasks, ...genericTasks],
     (task) => task(),
     (results: HydeResult[]) => {
-      for (const r of results) inclusions[r.language].push(...r.texts)
+      for (const r of results) inclusions[r.language].push(...r.angles)
     },
     { warmup: 1 }
   )
@@ -166,7 +172,7 @@ export const hashString = (input: string): string => {
 
 interface FileHydeResult {
   language: string
-  texts: string[]
+  angles: HydeAngle[]
   highlight: string
 }
 
@@ -188,7 +194,7 @@ const resolveFileInclusions = async (
 
   const tasks: FileHydeTask[] = languages.map((language) => async () => {
     const response = await generateFileHydes(fileContent, filename, language)
-    return [{ language, texts: response.inclusions, highlight: response.highlight }]
+    return [{ language, angles: response.inclusions, highlight: response.highlight }]
   })
 
   let highlight = ""
@@ -198,7 +204,7 @@ const resolveFileInclusions = async (
     (task) => task(),
     (results: FileHydeResult[]) => {
       for (const r of results) {
-        inclusions[r.language].push(...r.texts)
+        inclusions[r.language].push(...r.angles)
         if (!highlight && r.highlight) highlight = r.highlight
       }
     },
@@ -212,15 +218,18 @@ const embedAndFlattenAll = async (
   inclusions: Inclusions,
   baseUrl: string
 ): Promise<Result<HydeQuery[], { message: string }>> => {
-  const entries = Object.entries(inclusions).filter(([, texts]) => texts.length > 0)
+  const entries = Object.entries(inclusions).filter(([, angles]) => angles.length > 0)
   const allQueries: HydeQuery[] = []
 
   const pool = await processPool(
     entries,
-    async ([language, texts]) => {
-      const result = await fetchEmbeddingBatch(texts, baseUrl)
+    async ([language, angles]) => {
+      const result = await fetchEmbeddingBatch(
+        angles.map((a) => a.text),
+        baseUrl
+      )
       if (!result.ok) throw new Error(result.error.message)
-      return toHydeQueries(language, texts, result.value)
+      return toHydeQueries(language, angles, result.value)
     },
     (hydes) => allQueries.push(...hydes),
     { warmup: 0 }

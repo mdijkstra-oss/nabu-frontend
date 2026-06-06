@@ -14,6 +14,7 @@ export { formatNumberedPassage } from "~/lib/text/format"
 
 export const FILTER_BATCH_SIZE = 5
 export const FILTER_CONCURRENCY = 5
+export const FILTER_RUNS = 2
 
 const SEMANTIC_FILTER_ENDPOINT = "/semantic-filter"
 const MIN_WORD_COUNT = 3
@@ -99,18 +100,25 @@ const countSelectedSentences = (groups: number[][]): number => new Set(groups.fl
 const isOverselected = (groups: number[][], totalSentences: number): boolean =>
   countSelectedSentences(groups) > totalSentences * MAX_SELECTED_RATIO
 
+const formatSignalExamples = (signals: string[]): string =>
+  `<signal_examples>\n${signals.map((s) => `- ${s}`).join("\n")}\n</signal_examples>`
+
 const callSemanticFilterBatch = async (
   intent: string,
-  prepared: PreparedHit[]
+  signals: string[],
+  prepared: PreparedHit[],
+  runIdx: number
 ): Promise<number[][][]> => {
   const labels = prepared.map((_, i) => toLetter(i))
   const messages = [
     toSystem(`<search_intent>${intent}</search_intent>`),
+    ...(signals.length > 0 ? [toSystem(formatSignalExamples(signals))] : []),
     ...prepared.map((p, i) => toSystem(formatHitTarget(p.numbered, labels[i]))),
     toSystem(FILTER_CALL_TO_ACTION),
   ]
 
-  const result = await callAndParse(SEMANTIC_FILTER_ENDPOINT, messages, FilterResponseSchema)
+  const endpoint = `${SEMANTIC_FILTER_ENDPOINT}?model=${runIdx}`
+  const result = await callAndParse(endpoint, messages, FilterResponseSchema)
   if (!result.ok) return prepared.map(() => [])
 
   const grouped = groupMatchesByLabel(result.data, labels)
@@ -119,46 +127,96 @@ const callSemanticFilterBatch = async (
   )
 }
 
+const canonicalGroupKey = (group: number[]): string => [...group].sort((a, b) => a - b).join(",")
+
+const unionGroupsAcrossRuns = (runs: number[][][]): number[][] => {
+  const seen = new Set<string>()
+  const out: number[][] = []
+  for (const groups of runs) {
+    for (const g of groups) {
+      const key = canonicalGroupKey(g)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(g)
+    }
+  }
+  return out
+}
+
 const FILTER_CACHE_PREFIX = "filter"
 const FILTER_CACHE_CAP = 200_000
 
-const hitCacheKey = (intent: string, numbered: string): string => buildKey([intent, numbered])
+const signalsKeyPart = (signals: string[]): string => buildKey([...signals].sort())
+
+const hitCacheKey = (
+  runIdx: number,
+  intent: string,
+  signalsKey: string,
+  numbered: string
+): string => buildKey([String(runIdx), intent, signalsKey, numbered])
 
 const lookupHitCache = async (
+  runIdx: number,
   intent: string,
+  signalsKey: string,
   prepared: PreparedHit[]
 ): Promise<(number[][] | undefined)[]> =>
   Promise.all(
-    prepared.map((p) => tryGet<number[][]>(FILTER_CACHE_PREFIX, hitCacheKey(intent, p.numbered)))
+    prepared.map((p) =>
+      tryGet<number[][]>(FILTER_CACHE_PREFIX, hitCacheKey(runIdx, intent, signalsKey, p.numbered))
+    )
   )
 
 const cacheHitResults = async (
+  runIdx: number,
   intent: string,
+  signalsKey: string,
   prepared: PreparedHit[],
   results: number[][][]
 ): Promise<void> => {
   await Promise.all(
     prepared.map((p, i) =>
-      tryPut(FILTER_CACHE_PREFIX, hitCacheKey(intent, p.numbered), results[i], FILTER_CACHE_CAP)
+      tryPut(
+        FILTER_CACHE_PREFIX,
+        hitCacheKey(runIdx, intent, signalsKey, p.numbered),
+        results[i],
+        FILTER_CACHE_CAP
+      )
     )
   )
 }
 
 const cachedCallSemanticFilterBatch = async (
   intent: string,
-  prepared: PreparedHit[]
+  signals: string[],
+  prepared: PreparedHit[],
+  runIdx: number
 ): Promise<number[][][]> => {
-  const cached = await lookupHitCache(intent, prepared)
+  const signalsKey = signalsKeyPart(signals)
+  const cached = await lookupHitCache(runIdx, intent, signalsKey, prepared)
 
   const uncached = prepared.filter((_, i) => cached[i] === undefined)
 
   if (uncached.length === 0) return cached as number[][][]
 
-  const fresh = await callSemanticFilterBatch(intent, uncached)
-  await cacheHitResults(intent, uncached, fresh)
+  const fresh = await callSemanticFilterBatch(intent, signals, uncached, runIdx)
+  await cacheHitResults(runIdx, intent, signalsKey, uncached, fresh)
 
   let freshIdx = 0
   return cached.map((v) => v ?? fresh[freshIdx++])
+}
+
+const runAllModels = async (
+  intent: string,
+  signals: string[],
+  prepared: PreparedHit[]
+): Promise<number[][][]> => {
+  const runs = await Promise.all(
+    Array.from({ length: FILTER_RUNS }, (_, runIdx) =>
+      cachedCallSemanticFilterBatch(intent, signals, prepared, runIdx)
+    )
+  )
+  return prepared.map((_, hitIdx) => unionGroupsAcrossRuns(runs.map((r) => r[hitIdx] ?? [])))
 }
 
 const reconstructBatchHits = (prepared: PreparedHit[], results: number[][][]): SearchHit[] =>
@@ -170,12 +228,16 @@ const reconstructBatchHits = (prepared: PreparedHit[], results: number[][][]): S
     return [{ ...p.hit, matches }]
   })
 
-const filterBatch = async (hits: SearchHit[], intent: string): Promise<SearchHit[]> => {
+const filterBatch = async (
+  hits: SearchHit[],
+  intent: string,
+  signals: string[]
+): Promise<SearchHit[]> => {
   const prepared = hits.map(prepareHit).filter((p): p is PreparedHit => p !== null)
   if (prepared.length === 0) return hits.filter((h) => !h.text)
 
   try {
-    const results = await cachedCallSemanticFilterBatch(intent, prepared)
+    const results = await runAllModels(intent, signals, prepared)
     const passThrough = hits.filter((h) => !h.text)
     return [...passThrough, ...reconstructBatchHits(prepared, results)]
   } catch (e) {
@@ -195,9 +257,10 @@ const chunkHits = (hits: SearchHit[]): SearchHit[][] => {
 const filterAndGrowBatch = async (
   hits: SearchHit[],
   intent: string,
+  signals: string[],
   files: FileStore
 ): Promise<SearchHit[]> => {
-  const filtered = await filterBatch(hits, intent)
+  const filtered = await filterBatch(hits, intent, signals)
   return growHits(filtered, files)
 }
 
@@ -209,12 +272,18 @@ export interface FilterOptions {
 export const filterParallel = (
   hits: SearchHit[],
   intent: string,
+  signals: string[],
   files: FileStore,
   onResults: (results: SearchHit[]) => void,
   opts?: FilterOptions
 ): Promise<PoolResult<SearchHit[], SearchHit>> =>
-  processPool(chunkHits(hits), (chunk) => filterAndGrowBatch(chunk, intent, files), onResults, {
-    concurrency: FILTER_CONCURRENCY,
-    target: opts?.target,
-    maxBarren: opts?.maxBarren,
-  })
+  processPool(
+    chunkHits(hits),
+    (chunk) => filterAndGrowBatch(chunk, intent, signals, files),
+    onResults,
+    {
+      concurrency: FILTER_CONCURRENCY,
+      target: opts?.target,
+      maxBarren: opts?.maxBarren,
+    }
+  )

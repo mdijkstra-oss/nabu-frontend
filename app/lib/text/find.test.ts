@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { findMatchOffset, findWithPartialEdges, expandWithContext } from "./find"
+import {
+  findMatchOffset,
+  findWithPartialEdges,
+  expandWithContext,
+  findOwningChunk,
+  growToInclude,
+} from "./find"
 
 describe("findMatchOffset", () => {
   const cases: {
@@ -250,5 +256,174 @@ describe("expandWithContext", () => {
 
   it.each(cases)("$name", ({ text, start, end, padWords, expected }) => {
     expect(expandWithContext(text, start, end, padWords)).toBe(expected)
+  })
+})
+
+describe("findOwningChunk", () => {
+  interface Chunk {
+    id: string
+    text: string
+  }
+  const cases: {
+    name: string
+    chunks: Chunk[]
+    needle: string
+    minWords: number
+    expectedId: string | null
+  }[] = [
+    {
+      name: "empty chunks returns null",
+      chunks: [],
+      needle: "anything goes here",
+      minWords: 2,
+      expectedId: null,
+    },
+    {
+      name: "needle shorter than minWords returns null",
+      chunks: [{ id: "a", text: "alpha beta gamma" }],
+      needle: "alpha",
+      minWords: 2,
+      expectedId: null,
+    },
+    {
+      name: "single chunk containing full needle",
+      chunks: [{ id: "a", text: "alpha beta gamma delta epsilon" }],
+      needle: "beta gamma delta",
+      minWords: 2,
+      expectedId: "a",
+    },
+    {
+      name: "needle absent from all chunks returns null",
+      chunks: [
+        { id: "a", text: "alpha beta gamma" },
+        { id: "b", text: "delta epsilon zeta" },
+      ],
+      needle: "nothing matches here at all",
+      minWords: 2,
+      expectedId: null,
+    },
+    {
+      name: "longer run wins across chunks",
+      chunks: [
+        { id: "a", text: "alpha beta gamma delta epsilon zeta" },
+        { id: "b", text: "epsilon zeta eta theta iota kappa" },
+      ],
+      needle: "delta epsilon zeta eta theta",
+      minWords: 2,
+      expectedId: "b",
+    },
+    {
+      name: "needle in overlap region tiebreaks to chunk where it appears earliest",
+      chunks: [
+        { id: "a", text: "alpha beta gamma delta epsilon zeta" },
+        { id: "b", text: "epsilon zeta eta theta iota kappa" },
+      ],
+      needle: "epsilon zeta",
+      minWords: 2,
+      expectedId: "b",
+    },
+    {
+      name: "exact tie on length and start position falls back to first chunk index",
+      chunks: [
+        { id: "a", text: "epsilon zeta filler one two" },
+        { id: "b", text: "epsilon zeta filler three four" },
+      ],
+      needle: "epsilon zeta",
+      minWords: 2,
+      expectedId: "a",
+    },
+    {
+      name: "longest run below minWords returns null",
+      chunks: [
+        { id: "a", text: "alpha beta gamma" },
+        { id: "b", text: "delta epsilon zeta" },
+      ],
+      needle: "beta something delta",
+      minWords: 3,
+      expectedId: null,
+    },
+    {
+      name: "shared-count shortcircuit skips chunks with no shared tokens",
+      chunks: [
+        { id: "a", text: "completely unrelated content here" },
+        { id: "b", text: "alpha beta gamma delta epsilon" },
+      ],
+      needle: "beta gamma delta",
+      minWords: 2,
+      expectedId: "b",
+    },
+  ]
+
+  it.each(cases)("$name", ({ chunks, needle, minWords, expectedId }) => {
+    const result = findOwningChunk(chunks, needle, { minWords })
+    expect(result?.id ?? null).toBe(expectedId)
+  })
+})
+
+describe("growToInclude", () => {
+  const cases: {
+    name: string
+    text: string
+    needle: string
+    expected: string
+  }[] = [
+    {
+      name: "needle fully inside text returns text unchanged",
+      text: "alpha beta gamma delta epsilon zeta eta theta",
+      needle: "gamma delta epsilon",
+      expected: "alpha beta gamma delta epsilon zeta eta theta",
+    },
+    {
+      name: "no overlap returns text unchanged",
+      text: "alpha beta gamma",
+      needle: "xxx yyy zzz",
+      expected: "alpha beta gamma",
+    },
+    {
+      name: "annotation tail extends past chunk end — tail appended",
+      text: "alpha beta gamma delta epsilon",
+      needle: "delta epsilon zeta eta",
+      expected: "alpha beta gamma delta epsilon zeta eta",
+    },
+    {
+      name: "annotation head extends before chunk start — head prepended",
+      text: "epsilon zeta eta theta iota",
+      needle: "gamma delta epsilon zeta",
+      expected: "gamma delta epsilon zeta eta theta iota",
+    },
+    {
+      name: "annotation larger than chunk — both head and tail attached",
+      text: "delta epsilon zeta",
+      needle: "alpha beta gamma delta epsilon zeta eta theta",
+      expected: "alpha beta gamma delta epsilon zeta eta theta",
+    },
+    {
+      name: "tail appended preserves needle punctuation",
+      text: "the quick brown fox jumps",
+      needle: "fox jumps over, the lazy dog.",
+      expected: "the quick brown fox jumps over, the lazy dog.",
+    },
+    {
+      name: "head prepended preserves needle punctuation",
+      text: "lazy dog tomorrow",
+      needle: "fox, the lazy dog",
+      expected: "fox, the lazy dog tomorrow",
+    },
+    {
+      name: "empty needle returns text unchanged",
+      text: "alpha beta",
+      needle: "",
+      expected: "alpha beta",
+    },
+    {
+      name: "empty text returns text unchanged",
+      text: "",
+      needle: "anything",
+      expected: "",
+    },
+  ]
+
+  it.each(cases)("$name", ({ text, needle, expected }) => {
+    expect(growToInclude(text, needle)).toBe(expected)
   })
 })

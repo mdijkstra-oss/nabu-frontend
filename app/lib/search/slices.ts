@@ -4,19 +4,24 @@ import type { Annotation } from "~/domain/data-blocks/attributes/schema"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
 import { getBlock } from "~/lib/data-blocks/query"
 import { stripBlocksByLanguage, extractProse } from "~/lib/data-blocks/parse"
-import { findMatchOffset } from "~/lib/text/find"
-import { trimAroundMatches } from "~/lib/text/trim-around"
+import { findOwningChunk, growToInclude } from "~/lib/text/find"
+import { trimAroundMatches, SEPARATOR } from "~/lib/text/trim-around"
 import { createCappedCache } from "~/lib/utils/cache"
 import { yieldToBrowser } from "~/lib/utils/async"
 import { selectVisibleAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { SETTINGS_FILE } from "~/lib/files/filename"
 
+const MIN_OWNED_WORDS = 3
+
 const parseAnnotations = (fileContent: string): Annotation[] =>
   getBlock(fileContent, "json-annotations", AnnotationsBlockSchema)?.annotations ?? []
 
 const formatAnnotationsBlock = (annotations: Annotation[]): string =>
   "```json-annotations\n" + JSON.stringify({ annotations }) + "\n```"
+
+const stripAnnotationsBlock = (raw: string): string =>
+  stripBlocksByLanguage(raw, "json-annotations")
 
 interface FileContext {
   prose: string
@@ -28,17 +33,17 @@ const computeFileContext = (fileContent: string): FileContext => ({
   annotations: parseAnnotations(fileContent),
 })
 
-const resolveAnchors = (hit: SearchHit, annotations: Annotation[]): string[] | null => {
-  if (hit.matches && hit.matches.length > 0) return hit.matches
-  if (hit.id) {
-    const match = annotations.find((a) => a.id === hit.id)
-    if (match) return [match.text]
-  }
-  return null
-}
+const fileContextCache = createCappedCache<string, FileContext>(500)
 
-const isInSlice = (slice: string, annotationText: string): boolean =>
-  findMatchOffset(slice, annotationText) !== null
+const getFileContext = (file: string, files: FileStore): FileContext | null => {
+  const content = files[file]
+  if (!content) return null
+  const cached = fileContextCache.get(content)
+  if (cached) return cached
+  const ctx = computeFileContext(content)
+  fileContextCache.set(content, ctx)
+  return ctx
+}
 
 const stripLonelyEllipses = (text: string): string =>
   text
@@ -48,43 +53,68 @@ const stripLonelyEllipses = (text: string): string =>
     .replace(/\n{3,}/g, "\n\n")
     .replace(/^\n+|\n+$/g, "")
 
-const extractSliceFromContext = (
-  hit: SearchHit,
-  fileContent: string,
-  ctx: FileContext,
-  selectedCodes: Set<string>
-): string | null => {
+const resolveAnchors = (hit: SearchHit, annotations: Annotation[]): string[] | null => {
+  if (hit.matches && hit.matches.length > 0) return hit.matches
+  if (hit.id) {
+    const match = annotations.find((a) => a.id === hit.id)
+    if (match) return [match.text]
+  }
+  return null
+}
+
+type NormalizeMode = "trim" | "raw"
+
+interface Region {
+  hit: SearchHit
+  text: string
+}
+
+const normalizeToRegions = (hit: SearchHit, ctx: FileContext, mode: NormalizeMode): Region[] => {
+  if (mode === "raw") {
+    return hit.text ? [{ hit, text: hit.text }] : []
+  }
   const anchors = resolveAnchors(hit, ctx.annotations)
-  if (!anchors) return null
-  if (!fileContent) return hit.text ?? null
-
+  if (!anchors) return hit.text ? [{ hit, text: hit.text }] : []
   const trimmed = stripLonelyEllipses(trimAroundMatches(ctx.prose, anchors))
-
-  const visible = selectVisibleAnnotations(ctx.annotations, selectedCodes)
-  const candidates = hit.id ? visible.filter((a) => a.id === hit.id) : visible
-  const present = candidates.filter((a) => isInSlice(trimmed, a.text))
-  if (present.length === 0) return trimmed
-  return `${trimmed}\n\n${formatAnnotationsBlock(present)}`
+  if (!trimmed) return hit.text ? [{ hit, text: hit.text }] : []
+  const parts = trimmed
+    .split(SEPARATOR)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+  if (parts.length === 0) return []
+  return parts.map((text) => ({ hit, text }))
 }
 
-const EMPTY_CODES = new Set<string>()
-
-export const extractSearchSlice = (hit: SearchHit, fileContent: string): string | null =>
-  extractSliceFromContext(hit, fileContent, computeFileContext(fileContent), EMPTY_CODES)
-
-const growHitWithContext = (
-  hit: SearchHit,
-  fileContent: string,
-  ctx: FileContext,
-  selectedCodes: Set<string>
-): SearchHit => {
-  const grown = extractSliceFromContext(hit, fileContent, ctx, selectedCodes)
-  if (!grown || grown === hit.text) return hit
-  return { ...hit, text: grown }
+const mapOwners = (regions: Region[], visible: Annotation[]): Map<Region, Annotation[]> => {
+  const owned = new Map<Region, Annotation[]>()
+  for (const ann of visible) {
+    const candidates = regions.filter((r) => !r.hit.id || r.hit.id === ann.id)
+    if (candidates.length === 0) continue
+    const owner = findOwningChunk(candidates, ann.text, { minWords: MIN_OWNED_WORDS })
+    if (!owner) continue
+    const list = owned.get(owner) ?? []
+    list.push(ann)
+    owned.set(owner, list)
+  }
+  return owned
 }
 
-const stripAnnotationsBlock = (raw: string): string =>
-  stripBlocksByLanguage(raw, "json-annotations")
+const attachToRegion = (region: Region, anns: Annotation[]): SearchHit => {
+  let text = region.text
+  for (const ann of anns) text = growToInclude(text, ann.text)
+  if (anns.length > 0) text = `${text}\n\n${formatAnnotationsBlock(anns)}`
+  return { ...region.hit, text }
+}
+
+const groupByFile = (hits: SearchHit[]): Map<string, SearchHit[]> => {
+  const groups = new Map<string, SearchHit[]>()
+  for (const hit of hits) {
+    const list = groups.get(hit.file) ?? []
+    list.push(hit)
+    groups.set(hit.file, list)
+  }
+  return groups
+}
 
 const hitDedupeKey = (hit: SearchHit): string | null =>
   hit.text ? `${hit.file}\0${stripAnnotationsBlock(hit.text)}` : null
@@ -112,72 +142,58 @@ const deduplicateHits = (hits: SearchHit[]): SearchHit[] => {
   return dropped ? out : hits
 }
 
-const fileContextCache = createCappedCache<string, FileContext>(500)
-
-const getFileContext = (file: string, files: FileStore): FileContext | null => {
-  const content = files[file]
-  if (!content) return null
-  const cached = fileContextCache.get(content)
-  if (cached) return cached
-  const ctx = computeFileContext(content)
-  fileContextCache.set(content, ctx)
-  return ctx
-}
-
-export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] => {
+const attachAnnotationsWithMode = (
+  hits: SearchHit[],
+  files: FileStore,
+  mode: NormalizeMode
+): SearchHit[] => {
   const selectedCodes = getSelectedCodes(files)
-  return deduplicateHits(
-    hits.map((hit) => {
-      const ctx = getFileContext(hit.file, files)
-      if (!ctx) return hit
-      return growHitWithContext(hit, files[hit.file], ctx, selectedCodes)
-    })
-  )
+  const fileGroups = groupByFile(hits)
+  const out: SearchHit[] = []
+
+  for (const [, fileHits] of fileGroups) {
+    const file = fileHits[0].file
+    const ctx = getFileContext(file, files)
+    if (!ctx) {
+      out.push(...fileHits)
+      continue
+    }
+    const regions: Region[] = []
+    const passThrough: SearchHit[] = []
+    for (const hit of fileHits) {
+      const hitRegions = normalizeToRegions(hit, ctx, mode)
+      if (hitRegions.length === 0) {
+        passThrough.push(hit)
+        continue
+      }
+      regions.push(...hitRegions)
+    }
+    const visible = selectVisibleAnnotations(ctx.annotations, selectedCodes)
+    const ownerMap = mapOwners(regions, visible)
+    for (const region of regions) {
+      const anns = ownerMap.get(region) ?? []
+      out.push(attachToRegion(region, anns))
+    }
+    out.push(...passThrough)
+  }
+
+  return deduplicateHits(out)
 }
 
-const attachAnnotationsToHit = (
-  hit: SearchHit,
-  ctx: FileContext,
-  selectedCodes: Set<string>
-): SearchHit => {
-  const hitText = hit.text
-  if (!hitText) return hit
-  const visible = selectVisibleAnnotations(ctx.annotations, selectedCodes)
-  const candidates = hit.id ? visible.filter((a) => a.id === hit.id) : visible
-  const present = candidates.filter((a) => isInSlice(hitText, a.text))
-  if (present.length === 0) return hit
-  return { ...hit, text: `${hitText}\n\n${formatAnnotationsBlock(present)}` }
-}
+export const growHits = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  attachAnnotationsWithMode(hits, files, "trim")
 
-export const attachAnnotationsOnly = (hits: SearchHit[], files: FileStore): SearchHit[] => {
-  const selectedCodes = getSelectedCodes(files)
-  return deduplicateHits(
-    hits.map((hit) => {
-      const ctx = getFileContext(hit.file, files)
-      if (!ctx) return hit
-      return attachAnnotationsToHit(hit, ctx, selectedCodes)
-    })
-  )
-}
+export const attachAnnotationsOnly = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  attachAnnotationsWithMode(hits, files, "raw")
+
+const inferMode = (hit: SearchHit): NormalizeMode =>
+  (hit.matches && hit.matches.length > 0) || hit.id ? "trim" : "raw"
 
 const isHitAlive = (hit: SearchHit, files: FileStore): boolean => {
   const content = files[hit.file]
   if (content === undefined) return false
   if (hit.id === undefined) return true
   return content.includes(hit.id)
-}
-
-const regrowHitWithContext = (
-  hit: SearchHit,
-  fileContent: string,
-  ctx: FileContext,
-  selectedCodes: Set<string>
-): SearchHit => {
-  if (!hit.text) return hit
-  const stripped = stripAnnotationsBlock(hit.text)
-  const grown = extractSliceFromContext({ ...hit, text: stripped }, fileContent, ctx, selectedCodes)
-  if (!grown || grown === hit.text) return hit
-  return { ...hit, text: grown }
 }
 
 const isHitFileUnchanged = (
@@ -187,12 +203,16 @@ const isHitFileUnchanged = (
   settingsChanged: boolean
 ): boolean => !settingsChanged && !!prevFiles && prevFiles[hit.file] === files[hit.file]
 
+const refreshHit = (hit: SearchHit, files: FileStore): SearchHit[] => {
+  const stripped = hit.text ? { ...hit, text: stripAnnotationsBlock(hit.text) } : hit
+  return attachAnnotationsWithMode([stripped], files, inferMode(stripped))
+}
+
 export const refreshHits = (
   hits: SearchHit[],
   files: FileStore,
   prevFiles?: FileStore
 ): SearchHit[] => {
-  const selectedCodes = getSelectedCodes(files)
   const settingsChanged = !!prevFiles && prevFiles[SETTINGS_FILE] !== files[SETTINGS_FILE]
   const refreshed: SearchHit[] = []
   for (const h of hits) {
@@ -201,8 +221,7 @@ export const refreshHits = (
       refreshed.push(h)
       continue
     }
-    const ctx = getFileContext(h.file, files)
-    refreshed.push(ctx ? regrowHitWithContext(h, files[h.file], ctx, selectedCodes) : h)
+    refreshed.push(...refreshHit(h, files))
   }
   const deduped = deduplicateHits(refreshed)
   return sameRefs(deduped, hits) ? hits : deduped
@@ -214,10 +233,8 @@ export const refreshHitsAsync = async (
   isCancelled: () => boolean,
   prevFiles?: FileStore
 ): Promise<SearchHit[]> => {
-  const selectedCodes = getSelectedCodes(files)
   const settingsChanged = !!prevFiles && prevFiles[SETTINGS_FILE] !== files[SETTINGS_FILE]
   const refreshed: SearchHit[] = []
-
   for (const h of hits) {
     if (isCancelled()) return refreshed
     if (!isHitAlive(h, files)) continue
@@ -225,11 +242,9 @@ export const refreshHitsAsync = async (
       refreshed.push(h)
       continue
     }
-    const ctx = getFileContext(h.file, files)
-    refreshed.push(ctx ? regrowHitWithContext(h, files[h.file], ctx, selectedCodes) : h)
+    refreshed.push(...refreshHit(h, files))
     await yieldToBrowser()
   }
-
   const deduped = deduplicateHits(refreshed)
   return sameRefs(deduped, hits) ? hits : deduped
 }

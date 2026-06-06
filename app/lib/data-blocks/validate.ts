@@ -75,7 +75,13 @@ export const validateMarkdownBlocks = (
 
   for (const block of blocks) {
     const config = getBlockConfig(block.language)
-    if (!config) continue
+    if (!config) {
+      errors.push({
+        block: block.language,
+        message: `\`${block.language}\` is not a known data-block language. Only registered data blocks are allowed.`,
+      })
+      continue
+    }
 
     const fileError = validateFileConstraint(block.language, options.path)
     if (fileError) {

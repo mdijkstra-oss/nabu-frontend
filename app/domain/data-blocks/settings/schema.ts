@@ -20,15 +20,15 @@ const deduplicateByLabel = (tags: TagDefinition[]): TagDefinition[] => {
 }
 
 const BaseSettings = z.object({
-  tags: z.array(TagDefinition).optional(),
-  searches: z.array(SearchEntrySchema).optional(),
-  corpusDescriptions: z.array(CorpusDescriptionSchema).optional(),
+  tags: z.array(TagDefinition),
+  searches: z.array(SearchEntrySchema),
+  corpusDescriptions: z.array(CorpusDescriptionSchema),
 })
 
 export const settingsSchema = () =>
   BaseSettings.transform((s) => ({
     ...s,
-    ...(s.tags !== undefined && { tags: deduplicateByLabel(s.tags) }),
+    tags: deduplicateByLabel(s.tags),
   }))
 
 export const Settings = settingsSchema()

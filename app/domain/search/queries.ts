@@ -18,3 +18,9 @@ export const buildCandidateSearch = (codeId: string): NewSearchData => ({
   description: `File-similarity search for passages matching code: ${codeId}`,
   sql: `SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('${escapeSqlString(buildCandidateFilename(codeId))}') FROM files f`,
 })
+
+export const buildFileCandidateSearch = (codeId: string, file: string): NewSearchData => ({
+  title: `${codeId} (candidates in ${file})`,
+  description: `File-similarity search for passages matching code: ${codeId} — limited to ${file}`,
+  sql: `SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('${escapeSqlString(buildCandidateFilename(codeId))}') FROM files f WHERE f.file = '${escapeSqlString(file)}'`,
+})
