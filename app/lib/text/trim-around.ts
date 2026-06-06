@@ -1,8 +1,5 @@
 import type { Segment } from "./types"
 import { splitBySentences } from "./split"
-import { locateTextInSentences } from "./present"
-
-export const normalizeMatchWhitespace = (match: string): string => match.replace(/\n\n+/g, " ")
 
 interface Range {
   start: number
@@ -11,9 +8,7 @@ interface Range {
 
 const CONTEXT_BUDGET = 30
 const MIN_STUB_WORDS = 8
-export const SEPARATOR = "\n\n<!--SPLIT-->\n\n"
 const WORD_RE = /\s+/
-const LOCATE_THRESHOLD = 1
 
 const wordCount = (text: string): number => text.split(WORD_RE).filter(Boolean).length
 
@@ -43,17 +38,6 @@ const mergeRanges = (ranges: Range[]): Range[] => {
   }
   return merged
 }
-
-const locateMatch = (sentenceTexts: string[], match: string): Range | null => {
-  const result = locateTextInSentences(sentenceTexts, match, LOCATE_THRESHOLD)
-  if (!result) return null
-  return { start: result.start - 1, end: result.end - 1 }
-}
-
-const locateAll = (sentenceTexts: string[], matches: string[]): Range[] =>
-  matches
-    .map((m) => locateMatch(sentenceTexts, normalizeMatchWhitespace(m)))
-    .filter((r): r is Range => r !== null)
 
 interface ExpandedEdge {
   boundary: number
@@ -99,6 +83,12 @@ const expandAfter = (segments: Segment[], from: number, budget: number): Expande
 const originalGap = (text: string, segments: Segment[], a: number, b: number): string =>
   text.slice(segments[a].end, segments[b].start)
 
+export interface TrimmedRegion {
+  text: string
+  sourceStart: number
+  sourceEnd: number
+}
+
 const renderRegion = (
   text: string,
   segments: Segment[],
@@ -106,7 +96,7 @@ const renderRegion = (
   budget: number,
   isFirst: boolean,
   isLast: boolean
-): string => {
+): TrimmedRegion => {
   const before = expandBefore(segments, range.start, budget)
   const after = expandAfter(segments, range.end, budget)
 
@@ -132,29 +122,14 @@ const renderRegion = (
     parts.push(originalGap(text, segments, after.boundary, after.boundary + 1) + "…")
   }
 
-  return parts.join("")
+  return {
+    text: parts.join(""),
+    sourceStart: segments[before.boundary].start,
+    sourceEnd: segments[after.boundary].end,
+  }
 }
 
 const splitSentenceSegments = splitBySentences()
-
-export const trimAroundMatches = (text: string, matches: string[]): string => {
-  if (matches.length === 0) return text
-
-  const segments = splitSentenceSegments(text)
-  if (segments.length === 0) return text
-
-  const sentenceTexts = segments.map((s) => s.text)
-  const matchRanges = locateAll(sentenceTexts, matches)
-  if (matchRanges.length === 0) return ""
-
-  const regions = mergeRanges(matchRanges)
-
-  return regions
-    .map((r, i) =>
-      renderRegion(text, segments, r, CONTEXT_BUDGET, i === 0, i === regions.length - 1)
-    )
-    .join(SEPARATOR)
-}
 
 export interface SentenceRange {
   start: number
@@ -168,22 +143,20 @@ const clampRange = (range: SentenceRange, segmentCount: number): Range | null =>
   return { start, end }
 }
 
-export const trimByRanges = (text: string, ranges: SentenceRange[]): string => {
-  if (ranges.length === 0) return text
+export const trimByRanges = (text: string, ranges: SentenceRange[]): TrimmedRegion[] => {
+  if (ranges.length === 0) return [{ text, sourceStart: 0, sourceEnd: text.length }]
 
   const segments = splitSentenceSegments(text)
-  if (segments.length === 0) return text
+  if (segments.length === 0) return [{ text, sourceStart: 0, sourceEnd: text.length }]
 
   const clamped = ranges
     .map((r) => clampRange(r, segments.length))
     .filter((r): r is Range => r !== null)
-  if (clamped.length === 0) return ""
+  if (clamped.length === 0) return []
 
   const regions = mergeRanges(clamped)
 
-  return regions
-    .map((r, i) =>
-      renderRegion(text, segments, r, CONTEXT_BUDGET, i === 0, i === regions.length - 1)
-    )
-    .join(SEPARATOR)
+  return regions.map((r, i) =>
+    renderRegion(text, segments, r, CONTEXT_BUDGET, i === 0, i === regions.length - 1)
+  )
 }

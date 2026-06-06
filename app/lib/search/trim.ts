@@ -1,5 +1,5 @@
 import type { SearchHit } from "~/domain/search/types"
-import { trimByRanges, SEPARATOR } from "~/lib/text/trim-around"
+import { trimByRanges, type TrimmedRegion } from "~/lib/text/trim-around"
 
 const stripLonelyEllipses = (text: string): string =>
   text
@@ -9,24 +9,35 @@ const stripLonelyEllipses = (text: string): string =>
     .replace(/\n{3,}/g, "\n\n")
     .replace(/^\n+|\n+$/g, "")
 
-const splitTrimmedText = (trimmed: string): string[] =>
-  trimmed
-    .split(SEPARATOR)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
+const cleanRegion = (region: TrimmedRegion): TrimmedRegion => ({
+  ...region,
+  text: stripLonelyEllipses(region.text),
+})
+
+const offsetRegion = (region: TrimmedRegion, base: number): TrimmedRegion => ({
+  ...region,
+  sourceStart: base + region.sourceStart,
+  sourceEnd: base + region.sourceEnd,
+})
 
 const trimHit = (hit: SearchHit): SearchHit[] => {
   if (!hit.matchRanges || hit.matchRanges.length === 0 || !hit.text) return [hit]
-  const trimmed = stripLonelyEllipses(trimByRanges(hit.text, hit.matchRanges))
-  if (!trimmed) return [hit]
-  const parts = splitTrimmedText(trimmed)
-  if (parts.length === 0) return []
-  if (parts.length === 1) return [{ ...hit, text: parts[0] }]
-  return parts.map((text, i) => ({
+  const base = hit.chunkStart ?? 0
+  const regions = trimByRanges(hit.text, hit.matchRanges)
+    .map((r) => offsetRegion(cleanRegion(r), base))
+    .filter((r) => r.text.length > 0)
+  if (regions.length === 0) return []
+  if (regions.length === 1) {
+    const r = regions[0]
+    return [{ ...hit, text: r.text, chunkStart: r.sourceStart, chunkEnd: r.sourceEnd }]
+  }
+  return regions.map((r, i) => ({
     ...hit,
-    text,
+    text: r.text,
+    chunkStart: r.sourceStart,
+    chunkEnd: r.sourceEnd,
     splitIndex: i,
-    splitTotal: parts.length,
+    splitTotal: regions.length,
   }))
 }
 

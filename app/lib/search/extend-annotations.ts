@@ -94,7 +94,7 @@ export const extendRegionsForAnnotations = (hits: SearchHit[], files: FileStore)
     )
     const rangeUnchanged = extended.start === hit.chunkStart && extended.end === hit.chunkEnd
     if (rangeUnchanged && included.length === 0) return hit
-    const baseText = source.slice(extended.start, extended.end)
+    const baseText = rangeUnchanged ? (hit.text ?? "") : source.slice(extended.start, extended.end)
     const text =
       included.length > 0 ? `${baseText}\n\n${formatAnnotationsBlock(included)}` : baseText
     return {
