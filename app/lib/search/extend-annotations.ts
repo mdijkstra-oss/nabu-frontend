@@ -81,8 +81,19 @@ export const extendRegionsForAnnotations = (hits: SearchHit[], files: FileStore)
     return source
   }
 
+  const findAnnotationInFile = (file: string, id: string): Annotation | undefined =>
+    getAnnotations(file).find((a) => a.id === id)
+
   return hits.map((hit) => {
-    if (hit.chunkStart === undefined || hit.chunkEnd === undefined) return hit
+    if (hit.chunkStart === undefined || hit.chunkEnd === undefined) {
+      if (hit.id !== undefined) {
+        const annotation = findAnnotationInFile(hit.file, hit.id)
+        if (!annotation) return hit
+        const baseText = hit.text ?? ""
+        return { ...hit, text: `${baseText}\n\n${formatAnnotationsBlock([annotation])}` }
+      }
+      return hit
+    }
     const annotations = getAnnotations(hit.file)
     if (annotations.length === 0) return hit
     const source = getSource(hit.file)

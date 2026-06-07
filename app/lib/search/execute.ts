@@ -156,11 +156,8 @@ const topTenChunks = (
 ): Pick<ScoredChunk, "file" | "hash" | "score" | "text">[] =>
   chunks.slice(0, 10).map((c) => ({ file: c.file, hash: c.hash, score: c.score, text: c.text }))
 
-const logPreMergeTopTen = (cosineOnly: ScoredChunk[], combined: ScoredChunk[]): void => {
-  console.debug("[search-scoring-compare]", {
-    BE: topTenChunks(combined),
-    E: topTenChunks(cosineOnly),
-  })
+const logCosineOnlyTopTen = (cosineOnly: ScoredChunk[]): void => {
+  console.debug("[search-scoring]", { E: topTenChunks(cosineOnly) })
 }
 
 interface ConstituentScores {
@@ -282,7 +279,7 @@ export const executeHybridLocal = async (
     maxRawCosineByHash,
     plan.limit
   )
-  logPreMergeTopTen(cosineOnlyResult.fused, combinedResult.fused)
+  logCosineOnlyTopTen(cosineOnlyResult.fused)
   logConstituentScores(combinedResult.constituents)
 
   return ok(combinedResult.fused.map(chunkToHit))

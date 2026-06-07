@@ -11,6 +11,7 @@ import { generateFileHydes } from "~/lib/corpus/generate-file-hydes"
 import { getFileRaw } from "~/lib/files/store"
 import { resolveHiddenFile } from "~/lib/files/hidden-blocks"
 import { processPool } from "~/lib/utils/pool"
+import { isDebugOn } from "~/lib/debug/options"
 import {
   extractSemanticTokens,
   hasSemanticTokens,
@@ -124,6 +125,12 @@ const filterDescriptionsForLanguages = (
   return descriptions.filter((d) => langSet.has(d.language))
 }
 
+const buildRawQueryInclusions = (languages: string[], query: string): Inclusions => {
+  const inclusions: Inclusions = {}
+  for (const lang of languages) inclusions[lang] = [{ type: "direct", text: query }]
+  return inclusions
+}
+
 const resolveCorpusInclusions = async (
   descriptions: CorpusDescription[],
   languages: string[],
@@ -133,6 +140,8 @@ const resolveCorpusInclusions = async (
   const cached = ctx.cachedEmbeddings
   if (cached && isCorpusCacheValid(cached, ctx.descriptionsHash, languages))
     return ok(cached.inclusions)
+
+  if (isDebugOn("skipHydeGeneration")) return ok(buildRawQueryInclusions(languages, query))
 
   const relevant = filterDescriptionsForLanguages(descriptions, languages)
 

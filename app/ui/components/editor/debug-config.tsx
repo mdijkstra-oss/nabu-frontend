@@ -85,6 +85,13 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
+    key: "skipHydeGeneration",
+    label: "Step 0 — Skip HyDE generation (use raw query)",
+    description: "Skip LLM HyDE expansion. Embed the raw query text once per language.",
+    icon: <Filter />,
+    defaultValue: false,
+  },
+  {
     key: "skipMerge",
     label: "Step 3 — Skip merge (capped chunks, no fuse)",
     description: "Skip merging byte-overlapping chunks into regions. Cap-by-file still runs.",

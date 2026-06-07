@@ -66,8 +66,11 @@ const applyCap = (hits: SearchHit[], files: FileStore): SearchHit[] => capStage(
 const applyMerge = (hits: SearchHit[], files: FileStore): SearchHit[] =>
   isDebugOn("skipMerge") ? hits : mergeStage(hits, files)
 
-const logTopHits = (hits: SearchHit[]): void => {
-  console.debug("[search] top 10 results:", hits.slice(0, 10))
+const logFinalHits = (hits: SearchHit[]): void => {
+  console.debug(
+    "[search] final pipeline output:",
+    hits.map((h) => ({ file: h.file, text: h.text }))
+  )
 }
 
 const applyTrim = (hits: SearchHit[]): SearchHit[] => (isDebugOn("skipTrim") ? hits : trim(hits))
@@ -155,7 +158,7 @@ const buildResult = async ({
   if (!needsFiltering) {
     const hits = tail(grouped, files)
     onResults?.(hits)
-    logTopHits(hits)
+    logFinalHits(hits)
     return ok({
       hits,
       rawRemaining: [],
@@ -184,7 +187,7 @@ const buildResult = async ({
     onResults
   )
 
-  logTopHits(filtered.hits)
+  logFinalHits(filtered.hits)
 
   return ok({
     ...filtered,
