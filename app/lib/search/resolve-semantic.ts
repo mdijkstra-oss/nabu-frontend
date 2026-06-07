@@ -1,6 +1,6 @@
 import type { Result } from "~/lib/fp/result"
 import type { Database } from "~/lib/db/types"
-import type { HydeQuery, HybridSearchPlan } from "./semantic"
+import type { HydeQuery, HybridSearchPlan, KeywordsQuery } from "./semantic"
 import type { EmbeddingsCache, EmbeddingsSource, Inclusions } from "~/domain/search/types"
 import type { CorpusDescription } from "~/domain/corpus/types"
 import type { HydeAngle } from "~/lib/corpus/hyde-schema"
@@ -214,11 +214,30 @@ const resolveFileInclusions = async (
   return ok({ inclusions, highlight })
 }
 
+const isEmbeddable = (angle: HydeAngle): boolean => angle.type !== "keywords"
+
+const isKeyword = (angle: HydeAngle): boolean => angle.type === "keywords"
+
+const extractKeywords = (inclusions: Inclusions): KeywordsQuery[] => {
+  const out: KeywordsQuery[] = []
+  for (const [language, angles] of Object.entries(inclusions)) {
+    const text = angles
+      .filter(isKeyword)
+      .map((a) => a.text)
+      .join(" ")
+      .trim()
+    if (text.length > 0) out.push({ language, text })
+  }
+  return out
+}
+
 const embedAndFlattenAll = async (
   inclusions: Inclusions,
   baseUrl: string
 ): Promise<Result<HydeQuery[], { message: string }>> => {
-  const entries = Object.entries(inclusions).filter(([, angles]) => angles.length > 0)
+  const entries = Object.entries(inclusions)
+    .map(([language, angles]) => [language, angles.filter(isEmbeddable)] as const)
+    .filter(([, angles]) => angles.length > 0)
   const allQueries: HydeQuery[] = []
 
   const pool = await processPool(
@@ -268,7 +287,8 @@ const resolveCorpusSql = async (
   const embedded = await embedAndFlattenAll(inclusionsResult.value, ctx.baseUrl)
   if (!embedded.ok) return invalid(embedded.error.message)
 
-  const plan = buildHybridPlan(sql, token, embedded.value)
+  const keywords = extractKeywords(inclusionsResult.value)
+  const plan = buildHybridPlan(sql, token, embedded.value, keywords)
   const source: EmbeddingsSource = { type: "corpus", hash: ctx.descriptionsHash }
   return ok({
     type: "hybrid",
@@ -304,7 +324,8 @@ const resolveFileSql = async (
     const embedded = await embedAndFlattenAll(fileResult.value.inclusions, ctx.baseUrl)
     if (!embedded.ok) return invalid(embedded.error.message)
 
-    const plan = buildHybridPlan(sql, token, embedded.value)
+    const keywords = extractKeywords(fileResult.value.inclusions)
+    const plan = buildHybridPlan(sql, token, embedded.value, keywords)
     const source: EmbeddingsSource = { type: "file", filename, hash: fileHash }
     return ok({
       type: "hybrid",

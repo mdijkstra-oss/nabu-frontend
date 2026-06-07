@@ -1,11 +1,13 @@
 import type { Database, DbError } from "~/lib/db/types"
 import type { SearchHit } from "~/domain/search/types"
 import type { Result } from "~/lib/fp/result"
-import type { HybridSearchPlan } from "./semantic"
+import type { HybridSearchPlan, KeywordsQuery } from "./semantic"
 import type { ScoredChunk } from "./fusion"
 import { ok, err } from "~/lib/fp/result"
-import { buildCosineQuery } from "./semantic"
-import { fuseCosineResults } from "./fusion"
+import { buildCosineQuery, stripOrderByTail, injectSelectColumn } from "./semantic"
+import { stripPaging } from "./paging"
+import { fuseCosineResults, RRF_K } from "./fusion"
+import { queryBm25 } from "./bm25/store"
 
 type RawRow = Record<string, unknown>
 
@@ -64,12 +66,42 @@ export const chunkToHit = (chunk: ScoredChunk): SearchHit => ({
 
 type QueryBuilder = (baseSql: string, hyde: HybridSearchPlan["hydes"][number]) => string
 
-const fuseHydes = async (
+const BM25_QUERY_LIMIT = 200
+
+const runBm25Query = (keywords: KeywordsQuery, candidates: Set<string>): ScoredChunk[] =>
+  queryBm25(keywords.language, keywords.text, BM25_QUERY_LIMIT, { candidates }).map((hit) => ({
+    file: hit.file,
+    text: hit.text,
+    hash: hit.id,
+    chunkStart: hit.chunkStart,
+    chunkEnd: hit.chunkEnd,
+    score: hit.score,
+  }))
+
+const buildCandidateQuery = (baseSql: string): string => {
+  const core = stripOrderByTail(stripPaging(baseSql))
+  return injectSelectColumn(core, "hash")
+}
+
+const fetchCandidateHashes = async (
+  db: Database,
+  baseSql: string
+): Promise<Result<Set<string>, DbError>> => {
+  const sql = buildCandidateQuery(baseSql)
+  const result = await db.query<RawRow>(sql)
+  if (!result.ok) return result
+  const hashes = new Set<string>()
+  for (const row of result.value.rows) {
+    if (row.hash !== undefined && row.hash !== null) hashes.add(String(row.hash))
+  }
+  return ok(hashes)
+}
+
+const collectCosineLists = async (
   db: Database,
   plan: HybridSearchPlan,
-  buildQuery: QueryBuilder,
-  limit: number | undefined
-): Promise<Result<ScoredChunk[], DbError>> => {
+  buildQuery: QueryBuilder
+): Promise<Result<ScoredChunk[][], DbError>> => {
   const results = await Promise.all(
     plan.hydes.map((hyde) => runScoredQuery(db, buildQuery(plan.baseSql, hyde)))
   )
@@ -80,14 +112,178 @@ const fuseHydes = async (
     cosinePerHyde.push(result.value)
   }
 
-  return ok(fuseCosineResults(cosinePerHyde, limit))
+  return ok(cosinePerHyde)
+}
+
+const groupCosineByLanguage = (
+  plan: HybridSearchPlan,
+  cosineLists: ScoredChunk[][]
+): Map<string, ScoredChunk[][]> => {
+  const grouped = new Map<string, ScoredChunk[][]>()
+  for (let i = 0; i < plan.hydes.length; i++) {
+    const language = plan.hydes[i].language
+    const bucket = grouped.get(language) ?? []
+    bucket.push(cosineLists[i])
+    grouped.set(language, bucket)
+  }
+  return grouped
+}
+
+const fuseCosinePerLanguage = (
+  grouped: Map<string, ScoredChunk[][]>
+): Map<string, ScoredChunk[]> => {
+  const out = new Map<string, ScoredChunk[]>()
+  for (const [language, lists] of grouped) out.set(language, fuseCosineResults(lists, undefined))
+  return out
+}
+
+const buildBm25PerLanguage = (
+  plan: HybridSearchPlan,
+  candidates: Set<string>
+): Map<string, ScoredChunk[]> => {
+  const out = new Map<string, ScoredChunk[]>()
+  for (const kw of plan.keywords) {
+    const list = runBm25Query(kw, candidates)
+    if (list.length > 0) out.set(kw.language, list)
+  }
+  return out
+}
+
+const EMPTY_BM25 = new Map<string, ScoredChunk[]>()
+
+const topTenChunks = (
+  chunks: ScoredChunk[]
+): Pick<ScoredChunk, "file" | "hash" | "score" | "text">[] =>
+  chunks.slice(0, 10).map((c) => ({ file: c.file, hash: c.hash, score: c.score, text: c.text }))
+
+const logPreMergeTopTen = (cosineOnly: ScoredChunk[], combined: ScoredChunk[]): void => {
+  console.debug("[search-scoring-compare]", {
+    BE: topTenChunks(combined),
+    E: topTenChunks(cosineOnly),
+  })
+}
+
+interface ConstituentScores {
+  hash: string
+  file: string
+  language: string
+  cosine: number
+  bm25: number
+  fused: number
+  rawCosine: number
+}
+
+const computeMaxRawCosineByHash = (cosineLists: ScoredChunk[][]): Map<string, number> => {
+  const max = new Map<string, number>()
+  for (const list of cosineLists) {
+    for (const chunk of list) {
+      if (!chunk.hash) continue
+      const prev = max.get(chunk.hash) ?? Number.NEGATIVE_INFINITY
+      if (chunk.score > prev) max.set(chunk.hash, chunk.score)
+    }
+  }
+  return max
+}
+
+const scoreFromRank = (rank: number | undefined): number =>
+  rank === undefined ? 0 : 1 / (RRF_K + rank)
+
+const rankByHash = (list: ScoredChunk[]): Map<string, number> => {
+  const map = new Map<string, number>()
+  for (let i = 0; i < list.length; i++) {
+    const hash = list[i].hash
+    if (hash && !map.has(hash)) map.set(hash, i + 1)
+  }
+  return map
+}
+
+const fuseAcrossRetrievers = (
+  cosineByLang: Map<string, ScoredChunk[]>,
+  bm25ByLang: Map<string, ScoredChunk[]>,
+  maxRawCosineByHash: Map<string, number>,
+  limit: number | undefined
+): { fused: ScoredChunk[]; constituents: ConstituentScores[] } => {
+  const languages = new Set([...cosineByLang.keys(), ...bm25ByLang.keys()])
+  const merged: ScoredChunk[] = []
+  const constituents: ConstituentScores[] = []
+  for (const language of languages) {
+    const cosine = cosineByLang.get(language) ?? []
+    const bm25 = bm25ByLang.get(language) ?? []
+    const lists = [cosine, bm25].filter((l) => l.length > 0)
+    if (lists.length === 0) continue
+
+    const fusedLang = fuseCosineResults(lists, undefined)
+    merged.push(...fusedLang)
+
+    const cosineRanks = rankByHash(cosine)
+    const bm25Ranks = rankByHash(bm25)
+    for (const chunk of fusedLang) {
+      if (!chunk.hash) continue
+      constituents.push({
+        hash: chunk.hash,
+        file: chunk.file,
+        language,
+        cosine: scoreFromRank(cosineRanks.get(chunk.hash)),
+        bm25: scoreFromRank(bm25Ranks.get(chunk.hash)),
+        fused: chunk.score,
+        rawCosine: maxRawCosineByHash.get(chunk.hash) ?? 0,
+      })
+    }
+  }
+  const sorted = merged.sort((a, b) => b.score - a.score)
+  const limited = limit !== undefined ? sorted.slice(0, limit) : sorted
+  return { fused: limited, constituents }
+}
+
+const logConstituentScores = (constituents: ConstituentScores[]): void => {
+  const sorted = [...constituents].sort((a, b) => b.fused - a.fused)
+  console.debug(
+    "[search] cosine scores:",
+    sorted.map((c) => c.cosine)
+  )
+  console.debug(
+    "[search] bm25 scores:",
+    sorted.map((c) => c.bm25)
+  )
+  console.debug(
+    "[search] fused scores:",
+    sorted.map((c) => c.fused)
+  )
+  console.debug(
+    "[search] raw cosine similarity:",
+    sorted.map((c) => c.rawCosine)
+  )
 }
 
 export const executeHybridLocal = async (
   db: Database,
   plan: HybridSearchPlan
 ): Promise<Result<SearchHit[], DbError>> => {
-  const fused = await fuseHydes(db, plan, buildCosineQuery, plan.limit)
-  if (!fused.ok) return fused
-  return ok(fused.value.map(chunkToHit))
+  const [cosineLists, candidateHashes] = await Promise.all([
+    collectCosineLists(db, plan, buildCosineQuery),
+    fetchCandidateHashes(db, plan.baseSql),
+  ])
+  if (!cosineLists.ok) return cosineLists
+  if (!candidateHashes.ok) return candidateHashes
+
+  const maxRawCosineByHash = computeMaxRawCosineByHash(cosineLists.value)
+  const cosineByLanguage = fuseCosinePerLanguage(groupCosineByLanguage(plan, cosineLists.value))
+  const bm25ByLanguage = buildBm25PerLanguage(plan, candidateHashes.value)
+
+  const cosineOnlyResult = fuseAcrossRetrievers(
+    cosineByLanguage,
+    EMPTY_BM25,
+    maxRawCosineByHash,
+    plan.limit
+  )
+  const combinedResult = fuseAcrossRetrievers(
+    cosineByLanguage,
+    bm25ByLanguage,
+    maxRawCosineByHash,
+    plan.limit
+  )
+  logPreMergeTopTen(cosineOnlyResult.fused, combinedResult.fused)
+  logConstituentScores(combinedResult.constituents)
+
+  return ok(combinedResult.fused.map(chunkToHit))
 }

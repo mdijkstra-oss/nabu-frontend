@@ -78,7 +78,7 @@ export default function ProjectSearch() {
   const navigate = useNavigate()
   const { files, dbReady, debugOptions, getFileTags, tagDefinitions, actionBar } = useProject()
   const [revision, _setRevision] = useState(0)
-  const { search, results, hydes, phase, error, hasMore, loadMore } = useSearchResults(
+  const { search, results, hydes, keywords, phase, error, hasMore, loadMore } = useSearchResults(
     params.searchId ?? "",
     revision,
     dbReady
@@ -215,7 +215,7 @@ export default function ProjectSearch() {
               )}
               {hydes.length > 0 && (
                 <pre className="w-full rounded-md bg-neutral-100 px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
-                  {formatHydeDebug(hydes)}
+                  {formatHydeDebug(hydes, keywords)}
                 </pre>
               )}
             </div>

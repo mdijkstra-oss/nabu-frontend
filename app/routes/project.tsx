@@ -59,6 +59,7 @@ import {
   type OnDbSyncProgress,
 } from "~/domain/db/database"
 import { startEmbeddings } from "~/domain/embeddings/init"
+import { startBm25 } from "~/domain/search/bm25-init"
 import { startTopicAssignment } from "~/domain/corpus/init"
 import { WelcomeBackLoading } from "~/ui/components/WelcomeBackLoading"
 import {
@@ -344,6 +345,9 @@ export default function ProjectLayout() {
       if (cancelled) return
       setEmbeddingProcessed((t) => Math.max(t, 1))
       setEmbeddingTotal((t) => Math.max(t, 1))
+
+      await startBm25()
+      if (cancelled) return
 
       setStatusLabel("Classifying documents...")
       await startTopicAssignment((processed, total) => {

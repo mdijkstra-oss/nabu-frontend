@@ -67,6 +67,7 @@
     "jq-web": "^0.6.2",
     "lucide-react": "^1.7.0",
     "minimatch": "^10.1.1",
+    "minisearch": "^7.2.0",
     "mri": "^1.2.0",
     "prosemirror-model": "^1.25.4",
     "prosemirror-state": "^1.4.4",

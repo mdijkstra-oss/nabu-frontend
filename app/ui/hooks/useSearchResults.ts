@@ -14,7 +14,7 @@ import {
   runVerdictTail,
 } from "~/lib/search/pipeline"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
-import type { HydeQuery } from "~/lib/search/semantic"
+import type { HydeQuery, KeywordsQuery } from "~/lib/search/semantic"
 import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
 
 export type SearchPhase = "idle" | "resolving" | "searching" | "filtering" | "done"
@@ -22,6 +22,7 @@ export type SearchPhase = "idle" | "resolving" | "searching" | "filtering" | "do
 interface SettledState {
   results: SearchHit[]
   hydes: HydeQuery[]
+  keywords: KeywordsQuery[]
   error: string | null
   searchId: string | null
   phase: SearchPhase
@@ -31,6 +32,7 @@ interface SettledState {
 const EMPTY: SettledState = {
   results: [],
   hydes: [],
+  keywords: [],
   error: null,
   searchId: null,
   phase: "idle",
@@ -41,6 +43,7 @@ export interface SearchResults {
   search: SearchEntry | undefined
   results: SearchHit[]
   hydes: HydeQuery[]
+  keywords: KeywordsQuery[]
   phase: SearchPhase
   error: string | null
   hasMore: boolean
@@ -121,6 +124,7 @@ export const useSearchResults = (
       setSettled({
         results: [],
         hydes: [],
+        keywords: [],
         error: null,
         searchId,
         phase: "resolving",
@@ -140,6 +144,7 @@ export const useSearchResults = (
         setSettled({
           results: [],
           hydes: [],
+          keywords: [],
           error: resolved.error.message,
           searchId,
           phase: "done",
@@ -150,7 +155,11 @@ export const useSearchResults = (
 
       if (resolved.value.type === "hybrid") {
         const hybrid = resolved.value
-        setSettled((prev) => ({ ...prev, hydes: hybrid.plan.hydes }))
+        setSettled((prev) => ({
+          ...prev,
+          hydes: hybrid.plan.hydes,
+          keywords: hybrid.plan.keywords,
+        }))
         updateSearchCache(freshSearch.id, hybrid.embeddings, hybrid.highlight)
       }
 
@@ -184,6 +193,7 @@ export const useSearchResults = (
         setSettled({
           results: [],
           hydes: [],
+          keywords: [],
           error: result.error.message,
           searchId,
           phase: "done",
@@ -228,6 +238,7 @@ export const useSearchResults = (
     search,
     results: settled.results,
     hydes: settled.hydes,
+    keywords: settled.keywords,
     phase: settled.phase,
     error: settled.error,
     hasMore: settled.hasMore,

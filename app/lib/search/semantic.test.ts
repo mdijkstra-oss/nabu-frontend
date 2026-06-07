@@ -373,6 +373,12 @@ describe("buildCosineQuery", () => {
       ],
     },
     {
+      name: "selects hash, chunkStart, chunkEnd alongside score",
+      baseSql: "SELECT f.file, f.text FROM files f",
+      hyde: hyde("eng", [0.1]),
+      expectedContains: ["hash, chunkStart, chunkEnd, list_cosine_similarity"],
+    },
+    {
       name: "strips existing ORDER BY and LIMIT from base",
       baseSql: "SELECT f.file, f.text FROM files f ORDER BY f.file LIMIT 10",
       hyde: hyde("nld", [0.5]),
@@ -442,7 +448,7 @@ describe("buildHybridPlan", () => {
       },
     ]
 
-    const plan = buildHybridPlan(sql, token, hydes)
+    const plan = buildHybridPlan(sql, token, hydes, [])
 
     expect(plan.intent).toBe("emotional distress")
     expect(plan.limit).toBe(30)

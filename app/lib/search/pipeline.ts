@@ -66,6 +66,10 @@ const applyCap = (hits: SearchHit[], files: FileStore): SearchHit[] => capStage(
 const applyMerge = (hits: SearchHit[], files: FileStore): SearchHit[] =>
   isDebugOn("skipMerge") ? hits : mergeStage(hits, files)
 
+const logTopHits = (hits: SearchHit[]): void => {
+  console.debug("[search] top 10 results:", hits.slice(0, 10))
+}
+
 const applyTrim = (hits: SearchHit[]): SearchHit[] => (isDebugOn("skipTrim") ? hits : trim(hits))
 
 const applyExtend = (hits: SearchHit[], files: FileStore): SearchHit[] =>
@@ -151,6 +155,7 @@ const buildResult = async ({
   if (!needsFiltering) {
     const hits = tail(grouped, files)
     onResults?.(hits)
+    logTopHits(hits)
     return ok({
       hits,
       rawRemaining: [],
@@ -178,6 +183,8 @@ const buildResult = async ({
     target,
     onResults
   )
+
+  logTopHits(filtered.hits)
 
   return ok({
     ...filtered,

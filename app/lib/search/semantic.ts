@@ -17,10 +17,16 @@ export interface HydeQuery {
   cosineVector: number[]
 }
 
+export interface KeywordsQuery {
+  language: string
+  text: string
+}
+
 export interface HybridSearchPlan {
   intent: string
   baseSql: string
   hydes: HydeQuery[]
+  keywords: KeywordsQuery[]
   limit: number | undefined
 }
 
@@ -168,11 +174,11 @@ export const stripSemanticToken = (sql: string, token: SemanticToken): string =>
   return before + after
 }
 
-const stripOrderByTail = (sql: string): string => sql.replace(ORDER_BY_TAIL_RE, "")
+export const stripOrderByTail = (sql: string): string => sql.replace(ORDER_BY_TAIL_RE, "")
 
 const FROM_RE = /\bFROM\b/i
 
-const injectSelectColumn = (sql: string, column: string): string => {
+export const injectSelectColumn = (sql: string, column: string): string => {
   const match = FROM_RE.exec(sql)
   if (!match) return `${sql}, ${column}`
   const beforeFrom = sql.slice(0, match.index)
@@ -196,13 +202,16 @@ const injectLanguageFilter = (sql: string, language: string): string => {
   return `${sql.slice(0, insertAt)} WHERE language = '${escaped}'${sql.slice(insertAt)}`
 }
 
+// hash must be in the SELECT: cross-retriever RRF (cosine ⊕ BM25) keys chunks by hash to
+// reinforce hits found by both. Without it, fusion.ts::chunkKey falls back to `file:text`
+// for cosine vs the bm25 doc id for BM25 — same chunk gets two keys, never deduplicated.
 const buildCosineBase = (baseSql: string, hyde: HydeQuery): string => {
   const vec = formatVector(hyde.cosineVector)
   const core = stripOrderByTail(stripPaging(baseSql))
   const withLanguage = injectLanguageFilter(core, hyde.language)
   return injectSelectColumn(
     withLanguage,
-    `chunkStart, chunkEnd, list_cosine_similarity(embedding, ${vec}) AS ${SCORE_COLUMN}`
+    `hash, chunkStart, chunkEnd, list_cosine_similarity(embedding, ${vec}) AS ${SCORE_COLUMN}`
   )
 }
 
@@ -214,11 +223,12 @@ export const buildCosineQuery = (baseSql: string, hyde: HydeQuery): string =>
 export const buildHybridPlan = (
   sql: string,
   token: SemanticToken,
-  hydes: HydeQuery[]
+  hydes: HydeQuery[],
+  keywords: KeywordsQuery[]
 ): HybridSearchPlan => {
   const baseSql = stripSemanticToken(sql, token)
   const limit = extractLimit(sql)
-  return { intent: token.text, baseSql, hydes, limit }
+  return { intent: token.text, baseSql, hydes, keywords, limit }
 }
 
 const aliasTokens = (sql: string, tokens: SemanticToken[], wrapper: string): string => {
