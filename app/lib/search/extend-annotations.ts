@@ -63,7 +63,6 @@ export const extendRangeForAnnotations = (
 export const extendRegionsForAnnotations = (hits: SearchHit[], files: FileStore): SearchHit[] => {
   const selectedCodes = getSelectedCodes(files)
   const annotationCache = new Map<string, Annotation[]>()
-  const sourceCache = new Map<string, string | null>()
 
   const getAnnotations = (file: string): Annotation[] => {
     const cached = annotationCache.get(file)
@@ -71,14 +70,6 @@ export const extendRegionsForAnnotations = (hits: SearchHit[], files: FileStore)
     const visible = selectVisibleAnnotations(fileAnnotations(file, files), selectedCodes)
     annotationCache.set(file, visible)
     return visible
-  }
-
-  const getSource = (file: string): string | null => {
-    const cached = sourceCache.get(file)
-    if (cached !== undefined) return cached
-    const source = getEmbeddableSource(file, files)
-    sourceCache.set(file, source)
-    return source
   }
 
   const findAnnotationInFile = (file: string, id: string): Annotation | undefined =>
@@ -96,7 +87,7 @@ export const extendRegionsForAnnotations = (hits: SearchHit[], files: FileStore)
     }
     const annotations = getAnnotations(hit.file)
     if (annotations.length === 0) return hit
-    const source = getSource(hit.file)
+    const source = getEmbeddableSource(hit.file, files)
     if (source === null) return hit
     const { range: extended, included } = extendAndCollect(
       { start: hit.chunkStart, end: hit.chunkEnd },
