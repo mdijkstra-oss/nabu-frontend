@@ -42,6 +42,7 @@ const mergeRanges = (ranges: Range[]): Range[] => {
 interface ExpandedEdge {
   boundary: number
   truncated: { index: number; words: number } | null
+  used: number
 }
 
 const expandBefore = (segments: Segment[], from: number, budget: number): ExpandedEdge => {
@@ -55,11 +56,11 @@ const expandBefore = (segments: Segment[], from: number, budget: number): Expand
     } else {
       const remaining = budget - used
       if (remaining >= MIN_STUB_WORDS)
-        return { boundary, truncated: { index: i, words: remaining } }
-      return { boundary, truncated: null }
+        return { boundary, truncated: { index: i, words: remaining }, used }
+      return { boundary, truncated: null, used }
     }
   }
-  return { boundary, truncated: null }
+  return { boundary, truncated: null, used }
 }
 
 const expandAfter = (segments: Segment[], from: number, budget: number): ExpandedEdge => {
@@ -73,20 +74,127 @@ const expandAfter = (segments: Segment[], from: number, budget: number): Expande
     } else {
       const remaining = budget - used
       if (remaining >= MIN_STUB_WORDS)
-        return { boundary, truncated: { index: i, words: remaining } }
-      return { boundary, truncated: null }
+        return { boundary, truncated: { index: i, words: remaining }, used }
+      return { boundary, truncated: null, used }
     }
   }
-  return { boundary, truncated: null }
+  return { boundary, truncated: null, used }
 }
 
 const originalGap = (text: string, segments: Segment[], a: number, b: number): string =>
   text.slice(segments[a].end, segments[b].start)
 
+const splitSentenceSegments = splitBySentences()
+
 export interface TrimmedRegion {
   text: string
   sourceStart: number
   sourceEnd: number
+}
+
+interface PadResult {
+  text: string
+  bytesUsed: number
+}
+
+const padBefore = (leading: string, budget: number): PadResult | null => {
+  if (leading.length === 0 || budget < MIN_STUB_WORDS) return null
+  const segments = splitSentenceSegments(leading)
+  if (segments.length === 0) return null
+  const edge = expandBefore(segments, segments.length, budget)
+  if (edge.boundary >= segments.length) return null
+
+  const parts: string[] = []
+  if (edge.truncated) {
+    parts.push("…" + taketail(segments[edge.truncated.index].text, edge.truncated.words))
+    parts.push(originalGap(leading, segments, edge.truncated.index, edge.boundary))
+  } else if (edge.boundary > 0) {
+    parts.push("…" + originalGap(leading, segments, edge.boundary - 1, edge.boundary))
+  }
+  parts.push(leading.slice(segments[edge.boundary].start))
+
+  return { text: parts.join(""), bytesUsed: leading.length - segments[edge.boundary].start }
+}
+
+const padAfter = (trailing: string, budget: number): PadResult | null => {
+  if (trailing.length === 0 || budget < MIN_STUB_WORDS) return null
+  const segments = splitSentenceSegments(trailing)
+  if (segments.length === 0) return null
+  const edge = expandAfter(segments, -1, budget)
+  if (edge.boundary < 0) return null
+
+  const parts: string[] = []
+  parts.push(trailing.slice(0, segments[edge.boundary].end))
+  if (edge.truncated) {
+    parts.push(originalGap(trailing, segments, edge.boundary, edge.truncated.index))
+    parts.push(takeHead(segments[edge.truncated.index].text, edge.truncated.words) + "…")
+  } else if (edge.boundary < segments.length - 1) {
+    parts.push(originalGap(trailing, segments, edge.boundary, edge.boundary + 1) + "…")
+  }
+
+  return { text: parts.join(""), bytesUsed: segments[edge.boundary].end }
+}
+
+interface DecorationOpts {
+  leading?: string
+  trailing?: string
+}
+
+interface Decoration {
+  text: string
+  bytesShift: number
+}
+
+const renderBeforeDecoration = (
+  text: string,
+  segments: Segment[],
+  before: ExpandedEdge,
+  isFirst: boolean,
+  leading: string | undefined,
+  budget: number
+): Decoration => {
+  if (before.truncated) {
+    const stub = "…" + taketail(segments[before.truncated.index].text, before.truncated.words)
+    const gap = originalGap(text, segments, before.truncated.index, before.boundary)
+    return { text: stub + gap, bytesShift: 0 }
+  }
+  if (isFirst && before.boundary === 0 && leading) {
+    const pad = padBefore(leading, budget - before.used)
+    if (pad) return { text: pad.text, bytesShift: pad.bytesUsed }
+  }
+  if (isFirst && before.boundary > 0) {
+    return {
+      text: "…" + originalGap(text, segments, before.boundary - 1, before.boundary),
+      bytesShift: 0,
+    }
+  }
+  return { text: "", bytesShift: 0 }
+}
+
+const renderAfterDecoration = (
+  text: string,
+  segments: Segment[],
+  after: ExpandedEdge,
+  isLast: boolean,
+  trailing: string | undefined,
+  budget: number
+): Decoration => {
+  if (after.truncated) {
+    const gap = originalGap(text, segments, after.boundary, after.truncated.index)
+    const stub = takeHead(segments[after.truncated.index].text, after.truncated.words) + "…"
+    return { text: gap + stub, bytesShift: 0 }
+  }
+  if (isLast && after.boundary === segments.length - 1 && trailing) {
+    const pad = padAfter(trailing, budget - after.used)
+    if (pad) return { text: pad.text, bytesShift: pad.bytesUsed }
+  }
+  if (isLast && after.boundary < segments.length - 1) {
+    return {
+      text: originalGap(text, segments, after.boundary, after.boundary + 1) + "…",
+      bytesShift: 0,
+    }
+  }
+  return { text: "", bytesShift: 0 }
 }
 
 const renderRegion = (
@@ -95,41 +203,23 @@ const renderRegion = (
   range: Range,
   budget: number,
   isFirst: boolean,
-  isLast: boolean
+  isLast: boolean,
+  opts: DecorationOpts
 ): TrimmedRegion => {
   const before = expandBefore(segments, range.start, budget)
   const after = expandAfter(segments, range.end, budget)
 
-  const parts: string[] = []
+  const beforeDeco = renderBeforeDecoration(text, segments, before, isFirst, opts.leading, budget)
+  const afterDeco = renderAfterDecoration(text, segments, after, isLast, opts.trailing, budget)
 
-  const hasHiddenBefore = before.truncated === null && before.boundary > 0
-
-  if (before.truncated) {
-    parts.push("…" + taketail(segments[before.truncated.index].text, before.truncated.words))
-    parts.push(originalGap(text, segments, before.truncated.index, before.boundary))
-  } else if (isFirst && hasHiddenBefore) {
-    parts.push("…" + originalGap(text, segments, before.boundary - 1, before.boundary))
-  }
-
-  parts.push(text.slice(segments[before.boundary].start, segments[after.boundary].end))
-
-  const hasHiddenAfter = after.truncated === null && after.boundary < segments.length - 1
-
-  if (after.truncated) {
-    parts.push(originalGap(text, segments, after.boundary, after.truncated.index))
-    parts.push(takeHead(segments[after.truncated.index].text, after.truncated.words) + "…")
-  } else if (isLast && hasHiddenAfter) {
-    parts.push(originalGap(text, segments, after.boundary, after.boundary + 1) + "…")
-  }
+  const core = text.slice(segments[before.boundary].start, segments[after.boundary].end)
 
   return {
-    text: parts.join(""),
-    sourceStart: segments[before.boundary].start,
-    sourceEnd: segments[after.boundary].end,
+    text: beforeDeco.text + core + afterDeco.text,
+    sourceStart: segments[before.boundary].start - beforeDeco.bytesShift,
+    sourceEnd: segments[after.boundary].end + afterDeco.bytesShift,
   }
 }
-
-const splitSentenceSegments = splitBySentences()
 
 export interface SentenceRange {
   start: number
@@ -143,7 +233,16 @@ const clampRange = (range: SentenceRange, segmentCount: number): Range | null =>
   return { start, end }
 }
 
-export const trimByRanges = (text: string, ranges: SentenceRange[]): TrimmedRegion[] => {
+export interface TrimOptions {
+  leading?: string
+  trailing?: string
+}
+
+export const trimByRanges = (
+  text: string,
+  ranges: SentenceRange[],
+  opts: TrimOptions = {}
+): TrimmedRegion[] => {
   if (ranges.length === 0) return [{ text, sourceStart: 0, sourceEnd: text.length }]
 
   const segments = splitSentenceSegments(text)
@@ -157,6 +256,6 @@ export const trimByRanges = (text: string, ranges: SentenceRange[]): TrimmedRegi
   const regions = mergeRanges(clamped)
 
   return regions.map((r, i) =>
-    renderRegion(text, segments, r, CONTEXT_BUDGET, i === 0, i === regions.length - 1)
+    renderRegion(text, segments, r, CONTEXT_BUDGET, i === 0, i === regions.length - 1, opts)
   )
 }

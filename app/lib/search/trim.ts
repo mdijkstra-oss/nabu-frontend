@@ -1,5 +1,7 @@
 import type { SearchHit } from "~/domain/search/types"
+import type { FileStore } from "~/lib/files/store"
 import { trimByRanges, type TrimmedRegion } from "~/lib/text/trim-around"
+import { getEmbeddableSource } from "./source"
 
 const stripLonelyEllipses = (text: string): string =>
   text
@@ -20,10 +22,19 @@ const offsetRegion = (region: TrimmedRegion, base: number): TrimmedRegion => ({
   sourceEnd: base + region.sourceEnd,
 })
 
-const trimHit = (hit: SearchHit): SearchHit[] => {
+const sliceLeading = (source: string | null, hit: SearchHit): string =>
+  source !== null && hit.chunkStart !== undefined ? source.slice(0, hit.chunkStart) : ""
+
+const sliceTrailing = (source: string | null, hit: SearchHit): string =>
+  source !== null && hit.chunkEnd !== undefined ? source.slice(hit.chunkEnd) : ""
+
+const trimHit = (hit: SearchHit, source: string | null): SearchHit[] => {
   if (!hit.matchRanges || hit.matchRanges.length === 0 || !hit.text) return [hit]
   const base = hit.chunkStart ?? 0
-  const regions = trimByRanges(hit.text, hit.matchRanges)
+  const regions = trimByRanges(hit.text, hit.matchRanges, {
+    leading: sliceLeading(source, hit),
+    trailing: sliceTrailing(source, hit),
+  })
     .map((r) => offsetRegion(cleanRegion(r), base))
     .filter((r) => r.text.length > 0)
   if (regions.length === 0) return []
@@ -41,4 +52,5 @@ const trimHit = (hit: SearchHit): SearchHit[] => {
   }))
 }
 
-export const trim = (hits: SearchHit[]): SearchHit[] => hits.flatMap(trimHit)
+export const trim = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  hits.flatMap((hit) => trimHit(hit, getEmbeddableSource(hit.file, files)))
