@@ -1,14 +1,15 @@
 // Search pipeline — linear chain.
 //
-//   probe                → SearchHit[]   (Stage 1)                            raw chunk hits from vector search
+//   probe                → SearchHit[]   (Stage 1)                            raw chunk hits from vector + bm25
 //   capStage             → SearchHit[]   (Stage 2)                            cap per file (always; limiting, not merging)
 //   mergeStage           → SearchHit[]   (Stage 3)  [skipMerge]               seed-and-grow (score-ratio gate) + reslice from source
-//   verdict              → SearchHit[]   (Stage 4)  [skipFilter]              streaming LLM filter, attaches matchRanges
+//   verdict              → SearchHit[]   (Stage 4)  [skipFilter]              per-batch: scout[skipScoutFilter] → semantic-filter
 //   trim                 → SearchHit[]   (Stage 5)  [skipTrim]                trim within hit.text using matchRanges
 //   extendForAnnotations → SearchHit[]   (Stage 6)  [skipAnnotationExtend]    grow byte range to swallow overlapping annotations + append `json-annotations` block to text
 //
 // Each stage lives in its own file. Toggles short-circuit a stage to a pass-through.
 // verdict is the only async/batched/streaming step; per-batch tail (trim → extend) fires via onResults.
+// Scout is per-batch inside verdict — framework-aware coarse filter against the current batch's files.
 
 import type { Result } from "~/lib/fp/result"
 import type { SearchHit, EmbeddingsCache } from "~/domain/search/types"
@@ -69,17 +70,23 @@ const applyMerge = (hits: SearchHit[], files: FileStore): SearchHit[] =>
 const logFinalHits = (hits: SearchHit[]): void => {
   console.debug(
     "[search] final pipeline output:",
-    hits.map((h) => ({ file: h.file, text: h.text }))
+    hits.map((h) => ({
+      file: h.file,
+      hash: h.hash,
+      constituentHashes: h.constituentHashes,
+      text: h.text,
+    }))
   )
 }
 
-const applyTrim = (hits: SearchHit[]): SearchHit[] => (isDebugOn("skipTrim") ? hits : trim(hits))
+const applyTrim = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  isDebugOn("skipTrim") ? hits : trim(hits, files)
 
 const applyExtend = (hits: SearchHit[], files: FileStore): SearchHit[] =>
   isDebugOn("skipAnnotationExtend") ? hits : extendRegionsForAnnotations(hits, files)
 
 const tail = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  applyExtend(applyTrim(hits), files)
+  applyExtend(applyTrim(hits, files), files)
 
 export const extractSignalTexts = (hydes: HydeQuery[]): string[] =>
   hydes.filter((h) => h.type === "signal").map((h) => h.text)
@@ -88,6 +95,7 @@ const runVerdictWithTail = async (
   hits: SearchHit[],
   intent: string,
   signals: string[],
+  framework: string,
   files: FileStore,
   target: number,
   onResults?: (batch: SearchHit[]) => void
@@ -99,7 +107,7 @@ const runVerdictWithTail = async (
     onResults?.(out)
   }
 
-  const { consumed, barren } = await verdict(hits, intent, signals, onBatch, {
+  const { consumed, barren } = await verdict(hits, intent, signals, framework, files, onBatch, {
     target,
     maxBarren: isDebugOn("skipBarrenCheck") ? undefined : MAX_BARREN_BATCHES,
   })
@@ -122,6 +130,7 @@ interface BuildResultArgs {
   sql: string
   highlight: string
   files: FileStore
+  framework: string
   target: number
   onResults?: (batch: SearchHit[]) => void
 }
@@ -131,6 +140,7 @@ const buildResult = async ({
   sql,
   highlight,
   files,
+  framework,
   target,
   onResults,
 }: BuildResultArgs): Promise<Result<PipelineResult, PipelineError>> => {
@@ -182,6 +192,7 @@ const buildResult = async ({
     grouped,
     effectiveHighlight,
     extractSignalTexts(hydes),
+    framework,
     files,
     target,
     onResults
@@ -205,13 +216,22 @@ export const runSearchPipeline = async (
   ctx: SemanticContext,
   files: FileStore,
   target: number,
+  framework = "",
   onResults?: (batch: SearchHit[]) => void
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const resolved = await resolveSemanticSql(sql, ctx)
   if (!resolved.ok) return err({ message: resolved.error.message })
   const probed = await probe(resolved.value, ctx.db)
   if (!probed.ok) return err(probed.error)
-  return buildResult({ probeOutput: probed.value, sql, highlight, files, target, onResults })
+  return buildResult({
+    probeOutput: probed.value,
+    sql,
+    highlight,
+    files,
+    framework,
+    target,
+    onResults,
+  })
 }
 
 export const executeResolvedSearch = async (
@@ -225,7 +245,22 @@ export const executeResolvedSearch = async (
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const probed = await probe(resolved, db)
   if (!probed.ok) return err(probed.error)
-  return buildResult({ probeOutput: probed.value, sql, highlight, files, target, onResults })
+  return buildResult({
+    probeOutput: probed.value,
+    sql,
+    highlight,
+    files,
+    framework: "",
+    target,
+    onResults,
+  })
 }
 
-export const runVerdictTail = runVerdictWithTail
+export const runVerdictTail = (
+  hits: SearchHit[],
+  intent: string,
+  signals: string[],
+  files: FileStore,
+  target: number,
+  onResults?: (batch: SearchHit[]) => void
+) => runVerdictWithTail(hits, intent, signals, "", files, target, onResults)

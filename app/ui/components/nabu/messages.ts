@@ -4,7 +4,6 @@ import { derive, findCall, type DerivedPlan } from "~/lib/agent/derived"
 import { isPlanMarker } from "~/lib/agent/derived/plan"
 import { AskArgs, type AskOption } from "~/lib/agent/tools/ask/def"
 import { ScoutArgs } from "~/lib/agent/tools/scout/def"
-import { PlanDeepAnalysisArgs } from "~/lib/agent/tools/plan-deep-analysis/def"
 
 export interface TextMessage {
   type: "text"
@@ -223,7 +222,7 @@ export interface ScoutMessage {
   files: ScoutFileStatus[]
 }
 
-const SCOUT_TOOL_NAMES = ["scout", "plan_deep_analysis"] as const
+const SCOUT_TOOL_NAMES = ["scout"] as const
 
 const findScoutLikeCalls = (history: Block[]): { index: number; call: ToolCall }[] =>
   history.flatMap((block, index) =>
@@ -280,23 +279,6 @@ const parseScoutCallFiles = (
         status: deriveFileState(f.path, doneFiles, toolFinished),
       })),
     }
-  }
-
-  const deepParsed = PlanDeepAnalysisArgs.safeParse(call.args)
-  if (deepParsed.success) {
-    const sourceEntries = deepParsed.data.source_files.map((f) => ({
-      path: f.path,
-      group: f.group,
-      status: deriveFileState(f.path, doneFiles, toolFinished),
-    }))
-    const targetEntries = deepParsed.data.target_files
-      .filter((f): f is { path: string; group: string } => "path" in f)
-      .map((f) => ({
-        path: f.path,
-        group: f.group,
-        status: deriveFileState(f.path, doneFiles, toolFinished),
-      }))
-    return { files: [...sourceEntries, ...targetEntries] }
   }
 
   return null

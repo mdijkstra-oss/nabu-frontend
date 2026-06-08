@@ -11,6 +11,6 @@ export type ScoutFileEntry = FileEntry
 export const scoutTool: AnyTool = {
   name: "scout",
   description:
-    "NOT for interpretive work (coding, framework application, evaluation) — use plan_deep_analysis for those. This tool maps file prose into sections for mechanical/structural tasks (translate, reformat, extract).\n\nSmall files are inlined.\n\nparallel: no — batches internally (accepts array), wait for results before acting",
+    "NOT for interpretive work (coding, framework application, evaluation) — use apply_deep_analysis for those. This tool maps file prose into sections for mechanical/structural tasks (translate, reformat, extract).\n\nSmall files are inlined.\n\nparallel: no — batches internally (accepts array), wait for results before acting",
   schema: ScoutArgs,
 }

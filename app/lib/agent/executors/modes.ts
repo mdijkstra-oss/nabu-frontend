@@ -17,7 +17,6 @@ import { removeFile } from "../tools/remove-file/def"
 import { runLocalShell } from "../tools/run-local-shell/def"
 import { cancel } from "../tools/cancel/def"
 // scoutTool — temporary, re-enable later
-import { planDeepAnalysisTool } from "../tools/plan-deep-analysis/def"
 import { applyDeepAnalysisTool } from "../tools/apply-deep-analysis/def"
 import { refineCodeTool } from "../tools/refine-code/def"
 import { startPlanTool } from "../tools/start-planning/def"
@@ -68,7 +67,6 @@ const raw: Record<ModeName, ModeConfig> = {
       renameFile,
       removeFile,
       // scoutTool, // temporary — re-enable later
-      planDeepAnalysisTool,
       applyDeepAnalysisTool,
       refineCodeTool,
       startPlanTool,

@@ -5,7 +5,6 @@ import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { think, REVISITING, FILTERING, ADJUDICATING } from "./thoughts"
 import { groupByCode } from "./step-batch"
-import { findAllDimensions, type FindStats } from "./step-find"
 import { filterAnnotations, type FilterStats } from "./step-filter"
 import { adjudicateAnnotations, type AdjudStats } from "./step-adjudicate"
 import { POST_FIND_CONCURRENCY } from "./def"
@@ -34,9 +33,8 @@ const mergeFilterStats = (fragments: readonly FilterStats[]): FilterStats => {
   return merged
 }
 
-const collectCodes = (find: FindStats, filter: FilterStats, adjud: AdjudStats): string[] => {
+const collectCodes = (filter: FilterStats, adjud: AdjudStats): string[] => {
   const codes = new Set<string>()
-  for (const c of find.keys()) codes.add(c)
   for (const c of filter.keys()) codes.add(c)
   for (const c of adjud.keys()) codes.add(c)
   return [...codes].sort()
@@ -56,27 +54,16 @@ const padRight = (s: string, w: number): string => s + " ".repeat(Math.max(0, w 
 
 const LEGEND = [
   "per-code pipeline counts:",
-  "  find         raw spans returned by each find model (m0/m1)",
   "  filter       spans each filter model voted 'keep' (m0/m1)",
   "  adjud(k/r/a) contested spans resolved as kept / rejected / still-ambig",
 ].join("\n")
 
-const formatStatsTable = (
-  scope: string,
-  find: FindStats,
-  filter: FilterStats,
-  adjud: AdjudStats
-): string => {
-  const codes = collectCodes(find, filter, adjud)
+const formatStatsTable = (scope: string, filter: FilterStats, adjud: AdjudStats): string => {
+  const codes = collectCodes(filter, adjud)
   if (codes.length === 0) return `[deep-analysis] ${scope}: no annotations`
 
-  const rows = codes.map((code) => [
-    code,
-    formatPair(find, code),
-    formatPair(filter, code),
-    formatAdjud(adjud, code),
-  ])
-  const header = ["code", "find", "filter", "adjud(k/r/a)"]
+  const rows = codes.map((code) => [code, formatPair(filter, code), formatAdjud(adjud, code)])
+  const header = ["code", "filter", "adjud(k/r/a)"]
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)))
   const renderRow = (r: readonly string[]): string =>
     r.map((cell, i) => padRight(cell, widths[i])).join("  ")
@@ -115,30 +102,20 @@ const processBatch = async (
 }
 
 export const runAnalysisPipeline = async (
-  calls: ScopedSources[],
-  rawTarget: string,
-  firstFile: string,
+  incoming: Annotation[],
+  sentences: string[],
+  sources: ScopedSources,
   leadingCtx: string,
   trailingCtx: string,
-  sources: ScopedSources,
-  sentences: string[],
-  resolve: ContentResolver
+  resolve: ContentResolver,
+  firstFile: string
 ): Promise<PipelineResult> => {
-  const findResult = await findAllDimensions(
-    calls,
-    rawTarget,
-    firstFile,
-    leadingCtx,
-    trailingCtx,
-    resolve
-  )
-
-  if (findResult.annotations.length === 0) {
-    console.debug(formatStatsTable(firstFile, findResult.stats, new Map(), new Map()))
-    return { annotations: [], errors: findResult.errors }
+  if (incoming.length === 0) {
+    console.debug(formatStatsTable(firstFile, new Map(), new Map()))
+    return { annotations: [], errors: [] }
   }
 
-  const batches = groupByCode(findResult.annotations)
+  const batches = groupByCode(incoming)
 
   think(REVISITING)
   const { results: batchResults, failures } = await processPool(
@@ -151,7 +128,7 @@ export const runAnalysisPipeline = async (
   )
 
   const surviving: Annotation[] = []
-  const allErrors = [...findResult.errors]
+  const allErrors: string[] = []
   for (const br of batchResults) {
     surviving.push(...br.annotations)
     allErrors.push(...br.errors)
@@ -171,7 +148,7 @@ export const runAnalysisPipeline = async (
   )
   allErrors.push(...adjudicated.errors)
 
-  console.debug(formatStatsTable(firstFile, findResult.stats, filterStats, adjudicated.stats))
+  console.debug(formatStatsTable(firstFile, filterStats, adjudicated.stats))
 
   return { annotations: adjudicated.annotations, errors: allErrors }
 }

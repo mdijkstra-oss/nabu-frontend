@@ -85,6 +85,13 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
+    key: "cheapFilter",
+    label: "Step 4 — Cheap filter (single deepseek-flash pass)",
+    description: "Skip the two-model union. Send one call to ?model=2 (deepseek-v4-flash) instead.",
+    icon: <Filter />,
+    defaultValue: false,
+  },
+  {
     key: "skipHydeGeneration",
     label: "Step 0 — Skip HyDE generation (use raw query)",
     description: "Skip LLM HyDE expansion. Embed the raw query text once per language.",
@@ -109,6 +116,14 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     key: "skipBarrenCheck",
     label: "Step 4 — Skip barren cutoff (keep filtering)",
     description: "Don't stop early when filter batches return no hits. Keep filtering.",
+    icon: <Filter />,
+    defaultValue: false,
+  },
+  {
+    key: "skipScoutFilter",
+    label: "Step 4 — Skip scout pre-filter (framework)",
+    description:
+      "Skip the per-file framework scout that drops off-topic chunks before semantic filter.",
     icon: <Filter />,
     defaultValue: false,
   },

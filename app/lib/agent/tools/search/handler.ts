@@ -7,7 +7,7 @@ import { stripPaging } from "~/lib/search/paging"
 import { SEMANTIC_ABSENCE_HINT } from "~/lib/search/semantic"
 import { runSearchPipeline } from "~/lib/search/pipeline"
 import { saveNewSearch } from "./settings"
-import { getFiles } from "~/lib/files/store"
+import { getFile, getFiles } from "~/lib/files/store"
 import { getSearchEntries } from "~/domain/data-blocks/settings/searches/selectors"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import type { SearchHit } from "~/domain/search/types"
@@ -55,6 +55,8 @@ const handleSearch = async (call: { args: unknown }): Promise<ToolResult<unknown
   const files = getFiles()
   const existingEntry = getSearchEntries(files).find((e) => e.sql === sql)
 
+  const framework = parsed.data.framework_file ? (getFile(parsed.data.framework_file) ?? "") : ""
+
   const result = await runSearchPipeline(
     sql,
     parsed.data.highlight,
@@ -63,7 +65,8 @@ const handleSearch = async (call: { args: unknown }): Promise<ToolResult<unknown
       cachedEmbeddings: existingEntry?.embeddings,
     },
     files,
-    50
+    50,
+    framework
   )
   if (!result.ok) return { status: "error", output: result.error.message }
 

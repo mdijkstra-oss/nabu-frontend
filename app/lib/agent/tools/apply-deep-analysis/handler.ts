@@ -29,7 +29,6 @@ import { buildSentenceSegmentMap, resolveSentenceIndex } from "~/lib/composite/s
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import {
   partitionSources,
-  buildCallList,
   expandDimensions,
   extractDimensionIds,
   validateFrameworkNoCallouts,
@@ -269,7 +268,6 @@ const groupAnnotationsBySegment = (
 const processComposite = async (
   composite: Composite,
   scoped: ReturnType<typeof partitionSources>,
-  calls: ReturnType<typeof buildCallList>,
   postAction: PostActionFn
 ): Promise<SectionResult[]> => {
   const prepared = prepareTargetContent(composite.content)
@@ -305,18 +303,17 @@ const processComposite = async (
     trailingCtx = ctx.trailing
   }
 
-  const analyzedCodes = new Set(extractDimensionIds(calls, getFileView))
+  const analyzedCodes = new Set(extractDimensionIds([scoped], getFileView))
 
   const firstFile = composite.segments[0]?.path ?? "target"
   const pipelineResult = await runAnalysisPipeline(
-    calls,
-    composite.content,
-    firstFile,
+    [],
+    sentences,
+    scoped,
     leadingCtx,
     trailingCtx,
-    scoped,
-    sentences,
-    getFileView
+    getFileView,
+    firstFile
   )
 
   const warnings: string[] = []
@@ -401,7 +398,7 @@ registerTool(
         if (mismatch) return { status: "error", output: mismatch, mutations: [] }
       }
 
-      const calls = buildCallList(expandDimensions(scoped, getFileView))
+      const expanded = expandDimensions(scoped, getFileView)
       const enqueue = createKeyedQueue()
       const actions = buildPostActions(enqueue)
 
@@ -414,7 +411,7 @@ registerTool(
       for (const composite of composites) {
         const name = composite.segments[0]?.path.split("/").pop() ?? "section"
         thinkWithName(PICKING_UP, name)
-        const results = await processComposite(composite, scoped, calls, actions[post_action])
+        const results = await processComposite(composite, expanded, actions[post_action])
         flat.push(...results)
       }
       if (flat.length === 1) return flat[0].result

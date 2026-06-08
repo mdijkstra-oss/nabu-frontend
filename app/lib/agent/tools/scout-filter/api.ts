@@ -1,13 +1,6 @@
-import type { Splitter } from "~/lib/text/types"
-import { splitByParagraphs } from "~/lib/text/split"
 import { callAndParse } from "../../client/call-parse"
 import { ScoutFilterResponse, SCOUT_FILTER_ENDPOINT } from "./def"
-import { numberParagraphs, buildScoutFilterMessages, type NumberedParagraph } from "./messages"
-
-export interface FilterResult {
-  surviving: NumberedParagraph[]
-  excludedIndices: Set<number>
-}
+import { buildScoutFilterMessages, type NumberedEntry } from "./messages"
 
 const expandRanges = (ranges: ScoutFilterResponse["exclude"]): Set<number> => {
   const set = new Set<number>()
@@ -17,30 +10,15 @@ const expandRanges = (ranges: ScoutFilterResponse["exclude"]): Set<number> => {
   return set
 }
 
-export const filterTarget = async (
+export const filterEntries = async (
   framework: string,
-  content: string,
-  splitter: Splitter = splitByParagraphs
-): Promise<FilterResult> => {
-  const paragraphs = numberParagraphs(content, splitter)
+  entries: NumberedEntry[]
+): Promise<Set<number>> => {
+  if (entries.length === 0 || framework.length === 0) return new Set()
 
-  if (paragraphs.length === 0) {
-    return { surviving: [], excludedIndices: new Set() }
-  }
-
-  if (framework.length === 0) {
-    return { surviving: paragraphs, excludedIndices: new Set() }
-  }
-
-  const messages = buildScoutFilterMessages(framework, paragraphs)
+  const messages = buildScoutFilterMessages(framework, entries)
   const result = await callAndParse(SCOUT_FILTER_ENDPOINT, messages, ScoutFilterResponse)
+  if (!result.ok) throw new Error(`scout-filter failed: ${result.error}`)
 
-  if (!result.ok) {
-    throw new Error(`scout-filter failed: ${result.error}`)
-  }
-
-  const excludedIndices = expandRanges(result.data.exclude)
-  const surviving = paragraphs.filter((p) => !excludedIndices.has(p.index))
-
-  return { surviving, excludedIndices }
+  return expandRanges(result.data.exclude)
 }

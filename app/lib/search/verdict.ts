@@ -1,6 +1,7 @@
 import { z } from "zod"
 import type { SearchHit } from "~/domain/search/types"
 import type { PoolResult } from "~/lib/utils/pool"
+import type { FileStore } from "~/lib/files/store"
 import { toSystem } from "~/lib/agent/client/convert"
 import { callAndParse } from "~/lib/agent/client/call-parse"
 import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
@@ -10,6 +11,7 @@ import { toLetter, parseRef } from "~/lib/text/prefix-ref"
 import { collapseRunsByOverlap, dedupOverlapping, type Spanned } from "~/lib/text/spans"
 import { processPool } from "~/lib/utils/pool"
 import { isDebugOn } from "~/lib/debug/options"
+import { scoutFilterBatch } from "./scout"
 
 export const FILTER_BATCH_SIZE = 5
 export const FILTER_CONCURRENCY = 5
@@ -280,17 +282,29 @@ const reconstructBatchHits = (prepared: PreparedHit[], results: Spanned[][]): Se
     return [{ ...p.hit, matches, matchRanges }]
   })
 
+const applyScout = async (
+  hits: SearchHit[],
+  framework: string,
+  files: FileStore
+): Promise<SearchHit[]> =>
+  isDebugOn("skipScoutFilter") ? hits : await scoutFilterBatch(hits, framework, files)
+
 const verdictBatch = async (
   hits: SearchHit[],
   intent: string,
-  signals: string[]
+  signals: string[],
+  framework: string,
+  files: FileStore
 ): Promise<SearchHit[]> => {
-  const prepared = hits.map((h, i) => prepareHit(h, i)).filter((p): p is PreparedHit => p !== null)
-  if (prepared.length === 0) return hits.filter((h) => !h.text)
+  const scouted = await applyScout(hits, framework, files)
+  const prepared = scouted
+    .map((h, i) => prepareHit(h, i))
+    .filter((p): p is PreparedHit => p !== null)
+  if (prepared.length === 0) return scouted.filter((h) => !h.text)
 
   try {
     const results = await runAllModels(intent, signals, prepared)
-    const passThrough = hits.filter((h) => !h.text)
+    const passThrough = scouted.filter((h) => !h.text)
     return [...passThrough, ...reconstructBatchHits(prepared, results)]
   } catch (e) {
     console.error("[verdict] batch failed", e)
@@ -315,11 +329,18 @@ export const verdict = (
   hits: SearchHit[],
   intent: string,
   signals: string[],
+  framework: string,
+  files: FileStore,
   onBatch: (batch: SearchHit[]) => void,
   opts?: VerdictOptions
 ): Promise<PoolResult<SearchHit[], SearchHit>> =>
-  processPool(chunkHits(hits), (chunk) => verdictBatch(chunk, intent, signals), onBatch, {
-    concurrency: FILTER_CONCURRENCY,
-    target: opts?.target,
-    maxBarren: opts?.maxBarren,
-  })
+  processPool(
+    chunkHits(hits),
+    (chunk) => verdictBatch(chunk, intent, signals, framework, files),
+    onBatch,
+    {
+      concurrency: FILTER_CONCURRENCY,
+      target: opts?.target,
+      maxBarren: opts?.maxBarren,
+    }
+  )

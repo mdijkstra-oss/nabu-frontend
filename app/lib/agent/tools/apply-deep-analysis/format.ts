@@ -1,11 +1,11 @@
 import { splitBySentences } from "~/lib/text/split"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { stripMarkdown } from "~/lib/text/strip"
-import { formatNumberedPassage } from "~/lib/text/format"
-import { toLetter, parseRef } from "~/lib/text/prefix-ref"
 import type { PostAction } from "./def"
 import type { FindResult } from "./consensus"
 import type { Annotation } from "./types"
+
+const splitSentenceTexts = splitBySentences()
 
 export interface VoteRecord {
   find: { found: number; missed: number }
@@ -94,97 +94,10 @@ export const extractTrailingContext = (
 
 export const SECTION_MARKER = "§§ "
 
-export interface FilePrefix {
-  file: string
-  prefix: string
-  offset: number
-  count: number
-}
+const isSectionMarker = (text: string): boolean => text.startsWith(SECTION_MARKER)
 
 export const prepareTargetContent = (raw: string): string =>
   stripMarkdown(extractProse(raw), { keepHeadings: true })
-
-const splitSentenceTexts = splitBySentences()
-
-const isSectionMarker = (text: string): boolean => text.startsWith(SECTION_MARKER)
-
-export const letterForIndex = toLetter
-
-export const parseFileFromMarker = (marker: string): string => {
-  const after = marker.slice(SECTION_MARKER.length)
-  const bracketIdx = after.indexOf(" [")
-  return bracketIdx >= 0 ? after.slice(0, bracketIdx) : after.trim()
-}
-
-interface NumberByFileResult {
-  content: string
-  sentences: string[]
-  prefixes: FilePrefix[]
-}
-
-interface FileChunk {
-  file: string
-  segments: { text: string; start: number; end: number }[]
-}
-
-const splitChunks = (
-  segments: { text: string; start: number; end: number }[],
-  firstFile: string
-): FileChunk[] => {
-  const chunks: FileChunk[] = [{ file: firstFile, segments: [] }]
-  for (const s of segments) {
-    if (isSectionMarker(s.text)) {
-      chunks.push({ file: parseFileFromMarker(s.text), segments: [] })
-    } else {
-      chunks[chunks.length - 1].segments.push(s)
-    }
-  }
-  return chunks.filter((c) => c.segments.length > 0)
-}
-
-const sliceChunkProse = (prepared: string, segments: { start: number; end: number }[]): string =>
-  prepared.slice(segments[0].start, segments[segments.length - 1].end)
-
-export const numberByFile = (raw: string, firstFile: string): NumberByFileResult => {
-  const prepared = prepareTargetContent(raw)
-  const all = splitSentenceTexts(prepared)
-  const chunks = splitChunks(all, firstFile)
-
-  const sentences: string[] = []
-  const prefixes: FilePrefix[] = []
-  const blocks: string[] = []
-
-  chunks.forEach((chunk, fileIdx) => {
-    const prefix = letterForIndex(fileIdx)
-    const offset = sentences.length
-    const numbered = formatNumberedPassage(sliceChunkProse(prepared, chunk.segments), { prefix })
-    prefixes.push({ file: chunk.file, prefix, offset, count: chunk.segments.length })
-    blocks.push(`<target file="${chunk.file}" prefix="${prefix}">\n${numbered}\n</target>`)
-    for (const s of chunk.segments) sentences.push(s.text)
-  })
-
-  return { content: blocks.join("\n\n"), sentences, prefixes }
-}
-
-export interface PrefixedRef {
-  letter: string
-  index: number
-}
-
-export const parsePrefixedRef = (ref: string): PrefixedRef | null => {
-  const parsed = parseRef(ref, "")
-  if (!parsed) return null
-  return { letter: parsed.prefix, index: parsed.n }
-}
-
-export const resolveToGlobal = (ref: string, prefixes: readonly FilePrefix[]): number | null => {
-  const parsed = parsePrefixedRef(ref)
-  if (!parsed) return null
-  const entry = prefixes.find((p) => p.prefix === parsed.letter)
-  if (!entry) return null
-  if (parsed.index < 1 || parsed.index > entry.count) return null
-  return entry.offset + parsed.index
-}
 
 export const numberSectionWithPositions = (
   text: string

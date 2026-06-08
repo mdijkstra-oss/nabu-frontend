@@ -16,7 +16,6 @@ import "../tools/submit-plan/handler"
 import "../tools/compact/handler"
 // temporary — re-enable later
 // import "../tools/scout/handler"
-import "../tools/plan-deep-analysis/handler"
 import "../tools/apply-deep-analysis/handler"
 import "../tools/start-planning/handler"
 import "../tools/query/handler"

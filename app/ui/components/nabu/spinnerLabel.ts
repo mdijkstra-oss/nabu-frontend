@@ -22,7 +22,6 @@ const toolLabels: Record<string, string[]> = {
   rename_file: WRITING_LABELS,
   remove_file: REMOVING_LABELS,
   scout: ["Scouting", "Mapping terrain", "Surveying files"],
-  plan_deep_analysis: ["Analyzing", "Mapping analysis", "Preparing deep analysis"],
   apply_deep_analysis: ["Analyzing section", "Applying criteria", "Running deep analysis"],
   start_planning: ["Planning", "Preparing approach", "Laying groundwork"],
   submit_plan: ["Starting execution", "Locking in plan", "Transitioning"],

@@ -9,7 +9,6 @@ import { stripBoundaryComments } from "~/lib/patch/resolve/json-boundary"
 import { calloutToDeepSource } from "~/domain/data-blocks/callout/definition"
 import { getCallouts } from "~/domain/data-blocks/callout/selectors"
 import { GENERATED_SUFFIX } from "~/lib/files/filename"
-import { numberByFile, type FilePrefix } from "./format"
 import { cacheMarker } from "../../client/call-parse"
 
 interface Message {
@@ -22,31 +21,6 @@ export interface ScopedSources {
   framework: string[]
   dimension: string[]
 }
-
-export const buildPrefixedFindSchema = (validFiles: string[]) =>
-  z.object({
-    results: z.array(
-      z.object({
-        file: validFiles.length > 0 ? z.enum(validFiles as [string, ...string[]]) : z.string(),
-        start: z.string(),
-        end: z.string(),
-        reasonToKeep: z.string(),
-      })
-    ),
-  })
-
-export const buildFindResultSchema = (validIds: string[]) =>
-  z.object({
-    results: z.array(
-      z.object({
-        start: z.number().int().min(1),
-        end: z.number().int().min(1),
-        analysis_source_id:
-          validIds.length > 0 ? z.enum(validIds as [string, ...string[]]) : z.string(),
-        reasonToKeep: z.string(),
-      })
-    ),
-  })
 
 export const partitionSources = (files: SourceFile[]): ScopedSources => ({
   framework: files.filter((f) => f.scope === "framework").map((f) => f.path),
@@ -68,11 +42,6 @@ export const validateFrameworkNoCallouts = (
   }
   return null
 }
-
-export const buildCallList = ({ framework, dimension }: ScopedSources): ScopedSources[] =>
-  dimension.length === 0
-    ? [{ framework, dimension: [] }]
-    : dimension.map((p) => ({ framework, dimension: [p] }))
 
 export type ContentResolver = (path: string) => string | undefined
 
@@ -117,15 +86,6 @@ const resolveSource = (path: string, resolve: ContentResolver): string | null =>
   const content = prepareSourceContent(raw)
   return content || null
 }
-
-export const extractSourceIds = (
-  { framework, dimension }: ScopedSources,
-  resolve: ContentResolver
-): string[] =>
-  [...framework, ...dimension].flatMap((path) => {
-    const raw = resolve(path)
-    return raw ? getCallouts(raw).map((c) => c.id) : []
-  })
 
 export const extractDimensionIds = (
   calls: readonly ScopedSources[],
@@ -185,15 +145,13 @@ const buildLeadingContextMessage = (context: string): string =>
 const buildTrailingContextMessage = (context: string): string =>
   `<context type="following">\n${context}\n</context>`
 
-const FIND_CTA =
-  "Analyze the numbered sentences against the source definition. Return matching spans as JSON."
-
 export const FILTER_CTA =
   "For each coded section, judge whether the passage satisfies the code definitions. Return your judgment as JSON."
 
 export const ADJUDICATE_CTA =
   "For each contested passage, render a verdict: keep, reject, or inconsistent. Return your verdicts as JSON."
 
+// `results` wrapper — some providers reject a top-level JSON array as structured output.
 export const buildFilterSchema = (validCodes: string[]) =>
   z.object({
     results: z.array(
@@ -206,6 +164,7 @@ export const buildFilterSchema = (validCodes: string[]) =>
     ),
   })
 
+// `results` wrapper — some providers reject a top-level JSON array as structured output.
 export const buildAdjudicateSchema = (validCodes: string[]) =>
   z.object({
     results: z.array(
@@ -217,53 +176,6 @@ export const buildAdjudicateSchema = (validCodes: string[]) =>
       })
     ),
   })
-
-const buildFindEnvelope = (
-  frameworkMessages: Message[],
-  section: string,
-  leadingCtx: string,
-  trailingCtx: string,
-  dimensionMessages: Message[],
-  callToAction: string
-): Message[] => {
-  const messages: Message[] = [...frameworkMessages]
-  messages.push(cacheMarker())
-  if (leadingCtx) {
-    messages.push({
-      type: "message",
-      role: "system",
-      content: buildLeadingContextMessage(leadingCtx),
-    })
-  }
-  messages.push({ type: "message", role: "system", content: section })
-  if (trailingCtx) {
-    messages.push({
-      type: "message",
-      role: "system",
-      content: buildTrailingContextMessage(trailingCtx),
-    })
-  }
-  messages.push(cacheMarker())
-  messages.push(...dimensionMessages)
-  messages.push({ type: "message", role: "user", content: callToAction })
-  return messages
-}
-
-export const buildFindMessages = (
-  numbered: string,
-  sources: ScopedSources,
-  leadingCtx: string,
-  trailingCtx: string,
-  resolve: ContentResolver
-): Message[] =>
-  buildFindEnvelope(
-    resolvePathMessages(sources.framework, resolve),
-    numbered,
-    leadingCtx,
-    trailingCtx,
-    resolvePathMessages(sources.dimension, resolve),
-    FIND_CTA
-  )
 
 const wrapTarget = (section: string): string => `<target>\n${section}\n</target>`
 
@@ -315,22 +227,3 @@ export const buildSpanStepMessages = (
     buildCodeSourceMessages(codeIds, { framework: [], dimension: sources.dimension }, resolve),
     callToAction
   )
-
-export interface FindCallResult {
-  messages: Message[]
-  sentences: string[]
-  prefixes: FilePrefix[]
-}
-
-export const buildFindCall = (
-  rawTarget: string,
-  sources: ScopedSources,
-  resolve: ContentResolver,
-  leadingCtx = "",
-  trailingCtx = "",
-  firstFile = "target"
-): FindCallResult => {
-  const { content, sentences, prefixes } = numberByFile(rawTarget, firstFile)
-  const messages = buildFindMessages(content, sources, leadingCtx, trailingCtx, resolve)
-  return { messages, sentences, prefixes }
-}

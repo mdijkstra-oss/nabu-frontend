@@ -1,54 +1,28 @@
-import type { Segment, Splitter } from "~/lib/text/types"
-import { splitByParagraphs } from "~/lib/text/split"
-import { charOffsetToLine } from "~/lib/text/lines"
-
 interface Message {
   type: "message"
   role: "system" | "user"
   content: string
 }
 
-export interface NumberedParagraph {
+export interface NumberedEntry {
   index: number
   text: string
-  startLine: number
-  endLine: number
 }
 
-const segmentToLineRange = (content: string, segment: Segment): { start: number; end: number } => {
-  const startLine = charOffsetToLine(content, segment.start) + 1
-  const endLine = charOffsetToLine(content, segment.end - 1) + 1
-  return { start: startLine, end: endLine }
-}
+const formatNumberedEntries = (entries: NumberedEntry[]): string =>
+  entries.map((e) => `<entry id="${e.index}">\n${e.text}\n</entry>`).join("\n\n")
 
-export const numberParagraphs = (
-  content: string,
-  splitter: Splitter = splitByParagraphs
-): NumberedParagraph[] =>
-  splitter(content).map((segment, i) => {
-    const range = segmentToLineRange(content, segment)
-    return {
-      index: i + 1,
-      text: segment.text,
-      startLine: range.start,
-      endLine: range.end,
-    }
-  })
-
-const formatNumberedParagraphs = (paragraphs: NumberedParagraph[]): string =>
-  paragraphs.map((p) => `[${p.index}]\n${p.text}`).join("\n\n")
-
-const CTA = "Return paragraph numbers to exclude from analysis."
+const CTA = "Return entry numbers to exclude from analysis."
 
 export const buildScoutFilterMessages = (
   framework: string,
-  paragraphs: NumberedParagraph[]
+  entries: NumberedEntry[]
 ): Message[] => {
   const messages: Message[] = []
   if (framework.length > 0) {
     messages.push({ type: "message", role: "system", content: framework })
   }
-  messages.push({ type: "message", role: "system", content: formatNumberedParagraphs(paragraphs) })
+  messages.push({ type: "message", role: "system", content: formatNumberedEntries(entries) })
   messages.push({ type: "message", role: "user", content: CTA })
   return messages
 }

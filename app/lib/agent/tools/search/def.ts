@@ -14,6 +14,12 @@ export const SearchArgs = z.object({
     .describe(
       "What to highlight in each result chunk. Describes the relevant passages to extract and show to the user."
     ),
+  framework_file: z
+    .string()
+    .optional()
+    .describe(
+      "Optional path to a markdown file (e.g. a codebook) used as a coarse pre-filter scope. Chunks judged off-topic against the framework are dropped before semantic matching. Omit for ad-hoc search."
+    ),
 })
 
 export const searchTool: AnyTool = {
