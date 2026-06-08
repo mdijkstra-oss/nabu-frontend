@@ -17,6 +17,7 @@ interface Region {
   anchor: SearchHit & { chunkStart: number; chunkEnd: number }
   file: string
   scores: number[]
+  hashes: string[]
 }
 
 const byteOverlaps = (
@@ -42,6 +43,7 @@ const extend = (
   region.start = Math.min(region.start, hit.chunkStart)
   region.end = Math.max(region.end, hit.chunkEnd)
   region.scores.push(hit.score ?? 0)
+  if (hit.hash !== undefined) region.hashes.push(hit.hash)
 }
 
 const emit = (region: Region): SearchHit => ({
@@ -50,6 +52,7 @@ const emit = (region: Region): SearchHit => ({
   chunkEnd: region.end,
   score: region.anchor.score,
   constituentScores: region.scores,
+  ...(region.hashes.length > 0 ? { constituentHashes: region.hashes } : {}),
 })
 
 export const seedAndGrow = (
@@ -76,6 +79,7 @@ export const seedAndGrow = (
         anchor: hit,
         file: hit.file,
         scores: [hit.score ?? 0],
+        hashes: hit.hash !== undefined ? [hit.hash] : [],
       }
       regionsBySeedOrder.push(region)
       fileRegions.push(region)

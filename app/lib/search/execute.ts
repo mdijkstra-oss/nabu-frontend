@@ -58,6 +58,7 @@ const runScoredQuery = async (
 
 export const chunkToHit = (chunk: ScoredChunk): SearchHit => ({
   file: chunk.file,
+  ...(chunk.hash !== undefined ? { hash: chunk.hash } : {}),
   ...(chunk.text !== undefined ? { text: chunk.text } : {}),
   ...(chunk.chunkStart !== undefined ? { chunkStart: chunk.chunkStart } : {}),
   ...(chunk.chunkEnd !== undefined ? { chunkEnd: chunk.chunkEnd } : {}),

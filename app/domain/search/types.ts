@@ -5,6 +5,8 @@ import { HydeAngleSchema } from "~/lib/corpus/hyde-schema"
 export const SearchHitSchema = z.object({
   file: z.string(),
   id: z.string().optional(),
+  hash: z.string().optional(),
+  constituentHashes: z.array(z.string()).optional(),
   text: z.string().optional(),
   score: z.number().optional(),
   constituentScores: z.array(z.number()).optional(),
