@@ -2,6 +2,7 @@ import { splitBySentences } from "~/lib/text/split"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { stripMarkdown } from "~/lib/text/strip"
 import { formatNumberedPassage } from "~/lib/text/format"
+import { toLetter, parseRef } from "~/lib/text/prefix-ref"
 import type { PostAction } from "./def"
 import type { FindResult } from "./consensus"
 import type { Annotation } from "./types"
@@ -107,7 +108,7 @@ const splitSentenceTexts = splitBySentences()
 
 const isSectionMarker = (text: string): boolean => text.startsWith(SECTION_MARKER)
 
-export const letterForIndex = (i: number): string => String.fromCharCode(97 + i)
+export const letterForIndex = toLetter
 
 export const parseFileFromMarker = (marker: string): string => {
   const after = marker.slice(SECTION_MARKER.length)
@@ -165,18 +166,15 @@ export const numberByFile = (raw: string, firstFile: string): NumberByFileResult
   return { content: blocks.join("\n\n"), sentences, prefixes }
 }
 
-interface PrefixedRef {
+export interface PrefixedRef {
   letter: string
   index: number
 }
 
 export const parsePrefixedRef = (ref: string): PrefixedRef | null => {
-  if (ref.length < 2) return null
-  const letter = ref[0]
-  if (letter < "a" || letter > "z") return null
-  const num = Number(ref.slice(1))
-  if (!Number.isInteger(num) || num < 1) return null
-  return { letter, index: num }
+  const parsed = parseRef(ref, "")
+  if (!parsed) return null
+  return { letter: parsed.prefix, index: parsed.n }
 }
 
 export const resolveToGlobal = (ref: string, prefixes: readonly FilePrefix[]): number | null => {

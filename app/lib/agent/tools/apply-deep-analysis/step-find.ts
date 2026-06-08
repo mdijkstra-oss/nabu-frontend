@@ -9,6 +9,7 @@ import { think, FINDING, CONSENSUS } from "./thoughts"
 import { buildFindCall, buildPrefixedFindSchema, extractSourceIds } from "./messages"
 import { resolveToGlobal } from "./format"
 import { filterOverlappingSpans } from "./consensus"
+import { collapseRunsByOverlap } from "~/lib/text/spans"
 import { FIND_ENDPOINT, FIND_RUNS, FIND_CONCURRENCY } from "./def"
 
 export type FindStats = Map<string, [number, number]>
@@ -17,11 +18,6 @@ export interface FindStepResult {
   annotations: Annotation[]
   errors: string[]
   stats: FindStats
-}
-
-interface VotedSpan {
-  span: FindResult
-  runIdx: number
 }
 
 interface FindSlot {
@@ -39,19 +35,6 @@ interface SlotResult {
 
 const AGREEMENT_THRESHOLD = 0.8
 
-const spanLength = (s: FindResult): number => s.end - s.start + 1
-
-const overlapCount = (a: FindResult, b: FindResult): number => {
-  const start = Math.max(a.start, b.start)
-  const end = Math.min(a.end, b.end)
-  return end >= start ? end - start + 1 : 0
-}
-
-const overlapRatio = (a: FindResult, b: FindResult): number => {
-  const smaller = Math.min(spanLength(a), spanLength(b))
-  return smaller === 0 ? 0 : overlapCount(a, b) / smaller
-}
-
 const toAnnotation = (span: FindResult, votes: boolean[]): Annotation => ({
   start: span.start,
   end: span.end,
@@ -60,64 +43,27 @@ const toAnnotation = (span: FindResult, votes: boolean[]): Annotation => ({
   reason: "",
 })
 
-const voteSpans = (runs: FindResult[][]): Annotation[] => {
-  const byCode = new Map<string, VotedSpan[]>()
+const groupRunsByCode = (runs: FindResult[][]): Map<string, FindResult[][]> => {
+  const byCode = new Map<string, FindResult[][]>()
   for (let runIdx = 0; runIdx < runs.length; runIdx++) {
     for (const span of runs[runIdx]) {
-      const group = byCode.get(span.analysis_source_id) ?? []
-      group.push({ span, runIdx })
-      byCode.set(span.analysis_source_id, group)
+      const code = span.analysis_source_id
+      const perRun = byCode.get(code) ?? Array.from({ length: runs.length }, (): FindResult[] => [])
+      perRun[runIdx].push(span)
+      byCode.set(code, perRun)
     }
   }
+  return byCode
+}
 
+const voteSpans = (runs: FindResult[][]): Annotation[] => {
   const annotations: Annotation[] = []
-
-  for (const [code, spans] of byCode) {
-    const perRun: VotedSpan[][] = Array.from({ length: runs.length }, () => [])
-    for (const vs of spans) perRun[vs.runIdx].push(vs)
-
-    const matchedSets = perRun.map(() => new Set<number>())
-
-    for (let ri = 0; ri < runs.length - 1; ri++) {
-      for (let i = 0; i < perRun[ri].length; i++) {
-        if (matchedSets[ri].has(i)) continue
-        for (let rj = ri + 1; rj < runs.length; rj++) {
-          let bestJ = -1
-          let bestOverlap = 0
-          for (let j = 0; j < perRun[rj].length; j++) {
-            if (matchedSets[rj].has(j)) continue
-            const ratio = overlapRatio(perRun[ri][i].span, perRun[rj][j].span)
-            if (ratio >= AGREEMENT_THRESHOLD && ratio > bestOverlap) {
-              bestOverlap = ratio
-              bestJ = j
-            }
-          }
-          if (bestJ >= 0) {
-            matchedSets[ri].add(i)
-            matchedSets[rj].add(bestJ)
-            const a = perRun[ri][i].span
-            const b = perRun[rj][bestJ].span
-            const smallest = spanLength(a) <= spanLength(b) ? a : b
-            const votes = Array.from({ length: runs.length }, () => false)
-            votes[ri] = true
-            votes[rj] = true
-            annotations.push(toAnnotation({ ...smallest, analysis_source_id: code }, votes))
-            break
-          }
-        }
-      }
-    }
-
-    for (let ri = 0; ri < runs.length; ri++) {
-      for (let i = 0; i < perRun[ri].length; i++) {
-        if (matchedSets[ri].has(i)) continue
-        const votes = Array.from({ length: runs.length }, () => false)
-        votes[ri] = true
-        annotations.push(toAnnotation({ ...perRun[ri][i].span, analysis_source_id: code }, votes))
-      }
+  for (const [code, perRun] of groupRunsByCode(runs)) {
+    const collapsed = collapseRunsByOverlap(perRun, AGREEMENT_THRESHOLD)
+    for (const { span, votes } of collapsed) {
+      annotations.push(toAnnotation({ ...span, analysis_source_id: code }, votes))
     }
   }
-
   return annotations
 }
 

@@ -5,7 +5,7 @@ describe("formatNumberedPassage", () => {
   const cases: {
     name: string
     text: string
-    opts?: { prefix?: string; offset?: number }
+    opts?: { prefix?: string; offset?: number; separator?: string }
     expected: string
   }[] = [
     {
@@ -50,6 +50,24 @@ describe("formatNumberedPassage", () => {
       text: "Alpha. Beta.",
       opts: { prefix: "b", offset: 3 },
       expected: "[b4] Alpha. [b5] Beta.",
+    },
+    {
+      name: "dashed separator with prefix",
+      text: "Alpha. Beta.",
+      opts: { prefix: "a", separator: "-" },
+      expected: "[a-1] Alpha. [a-2] Beta.",
+    },
+    {
+      name: "dashed separator with prefix and offset",
+      text: "Alpha. Beta.",
+      opts: { prefix: "b", separator: "-", offset: 4 },
+      expected: "[b-5] Alpha. [b-6] Beta.",
+    },
+    {
+      name: "separator ignored when no prefix",
+      text: "Alpha. Beta.",
+      opts: { separator: "-" },
+      expected: "[1] Alpha. [2] Beta.",
     },
   ]
 

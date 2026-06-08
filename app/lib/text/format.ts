@@ -3,6 +3,7 @@ import { splitBySentences } from "./split"
 interface NumberedPassageOpts {
   prefix?: string
   offset?: number
+  separator?: string
 }
 
 const splitSentenceTexts = splitBySentences()
@@ -14,9 +15,10 @@ const isParagraphGap = (source: string, fromEnd: number, toStart: number): boole
   source.slice(fromEnd, toStart).includes("\n\n")
 
 export const formatNumberedPassage = (text: string, opts: NumberedPassageOpts = {}): string => {
-  const { prefix = "", offset = 0 } = opts
+  const { prefix = "", offset = 0, separator = "" } = opts
   const segments = splitSentenceTexts(text)
   if (segments.length === 0) return ""
+  const sep = prefix === "" ? "" : separator
 
   const parts: string[] = []
   for (let i = 0; i < segments.length; i++) {
@@ -25,7 +27,7 @@ export const formatNumberedPassage = (text: string, opts: NumberedPassageOpts = 
       const gap = isParagraphGap(text, segments[i - 1].end, seg.start) ? PARAGRAPH_BREAK : SPACE
       parts.push(gap)
     }
-    parts.push(`[${prefix}${offset + i + 1}] ${seg.text}`)
+    parts.push(`[${prefix}${sep}${offset + i + 1}] ${seg.text}`)
   }
   return parts.join("")
 }

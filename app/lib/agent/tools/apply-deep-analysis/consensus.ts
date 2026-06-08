@@ -1,3 +1,5 @@
+import { dedupOverlapping } from "~/lib/text/spans"
+
 export interface FindResult {
   start: number
   end: number
@@ -26,22 +28,13 @@ export const groupBySpan = (spans: FindResult[]): CodedSpan[] => {
   return [...map.values()]
 }
 
-interface Spanned {
+interface CodedSpanned {
   start: number
   end: number
   code: string
 }
 
-const spanSize = (s: Spanned): number => s.end - s.start
-
-const overlaps = (a: Spanned, b: Spanned): boolean => a.start <= b.end && b.start <= a.end
-
-const bySmallestThenEarliest = (a: Spanned, b: Spanned): number => {
-  const sizeDiff = spanSize(a) - spanSize(b)
-  return sizeDiff !== 0 ? sizeDiff : a.start - b.start
-}
-
-export const filterOverlappingSpans = <T extends Spanned>(items: T[]): T[] => {
+export const filterOverlappingSpans = <T extends CodedSpanned>(items: T[]): T[] => {
   const byCode = new Map<string, T[]>()
   for (const item of items) {
     const group = byCode.get(item.code) ?? []
@@ -51,16 +44,7 @@ export const filterOverlappingSpans = <T extends Spanned>(items: T[]): T[] => {
 
   const kept = new Set<T>()
   for (const group of byCode.values()) {
-    const sorted = [...group].sort(bySmallestThenEarliest)
-    const accepted: T[] = []
-    for (const span of sorted) {
-      const hasOverlap = accepted.some((a) => overlaps(a, span))
-      if (!hasOverlap) {
-        accepted.push(span)
-        kept.add(span)
-      }
-    }
+    for (const survivor of dedupOverlapping(group)) kept.add(survivor)
   }
-
   return items.filter((item) => kept.has(item))
 }
