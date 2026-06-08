@@ -7,6 +7,7 @@ import type { CorpusDescription } from "~/domain/corpus/types"
 const HYDE_GENERATOR_ENDPOINT = "/hyde-generator"
 const GENERIC_HYDE_ENDPOINT = "/generic-hyde"
 
+// Wrapper object — some providers reject a top-level JSON array as structured output.
 const HydeResponseSchema = z.object({
   hydes: HydeListSchema,
 })

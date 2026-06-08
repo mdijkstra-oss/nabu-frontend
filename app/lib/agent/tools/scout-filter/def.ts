@@ -8,6 +8,7 @@ const ExcludeRange = z.object({
   reason: z.string().describe("Why these paragraphs fall outside analysis scope"),
 })
 
+// Wrapper object — some providers reject a top-level JSON array as structured output.
 export const ScoutFilterResponse = z.object({
   exclude: z.array(ExcludeRange).describe("Ranges of paragraphs to exclude from analysis"),
 })
