@@ -94,7 +94,8 @@ export const useSearchResults = (
       state.highlight,
       state.signals,
       getFiles(),
-      30,
+      // TEMP: bumped from 30 to 50 to load all at start. MUST restore to 30 — flag if seen.
+      50,
       appendHits
     )
 
@@ -183,7 +184,8 @@ export const useSearchResults = (
         updatedSearch.highlight,
         ctx.db,
         getFiles(),
-        30,
+        // TEMP: bumped from 30 to 100 to load all at start. MUST restore to 30 — flag if seen.
+        100,
         appendHits
       )
 

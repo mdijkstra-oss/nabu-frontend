@@ -3,7 +3,7 @@ import type { PostAction, Section, SourceFile } from "./def"
 import { ApplyDeepAnalysisArgs, applyDeepAnalysisTool } from "./def"
 import { registerTool, tool, getToolHandlers } from "../../executors/tool"
 import { getFileView, getViewableFiles } from "../file-view"
-import { getFile, getFileRaw } from "~/lib/files/store"
+import { getFile, getFileRaw, getFiles } from "~/lib/files/store"
 import { CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
 import {
   SECTION_MARKER,
@@ -35,13 +35,17 @@ import {
 } from "./messages"
 import { clearAnnotationsOnSection } from "./step-clear"
 import { runAnalysisPipeline } from "./pipeline"
+import { runFind, type SearchCtx } from "./step-find"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
-import { FIND_CONTEXT_SENTENCES } from "./def"
+import { SECTION_EDGE_CONTEXT_SENTENCES } from "./def"
 import { think, thinkWithName, STARTING, PICKING_UP, READING_FRAMEWORK, WRITING } from "./thoughts"
 import { findMatchOffset } from "~/lib/text/find"
 import type { Annotation as StoredAnnotation } from "~/domain/data-blocks/attributes/schema"
+import { getDatabase } from "~/domain/db/database"
+import { getLlmHost } from "~/lib/agent/env"
+import { buildSemanticContext } from "~/domain/corpus/init"
 
 type Enqueue = <T>(key: string, fn: () => Promise<T>) => Promise<T>
 
@@ -268,6 +272,8 @@ const groupAnnotationsBySegment = (
 const processComposite = async (
   composite: Composite,
   scoped: ReturnType<typeof partitionSources>,
+  expanded: ReturnType<typeof partitionSources>,
+  searchCtx: SearchCtx,
   postAction: PostActionFn
 ): Promise<SectionResult[]> => {
   const prepared = prepareTargetContent(composite.content)
@@ -297,7 +303,7 @@ const processComposite = async (
       fullContent,
       firstSeg.startLine,
       lastSeg.endLine,
-      FIND_CONTEXT_SENTENCES
+      SECTION_EDGE_CONTEXT_SENTENCES
     )
     leadingCtx = ctx.leading
     trailingCtx = ctx.trailing
@@ -306,8 +312,11 @@ const processComposite = async (
   const analyzedCodes = new Set(extractDimensionIds([scoped], getFileView))
 
   const firstFile = composite.segments[0]?.path ?? "target"
+
+  const incoming = await runFind(composite, expanded, sentences, searchCtx)
+
   const pipelineResult = await runAnalysisPipeline(
-    [],
+    incoming,
     sentences,
     scoped,
     leadingCtx,
@@ -399,6 +408,22 @@ registerTool(
       }
 
       const expanded = expandDimensions(scoped, getFileView)
+
+      const db = getDatabase()
+      if (!db)
+        return { status: "error", output: "Database not ready. Try again shortly.", mutations: [] }
+      const semCtx = await buildSemanticContext(db, getLlmHost())
+      const frameworkText = scoped.framework
+        .map((p) => getFileView(p))
+        .filter((s): s is string => typeof s === "string" && s.length > 0)
+        .join("\n\n")
+      const searchCtx: SearchCtx = {
+        ctx: semCtx,
+        files: getFiles(),
+        framework: frameworkText,
+        resolveFile: getFileView,
+      }
+
       const enqueue = createKeyedQueue()
       const actions = buildPostActions(enqueue)
 
@@ -411,7 +436,13 @@ registerTool(
       for (const composite of composites) {
         const name = composite.segments[0]?.path.split("/").pop() ?? "section"
         thinkWithName(PICKING_UP, name)
-        const results = await processComposite(composite, expanded, actions[post_action])
+        const results = await processComposite(
+          composite,
+          scoped,
+          expanded,
+          searchCtx,
+          actions[post_action]
+        )
         flat.push(...results)
       }
       if (flat.length === 1) return flat[0].result

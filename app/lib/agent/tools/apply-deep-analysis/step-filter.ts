@@ -3,7 +3,8 @@ import type { ScopedSources, ContentResolver } from "./messages"
 import { callAndParse } from "../../client/call-parse"
 import { buildSpanStepMessages, FILTER_CTA, buildFilterSchema } from "./messages"
 import { groupBySpan, type CodedSpan } from "./consensus"
-import { formatCodedSection, type CodedItem } from "./present"
+import { type CodedItem } from "./present"
+import { renderTripletSection } from "./triplet"
 import { spanKey } from "./format"
 import { FILTER_ENDPOINT, FILTER_RUNS, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
 import { shouldShowModelIndex } from "./debug-flags"
@@ -97,10 +98,11 @@ export const filterAnnotations = async (
   )
   const codeIds = collectCodeIds(grouped)
   const codedItems = toCodedItems(grouped)
-  const { text: presented, mapping } = formatCodedSection(
+  const { text: presented, mapping } = renderTripletSection(
     sentences,
     codedItems,
-    SPAN_STEP_CONTEXT_SENTENCES
+    SPAN_STEP_CONTEXT_SENTENCES,
+    { leading: "", trailing: "" }
   )
 
   const messages = buildSpanStepMessages(

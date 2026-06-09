@@ -65,8 +65,8 @@ const searchStatusText = (
   fileCount: number,
   isSemantic: boolean
 ): string | null => {
-  if (phase === "resolving") return "Resolving search embeddings"
-  if (phase === "searching") return "Pre-selecting in corpus"
+  if (phase === "resolving") return "Generating samples to compare against"
+  if (phase === "searching") return "Comparing samples against corpus"
   if (phase === "filtering" && count === 0) return "Narrowing down results"
   const qualifier = isSemantic ? "potential " : ""
   if (count > 0) return `Showing ${count} ${qualifier}results across ${fileCount} files`

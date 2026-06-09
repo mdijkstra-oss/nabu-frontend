@@ -136,7 +136,7 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
   },
   {
     key: "fileSpecificCandidates",
-    label: "File-specific candidates",
+    label: "Show file-specific candidates",
     description: "Enable per-file candidate search on the current file.",
     icon: <Filter />,
     defaultValue: false,

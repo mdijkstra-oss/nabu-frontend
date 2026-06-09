@@ -5,6 +5,7 @@ export interface Annotation {
   findVotes: boolean[]
   review?: string
   reason: string
+  score?: number
 }
 
 export interface StepError {

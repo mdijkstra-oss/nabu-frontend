@@ -14,12 +14,8 @@ export type SourceFile = z.infer<typeof SourceFile>
 
 export const Section = z.object({
   path: z.string().describe("File path"),
-  start_line: z
-    .number()
-    .int()
-    .min(1)
-    .describe("First line of the section (1-based, from scout map)"),
-  end_line: z.number().int().min(1).describe("Last line of the section (1-based, from scout map)"),
+  start_line: z.number().int().min(1).describe("First line of the section (1-based)"),
+  end_line: z.number().int().min(1).describe("Last line of the section (1-based)"),
 })
 
 export type Section = z.infer<typeof Section>
@@ -42,15 +38,14 @@ export const ApplyDeepAnalysisArgs = z.object({
 
 export type ApplyDeepAnalysisArgs = z.infer<typeof ApplyDeepAnalysisArgs>
 
-export const FIND_ENDPOINT = "/deep-analysis-find"
 export const FILTER_ENDPOINT = "/deep-analysis-filter"
 export const ADJUDICATE_ENDPOINT = "/deep-analysis-adjudicate"
-export const FIND_RUNS = 2
 export const FILTER_RUNS = 2
 export const ADJUDICATE_RUNS = 1
-export const FIND_CONCURRENCY = 10
-export const FIND_CONTEXT_SENTENCES = 6
-export const SPAN_STEP_CONTEXT_SENTENCES = 6
+export const SPAN_STEP_CONTEXT_SENTENCES = 12
+export const SECTION_EDGE_CONTEXT_SENTENCES = 6
+export const BRANCH_CONCURRENCY = 10
+export const PER_DIM_TARGET = 50
 export const POST_FIND_CONCURRENCY = 5
 
 export const applyDeepAnalysisTool: AnyTool = {
