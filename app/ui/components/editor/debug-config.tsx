@@ -85,13 +85,6 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
-    key: "cheapFilter",
-    label: "Step 4 — Cheap filter (single deepseek-flash pass)",
-    description: "Skip the two-model union. Send one call to ?model=2 (deepseek-v4-flash) instead.",
-    icon: <Filter />,
-    defaultValue: false,
-  },
-  {
     key: "skipHydeGeneration",
     label: "Step 0 — Skip HyDE generation (use raw query)",
     description: "Skip LLM HyDE expansion. Embed the raw query text once per language.",
@@ -145,6 +138,13 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     key: "fileSpecificCandidates",
     label: "File-specific candidates",
     description: "Enable per-file candidate search on the current file.",
+    icon: <Filter />,
+    defaultValue: false,
+  },
+  {
+    key: "embeddingsLimit50",
+    label: "Embeddings limit 50",
+    description: "Cap fused embedding results at 50 (default 1000). Per-query cap matches.",
     icon: <Filter />,
     defaultValue: false,
   },

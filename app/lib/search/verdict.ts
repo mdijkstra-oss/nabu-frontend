@@ -26,8 +26,6 @@ const WORD_SPLIT_RE = /\s+/
 const FILTER_CALL_TO_ACTION =
   'Return { results: [{ start, end, reasonToKeep }, ...] } where start and end are prefixed sentence refs like "a-3" and reasonToKeep names the clause or signal the passage satisfies.'
 
-const MAX_SELECTED_RATIO = 0.4
-
 const hasEnoughWords = (text: string): boolean => text.split(WORD_SPLIT_RE).length >= MIN_WORD_COUNT
 
 interface PreparedHit {
@@ -211,8 +209,6 @@ const cachedCallSemanticFilterBatch = async (
   return cached.map((v) => (v ? v.spans : freshSpans[freshIdx++]))
 }
 
-const CHEAP_FILTER_MODEL_INDEX = 2
-
 const collectRunsPerHit = (
   perRunSpans: Spanned[][][],
   prepared: PreparedHit[]
@@ -224,22 +220,12 @@ const collectRunsPerHit = (
   )
 }
 
-const isOverselected = (spans: Spanned[], totalSentences: number): boolean => {
-  const selected = new Set<number>()
-  for (const s of spans) {
-    for (let i = s.start; i <= s.end; i++) selected.add(i)
-  }
-  return selected.size > totalSentences * MAX_SELECTED_RATIO
-}
-
 const runAllModels = async (
   intent: string,
   signals: string[],
   prepared: PreparedHit[]
 ): Promise<Spanned[][]> => {
-  const runIndices = isDebugOn("cheapFilter")
-    ? [CHEAP_FILTER_MODEL_INDEX]
-    : Array.from({ length: FILTER_RUNS }, (_, i) => i)
+  const runIndices = Array.from({ length: FILTER_RUNS }, (_, i) => i)
   const perRunSpans = await Promise.all(
     runIndices.map((runIdx) => cachedCallSemanticFilterBatch(intent, signals, prepared, runIdx))
   )
@@ -249,10 +235,7 @@ const runAllModels = async (
     prepared.map((p) => p.prefix)
   )
 
-  return prepared.map((p) => {
-    const spans = collapsedByPrefix.get(p.prefix) ?? []
-    return isOverselected(spans, p.sentences.length) ? [] : spans
-  })
+  return prepared.map((p) => collapsedByPrefix.get(p.prefix) ?? [])
 }
 
 const spanToRange = (s: Spanned): { start: number; end: number } => ({

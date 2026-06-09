@@ -1,3 +1,5 @@
+import { isDebugOn } from "~/lib/debug/options"
+
 export interface ScoredChunk {
   file: string
   text?: string
@@ -8,6 +10,15 @@ export interface ScoredChunk {
 }
 
 export const RRF_K = 60
+
+const FUSED_LIMIT_FLOOR = 1000
+const FUSED_LIMIT_DEBUG = 50
+const FUSED_LIMIT_RATIO = 0.2
+
+export const computeFusedLimit = (corpusChunks: number): number =>
+  isDebugOn("embeddingsLimit50")
+    ? FUSED_LIMIT_DEBUG
+    : Math.max(FUSED_LIMIT_FLOOR, Math.ceil(corpusChunks * FUSED_LIMIT_RATIO))
 
 export const chunkKey = (row: ScoredChunk): string => row.hash ?? `${row.file}:${row.text}`
 
@@ -41,12 +52,7 @@ export const rrfScores = (rankMaps: Map<string, number>[], k = RRF_K): Map<strin
   return scores
 }
 
-const FUSED_RESULT_LIMIT = 500
-
-export const fuseCosineResults = (
-  cosinePerHyde: ScoredChunk[][],
-  limit: number | undefined
-): ScoredChunk[] => {
+export const fuseCosineResults = (cosinePerHyde: ScoredChunk[][], limit: number): ScoredChunk[] => {
   const rankMaps = cosinePerHyde.map(toRankMap)
   const scores = rrfScores(rankMaps)
 
@@ -54,8 +60,7 @@ export const fuseCosineResults = (
   const chunkLookup = buildChunkLookup(allChunks)
 
   const sorted = [...scores.entries()].sort((a, b) => b[1] - a[1])
-  const cap = limit !== undefined ? limit : FUSED_RESULT_LIMIT
-  const sliced = sorted.slice(0, cap)
+  const sliced = sorted.slice(0, limit)
 
   return sliced.flatMap(([key, score]) => {
     const chunk = chunkLookup.get(key)

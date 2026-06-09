@@ -1,7 +1,11 @@
 import type { FileStore } from "~/lib/files/store"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { createCappedCache } from "~/lib/utils/cache"
-import { companionFilename, fastParseBlockContents } from "~/lib/embeddings/companion"
+import {
+  companionFilename,
+  fastParseBlockContents,
+  isCompanionFile,
+} from "~/lib/embeddings/companion"
 
 const sourceCache = createCappedCache<string, string>(500)
 
@@ -39,4 +43,14 @@ export const getTotalChunksByFiles = (
     if (!map.has(file)) map.set(file, getTotalChunks(file, files))
   }
   return map
+}
+
+export const getTotalCorpusChunks = (files: FileStore): number => {
+  let total = 0
+  for (const name of Object.keys(files)) {
+    if (isCompanionFile(name)) continue
+    if (!name.endsWith(".md")) continue
+    total += getTotalChunks(name, files)
+  }
+  return total
 }

@@ -1,13 +1,16 @@
 import type { Database, DbError } from "~/lib/db/types"
 import type { SearchHit } from "~/domain/search/types"
 import type { Result } from "~/lib/fp/result"
+import type { FileStore } from "~/lib/files/store"
 import type { HybridSearchPlan, KeywordsQuery } from "./semantic"
 import type { ScoredChunk } from "./fusion"
 import { ok, err } from "~/lib/fp/result"
 import { buildCosineQuery, stripOrderByTail, injectSelectColumn } from "./semantic"
 import { stripPaging } from "./paging"
-import { fuseCosineResults, RRF_K } from "./fusion"
+import { fuseCosineResults, computeFusedLimit, RRF_K } from "./fusion"
 import { queryBm25 } from "./bm25/store"
+import { getTotalCorpusChunks } from "./source"
+import { yieldToBrowser } from "~/lib/utils/async"
 
 type RawRow = Record<string, unknown>
 
@@ -38,6 +41,8 @@ export const executeSearch = async (
   return ok(rows.map(toHit))
 }
 
+const COSINE_SCORE_FLOOR = 0.3
+
 const toScoredChunk = (row: RawRow): ScoredChunk => ({
   file: String(row.file),
   text: row.text !== undefined ? String(row.text) : undefined,
@@ -53,7 +58,7 @@ const runScoredQuery = async (
 ): Promise<Result<ScoredChunk[], DbError>> => {
   const result = await db.query<RawRow>(sql)
   if (!result.ok) return result
-  return ok(result.value.rows.map(toScoredChunk))
+  return ok(result.value.rows.map(toScoredChunk).filter((c) => c.score >= COSINE_SCORE_FLOOR))
 }
 
 export const chunkToHit = (chunk: ScoredChunk): SearchHit => ({
@@ -67,10 +72,12 @@ export const chunkToHit = (chunk: ScoredChunk): SearchHit => ({
 
 type QueryBuilder = (baseSql: string, hyde: HybridSearchPlan["hydes"][number]) => string
 
-const BM25_QUERY_LIMIT = 200
-
-const runBm25Query = (keywords: KeywordsQuery, candidates: Set<string>): ScoredChunk[] =>
-  queryBm25(keywords.language, keywords.text, BM25_QUERY_LIMIT, { candidates }).map((hit) => ({
+const runBm25Query = (
+  keywords: KeywordsQuery,
+  candidates: Set<string>,
+  limit: number
+): ScoredChunk[] =>
+  queryBm25(keywords.language, keywords.text, limit, { candidates }).map((hit) => ({
     file: hit.file,
     text: hit.text,
     hash: hit.id,
@@ -131,20 +138,22 @@ const groupCosineByLanguage = (
 }
 
 const fuseCosinePerLanguage = (
-  grouped: Map<string, ScoredChunk[][]>
+  grouped: Map<string, ScoredChunk[][]>,
+  limit: number
 ): Map<string, ScoredChunk[]> => {
   const out = new Map<string, ScoredChunk[]>()
-  for (const [language, lists] of grouped) out.set(language, fuseCosineResults(lists, undefined))
+  for (const [language, lists] of grouped) out.set(language, fuseCosineResults(lists, limit))
   return out
 }
 
 const buildBm25PerLanguage = (
   plan: HybridSearchPlan,
-  candidates: Set<string>
+  candidates: Set<string>,
+  limit: number
 ): Map<string, ScoredChunk[]> => {
   const out = new Map<string, ScoredChunk[]>()
   for (const kw of plan.keywords) {
-    const list = runBm25Query(kw, candidates)
+    const list = runBm25Query(kw, candidates, limit)
     if (list.length > 0) out.set(kw.language, list)
   }
   return out
@@ -199,7 +208,8 @@ const fuseAcrossRetrievers = (
   cosineByLang: Map<string, ScoredChunk[]>,
   bm25ByLang: Map<string, ScoredChunk[]>,
   maxRawCosineByHash: Map<string, number>,
-  limit: number | undefined
+  fusedLimit: number,
+  planLimit: number | undefined
 ): { fused: ScoredChunk[]; constituents: ConstituentScores[] } => {
   const languages = new Set([...cosineByLang.keys(), ...bm25ByLang.keys()])
   const merged: ScoredChunk[] = []
@@ -210,7 +220,7 @@ const fuseAcrossRetrievers = (
     const lists = [cosine, bm25].filter((l) => l.length > 0)
     if (lists.length === 0) continue
 
-    const fusedLang = fuseCosineResults(lists, undefined)
+    const fusedLang = fuseCosineResults(lists, fusedLimit)
     merged.push(...fusedLang)
 
     const cosineRanks = rankByHash(cosine)
@@ -229,7 +239,7 @@ const fuseAcrossRetrievers = (
     }
   }
   const sorted = merged.sort((a, b) => b.score - a.score)
-  const limited = limit !== undefined ? sorted.slice(0, limit) : sorted
+  const limited = planLimit !== undefined ? sorted.slice(0, planLimit) : sorted
   return { fused: limited, constituents }
 }
 
@@ -255,29 +265,41 @@ const logConstituentScores = (constituents: ConstituentScores[]): void => {
 
 export const executeHybridLocal = async (
   db: Database,
-  plan: HybridSearchPlan
+  plan: HybridSearchPlan,
+  files: FileStore
 ): Promise<Result<SearchHit[], DbError>> => {
+  const fusedLimit = computeFusedLimit(getTotalCorpusChunks(files))
+  const buildQuery: QueryBuilder = (baseSql, hyde) => buildCosineQuery(baseSql, hyde, fusedLimit)
+
   const [cosineLists, candidateHashes] = await Promise.all([
-    collectCosineLists(db, plan, buildCosineQuery),
+    collectCosineLists(db, plan, buildQuery),
     fetchCandidateHashes(db, plan.baseSql),
   ])
   if (!cosineLists.ok) return cosineLists
   if (!candidateHashes.ok) return candidateHashes
 
+  await yieldToBrowser()
   const maxRawCosineByHash = computeMaxRawCosineByHash(cosineLists.value)
-  const cosineByLanguage = fuseCosinePerLanguage(groupCosineByLanguage(plan, cosineLists.value))
-  const bm25ByLanguage = buildBm25PerLanguage(plan, candidateHashes.value)
+  const cosineByLanguage = fuseCosinePerLanguage(
+    groupCosineByLanguage(plan, cosineLists.value),
+    fusedLimit
+  )
+  await yieldToBrowser()
+  const bm25ByLanguage = buildBm25PerLanguage(plan, candidateHashes.value, fusedLimit)
+  await yieldToBrowser()
 
   const cosineOnlyResult = fuseAcrossRetrievers(
     cosineByLanguage,
     EMPTY_BM25,
     maxRawCosineByHash,
+    fusedLimit,
     plan.limit
   )
   const combinedResult = fuseAcrossRetrievers(
     cosineByLanguage,
     bm25ByLanguage,
     maxRawCosineByHash,
+    fusedLimit,
     plan.limit
   )
   logCosineOnlyTopTen(cosineOnlyResult.fused)

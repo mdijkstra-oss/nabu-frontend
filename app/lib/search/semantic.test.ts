@@ -368,7 +368,7 @@ describe("buildCosineQuery", () => {
         "list_cosine_similarity(embedding, [0.1,0.2,0.3])",
         "AS _semantic_score",
         "ORDER BY _semantic_score DESC",
-        "LIMIT 200",
+        "LIMIT 1000",
         "language = 'eng'",
       ],
     },
@@ -384,7 +384,7 @@ describe("buildCosineQuery", () => {
       hyde: hyde("nld", [0.5]),
       expectedContains: [
         "list_cosine_similarity(embedding, [0.5])",
-        "ORDER BY _semantic_score DESC LIMIT 200",
+        "ORDER BY _semantic_score DESC LIMIT 1000",
         "language = 'nld'",
       ],
     },
@@ -398,7 +398,7 @@ describe("buildCosineQuery", () => {
   ]
 
   it.each(cases)("$name", ({ baseSql, hyde: h, expectedContains }) => {
-    const result = buildCosineQuery(baseSql, h)
+    const result = buildCosineQuery(baseSql, h, 1000)
     for (const fragment of expectedContains) {
       expect(result).toContain(fragment)
     }

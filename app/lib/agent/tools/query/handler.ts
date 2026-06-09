@@ -12,6 +12,7 @@ import {
 } from "~/lib/search/semantic"
 import { capLimit, hasOffset, dropOffset, type LimitRewrite } from "~/lib/search/paging"
 import { buildSemanticContext } from "~/domain/corpus/init"
+import { getFiles } from "~/lib/files/store"
 
 const MAX_QUERY_ROWS = 50
 
@@ -73,7 +74,7 @@ const executeQuery = async (call: { args: unknown }): Promise<ToolResult<unknown
 
   if (resolved.value.type === "hybrid") {
     const rewrite = planHybridWithCap(parsed.data.sql, resolved.value.plan, MAX_QUERY_ROWS)
-    const result = await executeHybridLocal(db, rewrite.plan)
+    const result = await executeHybridLocal(db, rewrite.plan, getFiles())
     if (!result.ok) return { status: "error", output: sanitizeSemanticError(result.error.message) }
     const hits = result.value
     return {

@@ -27,8 +27,9 @@ import { verdict, FILTER_BATCH_SIZE } from "./verdict"
 import { trim } from "./trim"
 import { extendRegionsForAnnotations } from "./extend-annotations"
 import { isDebugOn } from "~/lib/debug/options"
+import { yieldToBrowser } from "~/lib/utils/async"
 
-export const MAX_BARREN_BATCHES = 10
+const computeMaxBarren = (target: number): number => Math.ceil(target / FILTER_BATCH_SIZE)
 
 export interface PipelineResult {
   hits: SearchHit[]
@@ -109,7 +110,7 @@ const runVerdictWithTail = async (
 
   const { consumed, barren } = await verdict(hits, intent, signals, framework, files, onBatch, {
     target,
-    maxBarren: isDebugOn("skipBarrenCheck") ? undefined : MAX_BARREN_BATCHES,
+    maxBarren: isDebugOn("skipBarrenCheck") ? undefined : computeMaxBarren(target),
   })
 
   const rawConsumed = Math.min(consumed * FILTER_BATCH_SIZE, hits.length)
@@ -147,7 +148,11 @@ const buildResult = async ({
   const { rawHits: rawProbeHits, hydes, isSemantic, embeddings } = probeOutput
   const resolvedHighlight = probeOutput.highlight
 
-  const grouped = applyMerge(applyCap(rawProbeHits, files), files)
+  await yieldToBrowser()
+  const capped = applyCap(rawProbeHits, files)
+  await yieldToBrowser()
+  const grouped = applyMerge(capped, files)
+  await yieldToBrowser()
 
   if (grouped.length === 0) {
     return ok({
@@ -221,7 +226,7 @@ export const runSearchPipeline = async (
 ): Promise<Result<PipelineResult, PipelineError>> => {
   const resolved = await resolveSemanticSql(sql, ctx)
   if (!resolved.ok) return err({ message: resolved.error.message })
-  const probed = await probe(resolved.value, ctx.db)
+  const probed = await probe(resolved.value, ctx.db, files)
   if (!probed.ok) return err(probed.error)
   return buildResult({
     probeOutput: probed.value,
@@ -243,7 +248,7 @@ export const executeResolvedSearch = async (
   target: number,
   onResults?: (batch: SearchHit[]) => void
 ): Promise<Result<PipelineResult, PipelineError>> => {
-  const probed = await probe(resolved, db)
+  const probed = await probe(resolved, db, files)
   if (!probed.ok) return err(probed.error)
   return buildResult({
     probeOutput: probed.value,
