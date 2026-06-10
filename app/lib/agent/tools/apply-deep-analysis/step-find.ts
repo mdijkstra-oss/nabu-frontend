@@ -6,13 +6,13 @@ import type { Composite } from "~/lib/composite/pack"
 import type { SearchHit } from "~/domain/search/types"
 import { chunkText } from "~/lib/embeddings/chunk"
 import { lineToCharOffset } from "~/lib/text/lines"
-import { getCallouts } from "~/domain/data-blocks/callout/selectors"
 import { runSearchPipeline } from "~/lib/search/pipeline"
 import { locateTextInSentences } from "~/lib/text/present"
 import { spanKey } from "./format"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { BRANCH_CONCURRENCY, PER_DIM_TARGET } from "./def"
+import { stripGeneratedSuffix } from "~/lib/files/filename"
 
 export interface RangeInFile {
   startLine: number
@@ -64,13 +64,6 @@ export const buildCandidateSql = (dimPath: string, pairs: FileHashPair[]): strin
   ].join(" ")
 }
 
-const buildHighlight = (rawDimFile: string): string => {
-  const callouts = getCallouts(rawDimFile)
-  if (callouts.length === 0) return ""
-  const c = callouts[0]
-  return [c.title, c.content].filter(Boolean).join("\n")
-}
-
 export const mapHitToAnnotations = (
   hit: SearchHit,
   dim: string,
@@ -85,7 +78,7 @@ export const mapHitToAnnotations = (
     out.push({
       start: located.start,
       end: located.end,
-      code: dim,
+      code: stripGeneratedSuffix(dim),
       reason: "",
       findVotes: [],
       score: hit.score,
@@ -151,13 +144,10 @@ const runBranch = async (
   const rawDim = search.resolveFile(branch.dimPath)
   if (!rawDim) return []
 
-  const highlight = buildHighlight(rawDim)
-  if (!highlight) return []
-
   const sql = buildCandidateSql(branch.dimPath, branch.pairs)
   const result = await runSearchPipeline(
     sql,
-    highlight,
+    rawDim,
     search.ctx,
     search.files,
     PER_DIM_TARGET,

@@ -9,6 +9,8 @@ export const isHiddenFile = (path: string): boolean => path.includes(".hidden.")
 
 export const GENERATED_SUFFIX = ".generated.hidden.md"
 export const isGeneratedHiddenFile = (path: string): boolean => path.endsWith(GENERATED_SUFFIX)
+export const stripGeneratedSuffix = (path: string): string =>
+  path.endsWith(GENERATED_SUFFIX) ? path.slice(0, -GENERATED_SUFFIX.length) : path
 
 export const normalizeFilename = (name: string): string => name.toLowerCase().replace(/ /g, "_")
 
