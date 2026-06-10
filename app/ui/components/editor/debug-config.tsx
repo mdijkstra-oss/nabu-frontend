@@ -142,9 +142,10 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
-    key: "embeddingsLimit50",
-    label: "Embeddings limit 50",
-    description: "Cap fused embedding results at 50 (default 1000). Per-query cap matches.",
+    key: "embeddingsLimitOnePage",
+    label: "Embeddings limit one page",
+    description:
+      "Cap fused embedding results at one page (SEARCH_PAGE_SIZE). Default scales by corpus.",
     icon: <Filter />,
     defaultValue: false,
   },

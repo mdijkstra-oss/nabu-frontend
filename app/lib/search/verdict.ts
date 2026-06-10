@@ -13,7 +13,7 @@ import { processPool } from "~/lib/utils/pool"
 import { isDebugOn } from "~/lib/debug/options"
 import { scoutFilterBatch } from "./scout"
 
-export const FILTER_BATCH_SIZE = 5
+export const FILTER_BATCH_SIZE = 10
 export const FILTER_CONCURRENCY = 5
 export const FILTER_RUNS = 2
 

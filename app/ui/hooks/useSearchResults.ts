@@ -13,6 +13,7 @@ import {
   mergeByScore,
   runVerdictTail,
 } from "~/lib/search/pipeline"
+import { SEARCH_PAGE_SIZE } from "~/lib/search/fusion"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery, KeywordsQuery } from "~/lib/search/semantic"
 import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
@@ -94,8 +95,7 @@ export const useSearchResults = (
       state.highlight,
       state.signals,
       getFiles(),
-      // TEMP: bumped from 30 to 50 to load all at start. MUST restore to 30 — flag if seen.
-      50,
+      SEARCH_PAGE_SIZE,
       appendHits
     )
 
@@ -184,8 +184,7 @@ export const useSearchResults = (
         updatedSearch.highlight,
         ctx.db,
         getFiles(),
-        // TEMP: bumped from 30 to 100 to load all at start. MUST restore to 30 — flag if seen.
-        100,
+        SEARCH_PAGE_SIZE,
         appendHits
       )
 

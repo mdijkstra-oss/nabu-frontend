@@ -11,13 +11,14 @@ export interface ScoredChunk {
 
 export const RRF_K = 60
 
+export const SEARCH_PAGE_SIZE = 30
+
 const FUSED_LIMIT_FLOOR = 1000
-const FUSED_LIMIT_DEBUG = 50
 const FUSED_LIMIT_RATIO = 0.2
 
 export const computeFusedLimit = (corpusChunks: number): number =>
-  isDebugOn("embeddingsLimit50")
-    ? FUSED_LIMIT_DEBUG
+  isDebugOn("embeddingsLimitOnePage")
+    ? SEARCH_PAGE_SIZE
     : Math.max(FUSED_LIMIT_FLOOR, Math.ceil(corpusChunks * FUSED_LIMIT_RATIO))
 
 export const chunkKey = (row: ScoredChunk): string => row.hash ?? `${row.file}:${row.text}`
