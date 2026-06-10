@@ -1,5 +1,5 @@
 import type { HandlerResult, Operation } from "../../types"
-import type { PostAction, Section, SourceFile } from "./def"
+import type { PostAction, Target, SourceFile } from "./def"
 import { ApplyDeepAnalysisArgs, applyDeepAnalysisTool } from "./def"
 import { registerTool, tool, getToolHandlers } from "../../executors/tool"
 import { getFileView, getViewableFiles } from "../file-view"
@@ -63,16 +63,16 @@ interface PostActionCtx {
   analyzedCodes: ReadonlySet<string>
 }
 
-interface SectionResult {
-  section: Section
+interface TargetResult {
+  target: Target
   result: HandlerResult<string>
 }
 
-const validateFileSections = (
-  sections: Section[],
+const validateTargets = (
+  targets: Target[],
   sourceFiles: SourceFile[]
 ): HandlerResult<string> | null => {
-  const filePaths = sections.map((s) => s.path)
+  const filePaths = targets.map((t) => t.path)
   const missingTargets = [...new Set(filePaths)].filter((p) => getFileView(p) === undefined)
   if (missingTargets.length > 0)
     return {
@@ -253,7 +253,7 @@ const charOffsetToLine = (content: string, offset: number): number => {
   return line
 }
 
-const hitToSection = (hit: SearchHit): Section | null => {
+const hitToTarget = (hit: SearchHit): Target | null => {
   const content = getFileView(hit.file)
   if (content === undefined) return null
   if (hit.chunkStart === undefined || hit.chunkEnd === undefined) {
@@ -266,15 +266,15 @@ const hitToSection = (hit: SearchHit): Section | null => {
   }
 }
 
-const toSegments = (sections: Section[]): Segment[] =>
-  sections.flatMap((s) => {
-    const content = getFileView(s.path)
+const toSegments = (targets: Target[]): Segment[] =>
+  targets.flatMap((t) => {
+    const content = getFileView(t.path)
     if (content === undefined) return []
-    const startLine = s.start_line ?? 1
-    const endLine = s.end_line ?? content.split("\n").length
+    const startLine = t.start_line ?? 1
+    const endLine = t.end_line ?? content.split("\n").length
     return [
       {
-        path: s.path,
+        path: t.path,
         startLine,
         endLine,
         content: extractSection(content, startLine, endLine),
@@ -303,13 +303,13 @@ const processComposite = async (
   expanded: ReturnType<typeof partitionSources>,
   searchCtx: SearchCtx,
   postAction: PostActionFn
-): Promise<SectionResult[]> => {
+): Promise<TargetResult[]> => {
   const prepared = prepareTargetContent(composite.content)
   const { sentences, positions } = numberSectionWithPositions(prepared)
 
   if (sentences.length === 0) {
     return composite.segments.map((seg) => ({
-      section: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
+      target: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
       result: {
         status: "ok" as const,
         output: `${seg.path} [${seg.startLine}-${seg.endLine}]: no sentences.`,
@@ -318,7 +318,7 @@ const processComposite = async (
     }))
   }
 
-  const name = composite.segments[0]?.path.split("/").pop() ?? "section"
+  const name = composite.segments[0]?.path.split("/").pop() ?? "target"
   think(READING_FRAMEWORK)
 
   const firstSeg = composite.segments[0]
@@ -360,7 +360,7 @@ const processComposite = async (
 
   if (pipelineResult.annotations.length === 0 && pipelineResult.errors.length > 0) {
     return composite.segments.map((seg) => ({
-      section: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
+      target: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
       result: { status: "error" as const, output: pipelineResult.errors.join("; "), mutations: [] },
     }))
   }
@@ -370,13 +370,13 @@ const processComposite = async (
 
   thinkWithName(WRITING, name)
 
-  const sectionResults: SectionResult[] = []
+  const targetResults: TargetResult[] = []
   for (const seg of composite.segments) {
     const segAnnotations = grouped.get(seg) ?? []
     const mapped = mapAnnotations(sentences, segAnnotations)
     const segContent = composite.content.slice(seg.charStart, seg.charEnd)
     const sectionTextLength = prepareTargetContent(segContent).length
-    const section: Section = { path: seg.path, start_line: seg.startLine, end_line: seg.endLine }
+    const target: Target = { path: seg.path, start_line: seg.startLine, end_line: seg.endLine }
     const result = await postAction({
       mapped,
       path: seg.path,
@@ -386,26 +386,26 @@ const processComposite = async (
       warnings,
       analyzedCodes,
     })
-    sectionResults.push({ section, result })
+    targetResults.push({ target, result })
   }
 
-  return sectionResults
+  return targetResults
 }
 
-const sectionLabel = (s: Section): string => `${s.path} [${s.start_line}-${s.end_line}]`
+const targetLabel = (t: Target): string => `${t.path} [${t.start_line}-${t.end_line}]`
 
-const mergeSectionResults = (sectionResults: SectionResult[]): HandlerResult<string> => {
+const mergeTargetResults = (targetResults: TargetResult[]): HandlerResult<string> => {
   const outputs: string[] = []
   const allMutations: Operation[] = []
   const failed: string[] = []
 
-  for (const { section, result } of sectionResults) {
-    outputs.push(`## ${sectionLabel(section)}\n${result.output}`)
+  for (const { target, result } of targetResults) {
+    outputs.push(`## ${targetLabel(target)}\n${result.output}`)
     allMutations.push(...result.mutations)
-    if (result.status === "error") failed.push(sectionLabel(section))
+    if (result.status === "error") failed.push(targetLabel(target))
   }
 
-  const total = sectionResults.length
+  const total = targetResults.length
   const output = outputs.join("\n\n")
 
   if (failed.length === 0) return { status: "ok", output, mutations: allMutations }
@@ -415,7 +415,7 @@ const mergeSectionResults = (sectionResults: SectionResult[]): HandlerResult<str
   return {
     status: "partial",
     output,
-    message: `${total - failed.length}/${total} sections completed. Failed: ${failed.join(", ")}`,
+    message: `${total - failed.length}/${total} targets completed. Failed: ${failed.join(", ")}`,
     mutations: allMutations,
   }
 }
@@ -424,8 +424,8 @@ registerTool(
   tool({
     ...applyDeepAnalysisTool,
     schema: ApplyDeepAnalysisArgs,
-    handler: async (_files, { sections: inputSections, search_id, source_files, post_action }) => {
-      let sections: Section[]
+    handler: async (_files, { targets: inputTargets, search_id, source_files, post_action }) => {
+      let targets: Target[]
       if (search_id) {
         const hits = await executeSearchById(search_id, SEARCH_RESOLVE_TARGET)
         if (!hits.ok)
@@ -434,25 +434,25 @@ registerTool(
             output: `Failed to resolve search "${search_id}": ${hits.error}`,
             mutations: [],
           }
-        sections = hits.value.map(hitToSection).filter((s): s is Section => s !== null)
-        if (sections.length === 0)
+        targets = hits.value.map(hitToTarget).filter((t): t is Target => t !== null)
+        if (targets.length === 0)
           return {
             status: "error",
             output: `No usable hits returned for search "${search_id}"`,
             mutations: [],
           }
       } else {
-        sections = inputSections ?? []
+        targets = inputTargets ?? []
       }
 
-      if (sections.length === 0)
+      if (targets.length === 0)
         return {
           status: "error",
-          output: "Provide either sections or search_id",
+          output: "Provide either targets or search_id",
           mutations: [],
         }
 
-      const validationError = validateFileSections(sections, source_files)
+      const validationError = validateTargets(targets, source_files)
       if (validationError) return validationError
 
       const scoped = partitionSources(source_files)
@@ -482,14 +482,14 @@ registerTool(
       const enqueue = createKeyedQueue()
       const actions = buildPostActions(enqueue)
 
-      const segments = toSegments(sections)
+      const segments = toSegments(targets)
       const sorted = sortSegments(segments)
       const composites = packComposites(sorted, CHUNK_TARGET_CHARS, compositeSeparator)
 
       think(STARTING)
-      const flat: SectionResult[] = []
+      const flat: TargetResult[] = []
       for (const composite of composites) {
-        const name = composite.segments[0]?.path.split("/").pop() ?? "section"
+        const name = composite.segments[0]?.path.split("/").pop() ?? "target"
         thinkWithName(PICKING_UP, name)
         const results = await processComposite(
           composite,
@@ -502,7 +502,7 @@ registerTool(
       }
       if (flat.length === 1) return flat[0].result
 
-      return mergeSectionResults(flat)
+      return mergeTargetResults(flat)
     },
   })
 )

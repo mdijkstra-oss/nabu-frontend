@@ -54,7 +54,7 @@ export const codeWithSelection = (
 ): TaskConfig =>
   buildDeepAnalysisNudge(
     refs,
-    `sections: [${formatSections(ranges)}]`,
+    `targets: [${formatSections(ranges)}]`,
     `Code selection "${snippetPreview(ranges[0].fullWords.text)}" with ${buildFileList(refs)}`
   )
 
@@ -65,21 +65,21 @@ export const codeWithSearchSelection = (
 ): TaskConfig =>
   buildDeepAnalysisNudge(
     refs,
-    `sections: [${formatSections(ranges)}]`,
+    `targets: [${formatSections(ranges)}]`,
     `Code selected results from ${searchId} (${ranges.length} ${ranges.length === 1 ? "section" : "sections"}) with ${buildFileList(refs)}`
   )
 
 export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig =>
   buildDeepAnalysisNudge(
     refs,
-    `sections: [${refs.map((r) => `{ path: "${r.file}" }`).join(", ")}] (file paths only — no start_line or end_line; the whole file will be analyzed)`,
+    `targets: [${refs.map((r) => `{ path: "${r.file}" }`).join(", ")}] (file paths only — no start_line or end_line; the whole file will be analyzed)`,
     `Can you code this file with ${buildFileList(refs)}`
   )
 
 export const codeWithSearch = (refs: CodingFileRef[], searchId: string): TaskConfig =>
   buildDeepAnalysisNudge(
     refs,
-    `search_id: "${searchId}" (do not pass sections — the search's hits are resolved automatically to file paths and line ranges)`,
+    `search_id: "${searchId}" (do not pass targets — the search's hits are resolved automatically to file paths and line ranges)`,
     `Can you code ${searchId} with ${buildFileList(refs)}`
   )
 
