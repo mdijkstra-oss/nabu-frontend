@@ -182,7 +182,6 @@ export const hashString = (input: string): string => {
 interface FileHydeResult {
   language: string
   angles: HydeAngle[]
-  highlight: string
 }
 
 const resolveFileInclusions = async (
@@ -191,10 +190,10 @@ const resolveFileInclusions = async (
   fileHash: string,
   fileContent: string,
   ctx: SemanticContext
-): Promise<Result<{ inclusions: Inclusions; highlight: string }, { message: string }>> => {
+): Promise<Result<{ inclusions: Inclusions }, { message: string }>> => {
   const cached = ctx.cachedEmbeddings
   if (cached && isFileCacheValid(cached, fileHash, languages))
-    return ok({ inclusions: cached.inclusions, highlight: "" })
+    return ok({ inclusions: cached.inclusions })
 
   const inclusions: Inclusions = {}
   for (const lang of languages) inclusions[lang] = []
@@ -203,24 +202,19 @@ const resolveFileInclusions = async (
 
   const tasks: FileHydeTask[] = languages.map((language) => async () => {
     const response = await generateFileHydes(fileContent, filename, language)
-    return [{ language, angles: response.inclusions, highlight: response.highlight }]
+    return [{ language, angles: response.inclusions }]
   })
-
-  let highlight = ""
 
   await processPool(
     tasks,
     (task) => task(),
     (results: FileHydeResult[]) => {
-      for (const r of results) {
-        inclusions[r.language].push(...r.angles)
-        if (!highlight && r.highlight) highlight = r.highlight
-      }
+      for (const r of results) inclusions[r.language].push(...r.angles)
     },
     { warmup: 1 }
   )
 
-  return ok({ inclusions, highlight })
+  return ok({ inclusions })
 }
 
 const isEmbeddable = (angle: HydeAngle): boolean => angle.type !== "keywords"
@@ -340,7 +334,7 @@ const resolveFileSql = async (
       type: "hybrid",
       plan,
       embeddings: { source, inclusions: fileResult.value.inclusions },
-      highlight: fileResult.value.highlight,
+      highlight: fileContent,
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)

@@ -13,7 +13,16 @@ export const SearchHitSchema = z.object({
   splitIndex: z.number().int().optional(),
   splitTotal: z.number().int().optional(),
   matches: z.array(z.string()).optional(),
-  matchRanges: z.array(z.object({ start: z.number().int(), end: z.number().int() })).optional(),
+  matchRanges: z
+    .array(
+      z.object({
+        start: z.number().int(),
+        end: z.number().int(),
+        confidence: z.enum(["clear", "borderline"]).optional(),
+        reasonToKeep: z.string().optional(),
+      })
+    )
+    .optional(),
   chunkStart: z.number().int().optional(),
   chunkEnd: z.number().int().optional(),
 })

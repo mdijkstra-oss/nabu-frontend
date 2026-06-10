@@ -89,13 +89,9 @@ const applyExtend = (hits: SearchHit[], files: FileStore): SearchHit[] =>
 const tail = (hits: SearchHit[], files: FileStore): SearchHit[] =>
   applyExtend(applyTrim(hits, files), files)
 
-export const extractSignalTexts = (hydes: HydeQuery[]): string[] =>
-  hydes.filter((h) => h.type === "signal").map((h) => h.text)
-
 const runVerdictWithTail = async (
   hits: SearchHit[],
   intent: string,
-  signals: string[],
   framework: string,
   files: FileStore,
   target: number,
@@ -108,7 +104,7 @@ const runVerdictWithTail = async (
     onResults?.(out)
   }
 
-  const { consumed, barren } = await verdict(hits, intent, signals, framework, files, onBatch, {
+  const { consumed, barren } = await verdict(hits, intent, framework, files, onBatch, {
     target,
     maxBarren: isDebugOn("skipBarrenCheck") ? undefined : computeMaxBarren(target),
   })
@@ -196,7 +192,6 @@ const buildResult = async ({
   const filtered = await runVerdictWithTail(
     grouped,
     effectiveHighlight,
-    extractSignalTexts(hydes),
     framework,
     files,
     target,
@@ -264,8 +259,7 @@ export const executeResolvedSearch = async (
 export const runVerdictTail = (
   hits: SearchHit[],
   intent: string,
-  signals: string[],
   files: FileStore,
   target: number,
   onResults?: (batch: SearchHit[]) => void
-) => runVerdictWithTail(hits, intent, signals, "", files, target, onResults)
+) => runVerdictWithTail(hits, intent, "", files, target, onResults)

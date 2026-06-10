@@ -8,18 +8,16 @@ import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 import { splitSentences } from "~/lib/text/split"
 import { formatNumberedPassage } from "~/lib/text/format"
 import { toLetter, parseRef } from "~/lib/text/prefix-ref"
-import { collapseRunsByOverlap, dedupOverlapping, type Spanned } from "~/lib/text/spans"
+import { dedupOverlapping, type Spanned } from "~/lib/text/spans"
 import { processPool } from "~/lib/utils/pool"
 import { isDebugOn } from "~/lib/debug/options"
 import { scoutFilterBatch } from "./scout"
 
 export const FILTER_BATCH_SIZE = 10
 export const FILTER_CONCURRENCY = 5
-export const FILTER_RUNS = 2
 
 const SEMANTIC_FILTER_ENDPOINT = "/semantic-filter"
 const REF_SEPARATOR = "-"
-const AGREEMENT_THRESHOLD = 0.8
 const MIN_WORD_COUNT = 3
 const WORD_SPLIT_RE = /\s+/
 
@@ -44,9 +42,13 @@ const prepareHit = (hit: SearchHit, index: number): PreparedHit | null => {
   return { hit, sentences, numbered, prefix }
 }
 
+const ConfidenceSchema = z.enum(["clear", "borderline"])
+export type FilterConfidence = z.infer<typeof ConfidenceSchema>
+
 const FilterMatchSchema = z.object({
   start: z.string(),
   end: z.string(),
+  confidence: ConfidenceSchema,
   reasonToKeep: z.string(),
 })
 
@@ -59,6 +61,8 @@ interface ParsedMatch {
   prefix: string
   start: number
   end: number
+  confidence: FilterConfidence
+  reasonToKeep: string
 }
 
 const parseMatch = (
@@ -71,7 +75,13 @@ const parseMatch = (
   if (startRef.prefix !== endRef.prefix) return null
   if (!validPrefixes.has(startRef.prefix)) return null
   if (endRef.n < startRef.n) return null
-  return { prefix: startRef.prefix, start: startRef.n, end: endRef.n }
+  return {
+    prefix: startRef.prefix,
+    start: startRef.n,
+    end: endRef.n,
+    confidence: raw.confidence,
+    reasonToKeep: raw.reasonToKeep,
+  }
 }
 
 const parseMatches = (
@@ -79,103 +89,60 @@ const parseMatches = (
   validPrefixes: Set<string>
 ): ParsedMatch[] => matches.flatMap((m) => parseMatch(m, validPrefixes) ?? [])
 
-const groupRunsByPrefix = (runs: ParsedMatch[][], prefixes: string[]): Map<string, Spanned[][]> => {
-  const byPrefix = new Map<string, Spanned[][]>(
-    prefixes.map((p) => [p, Array.from({ length: runs.length }, (): Spanned[] => [])])
-  )
-  for (let runIdx = 0; runIdx < runs.length; runIdx++) {
-    for (const match of runs[runIdx]) {
-      const perRun = byPrefix.get(match.prefix)
-      if (!perRun) continue
-      perRun[runIdx].push({ start: match.start, end: match.end })
-    }
-  }
-  return byPrefix
-}
-
-const collapseSpansPerPrefix = (
-  runs: ParsedMatch[][],
-  prefixes: string[]
-): Map<string, Spanned[]> => {
-  const perPrefixRuns = groupRunsByPrefix(runs, prefixes)
-  const out = new Map<string, Spanned[]>()
-  for (const [prefix, perRun] of perPrefixRuns) {
-    const collapsed = collapseRunsByOverlap(perRun, AGREEMENT_THRESHOLD).map((v) => v.span)
-    out.set(prefix, dedupOverlapping(collapsed))
-  }
-  return out
-}
-
 const formatHitTarget = (numbered: string, prefix: string): string =>
   `<target prefix="${prefix}">\n${numbered}\n</target>`
 
-const formatSignalExamples = (signals: string[]): string =>
-  `<signal_examples>\n${signals.map((s) => `- ${s}`).join("\n")}\n</signal_examples>`
-
 const callSemanticFilterBatch = async (
   intent: string,
-  signals: string[],
-  prepared: PreparedHit[],
-  runIdx: number
+  prepared: PreparedHit[]
 ): Promise<ParsedMatch[]> => {
   const messages = [
     toSystem(`<search_intent>${intent}</search_intent>`),
-    ...(signals.length > 0 ? [toSystem(formatSignalExamples(signals))] : []),
     ...prepared.map((p) => toSystem(formatHitTarget(p.numbered, p.prefix))),
     toSystem(FILTER_CALL_TO_ACTION),
   ]
 
-  const endpoint = `${SEMANTIC_FILTER_ENDPOINT}?model=${runIdx}`
-  const result = await callAndParse(endpoint, messages, FilterResponseSchema)
+  const result = await callAndParse(SEMANTIC_FILTER_ENDPOINT, messages, FilterResponseSchema)
   if (!result.ok) return []
 
   const validPrefixes = new Set(prepared.map((p) => p.prefix))
   return parseMatches(result.data.results, validPrefixes)
 }
 
-const FILTER_CACHE_PREFIX = "filter-v2"
+const FILTER_CACHE_PREFIX = "filter-v4"
 const FILTER_CACHE_CAP = 200_000
 
-const signalsKeyPart = (signals: string[]): string => buildKey([...signals].sort())
+const hitCacheKey = (intent: string, numbered: string): string => buildKey([intent, numbered])
 
-const hitCacheKey = (
-  runIdx: number,
-  intent: string,
-  signalsKey: string,
-  numbered: string
-): string => buildKey([String(runIdx), intent, signalsKey, numbered])
+export interface FilteredSpan extends Spanned {
+  confidence: FilterConfidence
+  reasonToKeep: string
+}
 
 interface CachedHitResult {
-  spans: Spanned[]
+  spans: FilteredSpan[]
 }
 
 const lookupHitCache = async (
-  runIdx: number,
   intent: string,
-  signalsKey: string,
   prepared: PreparedHit[]
 ): Promise<(CachedHitResult | undefined)[]> =>
   Promise.all(
     prepared.map((p) =>
-      tryGet<CachedHitResult>(
-        FILTER_CACHE_PREFIX,
-        hitCacheKey(runIdx, intent, signalsKey, p.numbered)
-      )
+      tryGet<CachedHitResult>(FILTER_CACHE_PREFIX, hitCacheKey(intent, p.numbered))
     )
   )
 
 const cacheHitResults = async (
-  runIdx: number,
   intent: string,
-  signalsKey: string,
   prepared: PreparedHit[],
-  results: Spanned[][]
+  results: FilteredSpan[][]
 ): Promise<void> => {
   await Promise.all(
     prepared.map((p, i) =>
       tryPut(
         FILTER_CACHE_PREFIX,
-        hitCacheKey(runIdx, intent, signalsKey, p.numbered),
+        hitCacheKey(intent, p.numbered),
         { spans: results[i] },
         FILTER_CACHE_CAP
       )
@@ -183,64 +150,45 @@ const cacheHitResults = async (
   )
 }
 
-const splitMatchesByPrefix = (matches: ParsedMatch[], prepared: PreparedHit[]): Spanned[][] =>
+const toFilteredSpan = (m: ParsedMatch): FilteredSpan => ({
+  start: m.start,
+  end: m.end,
+  confidence: m.confidence,
+  reasonToKeep: m.reasonToKeep,
+})
+
+const splitMatchesByPrefix = (matches: ParsedMatch[], prepared: PreparedHit[]): FilteredSpan[][] =>
   prepared.map((p) =>
-    matches.filter((m) => m.prefix === p.prefix).map((m) => ({ start: m.start, end: m.end }))
+    dedupOverlapping(matches.filter((m) => m.prefix === p.prefix).map(toFilteredSpan))
   )
 
-const cachedCallSemanticFilterBatch = async (
-  intent: string,
-  signals: string[],
-  prepared: PreparedHit[],
-  runIdx: number
-): Promise<Spanned[][]> => {
-  const signalsKey = signalsKeyPart(signals)
-  const cached = await lookupHitCache(runIdx, intent, signalsKey, prepared)
+const runFilter = async (intent: string, prepared: PreparedHit[]): Promise<FilteredSpan[][]> => {
+  const cached = await lookupHitCache(intent, prepared)
 
   const uncached = prepared.filter((_, i) => cached[i] === undefined)
 
   if (uncached.length === 0) return cached.map((c) => c?.spans ?? [])
 
-  const matches = await callSemanticFilterBatch(intent, signals, uncached, runIdx)
+  const matches = await callSemanticFilterBatch(intent, uncached)
   const freshSpans = splitMatchesByPrefix(matches, uncached)
-  await cacheHitResults(runIdx, intent, signalsKey, uncached, freshSpans)
+  await cacheHitResults(intent, uncached, freshSpans)
 
   let freshIdx = 0
   return cached.map((v) => (v ? v.spans : freshSpans[freshIdx++]))
 }
 
-const collectRunsPerHit = (
-  perRunSpans: Spanned[][][],
-  prepared: PreparedHit[]
-): ParsedMatch[][] => {
-  return perRunSpans.map((spansPerHit) =>
-    prepared.flatMap((p, hitIdx) =>
-      spansPerHit[hitIdx].map((s) => ({ prefix: p.prefix, start: s.start, end: s.end }))
-    )
-  )
-}
-
-const runAllModels = async (
-  intent: string,
-  signals: string[],
-  prepared: PreparedHit[]
-): Promise<Spanned[][]> => {
-  const runIndices = Array.from({ length: FILTER_RUNS }, (_, i) => i)
-  const perRunSpans = await Promise.all(
-    runIndices.map((runIdx) => cachedCallSemanticFilterBatch(intent, signals, prepared, runIdx))
-  )
-  const perRunMatches = collectRunsPerHit(perRunSpans, prepared)
-  const collapsedByPrefix = collapseSpansPerPrefix(
-    perRunMatches,
-    prepared.map((p) => p.prefix)
-  )
-
-  return prepared.map((p) => collapsedByPrefix.get(p.prefix) ?? [])
-}
-
-const spanToRange = (s: Spanned): { start: number; end: number } => ({
+const spanToRange = (
+  s: FilteredSpan
+): {
+  start: number
+  end: number
+  confidence: FilterConfidence
+  reasonToKeep: string
+} => ({
   start: s.start - 1,
   end: s.end - 1,
+  confidence: s.confidence,
+  reasonToKeep: s.reasonToKeep,
 })
 
 export const extractMatchTexts = (sentences: string[], spans: Spanned[]): string[] =>
@@ -255,7 +203,7 @@ export const extractMatchTexts = (sentences: string[], spans: Spanned[]): string
     })
     .filter(hasEnoughWords)
 
-const reconstructBatchHits = (prepared: PreparedHit[], results: Spanned[][]): SearchHit[] =>
+const reconstructBatchHits = (prepared: PreparedHit[], results: FilteredSpan[][]): SearchHit[] =>
   prepared.flatMap((p, i) => {
     const spans = results[i]
     if (!spans || spans.length === 0) return []
@@ -275,7 +223,6 @@ const applyScout = async (
 const verdictBatch = async (
   hits: SearchHit[],
   intent: string,
-  signals: string[],
   framework: string,
   files: FileStore
 ): Promise<SearchHit[]> => {
@@ -286,7 +233,7 @@ const verdictBatch = async (
   if (prepared.length === 0) return scouted.filter((h) => !h.text)
 
   try {
-    const results = await runAllModels(intent, signals, prepared)
+    const results = await runFilter(intent, prepared)
     const passThrough = scouted.filter((h) => !h.text)
     return [...passThrough, ...reconstructBatchHits(prepared, results)]
   } catch (e) {
@@ -311,19 +258,13 @@ export interface VerdictOptions {
 export const verdict = (
   hits: SearchHit[],
   intent: string,
-  signals: string[],
   framework: string,
   files: FileStore,
   onBatch: (batch: SearchHit[]) => void,
   opts?: VerdictOptions
 ): Promise<PoolResult<SearchHit[], SearchHit>> =>
-  processPool(
-    chunkHits(hits),
-    (chunk) => verdictBatch(chunk, intent, signals, framework, files),
-    onBatch,
-    {
-      concurrency: FILTER_CONCURRENCY,
-      target: opts?.target,
-      maxBarren: opts?.maxBarren,
-    }
-  )
+  processPool(chunkHits(hits), (chunk) => verdictBatch(chunk, intent, framework, files), onBatch, {
+    concurrency: FILTER_CONCURRENCY,
+    target: opts?.target,
+    maxBarren: opts?.maxBarren,
+  })

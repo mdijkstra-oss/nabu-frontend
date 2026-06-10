@@ -7,12 +7,7 @@ import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import { updateSearchCache } from "~/lib/agent/tools/search/settings"
 import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
-import {
-  executeResolvedSearch,
-  extractSignalTexts,
-  mergeByScore,
-  runVerdictTail,
-} from "~/lib/search/pipeline"
+import { executeResolvedSearch, mergeByScore, runVerdictTail } from "~/lib/search/pipeline"
 import { SEARCH_PAGE_SIZE } from "~/lib/search/fusion"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery, KeywordsQuery } from "~/lib/search/semantic"
@@ -54,7 +49,6 @@ export interface SearchResults {
 interface ContinuationState {
   remaining: SearchHit[]
   highlight: string
-  signals: string[]
   loading: boolean
   cancelled: boolean
 }
@@ -93,7 +87,6 @@ export const useSearchResults = (
     const { rawRemaining, exhausted } = await runVerdictTail(
       state.remaining,
       state.highlight,
-      state.signals,
       getFiles(),
       SEARCH_PAGE_SIZE,
       appendHits
@@ -213,7 +206,6 @@ export const useSearchResults = (
         contRef.current = {
           remaining: rawRemaining,
           highlight: effectiveHighlight,
-          signals: extractSignalTexts(hydes),
           loading: false,
           cancelled,
         }

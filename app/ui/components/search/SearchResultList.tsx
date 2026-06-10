@@ -91,10 +91,16 @@ const matchesToSpotlights = (matches: string[]): Spotlight[] => matches.flatMap(
 
 const splitLabel = (index: number, total: number): string => `part ${index + 1}/${total}`
 
+interface MatchRangeMeta {
+  confidence?: "clear" | "borderline"
+  reasonToKeep?: string
+}
+
 const SearchSlicePreview = ({
   text,
   filePath,
   matches,
+  matchRanges,
   score,
   constituentScores,
   splitIndex,
@@ -104,6 +110,7 @@ const SearchSlicePreview = ({
   text: string
   filePath: string
   matches?: string[]
+  matchRanges?: MatchRangeMeta[]
   score?: number
   constituentScores?: number[]
   splitIndex?: number
@@ -133,6 +140,22 @@ const SearchSlicePreview = ({
               <span className="ml-2 text-neutral-500">
                 [{constituentScores.map((s) => s.toFixed(4)).join(", ")}]
               </span>
+            )}
+            {matchRanges?.map((mr, i) =>
+              mr.confidence || mr.reasonToKeep ? (
+                <div key={i} className="mt-1 font-normal text-neutral-500">
+                  {mr.confidence && (
+                    <span
+                      className={
+                        mr.confidence === "borderline" ? "text-amber-700" : "text-emerald-700"
+                      }
+                    >
+                      {mr.confidence}
+                    </span>
+                  )}
+                  {mr.reasonToKeep && <span className="ml-2">{mr.reasonToKeep}</span>}
+                </div>
+              ) : null
             )}
           </div>
         )}
@@ -214,6 +237,7 @@ const RunGroupCard = memo(
                 text={hit.text}
                 filePath={hit.file}
                 matches={hit.matches}
+                matchRanges={hit.matchRanges}
                 score={hit.score}
                 constituentScores={hit.constituentScores}
                 splitIndex={hit.splitIndex}

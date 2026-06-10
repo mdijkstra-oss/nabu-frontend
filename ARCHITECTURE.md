@@ -474,11 +474,7 @@ Companion file `<name>.embeddings.hidden.md` stores `EmbeddingEntry { hash, text
 - Filter: `filterParallel` batches (size 5, concurrency 5)
 - Hit refresh: `slices.ts::refreshHitsAsync` yields to the browser between hits (`yieldToBrowser()`) so the UI stays responsive on large result sets
 
-### 8.8 Intent
-
-`lib/search/intent.ts::generateSearchIntent` is a separate query-understanding LLM step (its product is a structured intent, not a HyDE).
-
-### 8.9 `format-hydes.ts`
+### 8.8 `format-hydes.ts`
 
 Debug output for HyDE queries — surfaces what passages were generated and embedded for each query.
 
