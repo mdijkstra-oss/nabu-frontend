@@ -182,7 +182,7 @@ const RunGroupCard = memo(
     const tagIds = getTags(content)
     const tags = tagIds
       .map((id) => findTagDefinitionById(files, id))
-      .filter((t): t is NonNullable<typeof t> => t !== null)
+      .filter((t): t is NonNullable<typeof t> => t != null)
 
     const isFileOnlyGroup = group.hits.every(hitIsFileOnly)
     const detailHits = group.hits.filter((h) => !hitIsFileOnly(h))
