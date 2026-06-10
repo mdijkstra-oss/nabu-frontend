@@ -14,8 +14,6 @@ import "../tools/run-local-shell/handler"
 import "../tools/ask/handler"
 import "../tools/submit-plan/handler"
 import "../tools/compact/handler"
-// temporary — re-enable later
-// import "../tools/scout/handler"
 import "../tools/apply-deep-analysis/handler"
 import "../tools/start-planning/handler"
 import "../tools/query/handler"

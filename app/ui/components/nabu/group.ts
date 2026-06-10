@@ -3,11 +3,9 @@ import { type Derived, type DerivedPlan, type Step } from "~/lib/agent/derived"
 import {
   type TextMessage,
   type AskMessage,
-  type ScoutMessage,
   type Indexed,
   textMessagesIndexed,
   extractAskMessages,
-  extractScoutMessages,
   findPlanBlockIndices,
   byIndex,
 } from "./messages"
@@ -39,7 +37,7 @@ export interface PlanItem {
   dimmed: boolean
 }
 
-export type GroupedMessage = LeafMessage | AskMessage | ScoutMessage | PlanHeader | PlanItem
+export type GroupedMessage = LeafMessage | AskMessage | PlanHeader | PlanItem
 
 interface PlanRange {
   plan: DerivedPlan
@@ -246,12 +244,6 @@ export const toGroupedMessages = (history: Block[], derived: Derived): KeyedMess
     item: a.message,
   }))
 
-  const scoutKeyed: KeyedEntry[] = extractScoutMessages(history).map((s) => ({
-    sortIndex: s.index,
-    key: `scout-${s.index}`,
-    item: s.message,
-  }))
-
   const planKeyed: KeyedEntry[] = planRanges.flatMap((range, planIdx) =>
     buildPlanEntries(range, planLeaves.get(planIdx) ?? [], history).map((e, entryIdx) => ({
       sortIndex: e.blockIndex,
@@ -260,7 +252,7 @@ export const toGroupedMessages = (history: Block[], derived: Derived): KeyedMess
     }))
   )
 
-  return [...outsideKeyed, ...askKeyed, ...scoutKeyed, ...planKeyed]
+  return [...outsideKeyed, ...askKeyed, ...planKeyed]
     .sort((a, b) => a.sortIndex - b.sortIndex)
     .map((e) => ({ key: e.key, message: e.item }))
 }

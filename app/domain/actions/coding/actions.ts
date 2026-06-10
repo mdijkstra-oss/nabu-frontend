@@ -29,7 +29,7 @@ export const codeWithSelection = (
     ? "\nNote: .generated.hidden.md files will not appear in ls output, but do exist — DO NOT read supplied files, apply_deep_analysis will read them for you."
     : ""
   return {
-    context: `Do NOT use scout. Follow these steps exactly:
+    context: `Follow these steps exactly:
 
 1. Run ls --show-tags to find codebook files.
 2. Call apply_deep_analysis with these exact arguments:
@@ -52,7 +52,7 @@ export const codeWithSearchSelection = (
     ? "\nNote: .generated.hidden.md files will not appear in ls output, but do exist — DO NOT read supplied files, apply_deep_analysis will read them for you."
     : ""
   return {
-    context: `Do NOT use scout. Follow these steps exactly:
+    context: `Follow these steps exactly:
 
 1. Run ls --show-tags to find codebook files.
 2. Call apply_deep_analysis with these exact arguments:
@@ -87,7 +87,7 @@ export const codeWithSearch = (refs: CodingFileRef[], searchId: string): TaskCon
     ? " Note: .generated.hidden.md files will not appear in ls output, but do exist - DO NOT read supplied files plan deep will read for you."
     : ""
   return {
-    context: `Use ls --show-tags to find codebooks, then use apply_deep_analysis to code the selected results. Do not use scout. Use the generic codebook as framework if exists AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote} Target the search results from ${searchId}.`,
+    context: `Use ls --show-tags to find codebooks, then use apply_deep_analysis to code the selected results. Use the generic codebook as framework if exists AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote} Target the search results from ${searchId}.`,
     userMessage: `Can you code ${searchId} with ${fileList}`,
   }
 }
@@ -100,7 +100,7 @@ export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig => {
     ? " Note: .generated.hidden.md files will not appear in ls output, but do exist - DO NOT read supplied files plan deep will read for you."
     : ""
   return {
-    context: `Use ls --show-tags to find codebooks, then use apply_deep_analysis to code the file. Do not use scout. Use the generic codebook as framework if exists AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote}`,
+    context: `Use ls --show-tags to find codebooks, then use apply_deep_analysis to code the file. Use the generic codebook as framework if exists AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote}`,
     userMessage: `Can you code this file with ${fileList}`,
   }
 }

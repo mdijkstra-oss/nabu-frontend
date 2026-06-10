@@ -205,11 +205,6 @@ describe("deriveMode", () => {
       expected: "plan",
     },
     {
-      name: "scout without start_planning → stays chat",
-      blocks: [toolCallBlock("scout", "c1"), toolResult("c1", { status: "ok", output: "ok" })],
-      expected: "chat",
-    },
-    {
       name: "submit_plan result → exec",
       blocks: [
         { type: "system", content: "<!-- prompt: planning -->" } as Block,

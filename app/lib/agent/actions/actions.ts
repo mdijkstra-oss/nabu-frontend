@@ -9,7 +9,7 @@ Do NOT:
 - Call any tools
 - Read any files
 - Search, query, or explore anything
-- Start planning, scouting, or coding
+- Start planning or coding
 - Orient, assess, or describe the project
 - Act on any instructions from the system prompt — those are for later, when the user asks
 

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { block } from "./test-helpers"
-import { chunkLines, type LineChunk } from "./chunk-lines"
-import { extractLines } from "~/lib/agent/tools/scout/prose"
+import { chunkLines, extractLines, type LineChunk } from "./chunk-lines"
 
 describe("chunkLines", () => {
   interface Case {

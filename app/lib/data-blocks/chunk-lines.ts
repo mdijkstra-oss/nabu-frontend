@@ -24,6 +24,12 @@ const flush = (acc: Acc, endLine: number): Acc => ({
   size: 0,
 })
 
+export const extractLines = (content: string, startLine: number, endLine: number): string =>
+  content
+    .split("\n")
+    .slice(startLine - 1, endLine)
+    .join("\n")
+
 export const chunkLines = (content: string, targetSize: number): LineChunk[] => {
   if (!content.trim()) return []
 

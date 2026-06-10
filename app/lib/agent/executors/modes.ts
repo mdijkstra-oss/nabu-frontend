@@ -16,7 +16,6 @@ import { renameFile } from "../tools/rename-file/def"
 import { removeFile } from "../tools/remove-file/def"
 import { runLocalShell } from "../tools/run-local-shell/def"
 import { cancel } from "../tools/cancel/def"
-// scoutTool — temporary, re-enable later
 import { applyDeepAnalysisTool } from "../tools/apply-deep-analysis/def"
 import { refineCodeTool } from "../tools/refine-code/def"
 import { startPlanTool } from "../tools/start-planning/def"
@@ -66,7 +65,6 @@ const raw: Record<ModeName, ModeConfig> = {
       copyFile,
       renameFile,
       removeFile,
-      // scoutTool, // temporary — re-enable later
       applyDeepAnalysisTool,
       refineCodeTool,
       startPlanTool,
@@ -76,15 +74,7 @@ const raw: Record<ModeName, ModeConfig> = {
     nudges: [baselineNudge, memoryNudge, settingsNudge],
   },
   plan: {
-    tools: [
-      runLocalShell,
-      queryTool,
-      searchTool,
-      // scoutTool, // temporary — re-enable later
-      submitPlanTool,
-      cancel,
-      askTool,
-    ],
+    tools: [runLocalShell, queryTool, searchTool, submitPlanTool, cancel, askTool],
     triggers: [],
     prompt: "planning",
     nudges: [baselineNudge, memoryNudge, settingsNudge],

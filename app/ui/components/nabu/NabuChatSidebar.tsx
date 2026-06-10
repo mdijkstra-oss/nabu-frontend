@@ -33,7 +33,7 @@ import {
   type PlanStep,
   type StepStatus,
 } from "./group"
-import type { AskMessage, ScoutMessage, ScoutFileStatus, ScoutFileState } from "./messages"
+import type { AskMessage } from "./messages"
 import { isWaitingForAsk } from "./messages"
 import { getSpinnerLabels, LABEL_ADVANCE_MS } from "./spinnerLabel"
 import { useFiles } from "~/ui/hooks/useFiles"
@@ -426,96 +426,6 @@ const AskRenderer = memo(
   askPropsEqual
 )
 
-interface ScoutRendererProps {
-  message: ScoutMessage
-  files: Record<string, string>
-  projectId: string | null
-}
-
-const scoutFilesEqual = (prev: ScoutFileStatus[], next: ScoutFileStatus[]): boolean => {
-  if (prev.length !== next.length) return false
-  for (let i = 0; i < prev.length; i++) {
-    if (prev[i].status !== next[i].status) return false
-  }
-  return true
-}
-
-const scoutPropsEqual = (prev: ScoutRendererProps, next: ScoutRendererProps): boolean =>
-  scoutFilesEqual(prev.message.files, next.message.files) &&
-  prev.files === next.files &&
-  prev.projectId === next.projectId
-
-interface ScoutFileGroup {
-  label: string
-  files: ScoutFileStatus[]
-}
-
-const byPath = (a: ScoutFileStatus, b: ScoutFileStatus): number => a.path.localeCompare(b.path)
-
-const byLabel = (a: ScoutFileGroup, b: ScoutFileGroup): number => a.label.localeCompare(b.label)
-
-const groupScoutFiles = (files: ScoutFileStatus[]): ScoutFileGroup[] => {
-  const groups: ScoutFileGroup[] = []
-  const seen = new Map<string, ScoutFileGroup>()
-  for (const f of files) {
-    const existing = seen.get(f.group)
-    if (existing) {
-      existing.files.push(f)
-    } else {
-      const label = f.group.charAt(0).toUpperCase() + f.group.slice(1)
-      const group: ScoutFileGroup = { label, files: [f] }
-      seen.set(f.group, group)
-      groups.push(group)
-    }
-  }
-  return groups.map((g) => ({ ...g, files: [...g.files].sort(byPath) })).sort(byLabel)
-}
-
-interface ScoutFileRowProps {
-  file: ScoutFileStatus
-  files: Record<string, string>
-  projectId: string | null
-}
-
-const scoutFileIcon: Record<ScoutFileState, ReactNode> = {
-  done: <Check className="text-body text-success-600 flex-none" />,
-  failed: <X className="text-body text-error-600 flex-none" />,
-  pending: <Loader2 className="text-body text-brand-600 flex-none animate-spin" />,
-}
-
-const ScoutFileRow = ({ file, files, projectId }: ScoutFileRowProps) => (
-  <div className="flex items-center gap-2">
-    {scoutFileIcon[file.status]}
-    <span className="prose prose-sm text-body font-body text-default-font [&>*]:mb-0 [&_a]:no-underline">
-      <InlineMarkdown
-        files={files}
-        projectId={projectId}
-        currentFile={null}
-        currentFileContent={null}
-      >
-        {file.path}
-      </InlineMarkdown>
-    </span>
-  </div>
-)
-
-const ScoutRenderer = memo(({ message, files, projectId }: ScoutRendererProps) => {
-  const groups = groupScoutFiles(message.files)
-  return (
-    <div className="flex w-full flex-col items-start gap-1.5 border-l-2 border-solid border-neutral-200 pl-3 pr-2 py-2 my-1">
-      <span className="text-caption font-caption text-subtext-color">Analyzing files</span>
-      {groups.map((group) => (
-        <div key={group.label} className="flex w-full flex-col items-start gap-1">
-          <span className="text-body-bold font-body-bold text-default-font">{group.label}</span>
-          {group.files.map((f) => (
-            <ScoutFileRow key={f.path} file={f} files={files} projectId={projectId} />
-          ))}
-        </div>
-      ))}
-    </div>
-  )
-}, scoutPropsEqual)
-
 const isPlanStep = (child: PlanChild): child is PlanStep => child.type === "plan-step"
 const isLeafMessage = (child: PlanChild): child is LeafMessage => child.type === "text"
 
@@ -682,7 +592,7 @@ interface CollapsedSteps {
   type: "collapsed-steps"
   count: number
 }
-type RenderSegment = LeafMessage | AskMessage | ScoutMessage | PlanSegment
+type RenderSegment = LeafMessage | AskMessage | PlanSegment
 type FinalSegment = RenderSegment | CollapsedSteps
 
 interface KeyedSegment {
@@ -696,8 +606,6 @@ const isPlanRelated = (m: GroupedMessage): m is PlanMessage =>
 const isPlanSegment = (s: FinalSegment): s is PlanSegment => s.type === "plan-segment"
 
 const isAskSegment = (s: FinalSegment): s is AskMessage => s.type === "ask"
-
-const isScoutSegment = (s: FinalSegment): s is ScoutMessage => s.type === "scout"
 
 const isCollapsedSteps = (s: FinalSegment): s is CollapsedSteps => s.type === "collapsed-steps"
 
@@ -1106,12 +1014,6 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
                     navigate={navigate}
                     onSelect={respond}
                     isLast={isLast}
-                  />
-                ) : isScoutSegment(segment) ? (
-                  <ScoutRenderer
-                    message={segment}
-                    files={files}
-                    projectId={params.projectId ?? null}
                   />
                 ) : isCollapsedSteps(segment) ? (
                   <CollapsedStepsIndicator count={segment.count} />
