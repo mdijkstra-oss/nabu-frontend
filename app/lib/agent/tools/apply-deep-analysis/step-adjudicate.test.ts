@@ -1,11 +1,5 @@
 import { describe, it, expect } from "vitest"
-import {
-  applyVerdict,
-  buildCase,
-  collectCodeIds,
-  isContested,
-  type Verdict,
-} from "./step-adjudicate"
+import { applyVerdict, collectCodeIds, isContested, type Verdict } from "./step-adjudicate"
 import type { Annotation } from "./types"
 
 const ann = (overrides: Partial<Annotation> = {}): Annotation => ({
@@ -25,24 +19,6 @@ describe("isContested", () => {
   ]
   cases.forEach(({ name, input, expected }) => {
     it(name, () => expect(isContested(input)).toBe(expected))
-  })
-})
-
-describe("buildCase", () => {
-  const cases = [
-    {
-      name: "formats both keep and remove reasons",
-      input: ann({ reason: "fits criterion A", review: "weak evidence" }),
-      expected: "keep-case: fits criterion A | remove-case: weak evidence",
-    },
-    {
-      name: "missing review renders empty remove-case",
-      input: ann({ reason: "fits" }),
-      expected: "keep-case: fits | remove-case: ",
-    },
-  ]
-  cases.forEach(({ name, input, expected }) => {
-    it(name, () => expect(buildCase(input)).toBe(expected))
   })
 })
 

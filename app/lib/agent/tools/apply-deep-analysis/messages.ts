@@ -139,12 +139,6 @@ export const buildCodeSourceMessages = (
   return messages
 }
 
-const buildLeadingContextMessage = (context: string): string =>
-  `<context type="preceding">\n${context}\n</context>`
-
-const buildTrailingContextMessage = (context: string): string =>
-  `<context type="following">\n${context}\n</context>`
-
 export const FILTER_CTA =
   "For each coded section, judge whether the passage satisfies the code definitions. Return your judgment as JSON."
 
@@ -177,53 +171,25 @@ export const buildAdjudicateSchema = (validCodes: string[]) =>
     ),
   })
 
-const wrapTarget = (section: string): string => `<target>\n${section}\n</target>`
-
-const buildSpanEnvelope = (
-  frameworkMessages: Message[],
-  section: string,
-  leadingCtx: string,
-  trailingCtx: string,
-  calloutMessages: Message[],
+const buildTargetMessages = (
+  targetBlocks: string[],
+  codeIds: ReadonlySet<string>,
+  sources: ScopedSources,
+  resolve: ContentResolver,
   callToAction: string
 ): Message[] => {
-  const messages: Message[] = [...frameworkMessages]
+  const messages: Message[] = [...resolvePathMessages(sources.framework, resolve)]
   messages.push(cacheMarker())
-  messages.push(...calloutMessages)
+  messages.push(
+    ...buildCodeSourceMessages(codeIds, { framework: [], dimension: sources.dimension }, resolve)
+  )
   messages.push(cacheMarker())
-  if (leadingCtx) {
-    messages.push({
-      type: "message",
-      role: "system",
-      content: buildLeadingContextMessage(leadingCtx),
-    })
-  }
-  messages.push({ type: "message", role: "system", content: wrapTarget(section) })
-  if (trailingCtx) {
-    messages.push({
-      type: "message",
-      role: "system",
-      content: buildTrailingContextMessage(trailingCtx),
-    })
+  for (const block of targetBlocks) {
+    messages.push({ type: "message", role: "system", content: block })
   }
   messages.push({ type: "message", role: "user", content: callToAction })
   return messages
 }
 
-export const buildSpanStepMessages = (
-  presented: string,
-  codeIds: ReadonlySet<string>,
-  sources: ScopedSources,
-  leadingCtx: string,
-  trailingCtx: string,
-  resolve: ContentResolver,
-  callToAction: string
-): Message[] =>
-  buildSpanEnvelope(
-    resolvePathMessages(sources.framework, resolve),
-    presented,
-    leadingCtx,
-    trailingCtx,
-    buildCodeSourceMessages(codeIds, { framework: [], dimension: sources.dimension }, resolve),
-    callToAction
-  )
+export const buildFilterMessages = buildTargetMessages
+export const buildAdjudicateMessages = buildTargetMessages

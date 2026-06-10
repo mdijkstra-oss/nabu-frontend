@@ -1,9 +1,10 @@
 import type { Annotation } from "./types"
 import type { ScopedSources, ContentResolver } from "./messages"
 import { callAndParse } from "../../client/call-parse"
-import { buildSpanStepMessages, ADJUDICATE_CTA, buildAdjudicateSchema } from "./messages"
+import { buildAdjudicateMessages, ADJUDICATE_CTA, buildAdjudicateSchema } from "./messages"
 import { groupBySpan, type CodedSpan } from "./consensus"
-import { formatCodedSection, type CodedItem } from "./present"
+import { renderTargetBlocks } from "./triplet"
+import { type CodedItem } from "./present"
 import { spanKey } from "./format"
 import { ADJUDICATE_ENDPOINT, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
 
@@ -28,9 +29,6 @@ export interface Verdict {
 
 export const isContested = (a: Annotation): boolean => a.review !== undefined
 
-export const buildCase = (a: Annotation): string =>
-  `keep-case: ${a.reason} | remove-case: ${a.review ?? ""}`
-
 export const collectCodeIds = (annotations: readonly Annotation[]): Set<string> => {
   const ids = new Set<string>()
   for (const a of annotations) ids.add(a.code)
@@ -50,21 +48,35 @@ export const applyVerdict = (a: Annotation, v: Verdict): Annotation | null => {
   }
 }
 
+interface CaseEntry {
+  keepCase: string
+  removeCase: string
+}
+
 const spanReasonKey = (start: number, end: number): string => `${start}-${end}`
 
-const buildCaseMap = (annotations: readonly Annotation[]): Map<string, string> => {
-  const map = new Map<string, string>()
-  for (const a of annotations) map.set(spanReasonKey(a.start, a.end), buildCase(a))
+const buildCaseMap = (annotations: readonly Annotation[]): Map<string, CaseEntry> => {
+  const map = new Map<string, CaseEntry>()
+  for (const a of annotations) {
+    map.set(spanReasonKey(a.start, a.end), {
+      keepCase: a.reason,
+      removeCase: a.review ?? "",
+    })
+  }
   return map
 }
 
-const toCodedItems = (spans: CodedSpan[], cases: Map<string, string>): CodedItem[] =>
-  spans.map((s) => ({
-    start: s.start,
-    end: s.end,
-    codings: s.codings,
-    reason: cases.get(spanReasonKey(s.start, s.end)),
-  }))
+const toCodedItems = (spans: CodedSpan[], cases: Map<string, CaseEntry>): CodedItem[] =>
+  spans.map((s) => {
+    const c = cases.get(spanReasonKey(s.start, s.end))
+    return {
+      start: s.start,
+      end: s.end,
+      codings: s.codings,
+      keepCase: c?.keepCase,
+      removeCase: c?.removeCase,
+    }
+  })
 
 const toFindShape = (
   annotations: readonly Annotation[]
@@ -75,8 +87,6 @@ export const adjudicateAnnotations = async (
   allSurvivors: Annotation[],
   sentences: string[],
   sources: ScopedSources,
-  leadingCtx: string,
-  trailingCtx: string,
   resolve: ContentResolver
 ): Promise<AdjudicateStepResult> => {
   const contested = allSurvivors.filter(isContested)
@@ -87,21 +97,9 @@ export const adjudicateAnnotations = async (
   const codedItems = toCodedItems(grouped, caseMap)
   const codeIds = collectCodeIds(allSurvivors)
 
-  const { text: presented, mapping } = formatCodedSection(
-    sentences,
-    codedItems,
-    SPAN_STEP_CONTEXT_SENTENCES
-  )
+  const { blocks, mapping } = renderTargetBlocks(sentences, codedItems, SPAN_STEP_CONTEXT_SENTENCES)
 
-  const messages = buildSpanStepMessages(
-    presented,
-    codeIds,
-    sources,
-    leadingCtx,
-    trailingCtx,
-    resolve,
-    ADJUDICATE_CTA
-  )
+  const messages = buildAdjudicateMessages(blocks, codeIds, sources, resolve, ADJUDICATE_CTA)
 
   const validCodes = [...codeIds]
   const schema = buildAdjudicateSchema(validCodes)

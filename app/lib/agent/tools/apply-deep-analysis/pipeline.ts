@@ -81,19 +81,10 @@ const processBatch = async (
   annotations: Annotation[],
   sentences: string[],
   sources: ScopedSources,
-  leadingCtx: string,
-  trailingCtx: string,
   resolve: ContentResolver
 ): Promise<BatchResult> => {
   think(FILTERING)
-  const filterResult = await filterAnnotations(
-    annotations,
-    sentences,
-    sources,
-    leadingCtx,
-    trailingCtx,
-    resolve
-  )
+  const filterResult = await filterAnnotations(annotations, sentences, sources, resolve)
   return {
     annotations: filterResult.surviving,
     errors: filterResult.errors,
@@ -105,8 +96,6 @@ export const runAnalysisPipeline = async (
   incoming: Annotation[],
   sentences: string[],
   sources: ScopedSources,
-  leadingCtx: string,
-  trailingCtx: string,
   resolve: ContentResolver,
   firstFile: string
 ): Promise<PipelineResult> => {
@@ -120,9 +109,7 @@ export const runAnalysisPipeline = async (
   think(REVISITING)
   const { results: batchResults, failures } = await processPool(
     batches,
-    async (batch) => [
-      await processBatch(batch, sentences, sources, leadingCtx, trailingCtx, resolve),
-    ],
+    async (batch) => [await processBatch(batch, sentences, sources, resolve)],
     noop,
     { concurrency: POST_FIND_CONCURRENCY }
   )
@@ -138,14 +125,7 @@ export const runAnalysisPipeline = async (
   const filterStats = mergeFilterStats(batchResults.map((br) => br.stats))
 
   think(ADJUDICATING)
-  const adjudicated = await adjudicateAnnotations(
-    surviving,
-    sentences,
-    sources,
-    leadingCtx,
-    trailingCtx,
-    resolve
-  )
+  const adjudicated = await adjudicateAnnotations(surviving, sentences, sources, resolve)
   allErrors.push(...adjudicated.errors)
 
   console.debug(formatStatsTable(firstFile, filterStats, adjudicated.stats))

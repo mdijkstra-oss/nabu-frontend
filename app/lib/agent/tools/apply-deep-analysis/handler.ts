@@ -8,7 +8,6 @@ import { CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
 import {
   SECTION_MARKER,
   extractSection,
-  extractSentenceContext,
   prepareTargetContent,
   numberSectionWithPositions,
   mapAnnotations,
@@ -39,7 +38,6 @@ import { runFind, type SearchCtx } from "./step-find"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
-import { SECTION_EDGE_CONTEXT_SENTENCES } from "./def"
 import { think, thinkWithName, STARTING, PICKING_UP, READING_FRAMEWORK, WRITING } from "./thoughts"
 import { findMatchOffset } from "~/lib/text/find"
 import type { Annotation as StoredAnnotation } from "~/domain/data-blocks/attributes/schema"
@@ -238,9 +236,6 @@ const buildPostActions = (enqueue: Enqueue): Record<PostAction, PostActionFn> =>
   annotate_as_comment: handleAnnotation("annotate_as_comment", enqueue),
 })
 
-const isSingleFileComposite = (segments: readonly { path: string }[]): boolean =>
-  segments.length > 0 && segments.every((s) => s.path === segments[0].path)
-
 const compositeSeparator = (seg: Segment): string =>
   `\n\n${SECTION_MARKER}${seg.path} [${seg.startLine}-${seg.endLine}]\n\n`
 
@@ -321,22 +316,6 @@ const processComposite = async (
   const name = composite.segments[0]?.path.split("/").pop() ?? "target"
   think(READING_FRAMEWORK)
 
-  const firstSeg = composite.segments[0]
-  const lastSeg = composite.segments[composite.segments.length - 1]
-  let leadingCtx = ""
-  let trailingCtx = ""
-  if (isSingleFileComposite(composite.segments) && firstSeg && lastSeg) {
-    const fullContent = getFileView(firstSeg.path) ?? ""
-    const ctx = extractSentenceContext(
-      fullContent,
-      firstSeg.startLine,
-      lastSeg.endLine,
-      SECTION_EDGE_CONTEXT_SENTENCES
-    )
-    leadingCtx = ctx.leading
-    trailingCtx = ctx.trailing
-  }
-
   const analyzedCodes = new Set(extractDimensionIds([scoped], getFileView))
 
   const firstFile = composite.segments[0]?.path ?? "target"
@@ -347,8 +326,6 @@ const processComposite = async (
     incoming,
     sentences,
     scoped,
-    leadingCtx,
-    trailingCtx,
     getFileView,
     firstFile
   )

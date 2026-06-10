@@ -1,53 +1,43 @@
-import type { CodedItem, ItemMapping, PresentedSection } from "./present"
+import type { CodedItem, ItemMapping } from "./present"
 
 const formatCodings = (codings: string[]): string => codings.join(", ")
 
-const joinNonEmpty = (parts: string[]): string => parts.filter(Boolean).join(" ")
-
-const buildBlock = (
+const buildTargetBlock = (
   sentences: string[],
   item: CodedItem,
   itemIndex: number,
-  halo: number,
-  leading: string,
-  trailing: string
+  halo: number
 ): string => {
-  const sectionBeforeCount = Math.min(halo, item.start - 1)
-  const sectionBefore = sentences
-    .slice(item.start - 1 - sectionBeforeCount, item.start - 1)
-    .join(" ")
-  const needsLeadingSpill = halo > sectionBeforeCount
+  const beforeCount = Math.min(halo, item.start - 1)
+  const before = sentences.slice(item.start - 1 - beforeCount, item.start - 1).join(" ")
 
-  const sectionAfterCount = Math.min(halo, sentences.length - item.end)
-  const sectionAfter = sentences.slice(item.end, item.end + sectionAfterCount).join(" ")
-  const needsTrailingSpill = halo > sectionAfterCount
-
-  const beforeText = joinNonEmpty([needsLeadingSpill ? leading : "", sectionBefore])
-  const afterText = joinNonEmpty([sectionAfter, needsTrailingSpill ? trailing : ""])
+  const afterCount = Math.min(halo, sentences.length - item.end)
+  const after = sentences.slice(item.end, item.end + afterCount).join(" ")
 
   const candidateText = sentences.slice(item.start - 1, item.end).join(" ")
   const label = item.id ?? String(itemIndex)
   const codeAttr = formatCodings(item.codings)
 
-  const lines: string[] = ["[target]"]
-  if (beforeText) lines.push(beforeText)
-  lines.push(`[candidate id="${label}" code="${codeAttr}"]${candidateText}[/candidate]`)
-  if (afterText) lines.push(afterText)
-  lines.push("[/target]")
+  const lines: string[] = [`<target id="${label}" code="${codeAttr}">`]
+  if (before) lines.push(before)
+  lines.push(`<marked>${candidateText}</marked>`)
+  if (after) lines.push(after)
+  if (item.keepCase !== undefined) lines.push(`<keep-case>${item.keepCase}</keep-case>`)
+  if (item.removeCase !== undefined) lines.push(`<remove-case>${item.removeCase}</remove-case>`)
+  lines.push("</target>")
   return lines.join("\n")
 }
 
-export interface TripletEdge {
-  leading: string
-  trailing: string
+export interface RenderedTargets {
+  blocks: string[]
+  mapping: ItemMapping[]
 }
 
-export const renderTripletSection = (
+export const renderTargetBlocks = (
   sentences: string[],
   items: CodedItem[],
-  halo: number,
-  edge: TripletEdge
-): PresentedSection => {
+  halo: number
+): RenderedTargets => {
   const mapping: ItemMapping[] = items.map((item, i) => ({
     index: i + 1,
     start: item.start,
@@ -55,9 +45,6 @@ export const renderTripletSection = (
     codings: item.codings,
   }))
 
-  const blocks = items.map((item, i) =>
-    buildBlock(sentences, item, i + 1, halo, edge.leading, edge.trailing)
-  )
-
-  return { text: blocks.join("\n\n"), mapping }
+  const blocks = items.map((item, i) => buildTargetBlock(sentences, item, i + 1, halo))
+  return { blocks, mapping }
 }

@@ -75,7 +75,6 @@ export const ADJUDICATE_ENDPOINT = "/deep-analysis-adjudicate"
 export const FILTER_RUNS = 2
 export const ADJUDICATE_RUNS = 1
 export const SPAN_STEP_CONTEXT_SENTENCES = 12
-export const SECTION_EDGE_CONTEXT_SENTENCES = 6
 export const BRANCH_CONCURRENCY = 10
 export const PER_DIM_TARGET = 50
 export const POST_FIND_CONCURRENCY = 5
