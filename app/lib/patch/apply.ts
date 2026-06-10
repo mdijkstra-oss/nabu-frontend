@@ -147,13 +147,19 @@ export const finalizeContent = (
     : filledContent
   const sanitizedContent = ensureFencesOnOwnLines(stampedContent)
 
-  const context = buildValidationContext()
-  const validation = validateMarkdownBlocks(sanitizedContent, {
-    path,
-    context,
-    original: options.original,
-    skipImmutableCheck: options.skipImmutableCheck,
-  })
+  // Companion files (per-source embedding vectors) are programmatic — written only by
+  // lib/embeddings/sync.ts via buildCompanionMarkdown. No user/agent editing. Schema parsing
+  // 1024-float arrays per block is purely waste, and any "failure" here can't be acted on
+  // since the source of truth is the embeddings sync, not the patch path.
+  const isCompanionFile = path.endsWith(".embeddings.hidden.md")
+  const validation = isCompanionFile
+    ? { valid: true, errors: [], warnings: [], recoveredMarkdown: undefined }
+    : validateMarkdownBlocks(sanitizedContent, {
+        path,
+        context: buildValidationContext(),
+        original: options.original,
+        skipImmutableCheck: options.skipImmutableCheck,
+      })
 
   if (!validation.valid) {
     if (options.skipCodeValidation) {
