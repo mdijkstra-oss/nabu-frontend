@@ -14,12 +14,6 @@ export const radixColor = z.enum(BLOCK_COLORS as [string, ...string[]])
 const hasColorOrCode = (a: { color?: unknown; code?: unknown }) =>
   (a.color !== undefined) !== (a.code !== undefined)
 
-const codeExists = (codeId: string, codes: { id: string }[]): boolean =>
-  codes.some((c) => c.id === codeId)
-
-const formatAvailableCodes = (codes: { id: string; name: string }[]): Record<string, string> =>
-  Object.fromEntries(codes.map((c) => [c.name, c.id]))
-
 const BaseAnnotationSchema = z.object({
   text: z.string().describe("Exact text from the document"),
   reason: z.string().describe("Why this text was annotated"),
@@ -36,31 +30,15 @@ const BaseAnnotationSchema = z.object({
     .optional(),
 })
 
-export const annotationSchema = (ctx?: ValidationContext) => {
-  const base = BaseAnnotationSchema.refine(
-    hasColorOrCode,
-    "Either color or code must be set, not both"
-  )
-  if (!ctx) return base
-  return base.superRefine((a, ctx2) => {
-    if (a.code && !codeExists(a.code, ctx.availableCodes)) {
-      ctx2.addIssue({
-        code: "custom",
-        message: `Code "${a.code}" not found`,
-        params: { hint: formatAvailableCodes(ctx.availableCodes) },
-      })
-    }
-  })
-}
+// Cross-file id existence (code/tag → definition) is owned by the pending-refs system in
+// ~/lib/files/pending-refs: unknown ids get wrapped as #[id] markers and resolve when the
+// defining file arrives (including later, via multiplayer). Schema stays focused on shape;
+// boot-time audit logs lingering orphans (see auditPendingRefsAtBoot in lib/files/store.ts).
+export const annotationSchema = (_ctx?: ValidationContext) =>
+  BaseAnnotationSchema.refine(hasColorOrCode, "Either color or code must be set, not both")
 
 export const AnnotationSchema = annotationSchema()
 export type Annotation = z.infer<typeof AnnotationSchema>
-
-const tagIdExists = (id: string, available: { id: string; label: string }[]): boolean =>
-  available.some((t) => t.id === id)
-
-const formatAvailableTags = (tags: { id: string; label: string }[]): Record<string, string> =>
-  Object.fromEntries(tags.map((t) => [t.label, t.id]))
 
 const BaseDocumentMeta = z.object({
   tags: z.array(slug).optional().describe("Tag IDs from settings"),
@@ -74,21 +52,7 @@ const BaseDocumentMeta = z.object({
     .describe("Content hash used to skip re-classification when unchanged"),
 })
 
-export const documentMetaSchema = (ctx?: ValidationContext) => {
-  if (!ctx || ctx.availableTags.length === 0) return BaseDocumentMeta
-  return BaseDocumentMeta.superRefine((meta, ctx2) => {
-    if (!meta.tags) return
-    const bad = meta.tags.filter((t) => !tagIdExists(t, ctx.availableTags))
-    for (const tag of bad) {
-      ctx2.addIssue({
-        code: "custom",
-        path: ["tags"],
-        message: `Tag "${tag}" is not defined in settings`,
-        params: { hint: formatAvailableTags(ctx.availableTags) },
-      })
-    }
-  })
-}
+export const documentMetaSchema = (_ctx?: ValidationContext) => BaseDocumentMeta
 
 export const DocumentMeta = documentMetaSchema()
 export type DocumentMeta = z.infer<typeof DocumentMeta>

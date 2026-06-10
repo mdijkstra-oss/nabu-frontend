@@ -27,101 +27,26 @@ describe("extractProse", () => {
 })
 
 describe("validateMarkdownBlocks", () => {
-  describe("annotation code validation", () => {
+  describe("cross-file id refs (delegated to pending-refs)", () => {
+    // Schema no longer enforces code/tag existence — pending-refs system owns cross-file
+    // resolution and boot-time orphan reporting. Schema only checks shape.
     const cases = [
       {
-        name: "accepts annotation when code exists",
-        markdown: `# Test
-
-\`\`\`json-annotations
-{"annotations": [{"text": "test", "reason": "note", "code": "abc123"}]}
-\`\`\``,
-        context: {
-          availableCodes: [{ id: "abc123", name: "Theme" }],
-          availableTags: [],
-        },
-        expectValid: true,
+        name: "accepts annotation referencing any code id (existence is pending-refs concern)",
+        markdown: `# Test\n\n\`\`\`json-annotations\n{"annotations": [{"text": "t", "reason": "r", "code": "anything"}]}\n\`\`\``,
       },
       {
-        name: "rejects annotation when code not found",
-        markdown: `# Test
-
-\`\`\`json-annotations
-{"annotations": [{"text": "test", "reason": "note", "code": "nonexistent"}]}
-\`\`\``,
-        context: {
-          availableCodes: [{ id: "abc123", name: "Theme" }],
-          availableTags: [],
-        },
-        expectValid: false,
-        expectErrorContains: "not found",
-        expectHint: { Theme: "abc123" },
+        name: "accepts document with any tag id (existence is pending-refs concern)",
+        markdown: `# Doc\n\n\`\`\`json-attributes\n{"tags": ["tag-anything"]}\n\`\`\``,
       },
     ]
 
-    it.each(cases)(
-      "$name",
-      ({ markdown, context, expectValid, expectErrorContains, expectHint }) => {
-        const result = validateMarkdownBlocks(markdown, { context })
-        expect(result.valid).toBe(expectValid)
-        if (!expectValid && expectErrorContains) {
-          expect(result.errors.some((e) => e.message.includes(expectErrorContains))).toBe(true)
-        }
-        if (expectHint) {
-          const errorWithHint = result.errors.find((e) => e.hint)
-          expect(errorWithHint?.hint).toEqual(expectHint)
-        }
-      }
-    )
-  })
-
-  describe("tag validation", () => {
-    const cases = [
-      {
-        name: "accepts tag when ID exists in settings",
-        markdown: `# Doc\n\n\`\`\`json-attributes\n{"tags": ["tag-abc"]}\n\`\`\``,
-        context: {
-          availableCodes: [],
-          availableTags: [{ id: "tag-abc", label: "interview" }],
-        },
-        expectValid: true,
-      },
-      {
-        name: "rejects tag when ID not in settings",
-        markdown: `# Doc\n\n\`\`\`json-attributes\n{"tags": ["tag-unknown"]}\n\`\`\``,
-        context: {
-          availableCodes: [],
-          availableTags: [{ id: "tag-abc", label: "interview" }],
-        },
-        expectValid: false,
-        expectErrorContains: "not defined in settings",
-        expectHint: { interview: "tag-abc" },
-      },
-      {
-        name: "skips validation when no tags defined",
-        markdown: `# Doc\n\n\`\`\`json-attributes\n{"tags": ["any-tag"]}\n\`\`\``,
-        context: {
-          availableCodes: [],
-          availableTags: [],
-        },
-        expectValid: true,
-      },
-    ]
-
-    it.each(cases)(
-      "$name",
-      ({ markdown, context, expectValid, expectErrorContains, expectHint }) => {
-        const result = validateMarkdownBlocks(markdown, { context })
-        expect(result.valid).toBe(expectValid)
-        if (!expectValid && expectErrorContains) {
-          expect(result.errors.some((e) => e.message.includes(expectErrorContains))).toBe(true)
-        }
-        if (expectHint) {
-          const errorWithHint = result.errors.find((e) => e.hint)
-          expect(errorWithHint?.hint).toEqual(expectHint)
-        }
-      }
-    )
+    it.each(cases)("$name", ({ markdown }) => {
+      const result = validateMarkdownBlocks(markdown, {
+        context: { availableCodes: [], availableTags: [] },
+      })
+      expect(result.valid).toBe(true)
+    })
   })
 
   describe("currentBlock in errors", () => {
@@ -142,16 +67,16 @@ describe("validateMarkdownBlocks", () => {
         original: `# Test
 
 \`\`\`json-annotations
-{"annotations": [{"text": "old one", "reason": "original", "code": "valid-code"}]}
+{"annotations": [{"text": "old one", "reason": "original", "code": "abc"}]}
 \`\`\``,
         patched: `# Test
 
 \`\`\`json-annotations
-{"annotations": [{"text": "new one", "reason": "test", "code": "bad-code"}]}
+{"annotations": "shape failure at root, not recoverable"}
 \`\`\``,
         check: (r) => {
           expect(r.errors[0].currentBlock).toContain("old one")
-          expect(r.errors[0].currentBlock).not.toContain("new one")
+          expect(r.errors[0].currentBlock).not.toContain("shape failure")
         },
       },
       {

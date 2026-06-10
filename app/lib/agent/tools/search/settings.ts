@@ -26,7 +26,7 @@ const rotateUnsaved = (entries: SearchEntry[]): SearchEntry[] => {
   return [...saved, ...sorted.slice(0, MAX_UNSAVED)]
 }
 
-const readSettings = (): Settings => getSettings(getFileRaw(SETTINGS_FILE)) ?? {}
+const readSettings = (): Partial<Settings> => getSettings(getFileRaw(SETTINGS_FILE)) ?? {}
 
 export const updateSearchEntries = (entries: SearchEntry[]): void => {
   executeFileAction({

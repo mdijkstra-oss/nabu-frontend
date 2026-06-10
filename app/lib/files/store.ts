@@ -10,6 +10,7 @@ import {
   renameInDefinitionIndex,
   findPendingRefs,
   findDefinitionIds,
+  findOrphanPendingRefs,
 } from "./pending-refs"
 import { resolveHiddenFile } from "./hidden-blocks"
 import { countLines } from "~/lib/text/stats"
@@ -218,6 +219,17 @@ export const resolvePendingRefsInBulk = (): void => {
   if (updated !== files) {
     files = updated
     notify()
+  }
+}
+
+// Boot diagnostic: after initial file load settles, any remaining #[id] markers are cross-file
+// refs whose definitions never arrived. Log-only — pending-refs will still resolve them if the
+// definition shows up later (e.g. future multiplayer push). Cross-file existence enforcement
+// is intentionally NOT done in schema; this is the single visibility point.
+export const auditPendingRefsAtBoot = (): void => {
+  const orphans = findOrphanPendingRefs(files)
+  for (const { file, ids } of orphans) {
+    console.warn(`[refs] orphaned at boot in ${file}:`, ids)
   }
 }
 

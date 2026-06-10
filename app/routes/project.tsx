@@ -49,6 +49,7 @@ import {
   setPersistEnabled,
   setPendingRefsSuppressed,
   resolvePendingRefsInBulk,
+  auditPendingRefsAtBoot,
   waitForRequiredFiles,
 } from "~/lib/files/store"
 import {
@@ -297,6 +298,7 @@ export default function ProjectLayout() {
       pendingRefsResolved = true
       setPendingRefsSuppressed(false)
       resolvePendingRefsInBulk()
+      auditPendingRefsAtBoot()
       filesLoadedResolve?.()
     }
 

@@ -111,3 +111,13 @@ export const resolveAllPendingRefs = (content: string, definitions: Set<string>)
   }
   return result
 }
+
+export interface OrphanPendingRef {
+  file: string
+  ids: string[]
+}
+
+export const findOrphanPendingRefs = (files: FileStore): OrphanPendingRef[] =>
+  Object.entries(files)
+    .map(([file, content]) => ({ file, ids: findPendingRefs(content) }))
+    .filter((r) => r.ids.length > 0)
