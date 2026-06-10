@@ -46,6 +46,10 @@ import type { Annotation as StoredAnnotation } from "~/domain/data-blocks/attrib
 import { getDatabase } from "~/domain/db/database"
 import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
+import { executeSearchById } from "~/domain/search/execute"
+import type { SearchHit } from "~/domain/search/types"
+
+const SEARCH_RESOLVE_TARGET = 200
 
 type Enqueue = <T>(key: string, fn: () => Promise<T>) => Promise<T>
 
@@ -240,16 +244,40 @@ const isSingleFileComposite = (segments: readonly { path: string }[]): boolean =
 const compositeSeparator = (seg: Segment): string =>
   `\n\n${SECTION_MARKER}${seg.path} [${seg.startLine}-${seg.endLine}]\n\n`
 
+const charOffsetToLine = (content: string, offset: number): number => {
+  let line = 1
+  const cap = Math.min(offset, content.length)
+  for (let i = 0; i < cap; i++) {
+    if (content[i] === "\n") line++
+  }
+  return line
+}
+
+const hitToSection = (hit: SearchHit): Section | null => {
+  const content = getFileView(hit.file)
+  if (content === undefined) return null
+  if (hit.chunkStart === undefined || hit.chunkEnd === undefined) {
+    return { path: hit.file }
+  }
+  return {
+    path: hit.file,
+    start_line: charOffsetToLine(content, hit.chunkStart),
+    end_line: charOffsetToLine(content, hit.chunkEnd),
+  }
+}
+
 const toSegments = (sections: Section[]): Segment[] =>
   sections.flatMap((s) => {
     const content = getFileView(s.path)
     if (content === undefined) return []
+    const startLine = s.start_line ?? 1
+    const endLine = s.end_line ?? content.split("\n").length
     return [
       {
         path: s.path,
-        startLine: s.start_line,
-        endLine: s.end_line,
-        content: extractSection(content, s.start_line, s.end_line),
+        startLine,
+        endLine,
+        content: extractSection(content, startLine, endLine),
       },
     ]
   })
@@ -396,7 +424,34 @@ registerTool(
   tool({
     ...applyDeepAnalysisTool,
     schema: ApplyDeepAnalysisArgs,
-    handler: async (_files, { sections, source_files, post_action }) => {
+    handler: async (_files, { sections: inputSections, search_id, source_files, post_action }) => {
+      let sections: Section[]
+      if (search_id) {
+        const hits = await executeSearchById(search_id, SEARCH_RESOLVE_TARGET)
+        if (!hits.ok)
+          return {
+            status: "error",
+            output: `Failed to resolve search "${search_id}": ${hits.error}`,
+            mutations: [],
+          }
+        sections = hits.value.map(hitToSection).filter((s): s is Section => s !== null)
+        if (sections.length === 0)
+          return {
+            status: "error",
+            output: `No usable hits returned for search "${search_id}"`,
+            mutations: [],
+          }
+      } else {
+        sections = inputSections ?? []
+      }
+
+      if (sections.length === 0)
+        return {
+          status: "error",
+          output: "Provide either sections or search_id",
+          mutations: [],
+        }
+
       const validationError = validateFileSections(sections, source_files)
       if (validationError) return validationError
 

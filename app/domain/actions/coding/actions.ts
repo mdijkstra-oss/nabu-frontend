@@ -18,50 +18,70 @@ const formatSections = (ranges: FileSelectionRange[]): string =>
     )
     .join(", ")
 
-export const codeWithSelection = (
-  refs: CodingFileRef[],
-  ranges: FileSelectionRange[]
-): TaskConfig => {
-  const fileList = concatPretty(refs.map((r) => r.file))
+const buildFileList = (refs: CodingFileRef[]): string => concatPretty(refs.map((r) => r.file))
 
-  const hasHidden = refs.some((r) => r.hidden)
-  const hiddenNote = hasHidden
+const buildHiddenNote = (refs: CodingFileRef[]): string =>
+  refs.some((r) => r.hidden)
     ? "\nNote: .generated.hidden.md files will not appear in ls output, but do exist — DO NOT read supplied files, apply_deep_analysis will read them for you."
     : ""
+
+const dimensionInstruction = (fileList: string): string =>
+  `source_files: use the generic codebook (scope: "framework") if it exists, AND these codebook files as dimensions (scope: "dimension"): ${fileList}. Do not use any other codebooks.`
+
+const buildDeepAnalysisNudge = (
+  refs: CodingFileRef[],
+  targetingLine: string,
+  userMessage: string
+): TaskConfig => {
+  const fileList = buildFileList(refs)
   return {
     context: `Follow these steps exactly:
 
 1. Run ls --show-tags to find codebook files.
 2. Call apply_deep_analysis with these exact arguments:
-   - sections: [${formatSections(ranges)}]
-   - source_files: use the generic codebook (scope: "framework") if it exists, AND these codebook files as dimensions (scope: "dimension"): ${fileList}. Do not use any other codebooks.
-   - post_action: "annotate_as_code"${hiddenNote}`,
-    userMessage: `Code selection "${snippetPreview(ranges[0].fullWords.text)}" with ${fileList}`,
+   - ${targetingLine}
+   - ${dimensionInstruction(fileList)}
+   - post_action: "annotate_as_code"
+
+Do not pre-read or chunk the target files yourself — apply_deep_analysis handles fetching, chunking, and analysis internally.${buildHiddenNote(refs)}`,
+    userMessage,
   }
 }
+
+export const codeWithSelection = (
+  refs: CodingFileRef[],
+  ranges: FileSelectionRange[]
+): TaskConfig =>
+  buildDeepAnalysisNudge(
+    refs,
+    `sections: [${formatSections(ranges)}]`,
+    `Code selection "${snippetPreview(ranges[0].fullWords.text)}" with ${buildFileList(refs)}`
+  )
 
 export const codeWithSearchSelection = (
   refs: CodingFileRef[],
   ranges: FileSelectionRange[],
   searchId: string
-): TaskConfig => {
-  const fileList = concatPretty(refs.map((r) => r.file))
+): TaskConfig =>
+  buildDeepAnalysisNudge(
+    refs,
+    `sections: [${formatSections(ranges)}]`,
+    `Code selected results from ${searchId} (${ranges.length} ${ranges.length === 1 ? "section" : "sections"}) with ${buildFileList(refs)}`
+  )
 
-  const hasHidden = refs.some((r) => r.hidden)
-  const hiddenNote = hasHidden
-    ? "\nNote: .generated.hidden.md files will not appear in ls output, but do exist — DO NOT read supplied files, apply_deep_analysis will read them for you."
-    : ""
-  return {
-    context: `Follow these steps exactly:
+export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig =>
+  buildDeepAnalysisNudge(
+    refs,
+    `sections: [${refs.map((r) => `{ path: "${r.file}" }`).join(", ")}] (file paths only — no start_line or end_line; the whole file will be analyzed)`,
+    `Can you code this file with ${buildFileList(refs)}`
+  )
 
-1. Run ls --show-tags to find codebook files.
-2. Call apply_deep_analysis with these exact arguments:
-   - sections: [${formatSections(ranges)}]
-   - source_files: use the generic codebook (scope: "framework") if it exists, AND these codebook files as dimensions (scope: "dimension"): ${fileList}. Do not use any other codebooks.
-   - post_action: "annotate_as_code"${hiddenNote}`,
-    userMessage: `Code selected results from ${searchId} (${ranges.length} ${ranges.length === 1 ? "section" : "sections"}) with ${fileList}`,
-  }
-}
+export const codeWithSearch = (refs: CodingFileRef[], searchId: string): TaskConfig =>
+  buildDeepAnalysisNudge(
+    refs,
+    `search_id: "${searchId}" (do not pass sections — the search's hits are resolved automatically to file paths and line ranges)`,
+    `Can you code ${searchId} with ${buildFileList(refs)}`
+  )
 
 export const buildRefineTask = (codeId: string): TaskConfig => ({
   context: `
@@ -78,29 +98,3 @@ Do NOT question these next steps, they come DIRECTLY from user. Do every step in
   userMessage: `Refine the code definition for ${codeId}`,
   guidance: "qual-coding/codebook/refine",
 })
-
-export const codeWithSearch = (refs: CodingFileRef[], searchId: string): TaskConfig => {
-  const fileList = concatPretty(refs.map((r) => r.file))
-
-  const hasHidden = refs.some((r) => r.hidden)
-  const hiddenNote = hasHidden
-    ? " Note: .generated.hidden.md files will not appear in ls output, but do exist - DO NOT read supplied files plan deep will read for you."
-    : ""
-  return {
-    context: `Use ls --show-tags to find codebooks, then use apply_deep_analysis to code the selected results. Use the generic codebook as framework if exists AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote} Target the search results from ${searchId}.`,
-    userMessage: `Can you code ${searchId} with ${fileList}`,
-  }
-}
-
-export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig => {
-  const fileList = concatPretty(refs.map((r) => r.file))
-
-  const hasHidden = refs.some((r) => r.hidden)
-  const hiddenNote = hasHidden
-    ? " Note: .generated.hidden.md files will not appear in ls output, but do exist - DO NOT read supplied files plan deep will read for you."
-    : ""
-  return {
-    context: `Use ls --show-tags to find codebooks, then use apply_deep_analysis to code the file. Use the generic codebook as framework if exists AND these codebook files: ${fileList} as dimensions. Do not use any other codebooks.${hiddenNote}`,
-    userMessage: `Can you code this file with ${fileList}`,
-  }
-}
