@@ -19,6 +19,11 @@ export interface RangeInFile {
   endLine: number
 }
 
+export interface FileHashPair {
+  file: string
+  hash: string
+}
+
 const escapeSqlString = (s: string): string => s.replace(/'/g, "''")
 
 export const chunkHashesForRanges = (rawFile: string, ranges: RangeInFile[]): string[] => {
@@ -34,12 +39,28 @@ export const chunkHashesForRanges = (rawFile: string, ranges: RangeInFile[]): st
     .map((c) => c.hash)
 }
 
-export const buildCandidateSql = (file: string, dimPath: string, hashes: string[]): string => {
+const groupHashesByFile = (pairs: FileHashPair[]): Map<string, string[]> => {
+  const byFile = new Map<string, string[]>()
+  for (const { file, hash } of pairs) {
+    const list = byFile.get(file) ?? []
+    list.push(hash)
+    byFile.set(file, list)
+  }
+  return byFile
+}
+
+const renderFileClause = (file: string, hashes: string[]): string => {
   const hashList = hashes.map((h) => `'${escapeSqlString(h)}'`).join(", ")
+  return `(f.file = '${escapeSqlString(file)}' AND hash IN (${hashList}))`
+}
+
+export const buildCandidateSql = (dimPath: string, pairs: FileHashPair[]): string => {
+  const byFile = groupHashesByFile(pairs)
+  const clauses = [...byFile].map(([file, hashes]) => renderFileClause(file, hashes))
   return [
     `SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('${escapeSqlString(dimPath)}')`,
     `FROM files f`,
-    `WHERE f.file = '${escapeSqlString(file)}' AND hash IN (${hashList})`,
+    `WHERE ${clauses.join(" OR ")}`,
   ].join(" ")
 }
 
@@ -95,6 +116,21 @@ const collectRangesByFile = (composite: Composite): Map<string, RangeInFile[]> =
   return byFile
 }
 
+const collectPairs = (
+  composite: Composite,
+  resolveFile: (path: string) => string | undefined
+): FileHashPair[] => {
+  const byFile = collectRangesByFile(composite)
+  const pairs: FileHashPair[] = []
+  for (const [file, ranges] of byFile) {
+    const rawFile = resolveFile(file)
+    if (!rawFile) continue
+    const hashes = chunkHashesForRanges(rawFile, ranges)
+    for (const hash of hashes) pairs.push({ file, hash })
+  }
+  return pairs
+}
+
 export interface SearchCtx {
   ctx: SemanticContextBase
   files: FileStore
@@ -103,9 +139,8 @@ export interface SearchCtx {
 }
 
 interface Branch {
-  file: string
-  ranges: RangeInFile[]
   dimPath: string
+  pairs: FileHashPair[]
 }
 
 const runBranch = async (
@@ -113,19 +148,13 @@ const runBranch = async (
   search: SearchCtx,
   compositeSentences: string[]
 ): Promise<Annotation[]> => {
-  const rawFile = search.resolveFile(branch.file)
-  if (!rawFile) return []
-
-  const hashes = chunkHashesForRanges(rawFile, branch.ranges)
-  if (hashes.length === 0) return []
-
   const rawDim = search.resolveFile(branch.dimPath)
   if (!rawDim) return []
 
   const highlight = buildHighlight(rawDim)
   if (!highlight) return []
 
-  const sql = buildCandidateSql(branch.file, branch.dimPath, hashes)
+  const sql = buildCandidateSql(branch.dimPath, branch.pairs)
   const result = await runSearchPipeline(
     sql,
     highlight,
@@ -136,7 +165,7 @@ const runBranch = async (
   )
   if (!result.ok) {
     console.warn(
-      `[apply-deep find] search failed for ${branch.file} × ${branch.dimPath}: ${result.error.message}`
+      `[apply-deep find] search failed for dim ${branch.dimPath}: ${result.error.message}`
     )
     return []
   }
@@ -155,14 +184,10 @@ export const runFind = async (
   search: SearchCtx
 ): Promise<Annotation[]> => {
   if (expanded.dimension.length === 0) return []
-  const byFile = collectRangesByFile(composite)
-  const branches: Branch[] = []
-  for (const [file, ranges] of byFile) {
-    for (const dimPath of expanded.dimension) {
-      branches.push({ file, ranges, dimPath })
-    }
-  }
-  if (branches.length === 0) return []
+  const pairs = collectPairs(composite, search.resolveFile)
+  if (pairs.length === 0) return []
+
+  const branches: Branch[] = expanded.dimension.map((dimPath) => ({ dimPath, pairs }))
 
   const pool = await processPool<Branch, Annotation>(
     branches,

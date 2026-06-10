@@ -66,42 +66,53 @@ describe("chunkHashesForRanges", () => {
 describe("buildCandidateSql", () => {
   const cases = [
     {
-      name: "single hash",
-      file: "a.md",
+      name: "single file, single hash",
       dim: "code-x.generated.hidden.md",
-      hashes: ["h1"],
+      pairs: [{ file: "a.md", hash: "h1" }],
       expected:
-        "SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('code-x.generated.hidden.md') FROM files f WHERE f.file = 'a.md' AND hash IN ('h1')",
+        "SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('code-x.generated.hidden.md') FROM files f WHERE (f.file = 'a.md' AND hash IN ('h1'))",
     },
     {
-      name: "multiple hashes",
-      file: "a.md",
+      name: "single file, multiple hashes",
       dim: "x.md",
-      hashes: ["h1", "h2", "h3"],
+      pairs: [
+        { file: "a.md", hash: "h1" },
+        { file: "a.md", hash: "h2" },
+        { file: "a.md", hash: "h3" },
+      ],
       expected:
-        "SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('x.md') FROM files f WHERE f.file = 'a.md' AND hash IN ('h1', 'h2', 'h3')",
+        "SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('x.md') FROM files f WHERE (f.file = 'a.md' AND hash IN ('h1', 'h2', 'h3'))",
+    },
+    {
+      name: "multiple files grouped per file",
+      dim: "x.md",
+      pairs: [
+        { file: "a.md", hash: "h1" },
+        { file: "b.md", hash: "h2" },
+        { file: "a.md", hash: "h3" },
+      ],
+      expected:
+        "SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('x.md') FROM files f WHERE (f.file = 'a.md' AND hash IN ('h1', 'h3')) OR (f.file = 'b.md' AND hash IN ('h2'))",
     },
     {
       name: "escapes single quote in file path",
-      file: "a'b.md",
       dim: "x.md",
-      hashes: ["h1"],
+      pairs: [{ file: "a'b.md", hash: "h1" }],
       expected:
-        "SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('x.md') FROM files f WHERE f.file = 'a''b.md' AND hash IN ('h1')",
+        "SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('x.md') FROM files f WHERE (f.file = 'a''b.md' AND hash IN ('h1'))",
     },
     {
       name: "escapes single quote in dim path",
-      file: "a.md",
       dim: "x'y.md",
-      hashes: ["h1"],
+      pairs: [{ file: "a.md", hash: "h1" }],
       expected:
-        "SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('x''y.md') FROM files f WHERE f.file = 'a.md' AND hash IN ('h1')",
+        "SELECT f.file, f.text, EMBEDDINGS_FROM_FILE('x''y.md') FROM files f WHERE (f.file = 'a.md' AND hash IN ('h1'))",
     },
   ]
 
-  cases.forEach(({ name, file, dim, hashes, expected }) => {
+  cases.forEach(({ name, dim, pairs, expected }) => {
     it(name, () => {
-      expect(buildCandidateSql(file, dim, hashes)).toBe(expected)
+      expect(buildCandidateSql(dim, pairs)).toBe(expected)
     })
   })
 })
