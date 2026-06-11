@@ -42,8 +42,10 @@ interface SuppressionRule {
   untilCall: string
 }
 
+// Sometimes refine_code returns no actionable findings and no `ask` follows —
+// suppressing assistant chat until an `ask` that never arrives breaks the flow.
 const SUPPRESSION_RULES: readonly SuppressionRule[] = [
-  { afterResult: "refine_code", untilCall: "ask" },
+  // { afterResult: "refine_code", untilCall: "ask" },
 ]
 
 const isResultOf = (block: Block, toolName: string): boolean =>
