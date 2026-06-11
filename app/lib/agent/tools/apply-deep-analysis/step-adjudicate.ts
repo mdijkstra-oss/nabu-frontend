@@ -31,9 +31,9 @@ export const applyVerdict = (e: Envelope, v: Verdict): Envelope | null => {
     case "reject":
       return null
     case "keep":
-      return { ...e, reason: v.reason, review: undefined }
+      return { ...e, review: undefined }
     case "inconsistent":
-      return { ...e, reason: v.reason, review: v.reason }
+      return { ...e, review: v.reason }
     default:
       throw new Error(`unknown adjudicate judgment: ${v.judgment}`)
   }
