@@ -23,7 +23,10 @@ const prettyJson = (json: string): string => {
   }
 }
 
-interface TextContentItem { type: string; content: string }
+interface TextContentItem {
+  type: string
+  content: string
+}
 
 const isTextContentArray = (value: unknown): value is TextContentItem[] =>
   Array.isArray(value) &&
@@ -48,6 +51,28 @@ const formatRawOutput = (raw: string): string => {
   }
 }
 
+const ENCRYPTED_KEYS = new Set(["encryptedContent", "encrypted_content"])
+
+const redactEncrypted = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(redactEncrypted)
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = ENCRYPTED_KEYS.has(k) ? "<ENCRYPTED>" : redactEncrypted(v)
+    }
+    return out
+  }
+  return value
+}
+
+const stripEncrypted = (raw: string): string => {
+  try {
+    return JSON.stringify(redactEncrypted(JSON.parse(raw)))
+  } catch {
+    return raw
+  }
+}
+
 const PREVIEW_LENGTH = 80
 
 const endpointLabel = (endpoint: string): string => endpoint
@@ -66,7 +91,7 @@ const addAllIds = (set: Set<number>, ids: number[]): Set<number> => {
 }
 
 const formatCallEntry = (call: RawLlmCall): string =>
-  `[${endpointLabel(call.endpoint)}] ${formatDuration(call.duration)}\n\n${call.rawResponse ?? (call.streamingContent || "(pending)")}`
+  `[${endpointLabel(call.endpoint)}] ${formatDuration(call.duration)}\n\n${call.rawResponse ? stripEncrypted(call.rawResponse) : call.streamingContent || "(pending)"}`
 
 const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false)
@@ -188,7 +213,7 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
           <Section
             label="Input"
             displayContent={prettyJson(call.requestBody)}
-            copyContent={call.requestBody}
+            copyContent={stripEncrypted(call.requestBody)}
             borderColor="border-blue-300"
             labelColor="text-blue-600"
           />
@@ -196,7 +221,7 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
             <Section
               label="Output"
               displayContent={formatRawOutput(call.rawResponse)}
-              copyContent={call.rawResponse}
+              copyContent={stripEncrypted(call.rawResponse)}
               borderColor="border-green-300"
               labelColor="text-green-600"
             />
