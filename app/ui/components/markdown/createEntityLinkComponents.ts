@@ -4,6 +4,7 @@ import type { Components } from "react-markdown"
 import { createElement } from "react"
 import { FileText, MapPin, Search } from "lucide-react"
 import { resolveEntityLink, type EntityIcons, type ResolvedLink } from "~/lib/markdown/resolve"
+import type { EntityKind } from "~/lib/markdown/linkify/types"
 import type { FileStore } from "~/lib/files/store"
 import { EntityLink } from "./EntityLink"
 
@@ -11,6 +12,7 @@ interface EntityLinkContext {
   files: FileStore
   projectId: string | null
   navigate?: (url: string) => void
+  transformLabel?: (label: string, kind: EntityKind) => string
 }
 
 const entityIcons: EntityIcons = {
@@ -39,7 +41,7 @@ const getCachedResolution = (
 }
 
 const createAnchorComponent =
-  ({ files, projectId, navigate }: EntityLinkContext): Components["a"] =>
+  ({ files, projectId, navigate, transformLabel }: EntityLinkContext): Components["a"] =>
   (props) => {
     const href = props.href as string | undefined
     if (!href) return createElement("a", props)
@@ -54,12 +56,14 @@ const createAnchorComponent =
           }
         : undefined
 
+      const label = transformLabel ? transformLabel(resolved.label, resolved.kind) : resolved.label
+
       return createElement(EntityLink, {
         href: resolved.url,
         colors: resolved.colors,
         icon: resolved.icon,
         onClick: handleClick,
-        children: resolved.label,
+        children: label,
       })
     }
 

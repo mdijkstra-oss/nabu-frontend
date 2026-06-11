@@ -40,6 +40,8 @@ import { useFiles } from "~/ui/hooks/useFiles"
 import { preprocessStreaming } from "~/lib/markdown/sanitize/partial"
 import { AbortBox } from "~/ui/components/ai/StepsBlock"
 import { createEntityLinkComponents } from "~/ui/components/markdown/createEntityLinkComponents"
+import { summarizeMiddle } from "~/lib/text/summarize"
+import type { EntityKind } from "~/lib/markdown/linkify/types"
 import { linkifyTags } from "~/lib/markdown/linkify/tags"
 import { fixMarkdownUrls } from "~/lib/markdown/sanitize/fix-urls"
 import { findTagDefinitionByLabel } from "~/domain/data-blocks/settings/tags/selectors"
@@ -81,6 +83,9 @@ const resolveTagForLinkify = (
 
 const remarkPlugins = [remarkGfm]
 
+const summarizeAnnotationLabel = (label: string, kind: EntityKind): string =>
+  kind === "annotation" ? summarizeMiddle(label) : label
+
 const ScrollableTable = ({
   _node,
   ...props
@@ -101,7 +106,12 @@ const MessageContent = memo(
   }: MessageContentProps) => {
     const components = useMemo(
       () => ({
-        ...createEntityLinkComponents({ files, projectId, navigate }),
+        ...createEntityLinkComponents({
+          files,
+          projectId,
+          navigate,
+          transformLabel: summarizeAnnotationLabel,
+        }),
         table: ScrollableTable,
       }),
       [files, projectId, navigate]
