@@ -10,6 +10,7 @@ import { generateHydesForDescription, generateGenericHydes } from "~/lib/corpus/
 import { generateFileHydes } from "~/lib/corpus/generate-file-hydes"
 import { getFileRaw } from "~/lib/files/store"
 import { resolveHiddenFile } from "~/lib/files/hidden-blocks"
+import { parseCodeBlocks, parseBlockJson } from "~/lib/data-blocks/parse"
 import { processPool } from "~/lib/utils/pool"
 import { isDebugOn } from "~/lib/debug/options"
 import {
@@ -303,6 +304,26 @@ const resolveCorpusSql = async (
 const readFileContent = (filename: string): string | undefined =>
   resolveHiddenFile(filename) ?? getFileRaw(filename) ?? undefined
 
+const firstSentence = (text: string): string => {
+  const trimmed = text.trim()
+  const match = trimmed.match(/^(.+?[.!?])(\s|$)/s)
+  return (match ? match[1] : trimmed.split(/\r?\n/)[0]).trim()
+}
+
+const deriveFileHighlight = (fileContent: string, filename: string): string => {
+  const blocks = parseCodeBlocks(fileContent)
+  for (const block of blocks) {
+    const parsed = parseBlockJson<Record<string, unknown>>(block)
+    if (!parsed.ok) continue
+    const title = typeof parsed.data.title === "string" ? parsed.data.title : ""
+    const content = typeof parsed.data.content === "string" ? parsed.data.content : ""
+    const summary = firstSentence(content)
+    const joined = [title, summary].filter((s) => s.length > 0).join(" — ")
+    if (joined.length > 0) return joined
+  }
+  return `Passages matching the definition in ${filename}`
+}
+
 const resolveFileSql = async (
   sql: string,
   ctx: SemanticContext
@@ -334,7 +355,7 @@ const resolveFileSql = async (
       type: "hybrid",
       plan,
       embeddings: { source, inclusions: fileResult.value.inclusions },
-      highlight: fileContent,
+      highlight: deriveFileHighlight(fileContent, filename),
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)

@@ -24,7 +24,9 @@ import {
   type IdResolver,
 } from "~/lib/data-blocks/normalize"
 import { findAnnotationById } from "~/domain/data-blocks/attributes/annotations/selectors"
-import { SETTINGS_FILE, PREFERENCES_FILE } from "./filename"
+import { SETTINGS_FILE, PREFERENCES_FILE, isMarkdownFile, isCompanionFile } from "./filename"
+import { validateStructural } from "~/lib/data-blocks/validate"
+import { FileCorruptionError } from "./errors"
 
 export const REQUIRED_FILES = [SETTINGS_FILE, PREFERENCES_FILE] as const
 
@@ -141,6 +143,15 @@ export const updateFileRaw = (filename: string, raw: string, options?: UpdateFil
     : (id) => findAnnotationById(files, id)?.text
   const normalized = normalizeFile(raw, resolveId)
   if (normalized === files[filename]) return
+
+  if (isMarkdownFile(filename) && !isCompanionFile(filename)) {
+    const errors = validateStructural(normalized)
+    if (errors.length > 0) {
+      const corruption = new FileCorruptionError(filename, errors)
+      console.error("[file-store]", corruption.message, { path: filename, errors, raw })
+      throw corruption
+    }
+  }
 
   const scheduleNotify = options?.immediate ? notify : debouncedNotify
 

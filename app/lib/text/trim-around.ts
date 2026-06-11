@@ -24,16 +24,31 @@ const takeHead = (text: string, count: number): string => {
   return words.slice(0, count).join(" ")
 }
 
-const mergeRanges = (ranges: Range[]): Range[] => {
+interface IndexedRange extends Range {
+  originalIndex: number
+}
+
+interface MergedRange extends Range {
+  rangeIndices: number[]
+}
+
+const mergeRanges = (ranges: IndexedRange[]): MergedRange[] => {
   if (ranges.length === 0) return []
   const sorted = [...ranges].sort((a, b) => a.start - b.start)
-  const merged: Range[] = [{ ...sorted[0] }]
+  const merged: MergedRange[] = [
+    { start: sorted[0].start, end: sorted[0].end, rangeIndices: [sorted[0].originalIndex] },
+  ]
   for (let i = 1; i < sorted.length; i++) {
     const prev = merged[merged.length - 1]
     if (sorted[i].start <= prev.end + 1) {
       prev.end = Math.max(prev.end, sorted[i].end)
+      prev.rangeIndices.push(sorted[i].originalIndex)
     } else {
-      merged.push({ ...sorted[i] })
+      merged.push({
+        start: sorted[i].start,
+        end: sorted[i].end,
+        rangeIndices: [sorted[i].originalIndex],
+      })
     }
   }
   return merged
@@ -90,6 +105,7 @@ export interface TrimmedRegion {
   text: string
   sourceStart: number
   sourceEnd: number
+  rangeIndices: number[]
 }
 
 interface PadResult {
@@ -200,7 +216,7 @@ const renderAfterDecoration = (
 const renderRegion = (
   text: string,
   segments: Segment[],
-  range: Range,
+  range: MergedRange,
   budget: number,
   isFirst: boolean,
   isLast: boolean,
@@ -218,6 +234,7 @@ const renderRegion = (
     text: beforeDeco.text + core + afterDeco.text,
     sourceStart: segments[before.boundary].start - beforeDeco.bytesShift,
     sourceEnd: segments[after.boundary].end + afterDeco.bytesShift,
+    rangeIndices: range.rangeIndices,
   }
 }
 
@@ -226,11 +243,15 @@ export interface SentenceRange {
   end: number
 }
 
-const clampRange = (range: SentenceRange, segmentCount: number): Range | null => {
+const clampRange = (
+  range: SentenceRange,
+  segmentCount: number,
+  originalIndex: number
+): IndexedRange | null => {
   if (segmentCount === 0) return null
   const start = Math.max(0, Math.min(range.start, segmentCount - 1))
   const end = Math.max(start, Math.min(range.end, segmentCount - 1))
-  return { start, end }
+  return { start, end, originalIndex }
 }
 
 export interface TrimOptions {
@@ -243,14 +264,16 @@ export const trimByRanges = (
   ranges: SentenceRange[],
   opts: TrimOptions = {}
 ): TrimmedRegion[] => {
-  if (ranges.length === 0) return [{ text, sourceStart: 0, sourceEnd: text.length }]
+  if (ranges.length === 0)
+    return [{ text, sourceStart: 0, sourceEnd: text.length, rangeIndices: [] }]
 
   const segments = splitSentenceSegments(text)
-  if (segments.length === 0) return [{ text, sourceStart: 0, sourceEnd: text.length }]
+  if (segments.length === 0)
+    return [{ text, sourceStart: 0, sourceEnd: text.length, rangeIndices: [] }]
 
   const clamped = ranges
-    .map((r) => clampRange(r, segments.length))
-    .filter((r): r is Range => r !== null)
+    .map((r, i) => clampRange(r, segments.length, i))
+    .filter((r): r is IndexedRange => r !== null)
   if (clamped.length === 0) return []
 
   const regions = mergeRanges(clamped)

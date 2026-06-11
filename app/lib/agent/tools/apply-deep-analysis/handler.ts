@@ -111,7 +111,7 @@ const applyAnnotationsEager = async (
       original: oldContent,
       actor: "ai",
       skipImmutableCheck: true,
-      skipCodeValidation: true,
+      skipSemanticValidation: true,
     })
     if (finalized.status === "error")
       return { status: "error", output: finalized.error, mutations: [] }

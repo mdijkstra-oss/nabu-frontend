@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { validateMarkdownBlocks } from "./validate"
+import { validateMarkdownBlocks, validateStructural, validateSemantic } from "./validate"
 import { extractProse } from "./parse"
 
 describe("extractProse", () => {
@@ -222,5 +222,79 @@ describe("validateMarkdownBlocks", () => {
         expect(result.errors.some((e) => e.message.includes(expectErrorContains))).toBe(true)
       }
     })
+  })
+})
+
+describe("validateStructural", () => {
+  const cases = [
+    {
+      name: "passes balanced fences with valid JSON",
+      markdown: '```json-attributes\n{"tags": []}\n```',
+      expectErrors: 0,
+    },
+    {
+      name: "passes empty markdown",
+      markdown: "",
+      expectErrors: 0,
+    },
+    {
+      name: "passes prose without code blocks",
+      markdown: "# Title\n\nJust words.",
+      expectErrors: 0,
+    },
+    {
+      name: "rejects unbalanced fences",
+      markdown: '```json-attributes\n{"tags": []}',
+      expectErrors: 1,
+      messageContains: "Unbalanced",
+    },
+    {
+      name: "rejects fence without language",
+      markdown: "```\n{}\n```",
+      expectErrors: 1,
+      messageContains: "missing a language tag",
+    },
+    {
+      name: "rejects unterminated JSON string",
+      markdown: '```json-callout\n{"x": "abc\n```',
+      expectErrors: 1,
+      messageContains: "Invalid JSON",
+    },
+    {
+      name: "rejects malformed JSON object",
+      markdown: '```json-callout\n{"x":\n```',
+      expectErrors: 1,
+      messageContains: "Invalid JSON",
+    },
+    {
+      name: "ignores non-json fenced blocks",
+      markdown: "```python\nprint(1)\n```",
+      expectErrors: 0,
+    },
+    {
+      name: "accepts JSON that fails ZOD but is parseable",
+      markdown: '```json-callout\n{"wrong": "shape"}\n```',
+      expectErrors: 0,
+    },
+    {
+      name: "reports multiple JSON errors across blocks",
+      markdown: '```json-callout\n{"x":\n```\n\n```json-attributes\n{bad\n```',
+      expectErrors: 2,
+    },
+  ]
+
+  it.each(cases)("$name", ({ markdown, expectErrors, messageContains }) => {
+    const errors = validateStructural(markdown)
+    expect(errors).toHaveLength(expectErrors)
+    if (messageContains) {
+      expect(errors.some((e) => e.message.includes(messageContains))).toBe(true)
+    }
+  })
+})
+
+describe("validateSemantic skips structural-only failures", () => {
+  it("flags ZOD shape errors but not JSON syntax (structural should have caught syntax)", () => {
+    const result = validateSemantic('```json-callout\n{"wrong":"shape"}\n```')
+    expect(result.valid).toBe(false)
   })
 })

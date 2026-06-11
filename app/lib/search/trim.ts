@@ -28,6 +28,11 @@ const sliceLeading = (source: string | null, hit: SearchHit): string =>
 const sliceTrailing = (source: string | null, hit: SearchHit): string =>
   source !== null && hit.chunkEnd !== undefined ? source.slice(hit.chunkEnd) : ""
 
+const pickByIndices = <T>(source: T[] | undefined, indices: number[]): T[] | undefined => {
+  if (!source) return undefined
+  return indices.map((i) => source[i]).filter((v): v is T => v !== undefined)
+}
+
 const trimHit = (hit: SearchHit, source: string | null): SearchHit[] => {
   if (!hit.matchRanges || hit.matchRanges.length === 0 || !hit.text) return [hit]
   const base = hit.chunkStart ?? 0
@@ -40,13 +45,24 @@ const trimHit = (hit: SearchHit, source: string | null): SearchHit[] => {
   if (regions.length === 0) return []
   if (regions.length === 1) {
     const r = regions[0]
-    return [{ ...hit, text: r.text, chunkStart: r.sourceStart, chunkEnd: r.sourceEnd }]
+    return [
+      {
+        ...hit,
+        text: r.text,
+        chunkStart: r.sourceStart,
+        chunkEnd: r.sourceEnd,
+        matchRanges: pickByIndices(hit.matchRanges, r.rangeIndices) ?? hit.matchRanges,
+        matches: pickByIndices(hit.matches, r.rangeIndices) ?? hit.matches,
+      },
+    ]
   }
   return regions.map((r, i) => ({
     ...hit,
     text: r.text,
     chunkStart: r.sourceStart,
     chunkEnd: r.sourceEnd,
+    matchRanges: pickByIndices(hit.matchRanges, r.rangeIndices) ?? hit.matchRanges,
+    matches: pickByIndices(hit.matches, r.rangeIndices) ?? hit.matches,
     splitIndex: i,
     splitTotal: regions.length,
   }))

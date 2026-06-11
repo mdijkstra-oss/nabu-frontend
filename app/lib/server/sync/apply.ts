@@ -17,7 +17,7 @@ interface ResolvedContent {
   content: string
 }
 
-const patchOptions = { skipCodeValidation: true, actor: "user" } as const
+const patchOptions = { skipSemanticValidation: true, actor: "user" } as const
 
 const resolveContent = (command: Command): ResolvedContent | undefined => {
   const { action, path, content, diff } = command

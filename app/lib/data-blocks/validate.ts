@@ -45,19 +45,49 @@ const fenceErrorsToValidationErrors = (fenceErrors: FenceError[]): ValidationErr
     message: e.message,
   }))
 
+const parseBlockJson = (
+  language: string,
+  content: string
+): { ok: true; parsed: unknown } | { ok: false; error: ValidationError } => {
+  try {
+    return { ok: true, parsed: JSON.parse(content) }
+  } catch (e) {
+    const reason = e instanceof SyntaxError ? e.message : "Unknown error"
+    return { ok: false, error: { block: language, message: `Invalid JSON: ${reason}` } }
+  }
+}
+
+export const validateStructural = (markdown: string): ValidationError[] => {
+  const fenceErrors = validateFences(markdown)
+  if (fenceErrors.length > 0) return fenceErrorsToValidationErrors(fenceErrors)
+
+  const errors: ValidationError[] = []
+  for (const block of parseCodeBlocks(markdown)) {
+    if (!isJsonBlockLanguage(block.language)) continue
+    const result = parseBlockJson(block.language, block.content)
+    if (!result.ok) errors.push(result.error)
+  }
+  return errors
+}
+
+const isJsonBlockLanguage = (language: string): boolean => language.startsWith("json-")
+
 export const validateMarkdownBlocks = (
   markdown: string,
   options: ValidateOptions = {}
 ): ValidationResult => {
-  const fenceErrors = validateFences(markdown)
-  if (fenceErrors.length > 0) {
-    return {
-      valid: false,
-      errors: fenceErrorsToValidationErrors(fenceErrors),
-      warnings: [],
-    }
+  const structuralErrors = validateStructural(markdown)
+  if (structuralErrors.length > 0) {
+    return { valid: false, errors: structuralErrors, warnings: [] }
   }
 
+  return validateSemantic(markdown, options)
+}
+
+export const validateSemantic = (
+  markdown: string,
+  options: ValidateOptions = {}
+): ValidationResult => {
   const blocks = parseCodeBlocks(markdown)
   const errors: ValidationError[] = []
   const warnings: string[] = []
@@ -234,16 +264,11 @@ const validateBlockSchema = (
   const config = getBlockConfig(language)
   if (!config) return { errors: [], droppedWarnings: [] }
 
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(content)
-  } catch (e) {
-    const reason = e instanceof SyntaxError ? e.message : "Unknown error"
-    return {
-      errors: [{ block: language, message: `Invalid JSON: ${reason}` }],
-      droppedWarnings: [],
-    }
+  const parseResult = parseBlockJson(language, content)
+  if (!parseResult.ok) {
+    return { errors: [parseResult.error], droppedWarnings: [] }
   }
+  const parsed = parseResult.parsed
 
   const schema = config.schema(context)
   const result = schema.safeParse(parsed)

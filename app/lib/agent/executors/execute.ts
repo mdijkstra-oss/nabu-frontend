@@ -140,7 +140,7 @@ const applyMutation = async (
         original: oldContent,
         actor: "ai",
         skipImmutableCheck: redirected.skipBlockValidation,
-        skipCodeValidation: redirected.skipBlockValidation,
+        skipSemanticValidation: redirected.skipBlockValidation,
       })
       if (result.status === "error") return { error: result.error }
 

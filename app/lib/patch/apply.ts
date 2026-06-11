@@ -5,15 +5,20 @@ import { injectBoundaryComments, stripBoundaryComments } from "./resolve/json-bo
 import { stripPendingRefs } from "~/lib/files/pending-refs"
 import { parseCodeBlocks, ensureFencesOnOwnLines } from "~/lib/data-blocks/parse"
 import { fillMissingIds, buildGeneratedIdsList, type GeneratedId } from "~/lib/data-blocks/uuid"
-import { validateMarkdownBlocks, type ValidationError } from "~/lib/data-blocks/validate"
+import {
+  validateStructural,
+  validateSemantic,
+  type ValidationError,
+} from "~/lib/data-blocks/validate"
 import { stampActors } from "~/lib/data-blocks/actor"
+import { isSingleton } from "~/lib/data-blocks/registry"
 import type { ValidationContext } from "~/lib/data-blocks/validate"
 import { getFiles } from "~/lib/files/store"
 import { getAllCodes } from "~/domain/data-blocks/callout/codes/selectors"
 import { getTagDefinitions } from "~/domain/data-blocks/settings/tags/selectors"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
 import { getSettings } from "~/domain/data-blocks/settings/selectors"
-import { SETTINGS_FILE } from "~/lib/files/filename"
+import { SETTINGS_FILE, isCompanionFile } from "~/lib/files/filename"
 import { detectDanglingReferences } from "~/lib/data-blocks/refs"
 
 export type FileResult =
@@ -28,12 +33,14 @@ export type FileResult =
   | { path: string; status: "error"; error: string; blockErrors?: ValidationError[] }
 
 const isMdFile = (path: string): boolean => path.endsWith(".md")
-const isJsonBlock = (language: string): boolean => language.startsWith("json")
+const isJsonBlock = (language: string): boolean => language.startsWith("json-")
 
 const ensureTrailingNewline = (s: string): string =>
   s.length > 0 && !s.endsWith("\n") ? s + "\n" : s
 
-const repairJsonNewlines = (json: string): string => {
+type RepairResult = { ok: true; content: string } | { ok: false; error: string }
+
+const repairJsonNewlines = (json: string): RepairResult => {
   let result = ""
   let inString = false
   let i = 0
@@ -53,30 +60,57 @@ const repairJsonNewlines = (json: string): string => {
     i++
   }
 
-  return result
+  if (inString) {
+    return { ok: false, error: "Unterminated string literal in JSON block" }
+  }
+  return { ok: true, content: result }
 }
 
-const repairJsonBlocks = (markdown: string): string => {
+type RepairBlocksResult =
+  | { ok: true; content: string }
+  | { ok: false; error: string; language: string }
+
+const repairJsonBlocks = (markdown: string): RepairBlocksResult => {
   const blocks = parseCodeBlocks(markdown).filter((b) => isJsonBlock(b.language))
-  if (blocks.length === 0) return markdown
+  if (blocks.length === 0) return { ok: true, content: markdown }
 
   let result = markdown
   let offset = 0
 
   for (const block of blocks) {
-    const repaired = repairJsonNewlines(block.content)
-    if (repaired === block.content) continue
+    const repair = repairJsonNewlines(block.content)
+    if (!repair.ok) {
+      return { ok: false, error: repair.error, language: block.language }
+    }
+    if (repair.content === block.content) continue
 
     const blockStart = block.start + offset
     const blockEnd = block.end + offset
     const original = result.slice(blockStart, blockEnd)
-    const replaced = original.replace(block.content, () => repaired)
+    const replaced = original.replace(block.content, () => repair.content)
 
     result = result.slice(0, blockStart) + replaced + result.slice(blockEnd)
     offset += replaced.length - original.length
   }
 
-  return result
+  return { ok: true, content: result }
+}
+
+const formatBlock = (language: string, content: string): string =>
+  `\`\`\`${language}\n${content}\n\`\`\``
+
+const enrichStructuralErrors = (
+  errors: ValidationError[],
+  originalMarkdown: string | undefined
+): ValidationError[] => {
+  if (!originalMarkdown) return errors
+  const originals = parseCodeBlocks(originalMarkdown)
+  return errors.map((err) => {
+    if (!isSingleton(err.block)) return err
+    const original = originals.find((b) => b.language === err.block)
+    if (!original) return err
+    return { ...err, currentBlock: formatBlock(original.language, original.content) }
+  })
 }
 
 const buildValidationContext = (): ValidationContext => ({
@@ -111,7 +145,7 @@ const buildTagReferenceMap = (
 
 interface ApplyMdPatchOptions {
   skipImmutableCheck?: boolean
-  skipCodeValidation?: boolean
+  skipSemanticValidation?: boolean
   placeholderIds?: Record<string, string>
   actor?: "ai" | "user"
 }
@@ -120,7 +154,7 @@ interface FinalizeContentOptions {
   original: string
   actor?: "ai" | "user"
   skipImmutableCheck?: boolean
-  skipCodeValidation?: boolean
+  skipSemanticValidation?: boolean
   placeholderIds?: Record<string, string>
 }
 
@@ -151,10 +185,24 @@ export const finalizeContent = (
   // lib/embeddings/sync.ts via buildCompanionMarkdown. No user/agent editing. Schema parsing
   // 1024-float arrays per block is purely waste, and any "failure" here can't be acted on
   // since the source of truth is the embeddings sync, not the patch path.
-  const isCompanionFile = path.endsWith(".embeddings.hidden.md")
-  const validation = isCompanionFile
+  const skipBlockValidation = isCompanionFile(path)
+
+  if (!skipBlockValidation) {
+    const structuralErrors = validateStructural(sanitizedContent)
+    if (structuralErrors.length > 0) {
+      const enriched = enrichStructuralErrors(structuralErrors, options.original)
+      return {
+        path,
+        status: "error",
+        error: formatBlockErrors(enriched),
+        blockErrors: enriched,
+      }
+    }
+  }
+
+  const validation = skipBlockValidation
     ? { valid: true, errors: [], warnings: [], recoveredMarkdown: undefined }
-    : validateMarkdownBlocks(sanitizedContent, {
+    : validateSemantic(sanitizedContent, {
         path,
         context: buildValidationContext(),
         original: options.original,
@@ -162,9 +210,9 @@ export const finalizeContent = (
       })
 
   if (!validation.valid) {
-    if (options.skipCodeValidation) {
+    if (options.skipSemanticValidation) {
       console.warn(
-        `[patch] validation warnings for "${path}":`,
+        `[patch] semantic validation warnings for "${path}":`,
         formatBlockErrors(validation.errors)
       )
     } else {
@@ -245,13 +293,22 @@ const applyMdPatch = (
   }
 
   const rawContent = stripBoundaryComments(diffResult.content)
-  const repairedContent = ensureTrailingNewline(repairJsonBlocks(rawContent))
+  const repair = repairJsonBlocks(rawContent)
+  if (!repair.ok) {
+    return {
+      path,
+      status: "error",
+      error: `${repair.language}: ${repair.error}`,
+      blockErrors: [{ block: repair.language, message: repair.error }],
+    }
+  }
+  const repairedContent = ensureTrailingNewline(repair.content)
   return finalizeContent(path, repairedContent, { original: content, ...options })
 }
 
 interface ApplyFilePatchOptions {
   skipImmutableCheck?: boolean
-  skipCodeValidation?: boolean
+  skipSemanticValidation?: boolean
   placeholderIds?: Record<string, string>
   actor?: "ai" | "user"
 }

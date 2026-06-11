@@ -220,7 +220,20 @@ export const useSearchResults = (
       }))
     }
 
-    run()
+    run().catch((e) => {
+      if (cancelled) return
+      const message = e instanceof Error ? e.message : String(e)
+      console.error("[useSearchResults] run failed:", e)
+      setSettled({
+        results: [],
+        hydes: [],
+        keywords: [],
+        error: message,
+        searchId,
+        phase: "done",
+        hasMore: false,
+      })
+    })
     return () => {
       cancelled = true
       if (contRef.current) contRef.current.cancelled = true

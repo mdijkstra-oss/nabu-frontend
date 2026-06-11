@@ -7,6 +7,11 @@ export const isProtectedFile = (path: string): boolean => PROTECTED_FILES.has(pa
 
 export const isHiddenFile = (path: string): boolean => path.includes(".hidden.")
 
+export const COMPANION_SUFFIX = ".embeddings.hidden.md"
+export const isCompanionFile = (path: string): boolean => path.endsWith(COMPANION_SUFFIX)
+
+export const isMarkdownFile = (path: string): boolean => path.endsWith(".md")
+
 export const GENERATED_SUFFIX = ".generated.hidden.md"
 export const isGeneratedHiddenFile = (path: string): boolean => path.endsWith(GENERATED_SUFFIX)
 export const stripGeneratedSuffix = (path: string): string =>
