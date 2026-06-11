@@ -171,43 +171,14 @@ const formatWarnings = (warnings: string[]): string =>
     ? ""
     : `\n\n⚠ Degraded: ${warnings.length} model call(s) failed and were dropped. Results are based on fewer voters.\n${warnings.map((w) => `- ${w}`).join("\n")}`
 
-interface CodeCoverage {
-  code: string
-  chars: number
-}
-
-const computeCodeCoverages = (results: MappedResult[]): CodeCoverage[] => {
-  const byCode = new Map<string, number>()
-  for (const r of results) {
-    const prev = byCode.get(r.analysis_source_id) ?? 0
-    byCode.set(r.analysis_source_id, prev + r.text.length)
-  }
-  return Array.from(byCode, ([code, chars]) => ({ code, chars }))
-}
-
-const formatPct = (chars: number, total: number): string => `${Math.round((chars / total) * 100)}%`
-
-export const formatCoverage = (results: MappedResult[], sectionTextLength: number): string => {
-  if (results.length === 0 || sectionTextLength === 0) return ""
-  const coverages = computeCodeCoverages(results)
-  const totalChars = coverages.reduce((sum, c) => sum + c.chars, 0)
-  const breakdown = coverages
-    .map((c) => `${c.code}: ${formatPct(c.chars, sectionTextLength)}`)
-    .join(", ")
-  return `Coverage: ${formatPct(totalChars, sectionTextLength)} of text — ${breakdown}`
-}
-
 export const formatReturnOutput = (
   results: MappedResult[],
   startLine: number,
   endLine: number,
-  sectionTextLength: number,
   warnings: string[] = []
 ): string => {
-  const coverage = formatCoverage(results, sectionTextLength)
   const base = results.length === 0 ? formatAbsence(startLine, endLine, "") : formatResults(results)
-  const withCoverage = coverage ? `${coverage}\n\n${base}` : base
-  return withCoverage + formatWarnings(warnings)
+  return base + formatWarnings(warnings)
 }
 
 export const formatAnnotateOutput = (
@@ -215,17 +186,14 @@ export const formatAnnotateOutput = (
   action: "annotate_as_code" | "annotate_as_comment",
   startLine: number,
   endLine: number,
-  sectionTextLength: number,
   warnings: string[] = []
 ): string => {
   if (results.length === 0)
     return formatAbsence(startLine, endLine, " No annotations written.") + formatWarnings(warnings)
-  const coverage = formatCoverage(results, sectionTextLength)
   const kind = action === "annotate_as_code" ? "code" : "comment"
   const header = `${results.length} ${kind} annotation(s) written. Do not re-apply these.`
   const body = formatResults(results)
-  const withCoverage = coverage ? `${coverage}\n\n${header}\n\n${body}` : `${header}\n\n${body}`
-  return withCoverage + formatWarnings(warnings)
+  return `${header}\n\n${body}` + formatWarnings(warnings)
 }
 
 export const isAnnotateAction = (
@@ -235,6 +203,44 @@ export const isAnnotateAction = (
 
 export const spanKey = (start: number, end: number, code: string): string =>
   `${start}-${end}-${code}`
+
+export const countConfidence = (
+  results: readonly MappedResult[]
+): { confirmed: number; reviewed: number } => {
+  let confirmed = 0
+  let reviewed = 0
+  for (const r of results) {
+    if (r.vote?.review !== undefined) reviewed++
+    else confirmed++
+  }
+  return { confirmed, reviewed }
+}
+
+export const buildSynthesisDirective = (confirmed: number, reviewed: number): string => {
+  const total = confirmed + reviewed
+  if (total === 0) return ""
+  const ratio = confirmed / total
+  const body = ratio >= 0.7 ? HIGH_CONFIDENCE : ratio >= 0.4 ? MID_CONFIDENCE : LOW_CONFIDENCE
+  return `\n\n## Synthesis directive\n\n${body}`
+}
+
+const SYNTHESIS_FRAMING = `Ground every observation in source text. 1-2 quotes per pattern — the quote must directly demonstrate the pattern; if you need to explain relevance, pick a better one. Scale claims to evidence: one quote → "in at least one instance"; multiple passages → "recurrently." No exhaustive listing. Do not predict what later documents will show. Do not evaluate this document's importance relative to the corpus. Do not state confidence numbers, formulas, or which branch you took.`
+
+const HIGH_CONFIDENCE = `${SYNTHESIS_FRAMING}
+
+Reviewed annotations (flagged by one model, not the other) are candidates — note them as "tentatively" or "pending review", but build claims on confirmed annotations.
+
+If Research Questions exist in the project: write a synthesis per RQ, 150-250 words each. State the pattern, then quote, then note if other passages reinforce or complicate it. Do not place a quote next to a claim it doesn't directly support.
+
+Else: write an integrated findings section, 100-150 words. Focus on what confirmed annotations show. Note where reviewed annotations would extend the picture.`
+
+const MID_CONFIDENCE = `${SYNTHESIS_FRAMING}
+
+Integrated findings section, 100-150 words. Focus on what confirmed annotations show. Note where reviewed annotations would extend the picture.`
+
+const LOW_CONFIDENCE = `${SYNTHESIS_FRAMING}
+
+The model annotators disagreed often on this section. Write 100-150 words on what the disagreement pattern suggests about the code definition — where reviewers split, on what kind of passage.`
 
 const countVotes = (votes: boolean[]): { found: number; missed: number } => {
   const found = votes.filter(Boolean).length

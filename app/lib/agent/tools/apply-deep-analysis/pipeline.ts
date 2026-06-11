@@ -1,21 +1,22 @@
-import type { Annotation } from "./types"
+import type { Envelope } from "./envelope"
 import type { ScopedSources, ContentResolver } from "./messages"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { think, REVISITING, FILTERING, ADJUDICATING } from "./thoughts"
-import { groupByCode } from "./step-batch"
-import { filterAnnotations, type FilterStats } from "./step-filter"
-import { adjudicateAnnotations, type AdjudStats } from "./step-adjudicate"
+import { filterEnvelopes, type FilterStats } from "./step-filter"
+import { adjudicateEnvelopes, type AdjudStats } from "./step-adjudicate"
 import { POST_FIND_CONCURRENCY } from "./def"
+import type { Tracer } from "./trace"
+import { planBatches } from "./batching"
 
 export interface PipelineResult {
-  annotations: Annotation[]
+  envelopes: Envelope[]
   errors: string[]
 }
 
 interface BatchResult {
-  annotations: Annotation[]
+  envelopes: Envelope[]
   errors: string[]
   stats: FilterStats
 }
@@ -60,7 +61,7 @@ const LEGEND = [
 
 const formatStatsTable = (scope: string, filter: FilterStats, adjud: AdjudStats): string => {
   const codes = collectCodes(filter, adjud)
-  if (codes.length === 0) return `[deep-analysis] ${scope}: no annotations`
+  if (codes.length === 0) return `[deep-analysis] ${scope}: no envelopes`
 
   const rows = codes.map((code) => [code, formatPair(filter, code), formatAdjud(adjud, code)])
   const header = ["code", "filter", "adjud(k/r/a)"]
@@ -78,46 +79,46 @@ const formatStatsTable = (scope: string, filter: FilterStats, adjud: AdjudStats)
 }
 
 const processBatch = async (
-  annotations: Annotation[],
-  sentences: string[],
+  envelopes: Envelope[],
   sources: ScopedSources,
-  resolve: ContentResolver
+  resolve: ContentResolver,
+  tracer?: Tracer
 ): Promise<BatchResult> => {
   think(FILTERING)
-  const filterResult = await filterAnnotations(annotations, sentences, sources, resolve)
+  const filterResult = await filterEnvelopes(envelopes, sources, resolve, tracer)
   return {
-    annotations: filterResult.surviving,
+    envelopes: filterResult.surviving,
     errors: filterResult.errors,
     stats: filterResult.stats,
   }
 }
 
 export const runAnalysisPipeline = async (
-  incoming: Annotation[],
-  sentences: string[],
+  incoming: Envelope[],
   sources: ScopedSources,
   resolve: ContentResolver,
-  firstFile: string
+  scope: string,
+  tracer?: Tracer
 ): Promise<PipelineResult> => {
   if (incoming.length === 0) {
-    console.debug(formatStatsTable(firstFile, new Map(), new Map()))
-    return { annotations: [], errors: [] }
+    console.debug(formatStatsTable(scope, new Map(), new Map()))
+    return { envelopes: [], errors: [] }
   }
 
-  const batches = groupByCode(incoming)
+  const batches = planBatches(incoming)
 
   think(REVISITING)
   const { results: batchResults, failures } = await processPool(
     batches,
-    async (batch) => [await processBatch(batch, sentences, sources, resolve)],
+    async (batch) => [await processBatch(batch, sources, resolve, tracer)],
     noop,
     { concurrency: POST_FIND_CONCURRENCY }
   )
 
-  const surviving: Annotation[] = []
+  const surviving: Envelope[] = []
   const allErrors: string[] = []
   for (const br of batchResults) {
-    surviving.push(...br.annotations)
+    surviving.push(...br.envelopes)
     allErrors.push(...br.errors)
   }
   for (const f of failures) allErrors.push(errorMessage(f.error))
@@ -125,10 +126,10 @@ export const runAnalysisPipeline = async (
   const filterStats = mergeFilterStats(batchResults.map((br) => br.stats))
 
   think(ADJUDICATING)
-  const adjudicated = await adjudicateAnnotations(surviving, sentences, sources, resolve)
+  const adjudicated = await adjudicateEnvelopes(surviving, sources, resolve, tracer)
   allErrors.push(...adjudicated.errors)
 
-  console.debug(formatStatsTable(firstFile, filterStats, adjudicated.stats))
+  console.debug(formatStatsTable(scope, filterStats, adjudicated.stats))
 
-  return { annotations: adjudicated.annotations, errors: allErrors }
+  return { envelopes: adjudicated.envelopes, errors: allErrors }
 }

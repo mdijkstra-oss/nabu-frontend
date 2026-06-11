@@ -62,6 +62,12 @@ export const ApplyDeepAnalysisArgs = z
     post_action: PostAction.describe(
       "return: get results only. annotate_as_code: clears existing annotations for the dimension's code IDs within the analyzed targets, then writes fresh code annotations from the analysis results. annotate_as_comment: writes comment annotations without clearing existing ones."
     ),
+    synthesize: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true, the tool output ends with a Synthesis directive describing how to write the synthesis for the chat response. Use for whole-file coding passes; leave unset for selection or search coding."
+      ),
   })
   .refine(
     (a) => (a.targets?.length ?? 0) > 0 || a.search_id !== undefined,

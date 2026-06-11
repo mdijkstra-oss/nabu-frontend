@@ -1,12 +1,11 @@
-import type { Annotation } from "./types"
+import type { Envelope } from "./envelope"
 import type { ScopedSources, ContentResolver } from "./messages"
 import { callAndParse } from "../../client/call-parse"
 import { buildAdjudicateMessages, ADJUDICATE_CTA, buildAdjudicateSchema } from "./messages"
-import { groupBySpan, type CodedSpan } from "./consensus"
-import { renderTargetBlocks } from "./triplet"
-import { type CodedItem } from "./present"
-import { spanKey } from "./format"
+import { renderEnvelopeBlocks } from "./triplet"
+import { collectCodeIds, isContestedEnvelope } from "./envelope"
 import { ADJUDICATE_ENDPOINT, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
+import type { Tracer, AdjudEntry } from "./trace"
 
 export interface AdjudCounts {
   kept: number
@@ -17,7 +16,7 @@ export interface AdjudCounts {
 export type AdjudStats = Map<string, AdjudCounts>
 
 export interface AdjudicateStepResult {
-  annotations: Annotation[]
+  envelopes: Envelope[]
   errors: string[]
   stats: AdjudStats
 }
@@ -27,77 +26,44 @@ export interface Verdict {
   reason: string
 }
 
-export const isContested = (a: Annotation): boolean => a.review !== undefined
-
-export const collectCodeIds = (annotations: readonly Annotation[]): Set<string> => {
-  const ids = new Set<string>()
-  for (const a of annotations) ids.add(a.code)
-  return ids
-}
-
-export const applyVerdict = (a: Annotation, v: Verdict): Annotation | null => {
+export const applyVerdict = (e: Envelope, v: Verdict): Envelope | null => {
   switch (v.judgment) {
     case "reject":
       return null
     case "keep":
-      return { ...a, reason: v.reason, review: undefined }
+      return { ...e, reason: v.reason, review: undefined }
     case "inconsistent":
-      return { ...a, reason: v.reason, review: v.reason }
+      return { ...e, reason: v.reason, review: v.reason }
     default:
       throw new Error(`unknown adjudicate judgment: ${v.judgment}`)
   }
 }
 
-interface CaseEntry {
-  keepCase: string
-  removeCase: string
-}
+const adjudEntry = (e: Envelope, verdict: Verdict): AdjudEntry => ({
+  code: e.code,
+  start: e.markedStart,
+  end: e.markedEnd,
+  text: e.markedText,
+  verdict: verdict.judgment,
+  reason: verdict.reason,
+})
 
-const spanReasonKey = (start: number, end: number): string => `${start}-${end}`
+const ambigVerdict = (e: Envelope): Verdict => ({
+  judgment: "inconsistent",
+  reason: e.review ?? "no verdict returned",
+})
 
-const buildCaseMap = (annotations: readonly Annotation[]): Map<string, CaseEntry> => {
-  const map = new Map<string, CaseEntry>()
-  for (const a of annotations) {
-    map.set(spanReasonKey(a.start, a.end), {
-      keepCase: a.reason,
-      removeCase: a.review ?? "",
-    })
-  }
-  return map
-}
-
-const toCodedItems = (spans: CodedSpan[], cases: Map<string, CaseEntry>): CodedItem[] =>
-  spans.map((s) => {
-    const c = cases.get(spanReasonKey(s.start, s.end))
-    return {
-      start: s.start,
-      end: s.end,
-      codings: s.codings,
-      keepCase: c?.keepCase,
-      removeCase: c?.removeCase,
-    }
-  })
-
-const toFindShape = (
-  annotations: readonly Annotation[]
-): { start: number; end: number; analysis_source_id: string }[] =>
-  annotations.map((a) => ({ start: a.start, end: a.end, analysis_source_id: a.code }))
-
-export const adjudicateAnnotations = async (
-  allSurvivors: Annotation[],
-  sentences: string[],
+export const adjudicateEnvelopes = async (
+  allSurvivors: Envelope[],
   sources: ScopedSources,
-  resolve: ContentResolver
+  resolve: ContentResolver,
+  tracer?: Tracer
 ): Promise<AdjudicateStepResult> => {
-  const contested = allSurvivors.filter(isContested)
-  if (contested.length === 0) return { annotations: allSurvivors, errors: [], stats: new Map() }
+  const contested = allSurvivors.filter(isContestedEnvelope)
+  if (contested.length === 0) return { envelopes: allSurvivors, errors: [], stats: new Map() }
 
-  const grouped = groupBySpan(toFindShape(contested))
-  const caseMap = buildCaseMap(contested)
-  const codedItems = toCodedItems(grouped, caseMap)
   const codeIds = collectCodeIds(allSurvivors)
-
-  const { blocks, mapping } = renderTargetBlocks(sentences, codedItems, SPAN_STEP_CONTEXT_SENTENCES)
+  const { blocks, mapping } = renderEnvelopeBlocks(contested, SPAN_STEP_CONTEXT_SENTENCES)
 
   const messages = buildAdjudicateMessages(blocks, codeIds, sources, resolve, ADJUDICATE_CTA)
 
@@ -105,16 +71,13 @@ export const adjudicateAnnotations = async (
   const schema = buildAdjudicateSchema(validCodes)
   const result = await callAndParse(ADJUDICATE_ENDPOINT, messages, schema)
 
-  if (!result.ok) return { annotations: allSurvivors, errors: [result.error], stats: new Map() }
+  if (!result.ok) return { envelopes: allSurvivors, errors: [result.error], stats: new Map() }
 
   const verdicts = new Map<string, Verdict>()
   for (const r of result.data.results) {
     const m = mapping.find((entry) => entry.index === r.id)
     if (!m) continue
-    verdicts.set(spanKey(m.start, m.end, r.code), {
-      judgment: r.judgment,
-      reason: r.reason,
-    })
+    verdicts.set(m.envelopeId, { judgment: r.judgment, reason: r.reason })
   }
 
   const stats: AdjudStats = new Map()
@@ -124,24 +87,26 @@ export const adjudicateAnnotations = async (
     stats.set(code, entry)
   }
 
-  const final: Annotation[] = []
-  for (const a of allSurvivors) {
-    if (!isContested(a)) {
-      final.push(a)
+  const final: Envelope[] = []
+  for (const env of allSurvivors) {
+    if (!isContestedEnvelope(env)) {
+      final.push(env)
       continue
     }
-    const v = verdicts.get(spanKey(a.start, a.end, a.code))
+    const v = verdicts.get(env.id)
     if (!v) {
-      bump(a.code, "ambig")
-      final.push(a)
+      bump(env.code, "ambig")
+      final.push(env)
+      tracer?.pushAdjud(env.code, adjudEntry(env, ambigVerdict(env)))
       continue
     }
-    const applied = applyVerdict(a, v)
+    const applied = applyVerdict(env, v)
     if (applied) final.push(applied)
-    if (v.judgment === "keep") bump(a.code, "kept")
-    else if (v.judgment === "reject") bump(a.code, "rejected")
-    else if (v.judgment === "inconsistent") bump(a.code, "ambig")
+    if (v.judgment === "keep") bump(env.code, "kept")
+    else if (v.judgment === "reject") bump(env.code, "rejected")
+    else if (v.judgment === "inconsistent") bump(env.code, "ambig")
+    tracer?.pushAdjud(env.code, adjudEntry(env, v))
   }
 
-  return { annotations: final, errors: [], stats }
+  return { envelopes: final, errors: [], stats }
 }

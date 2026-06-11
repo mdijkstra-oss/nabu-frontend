@@ -31,9 +31,14 @@ const dimensionInstruction = (fileList: string): string =>
 const buildDeepAnalysisNudge = (
   refs: CodingFileRef[],
   targetingLine: string,
-  userMessage: string
+  userMessage: string,
+  synthesize = false
 ): TaskConfig => {
   const fileList = buildFileList(refs)
+  const synthArg = synthesize ? `\n   - synthesize: true` : ""
+  const synthTail = synthesize
+    ? "\n\nAfter the tool returns, its output ends with a `## Synthesis directive` section — follow that directive to write the synthesis as your chat response."
+    : ""
   return {
     context: `Follow these steps exactly:
 
@@ -41,9 +46,9 @@ const buildDeepAnalysisNudge = (
 2. Call apply_deep_analysis with these exact arguments:
    - ${targetingLine}
    - ${dimensionInstruction(fileList)}
-   - post_action: "annotate_as_code"
+   - post_action: "annotate_as_code"${synthArg}
 
-Do not pre-read or chunk the target files yourself — apply_deep_analysis handles fetching, chunking, and analysis internally.${buildHiddenNote(refs)}`,
+Do not pre-read or chunk the target files yourself — apply_deep_analysis handles fetching, chunking, and analysis internally.${buildHiddenNote(refs)}${synthTail}`,
     userMessage,
   }
 }
@@ -69,62 +74,13 @@ export const codeWithSearchSelection = (
     `Code selected results from ${searchId} (${ranges.length} ${ranges.length === 1 ? "section" : "sections"}) with ${buildFileList(refs)}`
   )
 
-const SYNTHESIS_EXPECTED = `
-    Ground every observation in source text. Do not predict what later
-    documents will show. Do not evaluate importance relative to the corpus.
-
-    Reviewed annotations (flagged by one model, not the other) are
-    candidates, not findings. Build claims on confirmed annotations.
-    Reviewed ones may be noted as "tentatively" or "pending review."
-
-    1-2 quotes per pattern. The quote must directly demonstrate the
-    pattern — if you need to explain relevance, pick a better quote.
-    Scale claims to evidence: one quote → "in at least one instance";
-    multiple passages → "recurrently." No exhaustive listing.
-
-    Assess confidence: confirmed / (confirmed + reviewed).
-    This ratio and the 0.7 threshold are internal deliberation only.
-    Do not state the number, the formula, or the branch you took in
-    the output. The reader sees synthesis, not the scoring mechanism.
-
-    If ≥ 0.7 and Research Questions exist:
-      Synthesis per RQ. 150-250 words per RQ.
-      State the pattern, then quote, then note if other passages
-      reinforce or complicate it. Do not place a quote next to a
-      claim it doesn't directly support.
-
-    Else:
-      Integrated findings section. Focus on what confirmed annotations
-      show. Note where reviewed annotations would extend the picture.
-      If confidence < 0.4, focus on what the disagreement pattern
-      suggests about the code definition. 100-150 words.`
-
-const buildCodingStepExpected = (refs: CodingFileRef[]): string => {
-  const fileList = buildFileList(refs)
-  const targetsArg = `[${refs.map((r) => `{path: "${r.file}"}`).join(", ")}]`
-  return `first call: apply_deep_analysis(targets=${targetsArg}, ${dimensionInstruction(fileList)}, post_action="annotate_as_code")
-    targets are file paths only — no start_line or end_line; the whole file will be analyzed.
-    on result: write nothing. call complete_step immediately.`
-}
-
-export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig => {
-  const fileList = buildFileList(refs)
-  return {
-    context: `Follow these steps exactly:
-
-1. Run ls --show-tags to find codebook files.
-2. Call start_planning with task: "Code ${fileList}".
-3. Immediately call submit_plan with EXACTLY 2 steps (do not discuss with the user first):
-   - Step 1, title: "Code ${fileList}", checkpoint: false, expected:
-${buildCodingStepExpected(refs)}
-   - Step 2, title: "Synthesis", checkpoint: false, expected:
-${SYNTHESIS_EXPECTED}
-4. Execute the plan.
-
-Do not pre-read or chunk the target files yourself — apply_deep_analysis handles fetching, chunking, and analysis internally.${buildHiddenNote(refs)}`,
-    userMessage: `Can you code this file with ${fileList}`,
-  }
-}
+export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig =>
+  buildDeepAnalysisNudge(
+    refs,
+    `targets: [${refs.map((r) => `{ path: "${r.file}" }`).join(", ")}] (file paths only — no start_line or end_line; the whole file will be analyzed)`,
+    `Can you code this file with ${buildFileList(refs)}`,
+    true
+  )
 
 export const codeWithSearch = (refs: CodingFileRef[], searchId: string): TaskConfig =>
   buildDeepAnalysisNudge(

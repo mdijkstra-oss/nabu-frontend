@@ -10,9 +10,10 @@ import {
   toAnalysisResults,
   formatReturnOutput,
   formatAnnotateOutput,
-  formatCoverage,
   isAnnotateAction,
   ABSENCE_HINT,
+  countConfidence,
+  buildSynthesisDirective,
   type MappedResult,
   type VoteRecord,
 } from "./format"
@@ -242,7 +243,6 @@ describe("formatReturnOutput", () => {
       results: [] as MappedResult[],
       startLine: 10,
       endLine: 50,
-      sectionTextLength: 0,
       warnings: [] as string[],
       expected: `Lines 10-50 analyzed. No matches found.${ABSENCE_HINT}`,
     },
@@ -254,7 +254,6 @@ describe("formatReturnOutput", () => {
       ],
       startLine: 1,
       endLine: 10,
-      sectionTextLength: 0,
       warnings: [] as string[],
       expected: '- [code_1] "Some text": because\n- [code_2] "Other text": also',
     },
@@ -263,7 +262,6 @@ describe("formatReturnOutput", () => {
       results: [{ text: "Some text", analysis_source_id: "code_1", reason: "because" }],
       startLine: 1,
       endLine: 10,
-      sectionTextLength: 0,
       warnings: ["find: LLM returned no text response"],
       expected:
         '- [code_1] "Some text": because\n\n⚠ Degraded: 1 model call(s) failed and were dropped. Results are based on fewer voters.\n- find: LLM returned no text response',
@@ -273,31 +271,13 @@ describe("formatReturnOutput", () => {
       results: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
-      sectionTextLength: 0,
       warnings: ["filter: connection dropped"],
       expected: `Lines 5-20 analyzed. No matches found.${ABSENCE_HINT}\n\n⚠ Degraded: 1 model call(s) failed and were dropped. Results are based on fewer voters.\n- filter: connection dropped`,
     },
-    {
-      name: "prepends coverage when sectionTextLength provided",
-      results: [
-        { text: "Some text", analysis_source_id: "code_1", reason: "because" },
-        { text: "Other text", analysis_source_id: "code_2", reason: "also" },
-      ],
-      startLine: 1,
-      endLine: 10,
-      sectionTextLength: 100,
-      warnings: [] as string[],
-      expected:
-        'Coverage: 19% of text — code_1: 9%, code_2: 10%\n\n- [code_1] "Some text": because\n- [code_2] "Other text": also',
-    },
   ]
 
-  cases.forEach(({ name, results, startLine, endLine, sectionTextLength, warnings, expected }) => {
-    it(name, () =>
-      expect(formatReturnOutput(results, startLine, endLine, sectionTextLength, warnings)).toBe(
-        expected
-      )
-    )
+  cases.forEach(({ name, results, startLine, endLine, warnings, expected }) => {
+    it(name, () => expect(formatReturnOutput(results, startLine, endLine, warnings)).toBe(expected))
   })
 })
 
@@ -314,7 +294,6 @@ describe("formatAnnotateOutput", () => {
       input: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
-      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "Lines 5-20 analyzed. No matches found. No annotations written.",
     },
@@ -324,7 +303,6 @@ describe("formatAnnotateOutput", () => {
       input: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
-      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "Lines 5-20 analyzed. No matches found. No annotations written.",
     },
@@ -334,7 +312,6 @@ describe("formatAnnotateOutput", () => {
       input: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
-      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "Absence is data.",
     },
@@ -344,7 +321,6 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
-      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "2 code annotation(s) written. Do not re-apply these.",
     },
@@ -354,7 +330,6 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
-      sectionTextLength: 0,
       warnings: [] as string[],
       contains: "2 comment annotation(s) written. Do not re-apply these.",
     },
@@ -364,7 +339,6 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
-      sectionTextLength: 0,
       warnings: [] as string[],
       contains: '- [code_1] "Some text": because',
     },
@@ -374,7 +348,6 @@ describe("formatAnnotateOutput", () => {
       input: results,
       startLine: 1,
       endLine: 10,
-      sectionTextLength: 0,
       warnings: ["find: timeout"],
       contains: "Degraded: 1 model call(s) failed",
     },
@@ -384,75 +357,15 @@ describe("formatAnnotateOutput", () => {
       input: [] as MappedResult[],
       startLine: 5,
       endLine: 20,
-      sectionTextLength: 0,
       warnings: ["filter: connection reset"],
       contains: "filter: connection reset",
     },
-    {
-      name: "coverage prepended when sectionTextLength provided",
-      action: "annotate_as_code" as const,
-      input: results,
-      startLine: 1,
-      endLine: 10,
-      sectionTextLength: 100,
-      warnings: [] as string[],
-      contains: "Coverage: 19% of text — code_1: 9%, code_2: 10%",
-    },
   ]
 
-  cases.forEach(
-    ({ name, action, input, startLine, endLine, sectionTextLength, warnings, contains }) => {
-      it(name, () =>
-        expect(
-          formatAnnotateOutput(input, action, startLine, endLine, sectionTextLength, warnings)
-        ).toContain(contains)
-      )
-    }
-  )
-})
-
-describe("formatCoverage", () => {
-  const cases = [
-    {
-      name: "empty results returns empty",
-      results: [] as MappedResult[],
-      sectionTextLength: 100,
-      expected: "",
-    },
-    {
-      name: "zero section length returns empty",
-      results: [{ text: "Some text", analysis_source_id: "code_1", reason: "r" }],
-      sectionTextLength: 0,
-      expected: "",
-    },
-    {
-      name: "single code computes percentage",
-      results: [{ text: "Hello world", analysis_source_id: "code_1", reason: "r" }],
-      sectionTextLength: 100,
-      expected: "Coverage: 11% of text — code_1: 11%",
-    },
-    {
-      name: "multiple codes with breakdown",
-      results: [
-        { text: "Hello world", analysis_source_id: "code_1", reason: "r" },
-        { text: "Goodbye", analysis_source_id: "code_2", reason: "r" },
-      ],
-      sectionTextLength: 100,
-      expected: "Coverage: 18% of text — code_1: 11%, code_2: 7%",
-    },
-    {
-      name: "same code aggregates char lengths",
-      results: [
-        { text: "Hello", analysis_source_id: "code_1", reason: "r1" },
-        { text: "World", analysis_source_id: "code_1", reason: "r2" },
-      ],
-      sectionTextLength: 100,
-      expected: "Coverage: 10% of text — code_1: 10%",
-    },
-  ]
-
-  cases.forEach(({ name, results, sectionTextLength, expected }) => {
-    it(name, () => expect(formatCoverage(results, sectionTextLength)).toBe(expected))
+  cases.forEach(({ name, action, input, startLine, endLine, warnings, contains }) => {
+    it(name, () =>
+      expect(formatAnnotateOutput(input, action, startLine, endLine, warnings)).toContain(contains)
+    )
   })
 })
 
@@ -745,5 +658,83 @@ describe("vote pass-through", () => {
 
   voteCases.forEach(({ name, fn, expected }) => {
     it(name, () => expect(fn()).toEqual(expected))
+  })
+})
+
+describe("countConfidence", () => {
+  const mk = (review?: string): MappedResult => ({
+    text: "x",
+    analysis_source_id: "c",
+    reason: "r",
+    vote: { find: { found: 1, missed: 0 }, ...(review ? { review } : {}) },
+  })
+
+  const cases: {
+    name: string
+    results: MappedResult[]
+    expected: { confirmed: number; reviewed: number }
+  }[] = [
+    { name: "empty", results: [], expected: { confirmed: 0, reviewed: 0 } },
+    { name: "all confirmed", results: [mk(), mk(), mk()], expected: { confirmed: 3, reviewed: 0 } },
+    {
+      name: "all reviewed",
+      results: [mk("flag"), mk("flag")],
+      expected: { confirmed: 0, reviewed: 2 },
+    },
+    {
+      name: "mixed",
+      results: [mk(), mk("flag"), mk(), mk("flag"), mk()],
+      expected: { confirmed: 3, reviewed: 2 },
+    },
+    {
+      name: "no vote treated as confirmed",
+      results: [{ text: "x", analysis_source_id: "c", reason: "r" }],
+      expected: { confirmed: 1, reviewed: 0 },
+    },
+  ]
+
+  cases.forEach(({ name, results, expected }) => {
+    it(name, () => expect(countConfidence(results)).toEqual(expected))
+  })
+})
+
+describe("buildSynthesisDirective", () => {
+  const cases: {
+    name: string
+    confirmed: number
+    reviewed: number
+    expect: "empty" | "high" | "mid" | "low"
+  }[] = [
+    { name: "zero annotations returns empty", confirmed: 0, reviewed: 0, expect: "empty" },
+    { name: "ratio >= 0.7 picks high (RQ branch)", confirmed: 7, reviewed: 3, expect: "high" },
+    { name: "ratio at boundary 0.7 picks high", confirmed: 7, reviewed: 3, expect: "high" },
+    { name: "ratio 0.4-0.7 picks mid", confirmed: 5, reviewed: 5, expect: "mid" },
+    { name: "ratio at boundary 0.4 picks mid", confirmed: 2, reviewed: 3, expect: "mid" },
+    {
+      name: "ratio < 0.4 picks low (disagreement focus)",
+      confirmed: 1,
+      reviewed: 9,
+      expect: "low",
+    },
+    { name: "all confirmed picks high", confirmed: 10, reviewed: 0, expect: "high" },
+    { name: "all reviewed picks low", confirmed: 0, reviewed: 5, expect: "low" },
+  ]
+
+  cases.forEach(({ name, confirmed, reviewed, expect: tier }) => {
+    it(name, () => {
+      const out = buildSynthesisDirective(confirmed, reviewed)
+      if (tier === "empty") {
+        expect(out).toBe("")
+        return
+      }
+      expect(out).toContain("## Synthesis directive")
+      if (tier === "high") expect(out).toContain("Research Questions")
+      if (tier === "mid") {
+        expect(out).toContain("Integrated findings section")
+        expect(out).not.toContain("Research Questions")
+        expect(out).not.toContain("disagreement pattern")
+      }
+      if (tier === "low") expect(out).toContain("disagreement pattern")
+    })
   })
 })

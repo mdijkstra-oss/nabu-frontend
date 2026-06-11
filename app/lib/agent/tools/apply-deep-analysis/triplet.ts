@@ -1,50 +1,47 @@
-import type { CodedItem, ItemMapping } from "./present"
+import type { Envelope } from "./envelope"
 
-const formatCodings = (codings: string[]): string => codings.join(", ")
+export interface EnvelopeMapping {
+  index: number
+  envelopeId: string
+  code: string
+}
 
-const buildTargetBlock = (
-  sentences: string[],
-  item: CodedItem,
-  itemIndex: number,
-  halo: number
-): string => {
-  const beforeCount = Math.min(halo, item.start - 1)
-  const before = sentences.slice(item.start - 1 - beforeCount, item.start - 1).join(" ")
+export interface RenderedEnvelopes {
+  blocks: string[]
+  mapping: EnvelopeMapping[]
+}
 
-  const afterCount = Math.min(halo, sentences.length - item.end)
-  const after = sentences.slice(item.end, item.end + afterCount).join(" ")
+const buildEnvelopeBlock = (env: Envelope, displayIndex: number, halo: number): string => {
+  const sentences = env.haloSentences
+  const beforeCount = Math.min(halo, env.markedStart - 1)
+  const before = sentences.slice(env.markedStart - 1 - beforeCount, env.markedStart - 1).join(" ")
 
-  const candidateText = sentences.slice(item.start - 1, item.end).join(" ")
-  const label = item.id ?? String(itemIndex)
-  const codeAttr = formatCodings(item.codings)
+  const afterCount = Math.min(halo, sentences.length - env.markedEnd)
+  const after = sentences.slice(env.markedEnd, env.markedEnd + afterCount).join(" ")
 
-  const lines: string[] = [`<target id="${label}" code="${codeAttr}">`]
+  const candidateText =
+    sentences.slice(env.markedStart - 1, env.markedEnd).join(" ") || env.markedText
+
+  const lines: string[] = [`<target id="${displayIndex}" code="${env.code}">`]
   if (before) lines.push(before)
   lines.push(`<marked>${candidateText}</marked>`)
   if (after) lines.push(after)
-  if (item.keepCase !== undefined) lines.push(`<keep-case>${item.keepCase}</keep-case>`)
-  if (item.removeCase !== undefined) lines.push(`<remove-case>${item.removeCase}</remove-case>`)
+  if (env.reason !== undefined) lines.push(`<keep-case>${env.reason}</keep-case>`)
+  if (env.review !== undefined) lines.push(`<remove-case>${env.review}</remove-case>`)
   lines.push("</target>")
   return lines.join("\n")
 }
 
-export interface RenderedTargets {
-  blocks: string[]
-  mapping: ItemMapping[]
-}
-
-export const renderTargetBlocks = (
-  sentences: string[],
-  items: CodedItem[],
+export const renderEnvelopeBlocks = (
+  envelopes: readonly Envelope[],
   halo: number
-): RenderedTargets => {
-  const mapping: ItemMapping[] = items.map((item, i) => ({
-    index: i + 1,
-    start: item.start,
-    end: item.end,
-    codings: item.codings,
-  }))
-
-  const blocks = items.map((item, i) => buildTargetBlock(sentences, item, i + 1, halo))
+): RenderedEnvelopes => {
+  const blocks: string[] = []
+  const mapping: EnvelopeMapping[] = []
+  envelopes.forEach((env, i) => {
+    const displayIndex = i + 1
+    mapping.push({ index: displayIndex, envelopeId: env.id, code: env.code })
+    blocks.push(buildEnvelopeBlock(env, displayIndex, halo))
+  })
   return { blocks, mapping }
 }

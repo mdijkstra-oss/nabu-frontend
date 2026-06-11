@@ -1,19 +1,18 @@
-import type { Annotation } from "./types"
+import type { Envelope } from "./envelope"
 import type { ScopedSources, ContentResolver } from "./messages"
 import { callAndParse } from "../../client/call-parse"
 import { buildFilterMessages, FILTER_CTA, buildFilterSchema } from "./messages"
-import { groupBySpan, type CodedSpan } from "./consensus"
-import { type CodedItem } from "./present"
-import { renderTargetBlocks } from "./triplet"
-import { spanKey } from "./format"
+import { renderEnvelopeBlocks } from "./triplet"
+import { collectCodeIds } from "./envelope"
 import { FILTER_ENDPOINT, FILTER_RUNS, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
 import { shouldShowModelIndex } from "./debug-flags"
+import type { Tracer, FilterEntry, FilterOutcome, FilterVote } from "./trace"
 
 export type FilterStats = Map<string, [number, number]>
 
 export interface FilterStepResult {
-  surviving: Annotation[]
-  removed: Annotation[]
+  surviving: Envelope[]
+  removed: Envelope[]
   errors: string[]
   stats: FilterStats
 }
@@ -33,17 +32,6 @@ interface MergedJudgment {
   reason: string
   review?: string
 }
-
-const collectCodeIds = (spans: CodedSpan[]): Set<string> => {
-  const ids = new Set<string>()
-  for (const s of spans) for (const c of s.codings) ids.add(c)
-  return ids
-}
-
-const toCodedItems = (spans: CodedSpan[]): CodedItem[] =>
-  spans.map((s) => ({ start: s.start, end: s.end, codings: s.codings }))
-
-const annotationKey = (a: Annotation): string => spanKey(a.start, a.end, a.code)
 
 const isKeep = (v: IndexedJudgment): boolean => v.judgment.judgment === "keep"
 
@@ -83,21 +71,34 @@ const callFilterModel = async (
   return callAndParse(endpoint, messages, schema)
 }
 
-export const filterAnnotations = async (
-  annotations: Annotation[],
-  sentences: string[],
+const buildVoteList = (
+  envelopeId: string,
+  perModelJudgments: readonly Map<string, Judgment>[]
+): FilterVote[] => {
+  const out: FilterVote[] = []
+  for (let idx = 0; idx < perModelJudgments.length; idx++) {
+    const entry = perModelJudgments[idx].get(envelopeId)
+    if (entry) {
+      const judgment = entry.judgment === "keep" ? "keep" : "remove"
+      out.push({ modelIdx: idx, judgment, reason: entry.reason })
+    } else {
+      out.push({ modelIdx: idx, judgment: "missing", reason: "no response" })
+    }
+  }
+  return out
+}
+
+export const filterEnvelopes = async (
+  envelopes: Envelope[],
   sources: ScopedSources,
-  resolve: ContentResolver
+  resolve: ContentResolver,
+  tracer?: Tracer
 ): Promise<FilterStepResult> => {
-  if (annotations.length === 0) return { surviving: [], removed: [], errors: [], stats: new Map() }
+  if (envelopes.length === 0) return { surviving: [], removed: [], errors: [], stats: new Map() }
+  tracer?.setVoterCount(FILTER_RUNS)
 
-  const grouped = groupBySpan(
-    annotations.map((a) => ({ start: a.start, end: a.end, analysis_source_id: a.code }))
-  )
-  const codeIds = collectCodeIds(grouped)
-  const codedItems = toCodedItems(grouped)
-  const { blocks, mapping } = renderTargetBlocks(sentences, codedItems, SPAN_STEP_CONTEXT_SENTENCES)
-
+  const codeIds = collectCodeIds(envelopes)
+  const { blocks, mapping } = renderEnvelopeBlocks(envelopes, SPAN_STEP_CONTEXT_SENTENCES)
   const messages = buildFilterMessages(blocks, codeIds, sources, resolve, FILTER_CTA)
 
   const validCodes = [...codeIds]
@@ -119,7 +120,7 @@ export const filterAnnotations = async (
       for (const r of result.data.results) {
         const m = mapping.find((entry) => entry.index === r.id)
         if (!m) continue
-        judgments.set(spanKey(m.start, m.end, r.code), { judgment: r.judgment, reason: r.reason })
+        judgments.set(m.envelopeId, { judgment: r.judgment, reason: r.reason })
         if (r.judgment === "keep") {
           const entry = stats.get(r.code) ?? [0, 0]
           entry[idx] += 1
@@ -130,32 +131,45 @@ export const filterAnnotations = async (
     perModelJudgments.push(judgments)
   }
 
-  const surviving: Annotation[] = []
-  const removed: Annotation[] = []
+  const surviving: Envelope[] = []
+  const removed: Envelope[] = []
 
-  for (const a of annotations) {
-    const key = annotationKey(a)
+  for (const env of envelopes) {
+    const traceVotes = buildVoteList(env.id, perModelJudgments)
+    const traceEntry = (outcome: FilterOutcome): FilterEntry => ({
+      code: env.code,
+      start: env.markedStart,
+      end: env.markedEnd,
+      text: env.markedText,
+      votes: traceVotes,
+      outcome,
+    })
+
     const votes: IndexedJudgment[] = []
     for (let idx = 0; idx < perModelJudgments.length; idx++) {
-      const entry = perModelJudgments[idx].get(key)
+      const entry = perModelJudgments[idx].get(env.id)
       if (entry) votes.push({ idx, judgment: entry })
     }
 
     if (votes.length === 0) {
-      surviving.push(a)
+      surviving.push(env)
+      tracer?.pushFilter(env.code, traceEntry("keep"))
       continue
     }
 
     const merged = mergeVotes(votes)
     switch (merged.outcome) {
       case "remove":
-        removed.push(a)
+        removed.push(env)
+        tracer?.pushFilter(env.code, traceEntry("remove"))
         break
       case "keep":
-        surviving.push({ ...a, reason: merged.reason })
+        surviving.push({ ...env, reason: merged.reason })
+        tracer?.pushFilter(env.code, traceEntry("keep"))
         break
       case "contested":
-        surviving.push({ ...a, reason: merged.reason, review: merged.review })
+        surviving.push({ ...env, reason: merged.reason, review: merged.review })
+        tracer?.pushFilter(env.code, traceEntry("contested"))
         break
       default:
         throw new Error(`unknown filter outcome: ${merged.outcome}`)

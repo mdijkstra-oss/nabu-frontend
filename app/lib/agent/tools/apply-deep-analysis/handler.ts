@@ -1,30 +1,16 @@
 import type { HandlerResult, Operation } from "../../types"
-import type { PostAction, Target, SourceFile } from "./def"
+import type { Target, SourceFile } from "./def"
 import { ApplyDeepAnalysisArgs, applyDeepAnalysisTool } from "./def"
 import { registerTool, tool, getToolHandlers } from "../../executors/tool"
 import { getFileView, getViewableFiles } from "../file-view"
 import { getFile, getFileRaw, getFiles } from "~/lib/files/store"
-import { CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
 import {
-  SECTION_MARKER,
-  extractSection,
-  prepareTargetContent,
-  numberSectionWithPositions,
-  mapAnnotations,
-  toAnnotationOps,
   formatReturnOutput,
   formatAnnotateOutput,
+  countConfidence,
+  buildSynthesisDirective,
   type MappedResult,
 } from "./format"
-import type { Annotation } from "./types"
-import {
-  sortSegments,
-  packComposites,
-  type Segment,
-  type Composite,
-  type PackedSegment,
-} from "~/lib/composite/pack"
-import { buildSentenceSegmentMap, resolveSentenceIndex } from "~/lib/composite/sentence-map"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import {
   partitionSources,
@@ -38,32 +24,24 @@ import { runFind, type SearchCtx } from "./step-find"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
-import { think, thinkWithName, STARTING, PICKING_UP, READING_FRAMEWORK, WRITING } from "./thoughts"
-import { findMatchOffset } from "~/lib/text/find"
-import type { Annotation as StoredAnnotation } from "~/domain/data-blocks/attributes/schema"
+import { think, STARTING, READING_FRAMEWORK, WRITING } from "./thoughts"
 import { getDatabase } from "~/domain/db/database"
 import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import { executeSearchById } from "~/domain/search/execute"
 import type { SearchHit } from "~/domain/search/types"
+import { createTracer } from "./trace"
+import type { Envelope } from "./envelope"
 
 const SEARCH_RESOLVE_TARGET = 200
 
 type Enqueue = <T>(key: string, fn: () => Promise<T>) => Promise<T>
 
-interface PostActionCtx {
-  mapped: MappedResult[]
-  path: string
-  startLine: number
-  endLine: number
-  sectionTextLength: number
-  warnings: string[]
-  analyzedCodes: ReadonlySet<string>
-}
-
 interface TargetResult {
   target: Target
   result: HandlerResult<string>
+  confirmed: number
+  reviewed: number
 }
 
 const validateTargets = (
@@ -88,6 +66,35 @@ const validateTargets = (
     }
 
   return null
+}
+
+const charOffsetToLine = (content: string, offset: number): number => {
+  let line = 1
+  const cap = Math.min(offset, content.length)
+  for (let i = 0; i < cap; i++) {
+    if (content[i] === "\n") line++
+  }
+  return line
+}
+
+const hitToTarget = (hit: SearchHit): Target | null => {
+  const content = getFileView(hit.file)
+  if (content === undefined) return null
+  if (hit.chunkStart === undefined || hit.chunkEnd === undefined) {
+    return { path: hit.file }
+  }
+  return {
+    path: hit.file,
+    start_line: charOffsetToLine(content, hit.chunkStart),
+    end_line: charOffsetToLine(content, hit.chunkEnd),
+  }
+}
+
+const resolveTargetLines = (target: Target): { start: number; end: number } => {
+  const content = getFileView(target.path) ?? ""
+  const start = target.start_line ?? 1
+  const end = target.end_line ?? content.split("\n").length
+  return { start, end }
 }
 
 const applyAnnotationsEager = async (
@@ -121,255 +128,137 @@ const applyAnnotationsEager = async (
   return { status: result.status, output: String(result.output), mutations: [] }
 }
 
-const handleReturn = async ({
-  mapped,
-  startLine,
-  endLine,
-  sectionTextLength,
-  warnings,
-}: PostActionCtx): Promise<HandlerResult<string>> => ({
-  status: "ok",
-  output: formatReturnOutput(mapped, startLine, endLine, sectionTextLength, warnings),
-  mutations: [],
+const envelopeToMapped = (e: Envelope): MappedResult => ({
+  text: e.markedText,
+  analysis_source_id: e.code,
+  reason: e.reason ?? "",
+  vote: {
+    find: { found: e.findVotes.filter(Boolean).length, missed: 0 },
+    ...(e.review !== undefined ? { review: e.review } : {}),
+  },
 })
 
-const overlapsWithLocked = (
-  text: string,
-  lockedTexts: readonly string[],
-  sectionText: string
+const overlapsTargetRange = (
+  e: Envelope,
+  target: Target,
+  contentByPath: Map<string, string>
 ): boolean => {
-  const newMatch = findMatchOffset(sectionText, text)
-  if (!newMatch) return false
-  for (const lt of lockedTexts) {
-    const lockedMatch = findMatchOffset(sectionText, lt)
-    if (!lockedMatch) continue
-    if (newMatch.start < lockedMatch.end && lockedMatch.start < newMatch.end) return true
+  if (e.file !== target.path) return false
+  if (target.start_line === undefined && target.end_line === undefined) return true
+  const content = contentByPath.get(target.path) ?? ""
+  const envStartLine = charOffsetToLine(content, e.fileCharStart)
+  const envEndLine = charOffsetToLine(content, e.fileCharEnd)
+  const tStart = target.start_line ?? 1
+  const tEnd = target.end_line ?? Number.MAX_SAFE_INTEGER
+  return envStartLine <= tEnd && envEndLine >= tStart
+}
+
+const groupEnvelopesByTarget = (
+  envelopes: readonly Envelope[],
+  targets: readonly Target[]
+): Map<Target, Envelope[]> => {
+  const contentByPath = new Map<string, string>()
+  for (const t of targets) {
+    if (!contentByPath.has(t.path)) {
+      contentByPath.set(t.path, getFileView(t.path) ?? "")
+    }
   }
-  return false
+  const out = new Map<Target, Envelope[]>()
+  for (const t of targets) out.set(t, [])
+  for (const e of envelopes) {
+    const owner = targets.find((t) => overlapsTargetRange(e, t, contentByPath))
+    if (!owner) continue
+    const list = out.get(owner)
+    if (list) list.push(e)
+  }
+  return out
 }
 
-const filterOverlappingWithLocked = (
-  addOps: { op: string; item: { text: string } }[],
-  lockedAnnotations: StoredAnnotation[],
-  content: string,
-  startLine: number,
-  endLine: number
-): typeof addOps => {
-  if (lockedAnnotations.length === 0) return addOps
-  const lines = content.split("\n")
-  const sectionText = lines.slice(startLine - 1, endLine).join("\n")
-  const lockedTexts = lockedAnnotations.map((a) => a.text)
-  return addOps.filter((op) => !overlapsWithLocked(op.item.text, lockedTexts, sectionText))
+interface AddOp {
+  op: "add_annotation"
+  item: { text: string; reason: string; code?: string; color?: string; vote?: MappedResult["vote"] }
 }
 
-const handleAnnotation =
-  (action: "annotate_as_code" | "annotate_as_comment", enqueue: Enqueue) =>
-  async ({
-    mapped,
-    path,
-    startLine,
-    endLine,
-    sectionTextLength,
-    warnings,
-    analyzedCodes,
-  }: PostActionCtx): Promise<HandlerResult<string>> =>
-    enqueue(path, async () => {
-      const freshContent = getFileView(path) ?? ""
+const DEFAULT_COMMENT_COLOR = "blue"
 
-      const clearResult =
-        action === "annotate_as_code"
-          ? clearAnnotationsOnSection(
-              getStoredAnnotations(freshContent),
-              freshContent,
-              analyzedCodes,
-              startLine,
-              endLine
-            )
-          : { ops: [] }
+const toAddOps = (
+  mapped: readonly MappedResult[],
+  action: "annotate_as_code" | "annotate_as_comment",
+  lockedTexts: ReadonlySet<string>
+): AddOp[] =>
+  mapped
+    .filter((m) => !lockedTexts.has(m.text))
+    .map((m) =>
+      action === "annotate_as_code"
+        ? {
+            op: "add_annotation" as const,
+            item: { text: m.text, reason: m.reason, code: m.analysis_source_id, vote: m.vote },
+          }
+        : {
+            op: "add_annotation" as const,
+            item: {
+              text: m.text,
+              reason: `[${m.analysis_source_id}] ${m.reason}`,
+              color: DEFAULT_COMMENT_COLOR,
+              vote: m.vote,
+            },
+          }
+    )
 
-      const rawAddOps = toAnnotationOps(mapped, action)
-      const lockedAnnotations = getStoredAnnotations(freshContent).filter((a) => a.locked === true)
-      const addOps = filterOverlappingWithLocked(
-        rawAddOps,
-        lockedAnnotations,
-        freshContent,
-        startLine,
-        endLine
-      )
+interface WriteCtx {
+  enqueue: Enqueue
+  action: "annotate_as_code" | "annotate_as_comment"
+  analyzedCodes: ReadonlySet<string>
+}
 
-      const ops = [...clearResult.ops, ...addOps]
-      if (ops.length === 0)
-        return {
-          status: "ok" as const,
-          output: formatAnnotateOutput(
-            mapped,
-            action,
-            startLine,
-            endLine,
-            sectionTextLength,
-            warnings
-          ),
-          mutations: [],
-        }
-      const annotationResult = await applyAnnotationsEager(path, ops)
-      if (annotationResult.status === "error") return annotationResult
+const writeAnnotationsForTarget = async (
+  target: Target,
+  mapped: MappedResult[],
+  ctx: WriteCtx
+): Promise<HandlerResult<string>> =>
+  ctx.enqueue(target.path, async () => {
+    const freshContent = getFileView(target.path) ?? ""
+    const lines = resolveTargetLines(target)
 
+    const clearResult =
+      ctx.action === "annotate_as_code"
+        ? clearAnnotationsOnSection(
+            getStoredAnnotations(freshContent),
+            freshContent,
+            ctx.analyzedCodes,
+            lines.start,
+            lines.end
+          )
+        : { ops: [] }
+
+    const lockedTexts = new Set(
+      getStoredAnnotations(freshContent)
+        .filter((a) => a.locked === true)
+        .map((a) => a.text)
+    )
+    const addOps = toAddOps(mapped, ctx.action, lockedTexts)
+
+    const ops = [...clearResult.ops, ...addOps]
+    if (ops.length === 0)
       return {
-        status: annotationResult.status,
-        output: formatAnnotateOutput(
-          mapped,
-          action,
-          startLine,
-          endLine,
-          sectionTextLength,
-          warnings
-        ),
+        status: "ok" as const,
+        output: formatAnnotateOutput(mapped, ctx.action, lines.start, lines.end),
         mutations: [],
       }
-    })
-
-type PostActionFn = (ctx: PostActionCtx) => Promise<HandlerResult<string>>
-
-const buildPostActions = (enqueue: Enqueue): Record<PostAction, PostActionFn> => ({
-  return: handleReturn,
-  annotate_as_code: handleAnnotation("annotate_as_code", enqueue),
-  annotate_as_comment: handleAnnotation("annotate_as_comment", enqueue),
-})
-
-const compositeSeparator = (seg: Segment): string =>
-  `\n\n${SECTION_MARKER}${seg.path} [${seg.startLine}-${seg.endLine}]\n\n`
-
-const charOffsetToLine = (content: string, offset: number): number => {
-  let line = 1
-  const cap = Math.min(offset, content.length)
-  for (let i = 0; i < cap; i++) {
-    if (content[i] === "\n") line++
-  }
-  return line
-}
-
-const hitToTarget = (hit: SearchHit): Target | null => {
-  const content = getFileView(hit.file)
-  if (content === undefined) return null
-  if (hit.chunkStart === undefined || hit.chunkEnd === undefined) {
-    return { path: hit.file }
-  }
-  return {
-    path: hit.file,
-    start_line: charOffsetToLine(content, hit.chunkStart),
-    end_line: charOffsetToLine(content, hit.chunkEnd),
-  }
-}
-
-const toSegments = (targets: Target[]): Segment[] =>
-  targets.flatMap((t) => {
-    const content = getFileView(t.path)
-    if (content === undefined) return []
-    const startLine = t.start_line ?? 1
-    const endLine = t.end_line ?? content.split("\n").length
-    return [
-      {
-        path: t.path,
-        startLine,
-        endLine,
-        content: extractSection(content, startLine, endLine),
-      },
-    ]
+    const annotationResult = await applyAnnotationsEager(target.path, ops)
+    if (annotationResult.status === "error") return annotationResult
+    return {
+      status: annotationResult.status,
+      output: formatAnnotateOutput(mapped, ctx.action, lines.start, lines.end),
+      mutations: [],
+    }
   })
 
-const groupAnnotationsBySegment = (
-  annotations: Annotation[],
-  sentenceMap: (PackedSegment | null)[]
-): Map<PackedSegment, Annotation[]> => {
-  const grouped = new Map<PackedSegment, Annotation[]>()
-  for (const a of annotations) {
-    const seg = resolveSentenceIndex(sentenceMap, a.start)
-    if (!seg) continue
-    const list = grouped.get(seg) ?? []
-    list.push(a)
-    grouped.set(seg, list)
-  }
-  return grouped
+const targetLabel = (t: Target): string => {
+  const start = t.start_line ?? 1
+  const end = t.end_line ?? "end"
+  return `${t.path} [${start}-${end}]`
 }
-
-const processComposite = async (
-  composite: Composite,
-  scoped: ReturnType<typeof partitionSources>,
-  expanded: ReturnType<typeof partitionSources>,
-  searchCtx: SearchCtx,
-  postAction: PostActionFn
-): Promise<TargetResult[]> => {
-  const prepared = prepareTargetContent(composite.content)
-  const { sentences, positions } = numberSectionWithPositions(prepared)
-
-  if (sentences.length === 0) {
-    return composite.segments.map((seg) => ({
-      target: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
-      result: {
-        status: "ok" as const,
-        output: `${seg.path} [${seg.startLine}-${seg.endLine}]: no sentences.`,
-        mutations: [],
-      },
-    }))
-  }
-
-  const name = composite.segments[0]?.path.split("/").pop() ?? "target"
-  think(READING_FRAMEWORK)
-
-  const analyzedCodes = new Set(extractDimensionIds([scoped], getFileView))
-
-  const firstFile = composite.segments[0]?.path ?? "target"
-
-  const incoming = await runFind(composite, expanded, sentences, searchCtx)
-
-  const pipelineResult = await runAnalysisPipeline(
-    incoming,
-    sentences,
-    scoped,
-    getFileView,
-    firstFile
-  )
-
-  const warnings: string[] = []
-  if (pipelineResult.errors.length > 0) {
-    warnings.push(...pipelineResult.errors)
-  }
-
-  if (pipelineResult.annotations.length === 0 && pipelineResult.errors.length > 0) {
-    return composite.segments.map((seg) => ({
-      target: { path: seg.path, start_line: seg.startLine, end_line: seg.endLine },
-      result: { status: "error" as const, output: pipelineResult.errors.join("; "), mutations: [] },
-    }))
-  }
-
-  const sentenceMap = buildSentenceSegmentMap(composite, positions)
-  const grouped = groupAnnotationsBySegment(pipelineResult.annotations, sentenceMap)
-
-  thinkWithName(WRITING, name)
-
-  const targetResults: TargetResult[] = []
-  for (const seg of composite.segments) {
-    const segAnnotations = grouped.get(seg) ?? []
-    const mapped = mapAnnotations(sentences, segAnnotations)
-    const segContent = composite.content.slice(seg.charStart, seg.charEnd)
-    const sectionTextLength = prepareTargetContent(segContent).length
-    const target: Target = { path: seg.path, start_line: seg.startLine, end_line: seg.endLine }
-    const result = await postAction({
-      mapped,
-      path: seg.path,
-      startLine: seg.startLine,
-      endLine: seg.endLine,
-      sectionTextLength,
-      warnings,
-      analyzedCodes,
-    })
-    targetResults.push({ target, result })
-  }
-
-  return targetResults
-}
-
-const targetLabel = (t: Target): string => `${t.path} [${t.start_line}-${t.end_line}]`
 
 const mergeTargetResults = (targetResults: TargetResult[]): HandlerResult<string> => {
   const outputs: string[] = []
@@ -397,11 +286,32 @@ const mergeTargetResults = (targetResults: TargetResult[]): HandlerResult<string
   }
 }
 
+const sumConfidence = (results: readonly TargetResult[]): { confirmed: number; reviewed: number } =>
+  results.reduce(
+    (acc, r) => ({ confirmed: acc.confirmed + r.confirmed, reviewed: acc.reviewed + r.reviewed }),
+    { confirmed: 0, reviewed: 0 }
+  )
+
+const appendSynthesisDirective = (
+  result: HandlerResult<string>,
+  flat: readonly TargetResult[],
+  enabled: boolean
+): HandlerResult<string> => {
+  if (!enabled) return result
+  const { confirmed, reviewed } = sumConfidence(flat)
+  const directive = buildSynthesisDirective(confirmed, reviewed)
+  if (directive === "") return result
+  return { ...result, output: `${result.output}${directive}` }
+}
+
 registerTool(
   tool({
     ...applyDeepAnalysisTool,
     schema: ApplyDeepAnalysisArgs,
-    handler: async (_files, { targets: inputTargets, search_id, source_files, post_action }) => {
+    handler: async (
+      _files,
+      { targets: inputTargets, search_id, source_files, post_action, synthesize }
+    ) => {
       let targets: Target[]
       if (search_id) {
         const hits = await executeSearchById(search_id, SEARCH_RESOLVE_TARGET)
@@ -456,30 +366,68 @@ registerTool(
         resolveFile: getFileView,
       }
 
-      const enqueue = createKeyedQueue()
-      const actions = buildPostActions(enqueue)
-
-      const segments = toSegments(targets)
-      const sorted = sortSegments(segments)
-      const composites = packComposites(sorted, CHUNK_TARGET_CHARS, compositeSeparator)
+      const scope = targets[0]?.path ?? "target"
+      const tracer = createTracer()
+      tracer.setTarget(scope)
 
       think(STARTING)
-      const flat: TargetResult[] = []
-      for (const composite of composites) {
-        const name = composite.segments[0]?.path.split("/").pop() ?? "target"
-        thinkWithName(PICKING_UP, name)
-        const results = await processComposite(
-          composite,
-          scoped,
-          expanded,
-          searchCtx,
-          actions[post_action]
-        )
-        flat.push(...results)
-      }
-      if (flat.length === 1) return flat[0].result
+      think(READING_FRAMEWORK)
 
-      return mergeTargetResults(flat)
+      const envelopes = await runFind(targets, expanded.dimension, searchCtx, tracer)
+
+      const analyzedCodes = new Set(extractDimensionIds([scoped], getFileView))
+
+      const pipelineResult = await runAnalysisPipeline(
+        envelopes,
+        scoped,
+        getFileView,
+        scope,
+        tracer
+      )
+      tracer.flush()
+
+      const warnings: string[] = []
+      if (pipelineResult.errors.length > 0) warnings.push(...pipelineResult.errors)
+
+      if (pipelineResult.envelopes.length === 0 && pipelineResult.errors.length > 0) {
+        return {
+          status: "error",
+          output: pipelineResult.errors.join("; "),
+          mutations: [],
+        }
+      }
+
+      think(WRITING)
+
+      const grouped = groupEnvelopesByTarget(pipelineResult.envelopes, targets)
+      const enqueue = createKeyedQueue()
+
+      const flat: TargetResult[] = []
+      for (const target of targets) {
+        const envs = grouped.get(target) ?? []
+        const mapped = envs.map(envelopeToMapped)
+        const lines = resolveTargetLines(target)
+
+        let result: HandlerResult<string>
+        if (post_action === "return") {
+          result = {
+            status: "ok",
+            output: formatReturnOutput(mapped, lines.start, lines.end, warnings),
+            mutations: [],
+          }
+        } else {
+          result = await writeAnnotationsForTarget(target, mapped, {
+            enqueue,
+            action: post_action,
+            analyzedCodes,
+          })
+        }
+        const { confirmed, reviewed } = countConfidence(mapped)
+        flat.push({ target, result, confirmed, reviewed })
+      }
+
+      const merged = flat.length === 1 ? flat[0].result : mergeTargetResults(flat)
+      return appendSynthesisDirective(merged, flat, synthesize === true)
     },
   })
 )
