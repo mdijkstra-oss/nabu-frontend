@@ -1,13 +1,13 @@
 import { getEditorSelection } from "~/lib/editor/selection-store"
 import type { EditorSelection } from "~/lib/editor/selection-store"
 import { findMatchOffset, findWithPartialEdges } from "~/lib/text/find"
-import { charOffsetToLine, lineToCharOffset, getLineContent } from "~/lib/text/lines"
-import { countLines } from "~/lib/text/stats"
+import { charOffsetToLine, lineToCharOffset } from "~/lib/text/lines"
 import { stripCodeBlockLines } from "~/lib/data-blocks/strip-lines"
 import { neutralizeMarkdown } from "~/lib/text/split"
 import { getFileRaw } from "~/lib/files/store"
 import { extractEditorSelections } from "~/lib/editor/selection-dom"
 import type { MatchOffset } from "~/lib/text/find"
+import { proseOf, indexFileSentences, buildHaloForRows } from "~/lib/text/halo"
 
 export interface TextSpan {
   text: string
@@ -150,51 +150,37 @@ export const resolveSearchSelections = (): FileSelectionRange[] => {
   return ranges
 }
 
-const ENTIRE_DOCUMENT_THRESHOLD = 0.9
-const TRUNCATION_BOUNDARY = 20
-const TRUNCATION_EDGE = 3
+const HALO_SENTENCE_COUNT = 3
 
-const formatLineNumber = (line: number, width: number): string =>
-  String(line + 1).padStart(width, " ")
-
-const addLineNumbers = (content: string, startLine: number): string => {
-  const lines = content.split("\n")
-  const lastLine = startLine + lines.length - 1
-  const width = String(lastLine + 1).length
-  return lines.map((l, i) => `${formatLineNumber(startLine + i, width)} | ${l}`).join("\n")
-}
-
-const isEntireDocument = (totalLines: number, selectionLines: number): boolean =>
-  selectionLines / totalLines >= ENTIRE_DOCUMENT_THRESHOLD
-
-const formatTruncated = (rawMarkdown: string, startLine: number, endLine: number): string => {
-  const head = getLineContent(rawMarkdown, startLine, startLine + TRUNCATION_EDGE - 1)
-  const tail = getLineContent(rawMarkdown, endLine - TRUNCATION_EDGE + 1, endLine)
-  const omitted = endLine - startLine + 1 - 2 * TRUNCATION_EDGE
-  return [
-    addLineNumbers(head, startLine),
-    `... (${omitted} lines omitted) ...`,
-    addLineNumbers(tail, endLine - TRUNCATION_EDGE + 1),
-  ].join("\n")
-}
+const findInProse = (prose: string, text: string): MatchOffset | null =>
+  findMatchOffset(prose, text, true) ?? findWithPartialEdges(prose, text)
 
 export const formatSelectionContext = (
   selection: EditorSelection,
   rawMarkdown: string
 ): string | null => {
-  const range = locateSelectionInFile(selection.text, "", rawMarkdown)
-  if (!range) return null
+  const prose = proseOf(rawMarkdown)
+  const offset = findInProse(prose, selection.text)
+  if (!offset) return null
 
-  const totalLines = countLines(rawMarkdown)
-  const selectionLines = range.endLine - range.startLine + 1
+  const rows = indexFileSentences(rawMarkdown)
+  const halo = buildHaloForRows(rows, offset.start, offset.end, HALO_SENTENCE_COUNT)
+  if (!halo) return null
 
-  if (isEntireDocument(totalLines, selectionLines)) return "User selected the entire document"
+  const coversWholeDoc =
+    halo.haloSentences.length === rows.length &&
+    halo.markedStart === 1 &&
+    halo.markedEnd === rows.length
+  if (coversWholeDoc) return null
 
-  const needsTruncation = selectionLines > TRUNCATION_BOUNDARY
+  const before = prose.slice(halo.haloCharStart, offset.start).trim()
+  const marked = prose.slice(offset.start, offset.end).trim()
+  const after = prose.slice(offset.end, halo.haloCharEnd).trim()
 
-  const formatted = needsTruncation
-    ? formatTruncated(rawMarkdown, range.startLine, range.endLine)
-    : addLineNumbers(getLineContent(rawMarkdown, range.startLine, range.endLine), range.startLine)
+  const parts: string[] = []
+  if (before) parts.push(before)
+  parts.push(`<selected>${marked}</selected>`)
+  if (after) parts.push(after)
 
-  return `User selected lines ${range.startLine + 1}-${range.endLine + 1}:\n${formatted}`
+  return `<context>${parts.join(" ")}</context>`
 }

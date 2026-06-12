@@ -14,6 +14,8 @@ export interface HaloResult {
   markedEnd: number
   fileCharStart: number
   fileCharEnd: number
+  haloCharStart: number
+  haloCharEnd: number
 }
 
 const splitSentencesWithOffsets = splitBySentences()
@@ -66,6 +68,8 @@ export const buildHaloForRows = (
     markedEnd: overlap.lastIdx - haloStart + 1,
     fileCharStart: rows[overlap.firstIdx].start,
     fileCharEnd: rows[overlap.lastIdx].end,
+    haloCharStart: rows[haloStart].start,
+    haloCharEnd: rows[haloEnd].end,
   }
 }
 

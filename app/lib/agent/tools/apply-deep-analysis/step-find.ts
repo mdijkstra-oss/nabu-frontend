@@ -12,7 +12,7 @@ import { noop } from "~/lib/utils/noop"
 import { BRANCH_CONCURRENCY, PER_DIM_TARGET, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
 import { stripGeneratedSuffix } from "~/lib/files/filename"
 import type { Tracer } from "./trace"
-import { indexFileSentences, buildHaloForRows, type SentenceRow } from "./halo"
+import { indexFileSentences, buildHaloForRows, type SentenceRow } from "~/lib/text/halo"
 
 export interface RangeInFile {
   startLine: number

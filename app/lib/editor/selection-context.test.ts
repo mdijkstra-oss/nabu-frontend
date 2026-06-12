@@ -13,9 +13,6 @@ const sel = (text: string, from = 0, to = text.length): EditorSelection => ({
 
 const fiveLineDoc = "line one\nline two\nline three\nline four\nline five"
 
-const hundredLineDoc = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`).join("\n")
-const twentyFiveLineSelection = Array.from({ length: 25 }, (_, i) => `line ${i + 1}`).join("\n")
-
 describe("locateSelectionInFile", () => {
   const cases: {
     name: string
@@ -403,6 +400,16 @@ describe("locateSelectionInFile with context", () => {
 })
 
 describe("formatSelectionContext", () => {
+  const proseDoc = [
+    "Intro sentence one.",
+    "Background sentence two.",
+    "Pivot sentence three.",
+    "Selected sentence four.",
+    "Follow-up sentence five.",
+    "Conclusion sentence six.",
+    "Tail sentence seven.",
+  ].join(" ")
+
   const cases: {
     name: string
     selection: EditorSelection
@@ -410,50 +417,39 @@ describe("formatSelectionContext", () => {
     check: (r: string | null) => void
   }[] = [
     {
-      name: "short selection → full content with line numbers",
-      selection: sel("line two\nline three"),
-      raw: fiveLineDoc,
+      name: "wraps selected sentence with <context>/<selected> and includes halo neighbours",
+      selection: sel("Selected sentence four."),
+      raw: proseDoc,
       check: (r) => {
         expect(r).not.toBeNull()
-        expect(r).toContain("lines 2-3")
-        expect(r).toContain("line two")
-        expect(r).toContain("line three")
+        expect(r).toContain("<context>")
+        expect(r).toContain("<selected>Selected sentence four.</selected>")
+        expect(r).toContain("Pivot sentence three.")
+        expect(r).toContain("Follow-up sentence five.")
       },
     },
     {
-      name: "long selection → truncated with omission note",
-      selection: sel(twentyFiveLineSelection),
-      raw: hundredLineDoc,
-      check: (r) => {
-        expect(r).not.toBeNull()
-        expect(r).toContain("lines omitted")
-        expect(r).toContain("line 1")
-        expect(r).toContain("line 25")
-      },
-    },
-    {
-      name: "nearly-entire-document selection → entire document message",
-      selection: sel(fiveLineDoc),
-      raw: fiveLineDoc,
-      check: (r) => {
-        expect(r).toBe("User selected the entire document")
-      },
-    },
-    {
-      name: "no match in raw markdown → returns null",
-      selection: sel("this text does not exist anywhere in the document"),
-      raw: fiveLineDoc,
+      name: "selection covering the whole document → null (file context already sent)",
+      selection: sel(proseDoc),
+      raw: proseDoc,
       check: (r) => {
         expect(r).toBeNull()
       },
     },
     {
-      name: "selection with inline markdown formatting → fuzzy match finds it",
-      selection: sel("bold text and italic words"),
-      raw: "some intro\n**bold text** and *italic words*\nsome outro",
+      name: "selection text not found in prose → null",
+      selection: sel("this text does not exist anywhere in the document"),
+      raw: proseDoc,
       check: (r) => {
-        expect(r).not.toBeNull()
-        expect(r).toContain("bold text")
+        expect(r).toBeNull()
+      },
+    },
+    {
+      name: "selection inside a json block → null (block is not in prose)",
+      selection: sel('"id": "ann_1"'),
+      raw: '# Doc\n\nLeading prose. Trailing prose.\n\n```json-annotations\n{"annotations":[{"id":"ann_1"}]}\n```\n',
+      check: (r) => {
+        expect(r).toBeNull()
       },
     },
   ]
