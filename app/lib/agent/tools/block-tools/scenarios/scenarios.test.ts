@@ -55,6 +55,7 @@ const loadCases = (groupDir: string): CaseJson[] =>
 const getGroups = (): string[] =>
   readdirSync(__dirname, { withFileTypes: true })
     .filter((d) => d.isDirectory() && d.name !== "fixtures")
+    .filter((d) => existsSync(join(__dirname, d.name, "cases.json")))
     .map((d) => d.name)
     .sort()
 

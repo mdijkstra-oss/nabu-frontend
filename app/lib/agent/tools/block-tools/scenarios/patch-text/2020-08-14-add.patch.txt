@@ -1,0 +1,15 @@
+patch_annotations
+  operations: [
+  {
+    "op": "add_annotation",
+    "item": {
+      "text": "We zitten in een onmogelijke situatie met dat virus. Waar we nog lang niet alles van weten. Dus u zult in de komende tijd vaker meemaken dat er dingen in de uitvoering misgaan zoals dat gebeurde vorige week vrijdag hè, bij de GGD's in Rotterdam en Amsterdam waar bleek dat zij niet op de volle schaal door konden zetten met de onderzoeken, maar nu aan het opschalen zijn in personeel zodat ze dat weer kunnen. Dat wil je niet, maar die dingen gebeuren. En dat zal ook in de toekomst op misschien hele andere plek, zou daar ook weer iets misgaan. Twee, wij zullen ook in de toekomst niet altijd perfect communiceren. Ook dan zullen er momenten zijn dat je denkt: dit is allemaal helder, we hebben het goed gebracht, waren er best tevreden over. En dat u en anderen zullen zeggen: dat was bagger. Dat zal ook in de toekomst gebeuren. Dat is onvermijdelijk bij het managen van een crisis. Je werkt met veel unknowns, met veel dingen die niet precies bekend zijn. Je moet soms snel besluiten nemen. We zien nu het virus toch weer snel de kop op steken. Dus ik maak me daar zorgen over. Vanwege alle medische gevolgen, maar natuurlijk ook economische gevolgen die dat kan hebben. En dat betekent dat er fouten gemaakt worden. En dat is onvermijdelijk.",
+      "reason": "Rutte responds to challenge that his communication looks 'rommelig' (inconsistent with his stated commitment to clear communication) by framing mistakes as inevitable in crisis management — managing inconsistency criticism by normalizing deviation from prior standards.",
+      "code": "callout-8xge3yvg",
+      "color": null,
+      "locked": null,
+      "vote": null
+    }
+  },
+    path: 2020-08-14_persconferentie.md
+]

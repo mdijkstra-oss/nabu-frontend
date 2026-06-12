@@ -14,32 +14,41 @@ interface Token {
   end: number
 }
 
-const WORD_PATTERN = /\S+/g
+const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" })
 
 const normalizeWord = (raw: string): string =>
-  raw.toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "")
+  raw
+    .normalize("NFD")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "")
+
+const isAbsorbable = (ch: string): boolean => !/[\p{L}\p{N}\s]/u.test(ch)
+
+const expandTokenSpan = (
+  text: string,
+  start: number,
+  end: number
+): { start: number; end: number } => {
+  let s = start
+  while (s > 0 && isAbsorbable(text[s - 1])) s--
+  let e = end
+  while (e < text.length && isAbsorbable(text[e])) e++
+  return { start: s, end: e }
+}
 
 const tokenize = (text: string): Token[] => {
   const tokens: Token[] = []
-  let match: RegExpExecArray | null
-  WORD_PATTERN.lastIndex = 0
-  while ((match = WORD_PATTERN.exec(text)) !== null) {
-    const word = normalizeWord(match[0])
-    if (word) tokens.push({ word, start: match.index, end: match.index + match[0].length })
+  for (const seg of wordSegmenter.segment(text)) {
+    if (!seg.isWordLike) continue
+    const word = normalizeWord(seg.segment)
+    if (!word) continue
+    const span = expandTokenSpan(text, seg.index, seg.index + seg.segment.length)
+    tokens.push({ word, start: span.start, end: span.end })
   }
   return tokens
 }
 
-export const tokenizeWords = (text: string): string[] => {
-  const words: string[] = []
-  let match: RegExpExecArray | null
-  WORD_PATTERN.lastIndex = 0
-  while ((match = WORD_PATTERN.exec(text)) !== null) {
-    const word = normalizeWord(match[0])
-    if (word) words.push(word)
-  }
-  return words
-}
+export const tokenizeWords = (text: string): string[] => tokenize(text).map((t) => t.word)
 
 const tokenCache = createCappedCache<string, Token[]>(500)
 

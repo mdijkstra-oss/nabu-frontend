@@ -80,6 +80,30 @@ describe("findMatchOffset", () => {
       needle: "xxx yyy zzz aaa bbb ccc ddd hotel",
       expected: null,
     },
+    {
+      name: "diacritics fold (doc keeps accents, needle bare)",
+      content: "Le café était naïve",
+      needle: "cafe etait naive",
+      expected: { start: 3, end: 19 },
+    },
+    {
+      name: "diacritics fold (needle has accents, doc bare)",
+      content: "Le cafe etait naive",
+      needle: "café était naïve",
+      expected: { start: 3, end: 19 },
+    },
+    {
+      name: "NFC vs NFD invariance (combining marks vs precomposed)",
+      content: "Le café etait naive",
+      needle: "Le café etait naive",
+      expected: { start: 0, end: 19 },
+    },
+    {
+      name: "curly vs straight apostrophe matches",
+      content: "the GGD’s in Rotterdam",
+      needle: "the GGD's in Rotterdam",
+      expected: { start: 0, end: 22 },
+    },
   ]
 
   it.each(cases)("$name", ({ content, needle, expected }) => {
