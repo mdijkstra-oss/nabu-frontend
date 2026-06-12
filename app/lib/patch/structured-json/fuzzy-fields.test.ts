@@ -1,78 +1,137 @@
 import { describe, it, expect } from "vitest"
 import type { JsonPatchOp } from "./apply"
-import {
-  autoFuzzyFieldValue,
-  parseFuzzyFieldPatterns,
-  type FuzzyFieldPattern,
-} from "./fuzzy-fields"
+import { parseFuzzyFieldPatterns, resolveFuzzyFieldValues } from "./fuzzy-fields"
 
-const annotationPatterns: FuzzyFieldPattern[] = parseFuzzyFieldPatterns(["annotations.*.text"])
+const annotationPatterns = parseFuzzyFieldPatterns(["annotations.*.text"])
 
-describe("autoFuzzyFieldValue", () => {
+describe("resolveFuzzyFieldValues", () => {
   interface Case {
     name: string
+    content: string
     op: JsonPatchOp
-    expected: JsonPatchOp
+    expected: { ok: true; op: JsonPatchOp } | { ok: false; error: string }
   }
+
+  const prose = "The **organizational** culture was particularly supportive of new staff."
 
   const cases: Case[] = [
     {
-      name: "wraps text in annotation entry add",
-      op: { op: "add", path: "/annotations/-", value: { text: "some phrase", code: "x" } },
-      expected: {
+      name: "resolves text in annotation entry add",
+      content: prose,
+      op: {
         op: "add",
         path: "/annotations/-",
-        value: { text: "FUZZY[[some phrase]]", code: "x" },
+        value: { text: "organizational culture was particularly supportive", code: "x" },
+      },
+      expected: {
+        ok: true,
+        op: {
+          op: "add",
+          path: "/annotations/-",
+          value: { text: "organizational culture was particularly supportive", code: "x" },
+        },
       },
     },
     {
-      name: "wraps text in annotation entry replace",
-      op: { op: "replace", path: "/annotations/0", value: { text: "some phrase" } },
-      expected: { op: "replace", path: "/annotations/0", value: { text: "FUZZY[[some phrase]]" } },
+      name: "strips markdown decoration from canonical span",
+      content: "The **organizational** culture was supportive.",
+      op: {
+        op: "replace",
+        path: "/annotations/0",
+        value: { text: "the organizational culture was supportive" },
+      },
+      expected: {
+        ok: true,
+        op: {
+          op: "replace",
+          path: "/annotations/0",
+          value: { text: "The organizational culture was supportive." },
+        },
+      },
     },
     {
-      name: "wraps text field directly",
-      op: { op: "replace", path: "/annotations/2/text", value: "some phrase" },
-      expected: { op: "replace", path: "/annotations/2/text", value: "FUZZY[[some phrase]]" },
+      name: "resolves direct text field",
+      content: prose,
+      op: {
+        op: "replace",
+        path: "/annotations/2/text",
+        value: "organizational culture was particularly supportive",
+      },
+      expected: {
+        ok: true,
+        op: {
+          op: "replace",
+          path: "/annotations/2/text",
+          value: "organizational culture was particularly supportive",
+        },
+      },
     },
     {
-      name: "skips already fuzzy text in entry",
-      op: { op: "add", path: "/annotations/-", value: { text: "FUZZY[[already wrapped]]" } },
-      expected: { op: "add", path: "/annotations/-", value: { text: "FUZZY[[already wrapped]]" } },
+      name: "errors when text not in prose",
+      content: prose,
+      op: {
+        op: "add",
+        path: "/annotations/-",
+        value: { text: "completely unrelated phrase that does not appear" },
+      },
+      expected: { ok: false, error: "/annotations/-: Text not found in document" },
     },
     {
-      name: "skips already fuzzy text field",
-      op: { op: "replace", path: "/annotations/0/text", value: "FUZZY[[already]]" },
-      expected: { op: "replace", path: "/annotations/0/text", value: "FUZZY[[already]]" },
+      name: "passes non-annotation path through unchanged",
+      content: prose,
+      op: { op: "add", path: "/codes/-", value: { text: "anything goes here" } },
+      expected: {
+        ok: true,
+        op: { op: "add", path: "/codes/-", value: { text: "anything goes here" } },
+      },
     },
     {
-      name: "skips non-annotation path",
-      op: { op: "add", path: "/codes/-", value: { text: "some phrase" } },
-      expected: { op: "add", path: "/codes/-", value: { text: "some phrase" } },
-    },
-    {
-      name: "skips remove op",
+      name: "passes remove op through unchanged",
+      content: prose,
       op: { op: "remove", path: "/annotations/0" },
-      expected: { op: "remove", path: "/annotations/0" },
+      expected: { ok: true, op: { op: "remove", path: "/annotations/0" } },
     },
     {
-      name: "skips test op",
-      op: { op: "test", path: "/annotations/0/text", value: "exact" },
-      expected: { op: "test", path: "/annotations/0/text", value: "exact" },
+      name: "passes test op through unchanged",
+      content: prose,
+      op: { op: "test", path: "/annotations/0/text", value: "anything" },
+      expected: { ok: true, op: { op: "test", path: "/annotations/0/text", value: "anything" } },
     },
     {
-      name: "skips annotation entry without text field",
+      name: "passes annotation entry without text field through unchanged",
+      content: prose,
       op: { op: "add", path: "/annotations/-", value: { code: "x" } },
-      expected: { op: "add", path: "/annotations/-", value: { code: "x" } },
+      expected: { ok: true, op: { op: "add", path: "/annotations/-", value: { code: "x" } } },
     },
     {
-      name: "skips non-string annotation text field",
+      name: "passes non-string annotation text field through unchanged",
+      content: prose,
       op: { op: "replace", path: "/annotations/0/text", value: 42 },
-      expected: { op: "replace", path: "/annotations/0/text", value: 42 },
+      expected: { ok: true, op: { op: "replace", path: "/annotations/0/text", value: 42 } },
     },
   ]
 
-  it.each(cases)("$name", ({ op, expected }) => {
-    expect(autoFuzzyFieldValue(op, annotationPatterns)).toEqual(expected)
+  it.each(cases)("$name", ({ content, op, expected }) => {
+    const result = resolveFuzzyFieldValues([op], content, annotationPatterns)
+    if (expected.ok) {
+      expect(result).toEqual({ ok: true, ops: [expected.op] })
+    } else {
+      expect(result).toEqual({ ok: false, error: expected.error })
+    }
+  })
+
+  it("resolves multiple ops in order", () => {
+    const ops: JsonPatchOp[] = [
+      { op: "add", path: "/annotations/-", value: { text: "organizational culture" } },
+      { op: "add", path: "/annotations/-", value: { text: "particularly supportive" } },
+    ]
+    const result = resolveFuzzyFieldValues(ops, prose, annotationPatterns)
+    expect(result).toEqual({
+      ok: true,
+      ops: [
+        { op: "add", path: "/annotations/-", value: { text: "organizational culture" } },
+        { op: "add", path: "/annotations/-", value: { text: "particularly supportive" } },
+      ],
+    })
   })
 })

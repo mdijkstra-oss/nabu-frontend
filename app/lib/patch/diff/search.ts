@@ -1,6 +1,3 @@
-import { findMatchOffset } from "~/lib/text/find"
-import { charOffsetToLine } from "~/lib/text/lines"
-
 export interface Match {
   start: number
   end: number
@@ -17,11 +14,7 @@ export const findMatches = (content: string, needle: string): Match[] => {
   const candidates = needleLines.map((line) => findLineCandidates(line, contentLines))
   const blocks = findConsecutiveBlocks(candidates)
 
-  if (blocks.length > 0) return toMatches(blocks)
-
-  if (needleLines.length === 1) return findSubstringMatches(content, needle)
-
-  return []
+  return blocks.length > 0 ? toMatches(blocks) : []
 }
 
 export const getMatchedText = (content: string, match: Match): string => {
@@ -148,12 +141,4 @@ const toMatches = (blocks: ConsecutiveBlock[]): Match[] => {
     return a.start - b.start
   })
   return sorted.map((b) => ({ start: b.start, end: b.end, fuzzy: !b.allExact }))
-}
-
-const findSubstringMatches = (content: string, needle: string): Match[] => {
-  const offset = findMatchOffset(content, needle)
-  if (!offset) return []
-  const startLine = charOffsetToLine(content, offset.start)
-  const endLine = charOffsetToLine(content, offset.end)
-  return [{ start: startLine, end: endLine, fuzzy: true }]
 }

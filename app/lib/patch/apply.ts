@@ -1,6 +1,5 @@
 import { applyDiff } from "./diff/parse"
 import { expandRangeRefs, type FileReader } from "./resolve/range-expand"
-import { resolveFuzzyPatterns } from "./resolve/fuzzy-match"
 import { injectBoundaryComments, stripBoundaryComments } from "./resolve/json-boundary"
 import { stripPendingRefs } from "~/lib/files/pending-refs"
 import { parseCodeBlocks, ensureFencesOnOwnLines } from "~/lib/data-blocks/parse"
@@ -277,17 +276,8 @@ const applyMdPatch = (
   const rangeResult = expandRangeRefs(patch, buildFileReader(path, content), path)
   if (!rangeResult.ok) return { path, status: "error", error: rangeResult.error }
 
-  const { patch: resolvedPatch, unresolved } = resolveFuzzyPatterns(rangeResult.patch, content)
-  if (unresolved.length > 0) {
-    return {
-      path,
-      status: "error",
-      error: `FUZZY patterns not found: ${unresolved.map((s) => `"${s}"`).join(", ")}. Use exact text from the document instead of paraphrasing.`,
-    }
-  }
-
   const viewContent = toViewContent(content)
-  const diffResult = applyDiff(viewContent, resolvedPatch)
+  const diffResult = applyDiff(viewContent, rangeResult.patch)
   if (!diffResult.ok) {
     return { path, status: "error", error: diffResult.error }
   }
