@@ -76,16 +76,20 @@ const applyMutation = async (op: Operation): Promise<MutationResult> => {
   switch (redirected.type) {
     case "write_file": {
       const oldContent = getFileRaw(redirected.path)
+      const skipBlockValidation = redirected.skipBlockValidation === true
       const result = finalizeContent(redirected.path, redirected.content, {
         original: oldContent,
         actor: "ai",
-        skipImmutableCheck: redirected.skipBlockValidation,
-        skipSemanticValidation: redirected.skipBlockValidation,
+        skipImmutableCheck: skipBlockValidation,
+        skipSemanticValidation: skipBlockValidation,
+        skipBlockValidation,
       })
       if (result.status === "error") return { error: result.error }
 
-      const asyncError = await runAsyncValidation(redirected.path, result.content)
-      if (asyncError) return asyncError
+      if (!skipBlockValidation) {
+        const asyncError = await runAsyncValidation(redirected.path, result.content)
+        if (asyncError) return asyncError
+      }
 
       updateFileRaw(result.path, result.content)
       pushEntries(diffFileContent(oldContent, result.content, redirected.path, ts))

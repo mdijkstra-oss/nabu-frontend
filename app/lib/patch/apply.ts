@@ -79,6 +79,7 @@ interface FinalizeContentOptions {
   actor?: "ai" | "user"
   skipImmutableCheck?: boolean
   skipSemanticValidation?: boolean
+  skipBlockValidation?: boolean
   placeholderIds?: Record<string, string>
 }
 
@@ -100,7 +101,9 @@ export const finalizeContent = (
   // lib/embeddings/sync.ts via buildCompanionMarkdown. No user/agent editing. Schema parsing
   // 1024-float arrays per block is purely waste, and any "failure" here can't be acted on
   // since the source of truth is the embeddings sync, not the patch path.
-  const skipBlockValidation = isCompanionFile(path)
+  // Tool callers that guarantee block bytes are untouched (e.g. edit_file with masking)
+  // can opt in via options.skipBlockValidation.
+  const skipBlockValidation = isCompanionFile(path) || options.skipBlockValidation === true
 
   if (!skipBlockValidation) {
     const structuralErrors = validateStructural(sanitizedContent)

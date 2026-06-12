@@ -24,7 +24,9 @@ const _editFile = registerTool(
 
       const newContent = content.slice(0, span.start) + replacement + content.slice(span.end)
 
-      return ok(`Edited ${path}`, [{ type: "write_file", path, content: newContent }])
+      return ok(`Edited ${path}`, [
+        { type: "write_file", path, content: newContent, skipBlockValidation: true },
+      ])
     },
   })
 )
