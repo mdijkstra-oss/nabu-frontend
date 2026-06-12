@@ -2,11 +2,9 @@ import {
   updateFileRaw,
   deleteFile,
   renameFile,
-  getFileRaw,
   withoutPersist,
   schedulePersist,
 } from "~/lib/files/store"
-import { applyFilePatch } from "~/lib/patch/apply"
 import { migrateFile } from "~/lib/data-blocks/migrate"
 import { migrations } from "~/domain/data-blocks/migrations"
 import type { Command } from "./types"
@@ -17,37 +15,15 @@ interface ResolvedContent {
   content: string
 }
 
-const patchOptions = { skipSemanticValidation: true, actor: "user" } as const
-
 const resolveContent = (command: Command): ResolvedContent | undefined => {
-  const { action, path, content, diff } = command
+  const { action, path, content } = command
   if (!path) return undefined
 
   switch (action) {
     case "CreateFile":
-      if (diff) {
-        const result = applyFilePatch(path, "", diff, patchOptions)
-        if (result.status !== "error") return { path: result.path, content: result.content }
-        console.error(`[apply] createFile failed: "${path}"`, result.error)
-        return undefined
-      }
-      if (content !== undefined) return { path, content }
-      return undefined
-
     case "UpdateFile":
-      if (diff) {
-        const current = getFileRaw(path)
-        const result = applyFilePatch(path, current, diff, patchOptions)
-        if (result.status !== "error") return { path: result.path, content: result.content }
-        console.error(`[apply] updateFile failed: "${path}"`, result.error)
-        return undefined
-      }
-      if (content !== undefined) return { path, content }
-      return undefined
-
     case "WriteFile":
-      if (content !== undefined) return { path, content }
-      return undefined
+      return content !== undefined ? { path, content } : undefined
 
     case "DeleteFile":
     case "RenameFile":

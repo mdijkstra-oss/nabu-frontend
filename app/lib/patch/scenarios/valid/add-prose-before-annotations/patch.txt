@@ -1,6 +1,0 @@
-*** Update File: transcript.md
-@@
--Original content here.
-+Original content here.
-+
-+New paragraph added.

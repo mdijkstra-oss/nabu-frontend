@@ -1,1 +1,0 @@
-only .md files allowed: config.json

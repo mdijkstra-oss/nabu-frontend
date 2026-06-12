@@ -1,0 +1,19 @@
+{
+  "name": "edit_file replaces a unique substring",
+  "files": {
+    "doc.md": "# Title\n\nFirst paragraph stays.\n\nSecond paragraph to remove.\n\nThird paragraph stays.\n"
+  },
+  "call": {
+    "id": "1",
+    "name": "edit_file",
+    "args": {
+      "path": "doc.md",
+      "needle": "Second paragraph to remove.",
+      "replacement": "Second paragraph rewritten."
+    }
+  },
+  "expected": {
+    "status": "ok",
+    "outputContains": ["Edited doc.md"]
+  }
+}

@@ -11,7 +11,11 @@ import {
 } from "~/lib/data-blocks/typed-ops/derive"
 import { translateOps } from "~/lib/data-blocks/typed-ops/translate"
 import { fillDocIds } from "~/lib/data-blocks/uuid"
-import { insertBlockAtAnchor, moveBlockToAnchor } from "~/lib/data-blocks/anchor"
+import {
+  insertBlockAtAnchor,
+  moveBlockToAnchor,
+  moveBlockToTargetFile,
+} from "~/lib/data-blocks/anchor"
 import {
   resolveFile,
   resolveBlock,
@@ -292,13 +296,14 @@ export const generateAddTool = (language: string, config: BlockTypeConfig): AnyT
 }
 
 const buildMoveDescription = (language: string): string =>
-  `Move an existing \`${language}\` block to a new position after the anchor. The block is removed from its current position and re-inserted after the matched context.\n\n${PARALLEL_NOTE}`
+  `Move an existing \`${language}\` block to a new position after the anchor. The block is removed from its current position and re-inserted after the matched context.\n\nProvide \`target_file\` to move the block to a different file — the anchor \`context\` is then resolved in the target file's content. If \`target_file\` is omitted, the move stays within \`path\`.\n\n${PARALLEL_NOTE}`
 
 const buildMoveLooseSchema = () =>
   z.object({
     path: z.string().min(1),
     block_id: z.string().min(1),
     context: z.string().min(1),
+    target_file: z.string().min(1).optional(),
   })
 
 const buildMoveJsonSchema = (allowedFiles?: string[]): unknown => ({
@@ -307,6 +312,7 @@ const buildMoveJsonSchema = (allowedFiles?: string[]): unknown => ({
     path: pathSchema(allowedFiles),
     block_id: { type: "string" },
     context: { type: "string", minLength: 1 },
+    target_file: pathSchema(allowedFiles),
   },
   required: ["path", "block_id", "context"],
 })
@@ -322,21 +328,45 @@ export const generateMoveTool = (language: string, config: BlockTypeConfig): Any
       schema: buildMoveLooseSchema(),
       jsonSchema: buildMoveJsonSchema(spec.allowedFiles),
       handler: async (_files, args) => {
-        const { path, block_id, context } = args as {
+        const { path, block_id, context, target_file } = args as {
           path: string
           block_id: string
           context: string
+          target_file?: string
         }
 
-        const file = resolveFile(path)
-        if (!file) return err(`${path}: No such file`)
+        const source = resolveFile(path)
+        if (!source) return err(`${path}: No such file`)
 
-        const result = moveBlockToAnchor(file.content, language, block_id, context)
-        if (!result.ok) return err(`${file.path}: ${result.error}`)
+        const isCrossFile = target_file !== undefined && target_file !== source.path
 
-        return ok(`Moved \`${language}\` block "${block_id}" in ${file.path}`, [
-          { type: "write_file", path: file.path, content: result.content },
-        ])
+        if (!isCrossFile) {
+          const result = moveBlockToAnchor(source.content, language, block_id, context)
+          if (!result.ok) return err(`${source.path}: ${result.error}`)
+          return ok(`Moved \`${language}\` block "${block_id}" in ${source.path}`, [
+            { type: "write_file", path: source.path, content: result.content },
+          ])
+        }
+
+        const target = resolveFile(target_file as string)
+        if (!target) return err(`${target_file}: No such file`)
+
+        const result = moveBlockToTargetFile(
+          source.content,
+          target.content,
+          language,
+          block_id,
+          context
+        )
+        if (!result.ok) return err(`${target.path}: ${result.error}`)
+
+        return ok(
+          `Moved \`${language}\` block "${block_id}" from ${source.path} → ${target.path}`,
+          [
+            { type: "write_file", path: source.path, content: result.sourceContent },
+            { type: "write_file", path: target.path, content: result.targetContent },
+          ]
+        )
       },
     })
   )

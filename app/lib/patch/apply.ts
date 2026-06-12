@@ -1,7 +1,3 @@
-import { applyDiff } from "./diff/parse"
-import { expandRangeRefs, type FileReader } from "./resolve/range-expand"
-import { injectBoundaryComments, stripBoundaryComments } from "./resolve/json-boundary"
-import { stripPendingRefs } from "~/lib/files/pending-refs"
 import { parseCodeBlocks, ensureFencesOnOwnLines } from "~/lib/data-blocks/parse"
 import { fillMissingIds, buildGeneratedIdsList, type GeneratedId } from "~/lib/data-blocks/uuid"
 import {
@@ -30,70 +26,6 @@ export type FileResult =
       generatedIds?: GeneratedId[]
     }
   | { path: string; status: "error"; error: string; blockErrors?: ValidationError[] }
-
-const isMdFile = (path: string): boolean => path.endsWith(".md")
-const isJsonBlock = (language: string): boolean => language.startsWith("json-")
-
-const ensureTrailingNewline = (s: string): string =>
-  s.length > 0 && !s.endsWith("\n") ? s + "\n" : s
-
-type RepairResult = { ok: true; content: string } | { ok: false; error: string }
-
-const repairJsonNewlines = (json: string): RepairResult => {
-  let result = ""
-  let inString = false
-  let i = 0
-
-  while (i < json.length) {
-    const char = json[i]
-    if (char === '"' && (i === 0 || json[i - 1] !== "\\")) {
-      inString = !inString
-      result += char
-    } else if (inString && char === "\n") {
-      result += "\\n"
-    } else if (inString && char === "\r") {
-      result += "\\r"
-    } else {
-      result += char
-    }
-    i++
-  }
-
-  if (inString) {
-    return { ok: false, error: "Unterminated string literal in JSON block" }
-  }
-  return { ok: true, content: result }
-}
-
-type RepairBlocksResult =
-  | { ok: true; content: string }
-  | { ok: false; error: string; language: string }
-
-const repairJsonBlocks = (markdown: string): RepairBlocksResult => {
-  const blocks = parseCodeBlocks(markdown).filter((b) => isJsonBlock(b.language))
-  if (blocks.length === 0) return { ok: true, content: markdown }
-
-  let result = markdown
-  let offset = 0
-
-  for (const block of blocks) {
-    const repair = repairJsonNewlines(block.content)
-    if (!repair.ok) {
-      return { ok: false, error: repair.error, language: block.language }
-    }
-    if (repair.content === block.content) continue
-
-    const blockStart = block.start + offset
-    const blockEnd = block.end + offset
-    const original = result.slice(blockStart, blockEnd)
-    const replaced = original.replace(block.content, () => repair.content)
-
-    result = result.slice(0, blockStart) + replaced + result.slice(blockEnd)
-    offset += replaced.length - original.length
-  }
-
-  return { ok: true, content: result }
-}
 
 const formatBlock = (language: string, content: string): string =>
   `\`\`\`${language}\n${content}\n\`\`\``
@@ -142,13 +74,6 @@ const buildTagReferenceMap = (
   return refs
 }
 
-interface ApplyMdPatchOptions {
-  skipImmutableCheck?: boolean
-  skipSemanticValidation?: boolean
-  placeholderIds?: Record<string, string>
-  actor?: "ai" | "user"
-}
-
 interface FinalizeContentOptions {
   original: string
   actor?: "ai" | "user"
@@ -156,15 +81,6 @@ interface FinalizeContentOptions {
   skipSemanticValidation?: boolean
   placeholderIds?: Record<string, string>
 }
-
-const toViewContent = (raw: string): string => injectBoundaryComments(stripPendingRefs(raw))
-
-const buildFileReader =
-  (currentPath: string, currentContent: string): FileReader =>
-  (p) => {
-    const raw = p === currentPath ? currentContent : getFiles()[p]
-    return raw !== undefined ? toViewContent(raw) : undefined
-  }
 
 export const finalizeContent = (
   path: string,
@@ -262,53 +178,3 @@ export const finalizeContent = (
     ...(generatedIds.length > 0 && { generatedIds }),
   }
 }
-
-const applyMdPatch = (
-  path: string,
-  content: string,
-  patch: string,
-  options: ApplyMdPatchOptions = {}
-): FileResult => {
-  if (content === "" && patch === "") {
-    return { path, status: "ok", content: "" }
-  }
-
-  const rangeResult = expandRangeRefs(patch, buildFileReader(path, content), path)
-  if (!rangeResult.ok) return { path, status: "error", error: rangeResult.error }
-
-  const viewContent = toViewContent(content)
-  const diffResult = applyDiff(viewContent, rangeResult.patch)
-  if (!diffResult.ok) {
-    return { path, status: "error", error: diffResult.error }
-  }
-
-  const rawContent = stripBoundaryComments(diffResult.content)
-  const repair = repairJsonBlocks(rawContent)
-  if (!repair.ok) {
-    return {
-      path,
-      status: "error",
-      error: `${repair.language}: ${repair.error}`,
-      blockErrors: [{ block: repair.language, message: repair.error }],
-    }
-  }
-  const repairedContent = ensureTrailingNewline(repair.content)
-  return finalizeContent(path, repairedContent, { original: content, ...options })
-}
-
-interface ApplyFilePatchOptions {
-  skipImmutableCheck?: boolean
-  skipSemanticValidation?: boolean
-  placeholderIds?: Record<string, string>
-  actor?: "ai" | "user"
-}
-
-export const applyFilePatch = (
-  path: string,
-  content: string,
-  patch: string,
-  options: ApplyFilePatchOptions = {}
-): FileResult =>
-  isMdFile(path)
-    ? applyMdPatch(path, content, patch, options)
-    : { path, status: "error", error: `only .md files allowed: ${path}` }

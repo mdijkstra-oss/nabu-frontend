@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { insertBlockAtAnchor, moveBlockToAnchor } from "./anchor"
+import { insertBlockAtAnchor, moveBlockToAnchor, moveBlockToTargetFile } from "./anchor"
 
 const calloutBlock = (id: string, title: string): string =>
   [
@@ -72,16 +72,16 @@ describe("insertBlockAtAnchor", () => {
       anchorContext: "Same line.",
       idPrefix: "callout",
       expectOk: false,
-      expectError: /ambiguous/i,
+      expectError: /matches 2 locations/i,
     },
     {
-      name: "error when anchor resolves inside a block",
+      name: "anchor that would resolve inside a block is masked away → not found",
       content: sampleDoc,
       language: "json-callout",
       anchorContext: '\t"title": "Alpha",',
       idPrefix: "callout",
       expectOk: false,
-      expectError: /inside a data block/i,
+      expectError: /not found/i,
     },
   ]
 
@@ -155,16 +155,16 @@ describe("moveBlockToAnchor", () => {
       blockId: "callout-x1234567",
       anchorContext: "Same.",
       expectOk: false,
-      expectError: /ambiguous/i,
+      expectError: /matches 2 locations/i,
     },
     {
-      name: "error when target is inside a block",
+      name: "target that would land inside a block is masked away → not found",
       content: sampleDoc,
       language: "json-callout",
       blockId: "callout-abc1234",
       anchorContext: '\t"title": "Beta",',
       expectOk: false,
-      expectError: /inside a data block/i,
+      expectError: /not found/i,
     },
   ]
 
@@ -183,4 +183,70 @@ describe("moveBlockToAnchor", () => {
       expect(result.content).toContain(blockId)
     }
   )
+})
+
+describe("moveBlockToTargetFile", () => {
+  const target = [
+    "# Target",
+    "",
+    "Intro paragraph in target.",
+    "",
+    "Drop here landing zone.",
+    "",
+    "Closing remarks.",
+  ].join("\n")
+
+  it("moves a block from source to target at anchor; both files mutated", () => {
+    const result = moveBlockToTargetFile(
+      sampleDoc,
+      target,
+      "json-callout",
+      "callout-abc1234",
+      "Drop here landing zone."
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.sourceContent).not.toContain("callout-abc1234")
+    expect(result.targetContent).toContain("callout-abc1234")
+    expect(result.targetContent.indexOf("callout-abc1234")).toBeGreaterThan(
+      result.targetContent.indexOf("Drop here landing zone.")
+    )
+  })
+
+  it("errors when block_id is missing in source", () => {
+    const result = moveBlockToTargetFile(
+      sampleDoc,
+      target,
+      "json-callout",
+      "callout-missing0",
+      "Drop here landing zone."
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/No.*block.*callout-missing0/i)
+  })
+
+  it("errors when anchor is not in target file", () => {
+    const result = moveBlockToTargetFile(
+      sampleDoc,
+      target,
+      "json-callout",
+      "callout-abc1234",
+      "nonexistent anchor text"
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/not found/i)
+  })
+
+  it("errors when target already contains a block with that id", () => {
+    const targetWithDup = target + "\n\n" + calloutBlock("callout-abc1234", "Dup") + "\n"
+    const result = moveBlockToTargetFile(
+      sampleDoc,
+      targetWithDup,
+      "json-callout",
+      "callout-abc1234",
+      "Drop here landing zone."
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/already contains/i)
+  })
 })

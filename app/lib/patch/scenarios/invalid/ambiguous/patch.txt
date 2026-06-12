@@ -1,4 +1,0 @@
-*** Update File: docs/document.md
-@@
--function process() {
-+function handle() {

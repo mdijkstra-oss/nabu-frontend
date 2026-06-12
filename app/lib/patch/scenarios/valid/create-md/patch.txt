@@ -1,4 +1,0 @@
-*** Add File: docs/welcome.md
-# Welcome
-
-This is a new document.

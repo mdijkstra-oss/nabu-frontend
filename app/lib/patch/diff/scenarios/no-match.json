@@ -1,7 +1,0 @@
-{
-  "name": "no match - completely different content",
-  "needle": "This text does not exist anywhere in the document.\nIt is completely fabricated.",
-  "expected": {
-    "matches": []
-  }
-}

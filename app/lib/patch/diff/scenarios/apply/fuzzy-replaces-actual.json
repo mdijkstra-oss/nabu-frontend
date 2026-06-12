@@ -1,9 +1,0 @@
-{
-  "name": "fuzzy match replaces actual content not patch text",
-  "content": "function dryBeans(beans) {\n\treturn beans.map(b => ({ ...b, dried: true }))\n}",
-  "patch": "@@\n-function dryBeans(bean) {\n-  return beans.map(b => ({ ...b, dried: true }))\n-}\n+function dryBeans(beans) {\n+  return beans.map(b => ({ ...b, dried: true, timestamp: Date.now() }))\n+}",
-  "expected": {
-    "ok": true,
-    "content": "function dryBeans(beans) {\n\treturn beans.map(b => ({ ...b, dried: true, timestamp: Date.now() }))\n}"
-  }
-}

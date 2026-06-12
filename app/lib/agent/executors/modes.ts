@@ -10,7 +10,8 @@ import {
   blockAddTools,
   blockMoveTools,
 } from "../tools/block-tools/register"
-import { applyLocalPatch } from "../tools/apply-local-patch/def"
+import { editFile } from "../tools/edit-file/def"
+import { createFile } from "../tools/create-file/def"
 import { copyFile } from "../tools/copy-file/def"
 import { renameFile } from "../tools/rename-file/def"
 import { removeFile } from "../tools/remove-file/def"
@@ -61,7 +62,8 @@ const raw: Record<ModeName, ModeConfig> = {
       ...blockDeleteTools,
       ...blockAddTools,
       ...blockMoveTools,
-      applyLocalPatch,
+      editFile,
+      createFile,
       copyFile,
       renameFile,
       removeFile,
@@ -88,7 +90,8 @@ const raw: Record<ModeName, ModeConfig> = {
       ...blockDeleteTools,
       ...blockAddTools,
       ...blockMoveTools,
-      applyLocalPatch,
+      editFile,
+      createFile,
       copyFile,
       renameFile,
       removeFile,

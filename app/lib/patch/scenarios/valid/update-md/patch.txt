@@ -1,4 +1,0 @@
-*** Update File: docs/hello.md
-@@
--This is the old content.
-+This is the new content.

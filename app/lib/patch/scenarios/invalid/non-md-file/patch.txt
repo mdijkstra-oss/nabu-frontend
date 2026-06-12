@@ -1,4 +1,0 @@
-*** Update File: config.json
-@@
--  "name": "test"
-+  "name": "updated"

@@ -109,6 +109,30 @@ const findOrderedMatch = (docTokens: Token[], needleWords: string[]): MatchOffse
   return null
 }
 
+const findAllOrderedMatches = (docTokens: Token[], needleWords: string[]): MatchOffset[] => {
+  const matches: MatchOffset[] = []
+  const len = needleWords.length
+  for (let i = 0; i <= docTokens.length - len; i++) {
+    let match = true
+    for (let j = 0; j < len; j++) {
+      if (docTokens[i + j].word !== needleWords[j]) {
+        match = false
+        break
+      }
+    }
+    if (match) matches.push({ start: docTokens[i].start, end: docTokens[i + len - 1].end })
+  }
+  return matches
+}
+
+export const findAllStrictMatchOffsets = (content: string, needle: string): MatchOffset[] => {
+  const needleWords = tokenizeWords(needle)
+  if (needleWords.length === 0) return []
+  const docTokens = getDocTokens(content)
+  if (docTokens.length < needleWords.length) return []
+  return findAllOrderedMatches(docTokens, needleWords)
+}
+
 export const findMatchOffset = (
   content: string,
   needle: string,

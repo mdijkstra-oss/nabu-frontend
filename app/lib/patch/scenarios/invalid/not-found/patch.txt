@@ -1,4 +1,0 @@
-*** Update File: docs/document.md
-@@
--This text does not exist in the file
-+replacement text
