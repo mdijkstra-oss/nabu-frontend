@@ -6,6 +6,7 @@ interface ToolDef<TSchema extends z.ZodType, TOutput> {
   description: string
   schema: TSchema
   jsonSchema?: unknown
+  includeAppliedDiff?: boolean
   handler: (files: RawFiles, args: z.infer<TSchema>) => Promise<HandlerResult<TOutput>>
 }
 
@@ -18,6 +19,7 @@ export interface AnyTool {
   description: string
   schema: z.ZodType
   jsonSchema?: unknown
+  includeAppliedDiff?: boolean
 }
 
 export const tool = <TSchema extends z.ZodType, TOutput>(
@@ -121,6 +123,11 @@ export const registerTool = <TSchema extends z.ZodType, TOutput>(
 
 export const getToolHandlers = (): Record<string, Handler> =>
   Object.fromEntries(registry.map((t) => [t.name, t.handle]))
+
+export const getToolMeta = (name: string): { includeAppliedDiff: boolean } => {
+  const t = registry.find((t) => t.name === name)
+  return { includeAppliedDiff: t?.includeAppliedDiff === true }
+}
 
 export const toSchemaMap = (tools: AnyTool[]): Record<string, z.ZodType> =>
   Object.fromEntries(tools.map((t) => [t.name, t.schema]))

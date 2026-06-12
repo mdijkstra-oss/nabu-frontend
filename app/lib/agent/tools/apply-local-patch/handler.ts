@@ -14,6 +14,7 @@ import {
 const _applyLocalPatch = registerTool(
   tool({
     ...def,
+    includeAppliedDiff: true,
     handler: async (files, { operation }) => {
       const validationError = validateOperation(files, operation)
       if (validationError) return err(validationError)

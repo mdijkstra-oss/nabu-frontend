@@ -1,3 +1,4 @@
+import { createPatch } from "diff"
 import type { ToolCall } from "../client/blocks"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import type { ToolResult, Operation, Handler } from "../types"
@@ -18,6 +19,7 @@ import {
   fileRenamedEntry,
 } from "~/lib/mutation-history/diff"
 import { getViewableFiles } from "../tools/file-view"
+import { getToolMeta } from "./tool"
 
 interface ResolvedOp {
   op: Operation
@@ -38,11 +40,22 @@ interface PatchOptions {
 interface MutationOk {
   ids: string | null
   warnings?: string
+  applied?: string
 }
 interface MutationErr {
   error: string
 }
 type MutationResult = MutationOk | MutationErr
+
+const buildAppliedDiff = (
+  path: string,
+  oldContent: string,
+  newContent: string
+): string | undefined => {
+  if (oldContent === newContent) return undefined
+  const patch = createPatch(path, oldContent, newContent)
+  return patch.includes("\n@@") ? patch : undefined
+}
 
 const isMutationError = (r: MutationResult): r is MutationErr => "error" in r
 
@@ -67,7 +80,8 @@ const applyPatchAndStore = async (
   updateFileRaw(result.path, result.content)
   const ids = result.generatedIds ? formatGeneratedIds(result.generatedIds) : null
   const warnings = result.status === "partial" ? result.warnings : undefined
-  return { ids, warnings }
+  const applied = buildAppliedDiff(result.path, content, result.content)
+  return { ids, warnings, applied }
 }
 
 const isWritableByAi = (path: string): boolean => !isHiddenFile(path) || path === SETTINGS_FILE
@@ -151,7 +165,8 @@ const applyMutation = async (
       pushEntries(diffFileContent(oldContent, result.content, redirected.path, ts))
       const ids = result.generatedIds ? formatGeneratedIds(result.generatedIds) : null
       const warnings = result.status === "partial" ? result.warnings : undefined
-      return { ids, warnings }
+      const applied = buildAppliedDiff(result.path, oldContent ?? "", result.content)
+      return { ids, warnings, applied }
     }
     case "delete_file": {
       const oldContent = getFileRaw(redirected.path)
@@ -179,21 +194,27 @@ const applyMutations = async (mutations: Operation[]): Promise<MutationErr | Mut
   if (mutations.length === 0) return null
   const allIds: string[] = []
   const allWarnings: string[] = []
+  const allApplied: string[] = []
   for (const op of mutations) {
     const { op: resolved, placeholderIds } = resolveOpPlaceholders(op)
     const result = await applyMutation(resolved, placeholderIds)
     if (isMutationError(result)) return result
     if (result.ids) allIds.push(result.ids)
     if (result.warnings) allWarnings.push(result.warnings)
+    if (result.applied) allApplied.push(result.applied)
   }
   return {
     ids: allIds.length > 0 ? allIds.join("\n") : null,
     warnings: allWarnings.length > 0 ? allWarnings.join("\n") : undefined,
+    applied: allApplied.length > 0 ? allApplied.join("\n") : undefined,
   }
 }
 
 const appendIds = (output: unknown, ids: string | null): unknown =>
   ids && typeof output === "string" ? `${output}\n${ids}` : output
+
+const appendApplied = (output: unknown, applied: string | undefined): unknown =>
+  applied && typeof output === "string" ? `${output}\n\nApplied:\n${applied}` : output
 
 export const createExecutor =
   (handlers: Record<string, Handler>): ToolExecutor =>
@@ -208,7 +229,11 @@ export const createExecutor =
     if (mutResult && isMutationError(mutResult))
       return { status: "error", output: mutResult.error, hint, directive }
 
-    const finalOutput = appendIds(output, mutResult?.ids ?? null)
+    const withIds = appendIds(output, mutResult?.ids ?? null)
+    const meta = getToolMeta(call.name)
+    const finalOutput = meta.includeAppliedDiff
+      ? appendApplied(withIds, mutResult?.applied)
+      : withIds
     const finalStatus = mutResult?.warnings ? "partial" : status
     const finalMessage = mutResult?.warnings
       ? [message, mutResult.warnings].filter(Boolean).join("\n")

@@ -1,0 +1,28 @@
+{
+  "name": "apply_local_patch output includes Applied diff for update_file",
+  "files": {
+    "doc.md": "# Title\n\nFirst paragraph stays.\n\nSecond paragraph to remove.\n\nThird paragraph stays.\n"
+  },
+  "call": {
+    "id": "1",
+    "name": "apply_local_patch",
+    "args": {
+      "operation": {
+        "type": "update_file",
+        "path": "doc.md",
+        "diff": "@@\n # Title\n \n First paragraph stays.\n \n-Second paragraph to remove.\n \n Third paragraph stays."
+      }
+    }
+  },
+  "expected": {
+    "status": "ok",
+    "outputContains": [
+      "Updated doc.md",
+      "Applied:",
+      "--- doc.md",
+      "+++ doc.md",
+      "@@",
+      "-Second paragraph to remove."
+    ]
+  }
+}
