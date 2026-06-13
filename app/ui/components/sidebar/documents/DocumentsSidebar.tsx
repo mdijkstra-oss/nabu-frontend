@@ -16,7 +16,7 @@ import {
   type RadixColor,
 } from "~/ui/theme/radix"
 import { resolveIcon } from "~/ui/theme/icon-map"
-import { humanize } from "./TagGroupHeader"
+import { humanize } from "~/lib/text/humanize"
 import { ToggleGroup } from "~/ui/components/ToggleGroup"
 import { DocumentItem } from "./DocumentItem"
 
@@ -132,7 +132,7 @@ const buildTagLookup = (definitions: TagDefinition[]): Map<string, ResolvedTag> 
   new Map(
     definitions.map((d) => [
       d.id,
-      { color: d.color, display: d.display, icon: resolveIcon(d.icon) },
+      { color: d.color, display: humanize(d.label), icon: resolveIcon(d.icon) },
     ])
   )
 

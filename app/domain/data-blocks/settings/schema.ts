@@ -7,7 +7,6 @@ import { CorpusDescriptionSchema } from "~/domain/corpus/types"
 export const TagDefinition = z.object({
   id: z.string(),
   label: slug,
-  display: z.string(),
   color: radixColor,
   icon: z.enum(ICON_NAMES),
 })

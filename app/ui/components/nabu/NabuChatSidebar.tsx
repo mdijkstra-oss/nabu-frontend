@@ -43,7 +43,10 @@ import { summarizeMiddle } from "~/lib/text/summarize"
 import type { EntityKind } from "~/lib/markdown/linkify/types"
 import { linkifyTags } from "~/lib/markdown/linkify/tags"
 import { fixMarkdownUrls } from "~/lib/markdown/sanitize/fix-urls"
-import { findTagDefinitionByLabel } from "~/domain/data-blocks/settings/tags/selectors"
+import {
+  findTagDefinitionByLabel,
+  getTagDisplay,
+} from "~/domain/data-blocks/settings/tags/selectors"
 import { resolveEntityName } from "~/lib/files/selectors"
 import { truncateLabel, presentEntry } from "~/lib/mutation-history/presentation"
 import { useMutationHistory } from "~/lib/mutation-history/useMutationHistory"
@@ -55,7 +58,7 @@ import { buildFileContextBlocks } from "~/lib/agent/context-blocks"
 import { pickGreeting } from "./greetings"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import { ChatSendButton, deriveChatButtonMode } from "./ChatSendButton"
-import { TimelineCard, Connector } from "./TimelineCard"
+import { TimelineCard, Connector, formatHourMinute } from "./TimelineCard"
 
 const allowFileProtocol = (url: string): string => url
 
@@ -78,7 +81,7 @@ const resolveTagForLinkify = (
   label: string
 ): { id: string; display: string } | null => {
   const def = findTagDefinitionByLabel(files, label)
-  return def ? { id: def.id, display: def.display } : null
+  return def ? { id: def.id, display: getTagDisplay(def) } : null
 }
 
 const remarkPlugins = [remarkGfm]
@@ -222,6 +225,7 @@ const leafPropsEqual = (prev: LeafRendererProps, next: LeafRendererProps): boole
   prev.message.content === next.message.content &&
   prev.message.role === next.message.role &&
   prev.message.draft === next.message.draft &&
+  prev.message.timestamp === next.message.timestamp &&
   prev.files === next.files &&
   prev.projectId === next.projectId &&
   prev.currentFile === next.currentFile &&
@@ -247,6 +251,7 @@ const LeafRenderer = memo(
         kind={isUser ? "QUESTION" : "ANSWER"}
         marker={isUser ? "ask" : "respond"}
         scrollOnMount={isUser && isLast}
+        timestamp={message.timestamp}
       >
         <CardBody>
           <MessageContent
@@ -332,6 +337,8 @@ const askPropsEqual = (prev: AskRendererProps, next: AskRendererProps): boolean 
   prev.message.question === next.message.question &&
   prev.message.selected === next.message.selected &&
   prev.message.options.length === next.message.options.length &&
+  prev.message.timestamp === next.message.timestamp &&
+  prev.message.answerTimestamp === next.message.answerTimestamp &&
   prev.files === next.files &&
   prev.projectId === next.projectId &&
   prev.currentFile === next.currentFile &&
@@ -352,7 +359,7 @@ const AskRenderer = memo(
     isLast,
   }: AskRendererProps) => (
     <div className="flex w-full flex-col items-stretch gap-2">
-      <TimelineCard kind="QUESTION" marker="ask">
+      <TimelineCard kind="QUESTION" marker="ask" timestamp={message.timestamp}>
         <CardBody>
           <MessageContent
             content={message.question}
@@ -392,7 +399,12 @@ const AskRenderer = memo(
         )}
       </TimelineCard>
       {isTypedAnswer(message) && (
-        <TimelineCard kind="QUESTION" marker="ask" scrollOnMount={isLast}>
+        <TimelineCard
+          kind="QUESTION"
+          marker="ask"
+          scrollOnMount={isLast}
+          timestamp={message.answerTimestamp}
+        >
           <CardBody>
             <MessageContent
               content={message.selected ?? ""}
@@ -431,11 +443,19 @@ const PlanLeafInline = ({
   const content = displayContent(message)
   if (!content) return null
   const label = message.role === "user" ? "QUESTION" : "ANSWER"
+  const time = message.timestamp !== undefined ? formatHourMinute(message.timestamp) : null
   return (
-    <div className="w-full border-l-2 border-neutral-200 pl-3">
-      <span className="block text-caption font-caption text-subtext-color uppercase tracking-wide mb-1">
-        {label}
-      </span>
+    <div className="group w-full border-l-2 border-neutral-200 pl-3">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="text-caption font-caption text-subtext-color uppercase tracking-wide">
+          {label}
+        </span>
+        {time && (
+          <span className="text-[11px] text-neutral-400 opacity-0 transition-opacity group-hover:opacity-100">
+            {time}
+          </span>
+        )}
+      </div>
       <div className="prose prose-sm text-body font-body text-default-font [&>*]:mb-0 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold">
         <MessageContent
           content={content}
@@ -951,7 +971,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
 
   return (
     <div className="flex w-full grow flex-col overflow-hidden">
-      <AutoScroll className="relative flex w-full grow shrink-0 basis-0 flex-col items-start pr-4 pt-4 overflow-y-auto">
+      <AutoScroll className="relative flex w-full grow shrink-0 basis-0 flex-col items-start pr-4 pt-3 overflow-y-auto">
         {keyedMessages.length === 0 && !loading && (
           <div className="flex h-full w-full items-center justify-center">
             <span className="text-body font-body text-subtext-color">
@@ -1023,7 +1043,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
         )}
         {!waitingForInput && spinnerLabels && (
           <>
-            {segments.length > 0 && <Connector />}
+            <Connector />
             <TickLabel key={spinnerLabels.join()} labels={spinnerLabels} />
           </>
         )}
@@ -1039,11 +1059,34 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
 
       <div className="px-3 pb-3 pt-4">
         <div
-          className={`flex w-full items-end gap-2 rounded-2xl border border-solid border-neutral-200 px-4 py-3 ${buttonMode === "cancel" ? "bg-neutral-50" : "bg-white"}`}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              e.preventDefault()
+              inputRef.current?.focus()
+            }
+          }}
+          className={`flex w-full items-end gap-2 rounded-2xl border border-solid border-neutral-200 px-4 py-3 cursor-text ${buttonMode === "cancel" ? "bg-neutral-50" : "bg-white"}`}
         >
-          <TextFieldUnstyled className="grow min-h-5">
+          <TextFieldUnstyled
+            className="grow min-h-5"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) {
+                e.preventDefault()
+                inputRef.current?.focus()
+              }
+            }}
+          >
             <TextFieldUnstyled.Textarea
               ref={inputRef}
+              name="chat-message"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck
+              data-1p-ignore
+              data-lpignore="true"
+              data-bwignore
+              data-form-type="other"
               placeholder={
                 waitingForInput || isWaitingForContinue
                   ? "Or type your own answer..."

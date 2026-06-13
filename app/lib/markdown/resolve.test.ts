@@ -15,14 +15,8 @@ const fileWithAnnotation = (id: string, text: string, color: string): string =>
 const fileWithCallout = (id: string, title: string, color: string): string =>
   `# Codebook\n\n\`\`\`json-callout\n${JSON.stringify({ id, type: "codebook-code", title, content: "detail", color, collapsed: false })}\n\`\`\``
 
-const fileWithTagDefinition = (
-  id: string,
-  label: string,
-  display: string,
-  color: string,
-  icon: string
-): string =>
-  `# Prefs\n\n\`\`\`json-settings\n${JSON.stringify({ tags: [{ id, label, display, color, icon }] })}\n\`\`\``
+const fileWithTagDefinition = (id: string, label: string, color: string, icon: string): string =>
+  `# Prefs\n\n\`\`\`json-settings\n${JSON.stringify({ tags: [{ id, label, color, icon }] })}\n\`\`\``
 
 const fileWithSearch = (id: string, title: string): string =>
   `# Settings\n\n\`\`\`json-settings\n${JSON.stringify({ searches: [{ id, title, description: title, highlight: "", saved: false, createdAt: 0, sql: "SELECT 1" }] })}\n\`\`\``
@@ -88,13 +82,7 @@ describe("resolveEntityLink", () => {
       name: "resolves tag ref",
       href: "file://tag-abc12345",
       files: {
-        "settings.hidden.md": fileWithTagDefinition(
-          "tag-abc12345",
-          "interview",
-          "Interview",
-          "green",
-          "mic"
-        ),
+        "settings.hidden.md": fileWithTagDefinition("tag-abc12345", "interview", "green", "mic"),
       },
       expected: {
         kind: "tag",

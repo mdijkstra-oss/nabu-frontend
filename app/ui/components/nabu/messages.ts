@@ -9,6 +9,7 @@ export interface TextMessage {
   role: "user" | "assistant"
   content: string
   draft?: true
+  timestamp?: number
 }
 
 export interface PlanMessage {
@@ -100,6 +101,7 @@ export const textMessagesIndexed = (history: Block[]): Indexed<TextMessage>[] =>
         role: block.type === "user" ? "user" : "assistant",
         content: block.content,
         ...(hasDraft(history[index]) && { draft: true as const }),
+        ...(history[index].timestamp !== undefined && { timestamp: history[index].timestamp }),
       },
     }))
 }
@@ -136,6 +138,8 @@ export interface AskMessage {
   question: string
   options: AskOption[]
   selected: string | null
+  timestamp?: number
+  answerTimestamp?: number
 }
 
 interface AskExtraction {
@@ -188,6 +192,8 @@ const extractSingleAsk = (
   const userAnswer =
     userIndices.length > 0 ? (history[userIndices[0]] as { content: string }).content : null
   const selected = userAnswer
+  const questionTimestamp = history[index].timestamp
+  const answerTimestamp = userIndices.length > 0 ? history[userIndices[0]].timestamp : undefined
 
   return [
     {
@@ -197,6 +203,8 @@ const extractSingleAsk = (
         question: args.question,
         options: args.options,
         selected,
+        ...(questionTimestamp !== undefined && { timestamp: questionTimestamp }),
+        ...(answerTimestamp !== undefined && { answerTimestamp }),
       },
     },
   ]

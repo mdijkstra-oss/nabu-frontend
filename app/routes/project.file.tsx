@@ -6,6 +6,7 @@ import { useScrollToEntity } from "~/ui/hooks/useScrollToEntity"
 import { parseSpotlight } from "~/lib/editor/spotlight/parse"
 import { patchBlock } from "~/lib/data-blocks/patch"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
+import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
 import { useProject } from "./project"
 import { toDisplayName } from "~/lib/files/filename"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
@@ -55,7 +56,7 @@ const documentStatusText = (content: string): string =>
   formatStatsLabel(computeTextStats(stripSingletonBlocks(content)))
 
 const sortTagsByDisplay = (tags: TagDefinition[]): TagDefinition[] =>
-  [...tags].sort((a, b) => a.display.localeCompare(b.display))
+  [...tags].sort((a, b) => getTagDisplay(a).localeCompare(getTagDisplay(b)))
 
 const getFileRaw = (files: Record<string, string>, filename: string): string | undefined =>
   files[filename]

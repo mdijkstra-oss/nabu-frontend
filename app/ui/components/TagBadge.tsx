@@ -1,6 +1,7 @@
 import type { ComponentType } from "react"
 import { X } from "lucide-react"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
+import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
 import { resolveIcon } from "~/ui/theme/icon-map"
 import {
   elementBackground,
@@ -74,7 +75,7 @@ export const TagBadge = ({
       onClick={onClick}
     >
       <TagIcon icon={Icon} color={iconColor} />
-      {tag.display}
+      {getTagDisplay(tag)}
       {hasHandler(onRemove) && (
         <button
           type="button"

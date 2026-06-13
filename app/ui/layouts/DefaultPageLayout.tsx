@@ -82,7 +82,8 @@ const buildNavItems = (
   return [items]
 }
 
-const HANDLE_WIDTH = 12
+const RAIL_DRAG_LEFT = 10
+const RAIL_DRAG_WIDTH = 8
 const CONTAINER_PADDING = 24
 const MIN_LEFT_WIDTH = 400
 const MIN_RIGHT_WIDTH = 280
@@ -90,7 +91,7 @@ const RIGHT_PANEL_DEFAULT = { width: 320, height: 0 }
 const RIGHT_PANEL_STORAGE_KEY = "layout:right-panel"
 
 const computeMaxRightWidth = (containerWidth: number): number =>
-  Math.floor((containerWidth - CONTAINER_PADDING - HANDLE_WIDTH) / 2)
+  Math.floor((containerWidth - CONTAINER_PADDING) / 2)
 
 export const DefaultPageLayout = ({
   children,
@@ -193,23 +194,14 @@ export const DefaultPageLayout = ({
           </div>
         )}
         {rightPanel && (
-          <>
+          <div className="relative flex flex-col flex-none h-full" style={{ width: rightWidth }}>
             <div
-              className="flex-none cursor-col-resize flex items-center justify-center group"
-              style={{ width: HANDLE_WIDTH }}
+              className="absolute top-0 bottom-0 z-30 cursor-col-resize"
+              style={{ left: RAIL_DRAG_LEFT, width: RAIL_DRAG_WIDTH }}
               onMouseDown={onDragStart}
-            >
-              <div
-                className={cn(
-                  "w-px h-full bg-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity",
-                  isDragging && "!opacity-100"
-                )}
-              />
-            </div>
-            <div className="flex flex-col flex-none h-full" style={{ width: rightWidth }}>
-              {rightPanel}
-            </div>
-          </>
+            />
+            {rightPanel}
+          </div>
         )}
       </div>
     </div>

@@ -26,7 +26,7 @@ import { createBackground } from "~/lib/editor/annotations/gradient"
 import { findMatchOffset } from "~/lib/text/find"
 import { findCalloutById, findDocumentForCallout } from "~/domain/data-blocks/callout/selectors"
 import { findChartById, findDocumentForChart } from "~/domain/data-blocks/chart/selectors"
-import { findTagDefinitionById } from "~/domain/data-blocks/settings/tags/selectors"
+import { findTagDefinitionById, getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import { resolveEntityName } from "~/lib/files/selectors"
 import { toDisplayName } from "~/lib/files/filename"
@@ -142,7 +142,7 @@ const resolveTagRef = (
     color: tag.color,
     icon: resolveIcon(tag.icon),
     url: "",
-    label: tag.display,
+    label: getTagDisplay(tag),
   }
 }
 
