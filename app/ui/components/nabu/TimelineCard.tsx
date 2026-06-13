@@ -61,7 +61,7 @@ export const TimelineCard = ({
 }
 
 export const Connector = () => (
-  <div className="relative w-full h-7 pl-[30px]">
+  <div className="relative w-full h-7 flex-none pl-[30px]">
     <span className="absolute left-[14px] -translate-x-1/2 top-0 bottom-0 w-px bg-neutral-200" />
     <span className="absolute left-[30px] right-0 top-1/2 h-px bg-neutral-200" />
   </div>

@@ -15,7 +15,6 @@ import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Check, ChevronRight, Circle, Loader2, MessageSquare, X } from "lucide-react"
 import { TextFieldUnstyled } from "~/ui/components/TextFieldUnstyled"
-import { AnimatePresence } from "framer-motion"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { AnimatedListItem } from "~/ui/components/AnimatedListItem"
 import { useChat } from "~/ui/hooks/useChat"
@@ -359,7 +358,7 @@ const AskRenderer = memo(
     isLast,
   }: AskRendererProps) => (
     <div className="flex w-full flex-col items-stretch gap-2">
-      <TimelineCard kind="QUESTION" marker="ask" timestamp={message.timestamp}>
+      <TimelineCard kind="QUESTION" marker="respond" timestamp={message.timestamp}>
         <CardBody>
           <MessageContent
             content={message.question}
@@ -399,23 +398,26 @@ const AskRenderer = memo(
         )}
       </TimelineCard>
       {isTypedAnswer(message) && (
-        <TimelineCard
-          kind="QUESTION"
-          marker="ask"
-          scrollOnMount={isLast}
-          timestamp={message.answerTimestamp}
-        >
-          <CardBody>
-            <MessageContent
-              content={message.selected ?? ""}
-              files={files}
-              projectId={projectId}
-              currentFile={currentFile}
-              currentFileContent={currentFileContent}
-              navigate={navigate}
-            />
-          </CardBody>
-        </TimelineCard>
+        <>
+          <Connector />
+          <TimelineCard
+            kind="ANSWER"
+            marker="ask"
+            scrollOnMount={isLast}
+            timestamp={message.answerTimestamp}
+          >
+            <CardBody>
+              <MessageContent
+                content={message.selected ?? ""}
+                files={files}
+                projectId={projectId}
+                currentFile={currentFile}
+                currentFileContent={currentFileContent}
+                navigate={navigate}
+              />
+            </CardBody>
+          </TimelineCard>
+        </>
       )}
     </div>
   ),
@@ -807,21 +809,61 @@ const PlanSegmentRenderer = ({
 
 interface TickLabelProps {
   labels: string[]
+  files: Record<string, string>
+  projectId: string | null
+  currentFile: string | null
+  currentFileContent: string | null
+  navigate?: (url: string) => void
 }
 
-const TickLabel = ({ labels }: TickLabelProps) => {
+const TickInlineP = ({ children }: { children?: ReactNode }) => <span>{children}</span>
+
+const TickLabel = ({
+  labels,
+  files,
+  projectId,
+  currentFile,
+  currentFileContent,
+  navigate,
+}: TickLabelProps) => {
   const [index, setIndex] = useState(0)
   useEffect(() => {
     if (index >= labels.length - 1) return
     const id = setTimeout(() => setIndex((i) => i + 1), LABEL_ADVANCE_MS)
     return () => clearTimeout(id)
   }, [index, labels.length])
+  const components = useMemo(
+    () => ({
+      ...createEntityLinkComponents({
+        files,
+        projectId,
+        navigate,
+        transformLabel: summarizeAnnotationLabel,
+      }),
+      p: TickInlineP,
+    }),
+    [files, projectId, navigate]
+  )
+  const label = labels[Math.min(index, labels.length - 1)]
+  const prepared = fixMarkdownUrls(
+    linkifyTags(
+      prepareEntityMarkdown(
+        label,
+        (id) => resolveAndTruncateName(files, id),
+        currentFile,
+        currentFileContent
+      ),
+      (l) => resolveTagForLinkify(files, l)
+    )
+  )
   return (
     <TimelineCard kind={null} marker="respond">
       <div className="flex items-center gap-2">
         <Loader2 className="text-body text-brand-600 flex-none animate-spin" />
         <span className="text-body font-body text-subtext-color">
-          {labels[Math.min(index, labels.length - 1)]}
+          <Markdown components={components} urlTransform={allowFileProtocol}>
+            {prepared}
+          </Markdown>
         </span>
       </div>
     </TimelineCard>
@@ -891,8 +933,6 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   )
 
   const [inputValue, setInputValue] = useState("")
-  const [isTyping, setIsTyping] = useState(false)
-  const typingTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -942,21 +982,14 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
     respond("Continue to next step")
   }, [respond])
 
-  const markTyping = useCallback(() => {
-    setIsTyping(true)
-    if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
-    typingTimerRef.current = setTimeout(() => setIsTyping(false), 300)
-  }, [])
-
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      markTyping()
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault()
         handleSend()
       }
     },
-    [handleSend, markTyping]
+    [handleSend]
   )
 
   const navigateToFile = useCallback(
@@ -979,60 +1012,53 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
             </span>
           </div>
         )}
-        <AnimatePresence initial={false}>
-          {segments.flatMap(({ key, segment }, index) => {
-            const isLast = index === segments.length - 1
-            const renderSegment = isPlanSegment(segment) ? (
-              <PlanSegmentRenderer
-                items={segment.items}
-                loading={loading}
-                files={files}
-                projectId={params.projectId ?? null}
-                currentFile={currentFile}
-                currentFileContent={currentFileContent}
-                navigate={navigate}
-              />
-            ) : isAskSegment(segment) ? (
-              <AskRenderer
-                message={segment}
-                files={files}
-                projectId={params.projectId ?? null}
-                currentFile={currentFile}
-                currentFileContent={currentFileContent}
-                navigate={navigate}
-                onSelect={respond}
-                isLast={isLast}
-              />
-            ) : isCollapsedSteps(segment) ? (
-              <div className="pl-[30px] w-full">
-                <CollapsedStepsIndicator count={segment.count} />
-              </div>
-            ) : (
-              <LeafRenderer
-                message={segment}
-                files={files}
-                projectId={params.projectId ?? null}
-                currentFile={currentFile}
-                currentFileContent={currentFileContent}
-                navigate={navigate}
-                isLast={isLast}
-              />
-            )
-            const items: ReactNode[] = []
-            if (index > 0)
-              items.push(
-                <AnimatedListItem key={`c-${key}`} layout={isTyping ? false : "position"}>
-                  <Connector />
-                </AnimatedListItem>
-              )
-            items.push(
-              <AnimatedListItem key={key} layout={isTyping ? false : "position"}>
-                {renderSegment}
-              </AnimatedListItem>
-            )
-            return items
-          })}
-        </AnimatePresence>
+        {segments.flatMap(({ key, segment }, index) => {
+          const isLast = index === segments.length - 1
+          const renderSegment = isPlanSegment(segment) ? (
+            <PlanSegmentRenderer
+              items={segment.items}
+              loading={loading}
+              files={files}
+              projectId={params.projectId ?? null}
+              currentFile={currentFile}
+              currentFileContent={currentFileContent}
+              navigate={navigate}
+            />
+          ) : isAskSegment(segment) ? (
+            <AskRenderer
+              message={segment}
+              files={files}
+              projectId={params.projectId ?? null}
+              currentFile={currentFile}
+              currentFileContent={currentFileContent}
+              navigate={navigate}
+              onSelect={respond}
+              isLast={isLast}
+            />
+          ) : isCollapsedSteps(segment) ? (
+            <div className="pl-[30px] w-full">
+              <CollapsedStepsIndicator count={segment.count} />
+            </div>
+          ) : (
+            <LeafRenderer
+              message={segment}
+              files={files}
+              projectId={params.projectId ?? null}
+              currentFile={currentFile}
+              currentFileContent={currentFileContent}
+              navigate={navigate}
+              isLast={isLast}
+            />
+          )
+          const items: ReactNode[] = []
+          if (index > 0) items.push(<Connector key={`c-${key}`} />)
+          items.push(
+            <AnimatedListItem key={key} layout={false}>
+              {renderSegment}
+            </AnimatedListItem>
+          )
+          return items
+        })}
         {isWaitingForContinue && (
           <>
             {segments.length > 0 && <Connector />}
@@ -1044,7 +1070,15 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
         {!waitingForInput && spinnerLabels && (
           <>
             <Connector />
-            <TickLabel key={spinnerLabels.join()} labels={spinnerLabels} />
+            <TickLabel
+              key={spinnerLabels.join()}
+              labels={spinnerLabels}
+              files={files}
+              projectId={params.projectId ?? null}
+              currentFile={currentFile}
+              currentFileContent={currentFileContent}
+              navigate={navigateToFile}
+            />
           </>
         )}
       </AutoScroll>

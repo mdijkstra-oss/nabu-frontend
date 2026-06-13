@@ -43,7 +43,7 @@ export function ActionBarButton({
           : cn(
               "cursor-pointer",
               isAi
-                ? "border border-solid border-[var(--orange-9)] bg-transparent hover:border-transparent hover:bg-brand-50"
+                ? "border border-solid border-brand-600 bg-transparent hover:border-transparent hover:bg-brand-50"
                 : "border-none bg-transparent hover:bg-brand-50"
             ),
         !disabled && !isAi && "border-none bg-transparent"
@@ -56,7 +56,7 @@ export function ActionBarButton({
         className={cn(
           "flex items-center [&>svg]:h-3.5 [&>svg]:w-3.5 transition-colors",
           disabled ? "text-neutral-400" : "text-subtext-color",
-          !disabled && "group-hover/action:text-[var(--orange-9)]"
+          !disabled && "group-hover/action:text-brand-700"
         )}
       >
         {icon}
@@ -152,7 +152,7 @@ export function ActionBar({ title, detail, titleAction, actions, onTitleHover }:
           </span>
           {titleAction && (
             <button
-              className="cursor-pointer border-none bg-transparent text-caption font-caption text-subtext-color hover:text-[var(--orange-9)]"
+              className="cursor-pointer border-none bg-transparent text-caption font-caption text-subtext-color hover:text-brand-700"
               onClick={titleAction.onClick}
               type="button"
             >

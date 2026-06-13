@@ -65,7 +65,7 @@ export function ConfirmButton({ icon, label, onConfirm, disabled, className }: C
         className={cn(
           "flex items-center [&>svg]:h-3.5 [&>svg]:w-3.5 transition-colors duration-200",
           isArmed || isDone ? "text-white" : disabled ? "text-neutral-400" : "text-subtext-color",
-          !disabled && !isArmed && !isDone && "group-hover/confirm:text-[var(--orange-9)]"
+          !disabled && !isArmed && !isDone && "group-hover/confirm:text-brand-700"
         )}
       >
         {icon}

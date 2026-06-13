@@ -36,7 +36,7 @@ const NavItem = React.forwardRef<HTMLDivElement, NavItemProps>(function NavItem(
           "bg-brand-50": selected,
         },
         {
-          "bg-[var(--orange-9)]/70 hover:bg-[var(--orange-9)]/70": pointed,
+          "bg-brand-600 hover:bg-brand-600": pointed,
         },
         className
       )}
