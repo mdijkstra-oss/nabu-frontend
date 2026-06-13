@@ -8,7 +8,7 @@
     "name": "edit_file",
     "args": {
       "path": "doc.md",
-      "needle": "Second paragraph to remove.",
+      "match": { "type": "full_anchor", "anchor": "Second paragraph to remove." },
       "replacement": "Second paragraph rewritten."
     }
   },

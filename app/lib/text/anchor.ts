@@ -7,7 +7,6 @@ export interface Span {
 
 export type AnchorResolution = Span | { error: string }
 
-const ELLIPSIS = "..."
 const CONTEXT_LINES = 2
 
 export const isAnchorError = (r: AnchorResolution): r is { error: string } => "error" in r
@@ -50,18 +49,14 @@ const formatAmbiguous = (content: string, matches: Span[], label: string): strin
   return `${label} matches ${matches.length} locations — add more context to disambiguate:\n\n${sections.join("\n\n")}`
 }
 
-interface MatchSet {
-  matches: Span[]
-}
-
-const findAnchorMatches = (content: string, needle: string): MatchSet => {
+const findAnchorMatches = (content: string, needle: string): Span[] => {
   const exact = findAllExactMatches(content, needle)
-  if (exact.length > 0) return { matches: exact }
-  return { matches: findAllStrictMatchOffsets(content, needle) }
+  if (exact.length > 0) return exact
+  return findAllStrictMatchOffsets(content, needle)
 }
 
-const resolveSingleAnchor = (content: string, needle: string, label: string): AnchorResolution => {
-  const { matches } = findAnchorMatches(content, needle)
+const resolveOne = (content: string, needle: string, label: string): AnchorResolution => {
+  const matches = findAnchorMatches(content, needle)
   if (matches.length === 0) return { error: `${label} not found` }
   if (matches.length > 1) return { error: formatAmbiguous(content, matches, label) }
   return matches[0]
@@ -72,32 +67,31 @@ const offsetSpan = (span: Span, offset: number): Span => ({
   end: span.end + offset,
 })
 
-const resolveRange = (content: string, before: string, after: string): AnchorResolution => {
-  if (!before.trim() || !after.trim())
-    return { error: "`...` requires non-empty anchor text on both sides" }
+export const resolveAnchor = (content: string, needle: string): AnchorResolution =>
+  resolveOne(content, needle, "anchor")
 
-  const beforeResult = resolveSingleAnchor(content, before, "anchor before `...`")
-  if (isAnchorError(beforeResult)) return beforeResult
+export const resolveAnchorRange = (
+  content: string,
+  anchorStart: string,
+  anchorEnd: string
+): AnchorResolution => {
+  if (!anchorStart.trim() || !anchorEnd.trim())
+    return { error: "anchor_start and anchor_end must each be non-empty" }
 
-  const tail = content.slice(beforeResult.end)
-  const afterRaw = findAnchorMatches(tail, after)
-  if (afterRaw.matches.length === 0)
-    return { error: "anchor after `...` not found following the first anchor" }
-  if (afterRaw.matches.length > 1) {
-    const translated = afterRaw.matches.map((m) => offsetSpan(m, beforeResult.end))
-    return { error: formatAmbiguous(content, translated, "anchor after `...`") }
+  const startResult = resolveOne(content, anchorStart, "anchor_start")
+  if (isAnchorError(startResult)) return startResult
+
+  const startLine = charToLine(content, startResult.start) + 1
+  const startPrefix = `anchor_start matched uniquely at line ${startLine}. `
+
+  const tail = content.slice(startResult.end)
+  const endMatches = findAnchorMatches(tail, anchorEnd)
+  if (endMatches.length === 0)
+    return { error: `${startPrefix}anchor_end not found after that line.` }
+  if (endMatches.length > 1) {
+    const translated = endMatches.map((m) => offsetSpan(m, startResult.end))
+    return { error: startPrefix + formatAmbiguous(content, translated, "anchor_end") }
   }
 
-  return { start: beforeResult.start, end: beforeResult.end + afterRaw.matches[0].end }
-}
-
-export const resolveAnchor = (content: string, needle: string): AnchorResolution => {
-  if (needle.includes(ELLIPSIS)) {
-    const idx = needle.indexOf(ELLIPSIS)
-    if (idx !== needle.lastIndexOf(ELLIPSIS))
-      return { error: "only one `...` per anchor is supported" }
-    return resolveRange(content, needle.slice(0, idx), needle.slice(idx + ELLIPSIS.length))
-  }
-
-  return resolveSingleAnchor(content, needle, "anchor")
+  return { start: startResult.start, end: startResult.end + endMatches[0].end }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveAnchor } from "./anchor"
+import { resolveAnchor, resolveAnchorRange } from "./anchor"
 
 const fixture = `# Doc
 
@@ -10,13 +10,13 @@ We zullen werken aan herstel.
 Het tekort kwam terug in het debat.
 `
 
-interface Case {
+interface AnchorCase {
   name: string
   needle: string
   expected: { start: number; end: number } | { errorMatch: RegExp }
 }
 
-const cases: Case[] = [
+const anchorCases: AnchorCase[] = [
   {
     name: "exact unique substring",
     needle: "We zullen werken aan herstel.",
@@ -45,33 +45,64 @@ const cases: Case[] = [
     expected: { errorMatch: /not found/ },
   },
   {
-    name: "ellipsis range resolves",
-    needle: "Het tekort loopt op...in 2024.",
+    name: "curly vs straight apostrophe matches",
+    needle: "the GGD’s in Rotterdam",
+    expected: { errorMatch: /not found/ },
+  },
+]
+
+describe("resolveAnchor", () => {
+  it.each(anchorCases)("$name", ({ needle, expected }) => {
+    const result = resolveAnchor(fixture, needle)
+    if ("errorMatch" in expected) {
+      expect(result).toMatchObject({ error: expect.any(String) })
+      expect((result as { error: string }).error).toMatch(expected.errorMatch)
+    } else {
+      expect(result).toEqual(expected)
+    }
+  })
+})
+
+interface RangeCase {
+  name: string
+  anchorStart: string
+  anchorEnd: string
+  expected: { start: number; end: number } | { errorMatch: RegExp }
+}
+
+const rangeCases: RangeCase[] = [
+  {
+    name: "range from start anchor to end anchor",
+    anchorStart: "Het tekort loopt op",
+    anchorEnd: "in 2024.",
     expected: {
       start: fixture.indexOf("Het tekort loopt op"),
       end: fixture.indexOf("in 2024.") + "in 2024.".length,
     },
   },
   {
-    name: "ellipsis empty anchor → error",
-    needle: "...rest",
-    expected: { errorMatch: /non-empty anchor/ },
+    name: "anchor_start ambiguous → error",
+    anchorStart: "Het tekort",
+    anchorEnd: "in 2024.",
+    expected: { errorMatch: /anchor_start matches 2 locations/ },
   },
   {
-    name: "ellipsis after-anchor missing",
-    needle: "We zullen werken aan herstel...niet bestaande zin",
-    expected: { errorMatch: /after .* not found/ },
+    name: "anchor_end missing after anchor_start → error",
+    anchorStart: "We zullen werken aan herstel.",
+    anchorEnd: "niet bestaande zin",
+    expected: { errorMatch: /anchor_end not found/ },
   },
   {
-    name: "more than one ellipsis → error",
-    needle: "Het tekort...op tot...2024.",
-    expected: { errorMatch: /only one/ },
+    name: "empty anchor → error",
+    anchorStart: "",
+    anchorEnd: "in 2024.",
+    expected: { errorMatch: /must each be non-empty/ },
   },
 ]
 
-describe("resolveAnchor", () => {
-  it.each(cases)("$name", ({ needle, expected }) => {
-    const result = resolveAnchor(fixture, needle)
+describe("resolveAnchorRange", () => {
+  it.each(rangeCases)("$name", ({ anchorStart, anchorEnd, expected }) => {
+    const result = resolveAnchorRange(fixture, anchorStart, anchorEnd)
     if ("errorMatch" in expected) {
       expect(result).toMatchObject({ error: expect.any(String) })
       expect((result as { error: string }).error).toMatch(expected.errorMatch)

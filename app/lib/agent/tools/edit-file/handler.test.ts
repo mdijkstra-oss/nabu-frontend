@@ -36,13 +36,24 @@ const cleanup = () => {
   clearEntries()
 }
 
+type Match =
+  | { type: "full_anchor"; anchor: string }
+  | { type: "spanned_anchor"; anchor_start: string; anchor_end: string }
+
+const full = (anchor: string): Match => ({ type: "full_anchor", anchor })
+const spanned = (anchor_start: string, anchor_end: string): Match => ({
+  type: "spanned_anchor",
+  anchor_start,
+  anchor_end,
+})
+
 describe("edit_file", () => {
   afterEach(cleanup)
 
   interface Case {
     name: string
     files: Record<string, string>
-    args: { path: string; needle: string; replacement: string }
+    args: { path: string; match: Match; replacement: string }
     expected:
       | {
           status: "ok"
@@ -55,11 +66,11 @@ describe("edit_file", () => {
 
   const cases: Case[] = [
     {
-      name: "exact substring replace in prose",
+      name: "full_anchor: exact substring replace in prose",
       files: { "doc.md": proseFile },
       args: {
         path: "doc.md",
-        needle: "stappen worden genomen",
+        match: full("stappen worden genomen"),
         replacement: "maatregelen volgen",
       },
       expected: {
@@ -69,33 +80,33 @@ describe("edit_file", () => {
       },
     },
     {
-      name: "token-strict fallback when punctuation differs",
+      name: "full_anchor: token-strict fallback when punctuation differs",
       files: { "doc.md": proseFile },
       args: {
         path: "doc.md",
-        needle: "het tekort loopt op",
+        match: full("het tekort loopt op"),
         replacement: "Het tekort daalde naar nul",
       },
       expected: { status: "ok", contentMatch: "Het tekort daalde naar nul" },
     },
     {
-      name: "needle missing → error",
+      name: "full_anchor: missing → error",
       files: { "doc.md": proseFile },
-      args: { path: "doc.md", needle: "ontbrekende zin xyz", replacement: "anything" },
+      args: { path: "doc.md", match: full("ontbrekende zin xyz"), replacement: "anything" },
       expected: { status: "error", errorMatch: /not found/ },
     },
     {
-      name: "ambiguous needle → error",
+      name: "full_anchor: ambiguous → error",
       files: { "doc.md": annotationsFile },
-      args: { path: "doc.md", needle: "Hello world", replacement: "Hi" },
+      args: { path: "doc.md", match: full("Hello world"), replacement: "Hi" },
       expected: { status: "error", errorMatch: /matches 2 locations/ },
     },
     {
-      name: "ellipsis range replace",
+      name: "spanned_anchor: range replace",
       files: { "doc.md": proseFile },
       args: {
         path: "doc.md",
-        needle: "Het tekort loopt op...in 2024.",
+        match: spanned("Het tekort loopt op", "in 2024."),
         replacement: "De begroting is op orde",
       },
       expected: {
@@ -105,35 +116,23 @@ describe("edit_file", () => {
       },
     },
     {
-      name: "ellipsis with missing after-anchor → error",
+      name: "spanned_anchor: anchor_end missing → error",
       files: { "doc.md": proseFile },
       args: {
         path: "doc.md",
-        needle: "Het tekort...niet bestaande zin",
+        match: spanned("We zullen werken aan herstel.", "niet bestaande zin"),
         replacement: "x",
       },
-      expected: { status: "error", errorMatch: /after .* not found/ },
+      expected: { status: "error", errorMatch: /anchor_end not found/ },
     },
     {
-      name: "ellipsis with empty anchor → error",
-      files: { "doc.md": proseFile },
-      args: { path: "doc.md", needle: "...rest", replacement: "x" },
-      expected: { status: "error", errorMatch: /non-empty anchor/ },
-    },
-    {
-      name: "multiple ellipses → error",
-      files: { "doc.md": proseFile },
-      args: {
-        path: "doc.md",
-        needle: "De minister...stappen...genomen",
-        replacement: "x",
-      },
-      expected: { status: "error", errorMatch: /only one/ },
-    },
-    {
-      name: "needle only present inside json block → not found",
+      name: "full_anchor only present inside json block → not found",
       files: { "doc.md": annotationsFile },
-      args: { path: "doc.md", needle: '"reason": "key"', replacement: '"reason": "changed"' },
+      args: {
+        path: "doc.md",
+        match: full('"reason": "key"'),
+        replacement: '"reason": "changed"',
+      },
       expected: { status: "error", errorMatch: /not found/ },
     },
     {
@@ -144,7 +143,7 @@ describe("edit_file", () => {
       },
       args: {
         path: "doc.md",
-        needle: "De minister kondigde aan dat er stappen worden genomen.",
+        match: full("De minister kondigde aan dat er stappen worden genomen."),
         replacement: "De minister herhaalde dat er maatregelen volgen.",
       },
       expected: {
@@ -159,7 +158,7 @@ describe("edit_file", () => {
       files: { "doc.md": proseFile },
       args: {
         path: "doc.md",
-        needle: "We zullen werken aan herstel.",
+        match: full("We zullen werken aan herstel."),
         replacement: "```json-annotations\n{}\n```",
       },
       expected: { status: "error", errorMatch: /Cannot create.*json-annotations/ },
@@ -167,7 +166,7 @@ describe("edit_file", () => {
     {
       name: "missing file → error",
       files: {},
-      args: { path: "missing.md", needle: "x", replacement: "y" },
+      args: { path: "missing.md", match: full("x"), replacement: "y" },
       expected: { status: "error", errorMatch: /No such file/ },
     },
     {
@@ -175,7 +174,7 @@ describe("edit_file", () => {
       files: { "doc.md": proseFile },
       args: {
         path: "doc.md",
-        needle: " in 2024",
+        match: full(" in 2024"),
         replacement: "",
       },
       expected: { status: "ok", contentNotMatch: " in 2024" },

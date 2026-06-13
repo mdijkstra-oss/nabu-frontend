@@ -1,6 +1,11 @@
 import { tool, registerTool, ok, err } from "../../executors/tool"
 import { editFile as def } from "./def"
-import { resolveAnchor, isAnchorError } from "~/lib/text/anchor"
+import {
+  resolveAnchor,
+  resolveAnchorRange,
+  isAnchorError,
+  type AnchorResolution,
+} from "~/lib/text/anchor"
 import {
   maskKnownBlocks,
   findFenceCreations,
@@ -8,15 +13,24 @@ import {
 } from "~/lib/patch/block-overlap"
 import { stripBoundaryComments } from "~/lib/patch/resolve/json-boundary"
 
+type Match =
+  | { type: "full_anchor"; anchor: string }
+  | { type: "spanned_anchor"; anchor_start: string; anchor_end: string }
+
+const resolveMatch = (masked: string, match: Match): AnchorResolution => {
+  if (match.type === "full_anchor") return resolveAnchor(masked, match.anchor)
+  return resolveAnchorRange(masked, match.anchor_start, match.anchor_end)
+}
+
 const _editFile = registerTool(
   tool({
     ...def,
-    handler: async (files, { path, needle, replacement }) => {
+    handler: async (files, { path, match, replacement }) => {
       const view = files.get(path)
       if (view === undefined) return err(`${path}: No such file`)
       const content = stripBoundaryComments(view)
 
-      const span = resolveAnchor(maskKnownBlocks(content), needle)
+      const span = resolveMatch(maskKnownBlocks(content), match)
       if (isAnchorError(span)) return err(`${path}: ${span.error}`)
 
       const fenceCreations = findFenceCreations(replacement)
