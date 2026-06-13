@@ -206,10 +206,7 @@ export const DefaultPageLayout = ({
                 )}
               />
             </div>
-            <div
-              className="flex flex-col flex-none h-full pt-2 pr-2 pb-2"
-              style={{ width: rightWidth }}
-            >
+            <div className="flex flex-col flex-none h-full" style={{ width: rightWidth }}>
               {rightPanel}
             </div>
           </>

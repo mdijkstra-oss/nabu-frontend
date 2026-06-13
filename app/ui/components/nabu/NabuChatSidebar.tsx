@@ -4,7 +4,6 @@ import {
   useState,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useMemo,
   memo,
@@ -56,6 +55,7 @@ import { buildFileContextBlocks } from "~/lib/agent/context-blocks"
 import { pickGreeting } from "./greetings"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import { ChatSendButton, deriveChatButtonMode } from "./ChatSendButton"
+import { TimelineCard, Connector } from "./TimelineCard"
 
 const allowFileProtocol = (url: string): string => url
 
@@ -138,37 +138,11 @@ const MessageContent = memo(
   }
 )
 
-const UserBubble = ({
-  children,
-  scrollOnMount = false,
-}: {
-  children: React.ReactNode
-  scrollOnMount?: boolean
-}) => {
-  const ref = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    if (!scrollOnMount) return
-    ref.current?.scrollIntoView({ block: "end", behavior: "smooth" })
-  }, [scrollOnMount])
-  return (
-    <div ref={ref} className="flex w-full items-end justify-end">
-      <div className="flex flex-col items-start rounded-2xl bg-brand-200 px-4 py-2 shadow-sm max-w-[95%]">
-        <div className="prose prose-sm text-body font-body text-default-font [&>*]:mb-2 [&>*:last-child]:mb-0 [&_a]:text-brand-700 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold">
-          {children}
-        </div>
-      </div>
-    </div>
-  )
-}
+const proseClass =
+  "prose prose-sm text-body font-body text-default-font [&>*]:mb-2 [&>*:last-child]:mb-0 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold"
 
-const AssistantBubble = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex w-full items-start">
-    <div className="flex flex-col items-start rounded-2xl bg-neutral-100 px-4 py-2 max-w-[95%]">
-      <div className="prose prose-sm text-body font-body text-default-font [&>*]:mb-2 [&>*:last-child]:mb-0 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold">
-        {children}
-      </div>
-    </div>
-  </div>
+const CardBody = ({ children }: { children: ReactNode }) => (
+  <div className={proseClass}>{children}</div>
 )
 
 const stepIconComponent: Record<StepStatus, React.ComponentType<{ className?: string }>> = {
@@ -267,9 +241,14 @@ const LeafRenderer = memo(
   }: LeafRendererProps) => {
     const content = displayContent(message)
     if (!content) return null
-    if (message.role === "user") {
-      return (
-        <UserBubble scrollOnMount={isLast}>
+    const isUser = message.role === "user"
+    return (
+      <TimelineCard
+        kind={isUser ? "QUESTION" : "ANSWER"}
+        marker={isUser ? "ask" : "respond"}
+        scrollOnMount={isUser && isLast}
+      >
+        <CardBody>
           <MessageContent
             content={content}
             files={files}
@@ -278,20 +257,8 @@ const LeafRenderer = memo(
             currentFileContent={currentFileContent}
             navigate={navigate}
           />
-        </UserBubble>
-      )
-    }
-    return (
-      <AssistantBubble>
-        <MessageContent
-          content={content}
-          files={files}
-          projectId={projectId}
-          currentFile={currentFile}
-          currentFileContent={currentFileContent}
-          navigate={navigate}
-        />
-      </AssistantBubble>
+        </CardBody>
+      </TimelineCard>
     )
   },
   leafPropsEqual
@@ -384,52 +351,59 @@ const AskRenderer = memo(
     onSelect,
     isLast,
   }: AskRendererProps) => (
-    <div className="flex w-full flex-col items-start gap-2 mb-3">
-      <AssistantBubble>
-        <MessageContent
-          content={message.question}
-          files={files}
-          projectId={projectId}
-          currentFile={currentFile}
-          currentFileContent={currentFileContent}
-          navigate={navigate}
-        />
-      </AssistantBubble>
-      {hasOptions(message) && (
-        <div className="flex w-full flex-col gap-1.5 max-w-[95%]">
-          {message.options.map((option) => {
-            const selected = message.selected === option.label
-            return (
-              <OptionCard
-                key={option.label}
-                selected={selected}
-                dimmed={message.selected !== null && !selected}
-                onClick={message.selected === null ? () => onSelect(option.label) : undefined}
-              >
-                <InlineMarkdown
-                  files={files}
-                  projectId={projectId}
-                  currentFile={currentFile}
-                  currentFileContent={currentFileContent}
-                >
-                  {option.label}
-                </InlineMarkdown>
-              </OptionCard>
-            )
-          })}
-        </div>
-      )}
-      {isTypedAnswer(message) && (
-        <UserBubble scrollOnMount={isLast}>
+    <div className="flex w-full flex-col items-stretch gap-2">
+      <TimelineCard kind="QUESTION" marker="ask">
+        <CardBody>
           <MessageContent
-            content={message.selected ?? ""}
+            content={message.question}
             files={files}
             projectId={projectId}
             currentFile={currentFile}
             currentFileContent={currentFileContent}
             navigate={navigate}
           />
-        </UserBubble>
+        </CardBody>
+        {hasOptions(message) && (
+          <>
+            <hr className="my-3 border-t border-neutral-100" />
+            <div className="flex w-full flex-col gap-1.5">
+              {message.options.map((option) => {
+                const selected = message.selected === option.label
+                return (
+                  <OptionCard
+                    key={option.label}
+                    selected={selected}
+                    dimmed={message.selected !== null && !selected}
+                    onClick={message.selected === null ? () => onSelect(option.label) : undefined}
+                  >
+                    <InlineMarkdown
+                      files={files}
+                      projectId={projectId}
+                      currentFile={currentFile}
+                      currentFileContent={currentFileContent}
+                    >
+                      {option.label}
+                    </InlineMarkdown>
+                  </OptionCard>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </TimelineCard>
+      {isTypedAnswer(message) && (
+        <TimelineCard kind="QUESTION" marker="ask" scrollOnMount={isLast}>
+          <CardBody>
+            <MessageContent
+              content={message.selected ?? ""}
+              files={files}
+              projectId={projectId}
+              currentFile={currentFile}
+              currentFileContent={currentFileContent}
+              navigate={navigate}
+            />
+          </CardBody>
+        </TimelineCard>
       )}
     </div>
   ),
@@ -456,37 +430,21 @@ const PlanLeafInline = ({
 }) => {
   const content = displayContent(message)
   if (!content) return null
-  if (message.role === "user") {
-    return (
-      <div className="flex w-full items-end justify-end">
-        <div className="flex flex-col items-start rounded-2xl bg-brand-200 px-3 py-1.5 shadow-sm max-w-[90%]">
-          <div className="prose prose-sm text-body font-body text-default-font [&>*]:mb-0 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold">
-            <MessageContent
-              content={content}
-              files={files}
-              projectId={projectId}
-              currentFile={currentFile}
-              currentFileContent={currentFileContent}
-              navigate={navigate}
-            />
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const label = message.role === "user" ? "QUESTION" : "ANSWER"
   return (
-    <div className="flex w-full items-start mt-1">
-      <div className="flex flex-col items-start rounded-2xl bg-neutral-100 px-3 py-1.5 max-w-[90%]">
-        <div className="prose prose-sm text-body font-body text-default-font [&>*]:mb-0 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold">
-          <MessageContent
-            content={content}
-            files={files}
-            projectId={projectId}
-            currentFile={currentFile}
-            currentFileContent={currentFileContent}
-            navigate={navigate}
-          />
-        </div>
+    <div className="w-full border-l-2 border-neutral-200 pl-3">
+      <span className="block text-caption font-caption text-subtext-color uppercase tracking-wide mb-1">
+        {label}
+      </span>
+      <div className="prose prose-sm text-body font-body text-default-font [&>*]:mb-0 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold">
+        <MessageContent
+          content={content}
+          files={files}
+          projectId={projectId}
+          currentFile={currentFile}
+          currentFileContent={currentFileContent}
+          navigate={navigate}
+        />
       </div>
     </div>
   )
@@ -551,7 +509,7 @@ const PlanHeaderRenderer = ({
   currentFileContent,
   navigate,
 }: PlanHeaderRendererProps) => (
-  <div className="flex w-full flex-col items-start gap-1 py-1">
+  <div className="flex w-full flex-col items-stretch border-b border-neutral-100 pb-2 mb-2">
     <div className="prose prose-sm [&>*]:mb-0 [&_a]:no-underline text-body-bold font-body-bold text-default-font">
       <MessageContent
         content={header.task}
@@ -785,43 +743,45 @@ const PlanSegmentRenderer = ({
   const { visible, pendingCount } = splitTrailingPending(items, loading)
   const runs = groupIntoRuns(visible)
   return (
-    <div className="flex w-full flex-col items-start gap-2 border-l-2 border-solid border-neutral-200 pl-3 pr-2 py-2 my-1">
-      {runs.map((run, i) =>
-        run.type === "single" ? (
-          <PlanSegmentItemRenderer
-            key={i}
-            item={run.item}
-            files={files}
-            projectId={projectId}
-            currentFile={currentFile}
-            currentFileContent={currentFileContent}
-            navigate={navigate}
-          />
+    <TimelineCard kind="PLAN" marker="respond">
+      <div className="flex w-full flex-col items-stretch gap-2">
+        {runs.map((run, i) =>
+          run.type === "single" ? (
+            <PlanSegmentItemRenderer
+              key={i}
+              item={run.item}
+              files={files}
+              projectId={projectId}
+              currentFile={currentFile}
+              currentFileContent={currentFileContent}
+              navigate={navigate}
+            />
+          ) : (
+            <div
+              key={i}
+              className="flex w-full flex-col items-stretch gap-2 border-l-2 border-solid border-neutral-100 pl-3"
+            >
+              {run.items.map((item, j) => (
+                <PlanSegmentItemRenderer
+                  key={j}
+                  item={item}
+                  files={files}
+                  projectId={projectId}
+                  currentFile={currentFile}
+                  currentFileContent={currentFileContent}
+                  navigate={navigate}
+                />
+              ))}
+            </div>
+          )
+        )}
+        {isAbortedPlan(items) ? (
+          <AbortBox />
         ) : (
-          <div
-            key={i}
-            className="flex w-full flex-col items-start gap-2 border-l-2 border-solid border-neutral-200 pl-3"
-          >
-            {run.items.map((item, j) => (
-              <PlanSegmentItemRenderer
-                key={j}
-                item={item}
-                files={files}
-                projectId={projectId}
-                currentFile={currentFile}
-                currentFileContent={currentFileContent}
-                navigate={navigate}
-              />
-            ))}
-          </div>
-        )
-      )}
-      {isAbortedPlan(items) ? (
-        <AbortBox />
-      ) : (
-        pendingCount > 0 && <CollapsedStepsIndicator count={pendingCount} />
-      )}
-    </div>
+          pendingCount > 0 && <CollapsedStepsIndicator count={pendingCount} />
+        )}
+      </div>
+    </TimelineCard>
   )
 }
 
@@ -837,14 +797,14 @@ const TickLabel = ({ labels }: TickLabelProps) => {
     return () => clearTimeout(id)
   }, [index, labels.length])
   return (
-    <div className="flex w-full items-start">
-      <div className="flex items-center gap-2 rounded-2xl bg-neutral-100 px-4 py-2">
+    <TimelineCard kind={null} marker="respond">
+      <div className="flex items-center gap-2">
         <Loader2 className="text-body text-brand-600 flex-none animate-spin" />
         <span className="text-body font-body text-subtext-color">
           {labels[Math.min(index, labels.length - 1)]}
         </span>
       </div>
-    </div>
+    </TimelineCard>
   )
 }
 
@@ -990,8 +950,8 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   const spinnerLabels = loading && !isStreamingText ? getSpinnerLabels(history, draft) : null
 
   return (
-    <div className="flex w-full grow flex-col rounded-xl border border-solid border-panel-border bg-white overflow-hidden">
-      <AutoScroll className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-2 px-4 py-4 overflow-auto">
+    <div className="flex w-full grow flex-col overflow-hidden">
+      <AutoScroll className="relative flex w-full grow shrink-0 basis-0 flex-col items-start pr-4 pt-4 overflow-y-auto">
         {keyedMessages.length === 0 && !loading && (
           <div className="flex h-full w-full items-center justify-center">
             <span className="text-body font-body text-subtext-color">
@@ -1000,51 +960,72 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
           </div>
         )}
         <AnimatePresence initial={false}>
-          {segments.map(({ key, segment }, index) => {
+          {segments.flatMap(({ key, segment }, index) => {
             const isLast = index === segments.length - 1
-            return (
+            const renderSegment = isPlanSegment(segment) ? (
+              <PlanSegmentRenderer
+                items={segment.items}
+                loading={loading}
+                files={files}
+                projectId={params.projectId ?? null}
+                currentFile={currentFile}
+                currentFileContent={currentFileContent}
+                navigate={navigate}
+              />
+            ) : isAskSegment(segment) ? (
+              <AskRenderer
+                message={segment}
+                files={files}
+                projectId={params.projectId ?? null}
+                currentFile={currentFile}
+                currentFileContent={currentFileContent}
+                navigate={navigate}
+                onSelect={respond}
+                isLast={isLast}
+              />
+            ) : isCollapsedSteps(segment) ? (
+              <div className="pl-[30px] w-full">
+                <CollapsedStepsIndicator count={segment.count} />
+              </div>
+            ) : (
+              <LeafRenderer
+                message={segment}
+                files={files}
+                projectId={params.projectId ?? null}
+                currentFile={currentFile}
+                currentFileContent={currentFileContent}
+                navigate={navigate}
+                isLast={isLast}
+              />
+            )
+            const items: ReactNode[] = []
+            if (index > 0)
+              items.push(
+                <AnimatedListItem key={`c-${key}`} layout={isTyping ? false : "position"}>
+                  <Connector />
+                </AnimatedListItem>
+              )
+            items.push(
               <AnimatedListItem key={key} layout={isTyping ? false : "position"}>
-                {isPlanSegment(segment) ? (
-                  <PlanSegmentRenderer
-                    items={segment.items}
-                    loading={loading}
-                    files={files}
-                    projectId={params.projectId ?? null}
-                    currentFile={currentFile}
-                    currentFileContent={currentFileContent}
-                    navigate={navigate}
-                  />
-                ) : isAskSegment(segment) ? (
-                  <AskRenderer
-                    message={segment}
-                    files={files}
-                    projectId={params.projectId ?? null}
-                    currentFile={currentFile}
-                    currentFileContent={currentFileContent}
-                    navigate={navigate}
-                    onSelect={respond}
-                    isLast={isLast}
-                  />
-                ) : isCollapsedSteps(segment) ? (
-                  <CollapsedStepsIndicator count={segment.count} />
-                ) : (
-                  <LeafRenderer
-                    message={segment}
-                    files={files}
-                    projectId={params.projectId ?? null}
-                    currentFile={currentFile}
-                    currentFileContent={currentFileContent}
-                    navigate={navigate}
-                    isLast={isLast}
-                  />
-                )}
+                {renderSegment}
               </AnimatedListItem>
             )
+            return items
           })}
         </AnimatePresence>
-        {isWaitingForContinue && <PlanContinuePrompt onContinue={handleContinue} />}
+        {isWaitingForContinue && (
+          <>
+            {segments.length > 0 && <Connector />}
+            <div className="pl-[30px] w-full">
+              <PlanContinuePrompt onContinue={handleContinue} />
+            </div>
+          </>
+        )}
         {!waitingForInput && spinnerLabels && (
-          <TickLabel key={spinnerLabels.join()} labels={spinnerLabels} />
+          <>
+            {segments.length > 0 && <Connector />}
+            <TickLabel key={spinnerLabels.join()} labels={spinnerLabels} />
+          </>
         )}
       </AutoScroll>
 
@@ -1056,30 +1037,32 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
         />
       )}
 
-      <div
-        className={`flex w-full items-end gap-2 border-t border-solid border-neutral-border px-4 py-3 ${buttonMode === "cancel" ? "bg-neutral-50" : ""}`}
-      >
-        <TextFieldUnstyled className="grow min-h-5">
-          <TextFieldUnstyled.Textarea
-            ref={inputRef}
-            placeholder={
-              waitingForInput || isWaitingForContinue
-                ? "Or type your own answer..."
-                : "Message Nabu..."
-            }
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
+      <div className="px-3 pb-3 pt-4">
+        <div
+          className={`flex w-full items-end gap-2 rounded-2xl border border-solid border-neutral-200 px-4 py-3 ${buttonMode === "cancel" ? "bg-neutral-50" : "bg-white"}`}
+        >
+          <TextFieldUnstyled className="grow min-h-5">
+            <TextFieldUnstyled.Textarea
+              ref={inputRef}
+              placeholder={
+                waitingForInput || isWaitingForContinue
+                  ? "Or type your own answer..."
+                  : "Ask a follow-up..."
+              }
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+            />
+          </TextFieldUnstyled>
+          <ChatSendButton
+            mode={buttonMode}
+            disabled={buttonMode === "send" && !inputValue.trim()}
+            onSend={handleSend}
+            onSkipAsk={handleSkipAsk}
+            onCancel={cancel}
+            onCancelPlan={handleCancelPlan}
           />
-        </TextFieldUnstyled>
-        <ChatSendButton
-          mode={buttonMode}
-          disabled={buttonMode === "send" && !inputValue.trim()}
-          onSend={handleSend}
-          onSkipAsk={handleSkipAsk}
-          onCancel={cancel}
-          onCancelPlan={handleCancelPlan}
-        />
+        </div>
       </div>
     </div>
   )
