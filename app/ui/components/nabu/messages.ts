@@ -10,6 +10,8 @@ export interface TextMessage {
   content: string
   draft?: true
   timestamp?: number
+  firstInAnswerRun?: boolean
+  inPlan?: boolean
 }
 
 export interface PlanMessage {

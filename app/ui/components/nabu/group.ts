@@ -14,30 +14,24 @@ export type LeafMessage = TextMessage
 
 export type StepStatus = "completed" | "active" | "pending" | "cancelled"
 
-export interface PlanStep {
-  type: "plan-step"
-  description: string
-  status: StepStatus
-  nested: boolean
-  checkpoint: boolean
-}
-
-export type PlanChild = PlanStep | LeafMessage
-
-export interface PlanHeader {
-  type: "plan-header"
+export interface PlanStartMessage {
+  type: "plan-start"
   task: string
   completed: boolean
   aborted: boolean
+  timestamp?: number
 }
 
-export interface PlanItem {
-  type: "plan-item"
-  child: PlanChild
-  dimmed: boolean
+export interface PlanStepMessage {
+  type: "plan-step"
+  description: string
+  status: StepStatus
+  checkpoint: boolean
+  nested: boolean
+  timestamp?: number
 }
 
-export type GroupedMessage = LeafMessage | AskMessage | PlanHeader | PlanItem
+export type GroupedMessage = LeafMessage | AskMessage | PlanStartMessage | PlanStepMessage
 
 interface PlanRange {
   plan: DerivedPlan
@@ -47,7 +41,7 @@ interface PlanRange {
 
 interface FlatEntry {
   blockIndex: number
-  item: PlanHeader | PlanItem
+  item: PlanStartMessage | PlanStepMessage
 }
 
 const collectResultStatuses = (history: Block[]): Map<string, string> => {
@@ -132,77 +126,125 @@ const findStepTransitions = (
   return transitions
 }
 
-const toItem = (child: PlanChild, dimmed: boolean): PlanItem => ({
-  type: "plan-item",
-  child,
-  dimmed,
+const buildPlanStart = (plan: DerivedPlan, history: Block[], startIndex: number): FlatEntry => ({
+  blockIndex: startIndex,
+  item: {
+    type: "plan-start",
+    task: plan.task,
+    completed: isPlanCompleted(plan),
+    aborted: plan.aborted,
+    ...(history[startIndex]?.timestamp !== undefined && {
+      timestamp: history[startIndex].timestamp,
+    }),
+  },
 })
 
-const buildPlanHeader = (plan: DerivedPlan): PlanHeader => ({
-  type: "plan-header",
-  task: plan.task,
-  completed: isPlanCompleted(plan),
-  aborted: plan.aborted,
-})
+const findStepStart = (
+  i: number,
+  transitions: StepTransition[],
+  startIndex: number,
+  endIndex: number,
+  totalSteps: number
+): number => {
+  if (i === 0) return startIndex
+  const transition = transitions.find((t) => t.newStep === i)
+  return transition?.blockIndex ?? endIndex - (totalSteps - i) * 0.001
+}
 
-const buildPlanEntries = (
-  range: PlanRange,
-  leaves: Indexed<LeafMessage>[],
-  history: Block[]
-): FlatEntry[] => {
+const findStepTimestamp = (
+  i: number,
+  transitions: StepTransition[],
+  history: Block[],
+  startIndex: number
+): number | undefined => {
+  if (i === 0) return history[startIndex]?.timestamp
+  const transition = transitions.find((t) => t.newStep === i)
+  if (transition === undefined) return undefined
+  return history[transition.blockIndex - 1]?.timestamp
+}
+
+const buildStepEntry = (
+  step: Step,
+  i: number,
+  plan: DerivedPlan,
+  history: Block[],
+  transitions: StepTransition[],
+  startIndex: number,
+  endIndex: number,
+  totalSteps: number
+): FlatEntry => {
+  const blockIndex = findStepStart(i, transitions, startIndex, endIndex, totalSteps)
+  const timestamp = findStepTimestamp(i, transitions, history, startIndex)
+  return {
+    blockIndex,
+    item: {
+      type: "plan-step",
+      description: step.description,
+      status: getStepStatus(step, i, plan.currentStep, plan.aborted),
+      checkpoint: step.checkpoint,
+      nested: step.id.includes("."),
+      ...(timestamp !== undefined && { timestamp }),
+    },
+  }
+}
+
+const buildPlanEntries = (range: PlanRange, history: Block[]): FlatEntry[] => {
   const { plan, startIndex, endIndex } = range
   const transitions = findStepTransitions(history, startIndex, endIndex)
   const totalSteps = plan.steps.length
 
-  const header: FlatEntry = {
-    blockIndex: startIndex,
-    item: buildPlanHeader(plan),
-  }
+  const planStart = buildPlanStart(plan, history, startIndex)
+  const stepEntries = plan.steps.map((step, i) =>
+    buildStepEntry(step, i, plan, history, transitions, startIndex, endIndex, totalSteps)
+  )
 
-  const makeStepEntry = (step: Step, i: number, blockIndex: number): FlatEntry => ({
-    blockIndex,
-    item: toItem(
-      {
-        type: "plan-step" as const,
-        description: step.description,
-        status: getStepStatus(step, i, plan.currentStep, plan.aborted),
-        nested: step.id.includes("."),
-        checkpoint: step.checkpoint,
-      },
-      false
-    ),
-  })
-
-  const stepActivations: FlatEntry[] = plan.steps.flatMap((step, i) => {
-    const startPosition =
-      i === 0
-        ? startIndex
-        : (transitions.find((t) => t.newStep === i)?.blockIndex ??
-          endIndex - (totalSteps - i) * 0.001)
-
-    return [makeStepEntry(step, i, startPosition)]
-  })
-
-  const visibleLeaves = leaves
-
-  const leafEntries: FlatEntry[] = visibleLeaves.map((l) => ({
-    blockIndex: l.index,
-    item: toItem(l.message, false),
-  }))
-
-  return [header, ...stepActivations, ...leafEntries]
+  return [planStart, ...stepEntries]
 }
-
-const isInRange = (index: number, range: PlanRange): boolean =>
-  index >= range.startIndex && index < range.endIndex
-
-const isConsumedLeaf = (leaf: Indexed<LeafMessage>, consumed: Set<number>): boolean =>
-  leaf.message.role === "user" && consumed.has(leaf.index)
 
 export interface KeyedMessage {
   key: string
   message: GroupedMessage
 }
+
+interface KeyedEntry {
+  sortIndex: number
+  key: string
+  item: GroupedMessage
+}
+
+const isResetTrigger = (m: GroupedMessage): boolean => {
+  if (m.type === "ask") return true
+  if (m.type === "plan-start") return true
+  if (m.type === "plan-step") return true
+  if (m.type === "text" && m.role === "user") return true
+  return false
+}
+
+const isAssistantLeaf = (m: GroupedMessage): m is TextMessage =>
+  m.type === "text" && m.role === "assistant"
+
+const stampAnswerRun = (entries: KeyedEntry[]): KeyedEntry[] => {
+  let prevReset = true
+  return entries.map((e) => {
+    const m = e.item
+    if (isAssistantLeaf(m)) {
+      const stamped: TextMessage = { ...m, firstInAnswerRun: prevReset }
+      prevReset = false
+      return { ...e, item: stamped }
+    }
+    if (isResetTrigger(m)) prevReset = true
+    return e
+  })
+}
+
+const isConsumedLeaf = (leaf: Indexed<LeafMessage>, consumed: Set<number>): boolean =>
+  leaf.message.role === "user" && consumed.has(leaf.index)
+
+const isIndexInPlan = (index: number, ranges: PlanRange[]): boolean =>
+  ranges.some((r) => index >= r.startIndex && index < r.endIndex)
+
+const markInPlan = (leaf: Indexed<LeafMessage>, ranges: PlanRange[]): Indexed<LeafMessage> =>
+  isIndexInPlan(leaf.index, ranges) ? { ...leaf, message: { ...leaf.message, inPlan: true } } : leaf
 
 export const toGroupedMessages = (history: Block[], derived: Derived): KeyedMessage[] => {
   const planRanges = buildPlanRanges(history, derived.plans)
@@ -210,29 +252,10 @@ export const toGroupedMessages = (history: Block[], derived: Derived): KeyedMess
 
   const allLeaves: Indexed<LeafMessage>[] = textMessagesIndexed(history)
     .filter((l) => !isConsumedLeaf(l, consumedUserIndices))
+    .map((l) => markInPlan(l, planRanges))
     .sort(byIndex)
 
-  const planLeaves = new Map<number, Indexed<LeafMessage>[]>()
-  const outsideLeaves: Indexed<LeafMessage>[] = []
-
-  for (const leaf of allLeaves) {
-    const rangeIdx = planRanges.findIndex((r) => isInRange(leaf.index, r))
-    if (rangeIdx === -1) {
-      outsideLeaves.push(leaf)
-    } else {
-      const existing = planLeaves.get(rangeIdx) ?? []
-      existing.push(leaf)
-      planLeaves.set(rangeIdx, existing)
-    }
-  }
-
-  interface KeyedEntry {
-    sortIndex: number
-    key: string
-    item: GroupedMessage
-  }
-
-  const outsideKeyed: KeyedEntry[] = outsideLeaves.map((l, i) => ({
+  const leafKeyed: KeyedEntry[] = allLeaves.map((l, i) => ({
     sortIndex: l.index,
     key: `msg-${i}`,
     item: l.message,
@@ -245,14 +268,14 @@ export const toGroupedMessages = (history: Block[], derived: Derived): KeyedMess
   }))
 
   const planKeyed: KeyedEntry[] = planRanges.flatMap((range, planIdx) =>
-    buildPlanEntries(range, planLeaves.get(planIdx) ?? [], history).map((e, entryIdx) => ({
+    buildPlanEntries(range, history).map((e, entryIdx) => ({
       sortIndex: e.blockIndex,
       key: `plan-${planIdx}-${entryIdx}`,
       item: e.item,
     }))
   )
 
-  return [...outsideKeyed, ...askKeyed, ...planKeyed]
-    .sort((a, b) => a.sortIndex - b.sortIndex)
-    .map((e) => ({ key: e.key, message: e.item }))
+  const merged = [...leafKeyed, ...askKeyed, ...planKeyed].sort((a, b) => a.sortIndex - b.sortIndex)
+
+  return stampAnswerRun(merged).map((e) => ({ key: e.key, message: e.item }))
 }

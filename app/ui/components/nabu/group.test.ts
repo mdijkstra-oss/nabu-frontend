@@ -4,9 +4,9 @@ import { derive } from "~/lib/agent/derived"
 import {
   toGroupedMessages,
   type GroupedMessage,
-  type PlanHeader,
-  type PlanItem,
-  type PlanStep,
+  type PlanStartMessage,
+  type PlanStepMessage,
+  type LeafMessage,
 } from "./group"
 import {
   submitPlanCall,
@@ -30,12 +30,12 @@ beforeEach(() => resetCallIdCounter())
 const group = (history: Block[], files = {}): GroupedMessage[] =>
   toGroupedMessages(history, derive(history, files)).map((k) => k.message)
 
-const isPlanHeader = (m: GroupedMessage): m is PlanHeader => m.type === "plan-header"
-const isPlanItem = (m: GroupedMessage): m is PlanItem => m.type === "plan-item"
-const isPlanStepItem = (m: GroupedMessage): m is PlanItem =>
-  m.type === "plan-item" && m.child.type === "plan-step"
-const planSteps = (result: GroupedMessage[]): PlanStep[] =>
-  result.filter(isPlanStepItem).map((m) => m.child as PlanStep)
+const isPlanStart = (m: GroupedMessage): m is PlanStartMessage => m.type === "plan-start"
+const isPlanStep = (m: GroupedMessage): m is PlanStepMessage => m.type === "plan-step"
+const isAssistantLeaf = (m: GroupedMessage): m is LeafMessage =>
+  m.type === "text" && m.role === "assistant"
+
+const planSteps = (result: GroupedMessage[]): PlanStepMessage[] => result.filter(isPlanStep)
 
 describe("toGroupedMessages", () => {
   describe("no plan", () => {
@@ -52,8 +52,13 @@ describe("toGroupedMessages", () => {
         history: [userBlock("Hello"), textBlock("Hi there")],
         check: (result: GroupedMessage[]) => {
           expect(result).toHaveLength(2)
-          expect(result[0]).toEqual({ type: "text", role: "user", content: "Hello" })
-          expect(result[1]).toEqual({ type: "text", role: "assistant", content: "Hi there" })
+          expect(result[0]).toMatchObject({ type: "text", role: "user", content: "Hello" })
+          expect(result[1]).toMatchObject({
+            type: "text",
+            role: "assistant",
+            content: "Hi there",
+            firstInAnswerRun: true,
+          })
         },
       },
     ]
@@ -64,7 +69,7 @@ describe("toGroupedMessages", () => {
   describe("simple plan", () => {
     const cases = [
       {
-        name: "plan header and items contain steps and messages interleaved",
+        name: "plan-start and plan-step interleave with leaves",
         history: [
           userBlock("Help me"),
           ...submitPlanCall("Build feature", ["Design", "Implement"]),
@@ -74,30 +79,25 @@ describe("toGroupedMessages", () => {
         ],
         check: (result: GroupedMessage[]) => {
           expect(result[0].type).toBe("text")
-          const header = mustFind(result, isPlanHeader)
-          expect(header.task).toBe("Build feature")
-          expect(header.completed).toBe(false)
-          expect(header.aborted).toBe(false)
+          const start = mustFind(result, isPlanStart)
+          expect(start.task).toBe("Build feature")
+          expect(start.completed).toBe(false)
+          expect(start.aborted).toBe(false)
           const steps = planSteps(result)
           expect(steps).toHaveLength(2)
           expect(steps[0].status).toBe("completed")
           expect(steps[1].status).toBe("active")
-          const textLeaf = result.find(
-            (m) =>
-              m.type === "plan-item" &&
-              m.child.type === "text" &&
-              m.child.content === "Starting design"
-          )
-          expect(textLeaf).toBeDefined()
+          const leaves = result.filter(isAssistantLeaf)
+          expect(leaves.map((l) => l.content)).toEqual(["Starting design", "Now implementing"])
         },
       },
       {
         name: "completed plan has completed flag and all steps completed",
         history: [...submitPlanCall("Task", ["Step 1"]), ...completeStepCall()],
         check: (result: GroupedMessage[]) => {
-          const header = mustFind(result, isPlanHeader)
-          expect(header.completed).toBe(true)
-          expect(header.aborted).toBe(false)
+          const start = mustFind(result, isPlanStart)
+          expect(start.completed).toBe(true)
+          expect(start.aborted).toBe(false)
           const steps = planSteps(result)
           expect(steps[0].status).toBe("completed")
         },
@@ -106,23 +106,12 @@ describe("toGroupedMessages", () => {
         name: "cancelled plan has aborted flag and cancelled step",
         history: [...submitPlanCall("Task", ["Step 1", "Step 2"]), ...cancelCall()],
         check: (result: GroupedMessage[]) => {
-          const header = mustFind(result, isPlanHeader)
-          expect(header.aborted).toBe(true)
-          expect(header.completed).toBe(false)
+          const start = mustFind(result, isPlanStart)
+          expect(start.aborted).toBe(true)
+          expect(start.completed).toBe(false)
           const steps = planSteps(result)
           expect(steps[0].status).toBe("cancelled")
           expect(steps[1].status).toBe("pending")
-        },
-      },
-      {
-        name: "all plan items have dimmed=false for simple plans",
-        history: [...submitPlanCall("Task", ["Step 1", "Step 2"]), textBlock("Working")],
-        check: (result: GroupedMessage[]) => {
-          const items = result.filter(isPlanItem)
-          expect(items.length).toBeGreaterThan(0)
-          items.forEach((item) => {
-            expect(item.dimmed).toBe(false)
-          })
         },
       },
     ]
@@ -133,7 +122,7 @@ describe("toGroupedMessages", () => {
   describe("nested steps", () => {
     const cases = [
       {
-        name: "nested steps are flattened as plan items",
+        name: "nested steps are flattened as plan-step messages with nested=true",
         history: [
           ...submitPlanCall("Process", [
             { title: "Setup", expected: "Setup done" },
@@ -153,10 +142,10 @@ describe("toGroupedMessages", () => {
     it.each(cases)("$name", ({ history, check }) => check(group(history)))
   })
 
-  describe("messages before and after plan", () => {
+  describe("messages around plan", () => {
     const cases = [
       {
-        name: "assistant text in silent steps is visible as plan items",
+        name: "assistant text before plan is a top-level leaf",
         history: [
           userBlock("Before plan"),
           textBlock("Response before"),
@@ -164,39 +153,15 @@ describe("toGroupedMessages", () => {
           textBlock("Inside plan"),
         ],
         check: (result: GroupedMessage[]) => {
-          expect(result[0].type).toBe("text")
-          expect(result[1].type).toBe("text")
-          expect(result[2].type).toBe("plan-header")
-          const textItems = result.filter((m) => m.type === "plan-item" && m.child.type === "text")
-          expect(textItems).toHaveLength(1)
+          expect(result[0]).toMatchObject({ type: "text", role: "user" })
+          expect(result[1]).toMatchObject({ type: "text", role: "assistant" })
+          expect(result[2].type).toBe("plan-start")
+          const leaves = result.filter(isAssistantLeaf)
+          expect(leaves).toHaveLength(2)
         },
       },
       {
-        name: "assistant text in checkpoint steps is visible",
-        history: [
-          ...submitPlanCall("Task", [{ title: "Step 1", expected: "done", checkpoint: true }]),
-          textBlock("Waiting for confirmation"),
-        ],
-        check: (result: GroupedMessage[]) => {
-          const textItems = result.filter((m) => m.type === "plan-item" && m.child.type === "text")
-          expect(textItems).toHaveLength(1)
-        },
-      },
-      {
-        name: "user messages in silent steps survive",
-        history: [...submitPlanCall("Task", ["Step 1"]), userBlock("User interruption")],
-        check: (result: GroupedMessage[]) => {
-          const textItems = result.filter((m) => m.type === "plan-item" && m.child.type === "text")
-          expect(textItems).toHaveLength(1)
-          expect((textItems[0] as PlanItem).child).toEqual({
-            type: "text",
-            role: "user",
-            content: "User interruption",
-          })
-        },
-      },
-      {
-        name: "messages after completed plan are leaves, not plan items",
+        name: "messages after completed plan are flat leaves",
         history: [
           ...submitPlanCall("Task", ["Step 1"]),
           textBlock("Inside plan"),
@@ -205,29 +170,17 @@ describe("toGroupedMessages", () => {
           textBlock("Back to chat"),
         ],
         check: (result: GroupedMessage[]) => {
-          const planItems = result.filter((m) => m.type === "plan-item" && m.child.type === "text")
-          expect(planItems).toHaveLength(1)
-          const leaves = result.filter((m) => m.type === "text")
-          expect(leaves).toHaveLength(2)
-          expect(leaves[0]).toEqual({ type: "text", role: "user", content: "After completion" })
-          expect(leaves[1]).toEqual({ type: "text", role: "assistant", content: "Back to chat" })
+          const leaves = result.filter((m) => m.type === "text") as LeafMessage[]
+          expect(leaves).toHaveLength(3)
+          expect(leaves.map((l) => l.content)).toEqual([
+            "Inside plan",
+            "After completion",
+            "Back to chat",
+          ])
         },
       },
       {
-        name: "messages after cancelled plan are leaves",
-        history: [
-          ...submitPlanCall("Task", ["Step 1", "Step 2"]),
-          ...cancelCall(),
-          textBlock("Back to normal"),
-        ],
-        check: (result: GroupedMessage[]) => {
-          const leaves = result.filter((m) => m.type === "text")
-          expect(leaves).toHaveLength(1)
-          expect(leaves[0]).toEqual({ type: "text", role: "assistant", content: "Back to normal" })
-        },
-      },
-      {
-        name: "messages between two plans belong to the earlier plan",
+        name: "two plans both emit plan-start cards",
         history: [
           ...submitPlanCall("First", ["Step 1"]),
           ...completeStepCall(),
@@ -235,13 +188,10 @@ describe("toGroupedMessages", () => {
           ...submitPlanCall("Second", ["Step 2"]),
         ],
         check: (result: GroupedMessage[]) => {
-          const headers = result.filter(isPlanHeader)
-          expect(headers).toHaveLength(2)
-          expect(headers[0].task).toBe("First")
-          expect(headers[1].task).toBe("Second")
-          const leaves = result.filter((m) => m.type === "text")
-          expect(leaves).toHaveLength(1)
-          expect(leaves[0]).toEqual({ type: "text", role: "assistant", content: "Between plans" })
+          const starts = result.filter(isPlanStart)
+          expect(starts).toHaveLength(2)
+          expect(starts[0].task).toBe("First")
+          expect(starts[1].task).toBe("Second")
         },
       },
     ]
@@ -249,45 +199,55 @@ describe("toGroupedMessages", () => {
     it.each(cases)("$name", ({ history, check }) => check(group(history)))
   })
 
-  describe("multiple plans", () => {
+  describe("firstInAnswerRun stamping", () => {
+    const flagsOf = (result: GroupedMessage[]): (boolean | undefined)[] =>
+      result.filter(isAssistantLeaf).map((l) => l.firstInAnswerRun)
+
     const cases = [
       {
-        name: "each plan gets its own PlanHeader",
+        name: "single assistant after user is first-in-run",
+        history: [userBlock("Q"), textBlock("A")],
+        expected: [true],
+      },
+      {
+        name: "consecutive assistants after one user — first true, rest false",
+        history: [userBlock("Q"), textBlock("A1"), textBlock("A2"), textBlock("A3")],
+        expected: [true, false, false],
+      },
+      {
+        name: "user between assistants resets run",
+        history: [userBlock("Q1"), textBlock("A1"), userBlock("Q2"), textBlock("A2")],
+        expected: [true, true],
+      },
+      {
+        name: "plan-start between assistants resets run",
         history: [
-          ...submitPlanCall("First task", ["Step A"]),
-          textBlock("Working on first"),
-          ...cancelCall(),
-          ...submitPlanCall("Second task", ["Step B"]),
-          textBlock("Working on second"),
+          userBlock("Q"),
+          textBlock("A1"),
+          ...submitPlanCall("Task", ["Step"]),
+          textBlock("A2"),
         ],
-        check: (result: GroupedMessage[]) => {
-          const headers = result.filter(isPlanHeader)
-          expect(headers).toHaveLength(2)
-          expect(headers[0].task).toBe("First task")
-          expect(headers[0].aborted).toBe(true)
-          expect(headers[1].task).toBe("Second task")
-          expect(headers[1].aborted).toBe(false)
-        },
+        expected: [true, true],
       },
-    ]
-
-    it.each(cases)("$name", ({ history, check }) => check(group(history)))
-  })
-
-  describe("streaming not in message list", () => {
-    const cases = [
       {
-        name: "assistant text in silent step is visible in grouped output",
-        history: [...submitPlanCall("Task", ["Step 1"]), textBlock("Working")],
-        check: (result: GroupedMessage[]) => {
-          const textItems = result.filter(
-            (m) => (m.type === "plan-item" && m.child.type === "text") || m.type === "text"
-          )
-          expect(textItems).toHaveLength(1)
-        },
+        name: "plan-step between assistants resets run",
+        history: [
+          ...submitPlanCall("Task", ["Step 1", "Step 2"]),
+          textBlock("A1"),
+          ...completeStepCall(),
+          textBlock("A2"),
+        ],
+        expected: [true, true],
+      },
+      {
+        name: "first assistant on empty history is still first-in-run",
+        history: [textBlock("A")],
+        expected: [true],
       },
     ]
 
-    it.each(cases)("$name", ({ history, check }) => check(group(history)))
+    it.each(cases)("$name", ({ history, expected }) => {
+      expect(flagsOf(group(history))).toEqual(expected)
+    })
   })
 })

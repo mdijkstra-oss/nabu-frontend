@@ -18,17 +18,15 @@ import { TextFieldUnstyled } from "~/ui/components/TextFieldUnstyled"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { AnimatedListItem } from "~/ui/components/AnimatedListItem"
 import { useChat } from "~/ui/hooks/useChat"
-import { derive, hasActivePlan, isCurrentStepCheckpoint } from "~/lib/agent/derived"
+import { derive, hasActivePlan, isCurrentStepCheckpoint, lastPlan } from "~/lib/agent/derived"
 import { pushBlocks } from "~/lib/agent/client/store"
 import {
   toGroupedMessages,
   type GroupedMessage,
   type KeyedMessage,
   type LeafMessage,
-  type PlanHeader,
-  type PlanItem,
-  type PlanChild,
-  type PlanStep,
+  type PlanStartMessage,
+  type PlanStepMessage,
   type StepStatus,
 } from "./group"
 import type { AskMessage } from "./messages"
@@ -57,7 +55,7 @@ import { buildFileContextBlocks } from "~/lib/agent/context-blocks"
 import { pickGreeting } from "./greetings"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import { ChatSendButton, deriveChatButtonMode } from "./ChatSendButton"
-import { TimelineCard, Connector, formatHourMinute } from "./TimelineCard"
+import { TimelineCard, Connector, type TimelineMarker } from "./TimelineCard"
 
 const allowFileProtocol = (url: string): string => url
 
@@ -161,50 +159,18 @@ const stepIconColor: Record<StepStatus, string> = {
   cancelled: "text-neutral-400",
 }
 
-const stepTextColor: Record<StepStatus, string> = {
-  completed: "text-default-font",
-  active: "text-default-font",
-  pending: "text-neutral-400",
-  cancelled: "text-neutral-400",
+const stepKindClass: Record<StepStatus, string> = {
+  completed: "text-[11px] font-bold uppercase tracking-[0.08em] text-brand-700",
+  active: "text-[11px] font-bold uppercase tracking-[0.08em] text-brand-700",
+  pending: "text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-400",
+  cancelled: "text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-400",
 }
 
-interface PlanStepRowProps {
-  step: PlanStep
-  files: Record<string, string>
-  projectId: string | null
-  currentFile: string | null
-  currentFileContent: string | null
-  navigate?: (url: string) => void
-}
-
-const PlanStepRow = ({
-  step,
-  files,
-  projectId,
-  currentFile,
-  currentFileContent,
-  navigate,
-}: PlanStepRowProps) => {
-  const Icon = step.checkpoint ? MessageSquare : stepIconComponent[step.status]
-  return (
-    <div className="flex w-full items-start gap-2">
-      <Icon className={`text-body ${stepIconColor[step.status]} mt-0.5 flex-none`} />
-      <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
-        <div
-          className={`prose prose-sm [&>*]:mb-0 [&_a]:no-underline text-body font-body ${stepTextColor[step.status]}`}
-        >
-          <MessageContent
-            content={step.description}
-            files={files}
-            projectId={projectId}
-            currentFile={currentFile}
-            currentFileContent={currentFileContent}
-            navigate={navigate}
-          />
-        </div>
-      </div>
-    </div>
-  )
+const stepMarker: Record<StepStatus, TimelineMarker> = {
+  completed: "step-done",
+  active: "step-active",
+  pending: "step-pending",
+  cancelled: "step-cancelled",
 }
 
 const displayContent = (message: LeafMessage): string | null =>
@@ -225,6 +191,8 @@ const leafPropsEqual = (prev: LeafRendererProps, next: LeafRendererProps): boole
   prev.message.role === next.message.role &&
   prev.message.draft === next.message.draft &&
   prev.message.timestamp === next.message.timestamp &&
+  prev.message.firstInAnswerRun === next.message.firstInAnswerRun &&
+  prev.message.inPlan === next.message.inPlan &&
   prev.files === next.files &&
   prev.projectId === next.projectId &&
   prev.currentFile === next.currentFile &&
@@ -245,9 +213,12 @@ const LeafRenderer = memo(
     const content = displayContent(message)
     if (!content) return null
     const isUser = message.role === "user"
+    const isContinuation = !isUser && message.firstInAnswerRun === false
+    const isPlanLeaf = message.inPlan === true
+    const hideCaption = isContinuation || isPlanLeaf
     return (
       <TimelineCard
-        kind={isUser ? "QUESTION" : "ANSWER"}
+        kind={hideCaption ? null : isUser ? "QUESTION" : "ANSWER"}
         marker={isUser ? "ask" : "respond"}
         scrollOnMount={isUser && isLast}
         timestamp={message.timestamp}
@@ -424,198 +395,113 @@ const AskRenderer = memo(
   askPropsEqual
 )
 
-const isPlanStep = (child: PlanChild): child is PlanStep => child.type === "plan-step"
-const isLeafMessage = (child: PlanChild): child is LeafMessage => child.type === "text"
-
-const PlanLeafInline = ({
-  message,
-  files,
-  projectId,
-  currentFile,
-  currentFileContent,
-  navigate,
-}: {
-  message: LeafMessage
+interface PlanStartCardProps {
+  message: PlanStartMessage
   files: Record<string, string>
   projectId: string | null
   currentFile: string | null
   currentFileContent: string | null
   navigate?: (url: string) => void
-}) => {
-  const content = displayContent(message)
-  if (!content) return null
-  const label = message.role === "user" ? "QUESTION" : "ANSWER"
-  const time = message.timestamp !== undefined ? formatHourMinute(message.timestamp) : null
-  return (
-    <div className="group w-full border-l-2 border-neutral-200 pl-3">
-      <div className="mb-1 flex items-center gap-2">
-        <span className="text-caption font-caption text-subtext-color uppercase tracking-wide">
-          {label}
-        </span>
-        {time && (
-          <span className="text-[11px] text-neutral-400 opacity-0 transition-opacity group-hover:opacity-100">
-            {time}
-          </span>
-        )}
-      </div>
-      <div className="prose prose-sm text-body font-body text-default-font [&>*]:mb-0 [&_a]:no-underline [&_h1]:!text-sm [&_h2]:!text-sm [&_h3]:!text-sm [&_h4]:!text-sm [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold">
+}
+
+const planStartPropsEqual = (prev: PlanStartCardProps, next: PlanStartCardProps): boolean =>
+  prev.message.task === next.message.task &&
+  prev.message.completed === next.message.completed &&
+  prev.message.aborted === next.message.aborted &&
+  prev.message.timestamp === next.message.timestamp &&
+  prev.files === next.files &&
+  prev.projectId === next.projectId &&
+  prev.currentFile === next.currentFile &&
+  prev.currentFileContent === next.currentFileContent &&
+  prev.navigate === next.navigate
+
+const PlanStartCard = memo(
+  ({
+    message,
+    files,
+    projectId,
+    currentFile,
+    currentFileContent,
+    navigate,
+  }: PlanStartCardProps) => (
+    <TimelineCard kind="PLAN" marker="plan" timestamp={message.timestamp}>
+      <CardBody>
         <MessageContent
-          content={content}
+          content={message.task}
           files={files}
           projectId={projectId}
           currentFile={currentFile}
           currentFileContent={currentFileContent}
           navigate={navigate}
         />
-      </div>
+      </CardBody>
+    </TimelineCard>
+  ),
+  planStartPropsEqual
+)
+
+interface PlanStepCardProps {
+  message: PlanStepMessage
+}
+
+const planStepPropsEqual = (prev: PlanStepCardProps, next: PlanStepCardProps): boolean =>
+  prev.message.description === next.message.description &&
+  prev.message.status === next.message.status &&
+  prev.message.checkpoint === next.message.checkpoint &&
+  prev.message.nested === next.message.nested &&
+  prev.message.timestamp === next.message.timestamp
+
+const PlanStepCard = memo(({ message }: PlanStepCardProps) => {
+  const marker: TimelineMarker = message.checkpoint ? "step-checkpoint" : stepMarker[message.status]
+  const Icon = message.checkpoint ? MessageSquare : stepIconComponent[message.status]
+  const glyph = <Icon className={`text-body ${stepIconColor[message.status]} flex-none`} />
+  return (
+    <div className={message.nested ? "pl-4" : ""}>
+      <TimelineCard
+        kind={message.description.toUpperCase()}
+        marker={marker}
+        timestamp={message.timestamp}
+        glyph={glyph}
+        kindClassName={stepKindClass[message.status]}
+      />
     </div>
   )
-}
+}, planStepPropsEqual)
 
-interface PlanChildRendererProps {
-  child: PlanChild
-  files: Record<string, string>
-  projectId: string | null
-  currentFile: string | null
-  currentFileContent: string | null
-  navigate?: (url: string) => void
-}
-
-const PlanChildRenderer = ({
-  child,
-  files,
-  projectId,
-  currentFile,
-  currentFileContent,
-  navigate,
-}: PlanChildRendererProps) => {
-  if (isPlanStep(child))
-    return (
-      <PlanStepRow
-        step={child}
-        files={files}
-        projectId={projectId}
-        currentFile={currentFile}
-        currentFileContent={currentFileContent}
-        navigate={navigate}
-      />
-    )
-  if (isLeafMessage(child))
-    return (
-      <PlanLeafInline
-        message={child}
-        files={files}
-        projectId={projectId}
-        currentFile={currentFile}
-        currentFileContent={currentFileContent}
-        navigate={navigate}
-      />
-    )
-  return null
-}
-
-interface PlanHeaderRendererProps {
-  header: PlanHeader
-  files: Record<string, string>
-  projectId: string | null
-  currentFile: string | null
-  currentFileContent: string | null
-  navigate?: (url: string) => void
-}
-
-const PlanHeaderRenderer = ({
-  header,
-  files,
-  projectId,
-  currentFile,
-  currentFileContent,
-  navigate,
-}: PlanHeaderRendererProps) => (
-  <div className="flex w-full flex-col items-stretch border-b border-neutral-100 pb-2 mb-2">
-    <div className="prose prose-sm [&>*]:mb-0 [&_a]:no-underline text-body-bold font-body-bold text-default-font">
-      <MessageContent
-        content={header.task}
-        files={files}
-        projectId={projectId}
-        currentFile={currentFile}
-        currentFileContent={currentFileContent}
-        navigate={navigate}
-      />
-    </div>
-  </div>
-)
-
-const PlanItemRenderer = ({
-  item,
-  files,
-  projectId,
-  currentFile,
-  currentFileContent,
-  navigate,
-}: {
-  item: PlanItem
-  files: Record<string, string>
-  projectId: string | null
-  currentFile: string | null
-  currentFileContent: string | null
-  navigate?: (url: string) => void
-}) => (
-  <div className={`flex w-full flex-col items-start${item.dimmed ? " opacity-50" : ""}`}>
-    <PlanChildRenderer
-      child={item.child}
-      files={files}
-      projectId={projectId}
-      currentFile={currentFile}
-      currentFileContent={currentFileContent}
-      navigate={navigate}
-    />
-  </div>
-)
-
-type PlanMessage = PlanHeader | PlanItem
-
-interface PlanSegment {
-  type: "plan-segment"
-  items: PlanMessage[]
-}
 interface CollapsedSteps {
   type: "collapsed-steps"
   count: number
 }
-type RenderSegment = LeafMessage | AskMessage | PlanSegment
-type FinalSegment = RenderSegment | CollapsedSteps
+
+interface ContinuePromptSegment {
+  type: "continue-prompt"
+}
+
+type FinalSegment = GroupedMessage | CollapsedSteps | ContinuePromptSegment
 
 interface KeyedSegment {
   key: string
   segment: FinalSegment
 }
 
-const isPlanRelated = (m: GroupedMessage): m is PlanMessage =>
-  m.type === "plan-header" || m.type === "plan-item"
-
-const isPlanSegment = (s: FinalSegment): s is PlanSegment => s.type === "plan-segment"
-
 const isAskSegment = (s: FinalSegment): s is AskMessage => s.type === "ask"
+
+const isPlanStartSegment = (s: FinalSegment): s is PlanStartMessage => s.type === "plan-start"
+
+const isPlanStepSegment = (s: FinalSegment): s is PlanStepMessage => s.type === "plan-step"
 
 const isCollapsedSteps = (s: FinalSegment): s is CollapsedSteps => s.type === "collapsed-steps"
 
-const toKeyedSegments = (entries: KeyedMessage[]): KeyedSegment[] =>
-  entries.reduce<KeyedSegment[]>((acc, { key, message }) => {
-    if (!isPlanRelated(message)) {
-      acc.push({ key, segment: message })
-      return acc
-    }
-    const prev = acc[acc.length - 1]
-    if (prev && isPlanSegment(prev.segment)) {
-      ;(prev.segment as PlanSegment).items.push(message)
-      return acc
-    }
-    acc.push({ key, segment: { type: "plan-segment", items: [message] } })
-    return acc
-  }, [])
+const isContinuePromptSegment = (s: FinalSegment): s is ContinuePromptSegment =>
+  s.type === "continue-prompt"
 
-const countPlanSteps = (items: PlanMessage[]): number =>
-  items.filter((item) => item.type === "plan-item" && isPlanStep(item.child)).length
+const isLeafSegment = (s: FinalSegment): s is LeafMessage => s.type === "text"
+
+const toKeyedSegments = (entries: KeyedMessage[]): KeyedSegment[] =>
+  entries.map(({ key, message }) => ({ key, segment: message }))
+
+const countStepCards = (segments: KeyedSegment[]): number =>
+  segments.filter(({ segment }) => isPlanStepSegment(segment)).length
 
 const findLastAskIndex = (segments: KeyedSegment[]): number => {
   for (let i = segments.length - 1; i >= 0; i--) {
@@ -629,60 +515,12 @@ const collapseAfterPendingAsk = (segments: KeyedSegment[], waiting: boolean): Ke
   const lastAskIdx = findLastAskIndex(segments)
   if (lastAskIdx === -1) return segments
   const after = segments.slice(lastAskIdx + 1)
-  const count = after.reduce(
-    (sum: number, { segment: s }) => (isPlanSegment(s) ? sum + countPlanSteps(s.items) : sum),
-    0
-  )
+  const count = countStepCards(after)
   if (count === 0) return segments
   return [
     ...segments.slice(0, lastAskIdx + 1),
     { key: "collapsed", segment: { type: "collapsed-steps", count } },
   ]
-}
-
-interface PlanSegmentItemRendererProps {
-  item: PlanMessage
-  files: Record<string, string>
-  projectId: string | null
-  currentFile: string | null
-  currentFileContent: string | null
-  navigate?: (url: string) => void
-}
-
-const PlanSegmentItemRenderer = ({
-  item,
-  files,
-  projectId,
-  currentFile,
-  currentFileContent,
-  navigate,
-}: PlanSegmentItemRendererProps) => {
-  switch (item.type) {
-    case "plan-header":
-      return (
-        <PlanHeaderRenderer
-          header={item}
-          files={files}
-          projectId={projectId}
-          currentFile={currentFile}
-          currentFileContent={currentFileContent}
-          navigate={navigate}
-        />
-      )
-    case "plan-item":
-      return (
-        <PlanItemRenderer
-          item={item}
-          files={files}
-          projectId={projectId}
-          currentFile={currentFile}
-          currentFileContent={currentFileContent}
-          navigate={navigate}
-        />
-      )
-    default:
-      return exhaustive(item)
-  }
 }
 
 const CollapsedStepsIndicator = ({ count }: { count: number }) => (
@@ -698,114 +536,6 @@ const PlanContinuePrompt = ({ onContinue }: { onContinue: () => void }) => (
     </OptionCard>
   </div>
 )
-
-const isPendingPlanStep = (item: PlanMessage): boolean =>
-  item.type === "plan-item" && isPlanStep(item.child) && item.child.status === "pending"
-
-const hasInlineLeaf = (items: PlanMessage[]): boolean =>
-  items.some((item) => item.type === "plan-item" && isLeafMessage(item.child))
-
-interface TrailingSplit {
-  visible: PlanMessage[]
-  pendingCount: number
-}
-
-const splitTrailingPending = (items: PlanMessage[], loading: boolean): TrailingSplit => {
-  if (loading || !hasInlineLeaf(items)) return { visible: items, pendingCount: 0 }
-  let splitIdx = items.length
-  for (let i = items.length - 1; i >= 0; i--) {
-    if (!isPendingPlanStep(items[i])) break
-    splitIdx = i
-  }
-  return { visible: items.slice(0, splitIdx), pendingCount: items.length - splitIdx }
-}
-
-interface PlanSegmentRendererProps {
-  items: PlanMessage[]
-  loading: boolean
-  files: Record<string, string>
-  projectId: string | null
-  currentFile: string | null
-  currentFileContent: string | null
-  navigate?: (url: string) => void
-}
-
-type SegmentRun = { type: "single"; item: PlanMessage } | { type: "nested"; items: PlanMessage[] }
-
-const isAbortedPlan = (items: PlanMessage[]): boolean =>
-  items.some((item) => item.type === "plan-header" && item.aborted)
-
-const isNestedPlanItem = (item: PlanMessage): boolean =>
-  item.type === "plan-item" && item.child.type === "plan-step" && item.child.nested
-
-const groupIntoRuns = (items: PlanMessage[]): SegmentRun[] =>
-  items.reduce<SegmentRun[]>((acc, item) => {
-    if (!isNestedPlanItem(item)) {
-      acc.push({ type: "single", item })
-      return acc
-    }
-    const prev = acc[acc.length - 1]
-    if (prev && prev.type === "nested") {
-      prev.items.push(item)
-      return acc
-    }
-    acc.push({ type: "nested", items: [item] })
-    return acc
-  }, [])
-
-const PlanSegmentRenderer = ({
-  items,
-  loading,
-  files,
-  projectId,
-  currentFile,
-  currentFileContent,
-  navigate,
-}: PlanSegmentRendererProps) => {
-  const { visible, pendingCount } = splitTrailingPending(items, loading)
-  const runs = groupIntoRuns(visible)
-  return (
-    <TimelineCard kind="PLAN" marker="respond">
-      <div className="flex w-full flex-col items-stretch gap-2">
-        {runs.map((run, i) =>
-          run.type === "single" ? (
-            <PlanSegmentItemRenderer
-              key={i}
-              item={run.item}
-              files={files}
-              projectId={projectId}
-              currentFile={currentFile}
-              currentFileContent={currentFileContent}
-              navigate={navigate}
-            />
-          ) : (
-            <div
-              key={i}
-              className="flex w-full flex-col items-stretch gap-2 border-l-2 border-solid border-neutral-100 pl-3"
-            >
-              {run.items.map((item, j) => (
-                <PlanSegmentItemRenderer
-                  key={j}
-                  item={item}
-                  files={files}
-                  projectId={projectId}
-                  currentFile={currentFile}
-                  currentFileContent={currentFileContent}
-                  navigate={navigate}
-                />
-              ))}
-            </div>
-          )
-        )}
-        {isAbortedPlan(items) ? (
-          <AbortBox />
-        ) : (
-          pendingCount > 0 && <CollapsedStepsIndicator count={pendingCount} />
-        )}
-      </div>
-    </TimelineCard>
-  )
-}
 
 interface TickLabelProps {
   labels: string[]
@@ -903,6 +633,106 @@ const LastWriteBar = ({ entry, currentFile, onClick }: LastWriteBarProps) => {
   )
 }
 
+interface SegmentRendererProps {
+  segment: FinalSegment
+  files: Record<string, string>
+  projectId: string | null
+  currentFile: string | null
+  currentFileContent: string | null
+  navigate: (url: string) => void
+  onSelect: (option: string) => void
+  onContinue: () => void
+  isLast: boolean
+}
+
+const SegmentRenderer = ({
+  segment,
+  files,
+  projectId,
+  currentFile,
+  currentFileContent,
+  navigate,
+  onSelect,
+  onContinue,
+  isLast,
+}: SegmentRendererProps) => {
+  if (isLeafSegment(segment))
+    return (
+      <LeafRenderer
+        message={segment}
+        files={files}
+        projectId={projectId}
+        currentFile={currentFile}
+        currentFileContent={currentFileContent}
+        navigate={navigate}
+        isLast={isLast}
+      />
+    )
+  if (isAskSegment(segment))
+    return (
+      <AskRenderer
+        message={segment}
+        files={files}
+        projectId={projectId}
+        currentFile={currentFile}
+        currentFileContent={currentFileContent}
+        navigate={navigate}
+        onSelect={onSelect}
+        isLast={isLast}
+      />
+    )
+  if (isPlanStartSegment(segment))
+    return (
+      <PlanStartCard
+        message={segment}
+        files={files}
+        projectId={projectId}
+        currentFile={currentFile}
+        currentFileContent={currentFileContent}
+        navigate={navigate}
+      />
+    )
+  if (isPlanStepSegment(segment)) return <PlanStepCard message={segment} />
+  if (isCollapsedSteps(segment))
+    return (
+      <div className="pl-[30px] w-full">
+        <CollapsedStepsIndicator count={segment.count} />
+      </div>
+    )
+  if (isContinuePromptSegment(segment))
+    return (
+      <div className="pl-[30px] w-full">
+        <PlanContinuePrompt onContinue={onContinue} />
+      </div>
+    )
+  return exhaustive(segment)
+}
+
+const findActiveCheckpointIndex = (segments: KeyedSegment[]): number =>
+  segments.findIndex(
+    (s) => isPlanStepSegment(s.segment) && s.segment.status === "active" && s.segment.checkpoint
+  )
+
+const findStepBoundaryAfter = (segments: KeyedSegment[], start: number): number => {
+  for (let i = start; i < segments.length; i++) {
+    const t = segments[i].segment.type
+    if (t === "plan-step" || t === "plan-start") return i
+  }
+  return segments.length
+}
+
+const injectContinuePrompt = (segments: KeyedSegment[], waiting: boolean): KeyedSegment[] => {
+  if (!waiting) return segments
+  const checkpointIdx = findActiveCheckpointIndex(segments)
+  if (checkpointIdx === -1) return segments
+  const insertAt = findStepBoundaryAfter(segments, checkpointIdx + 1)
+  const prompt: KeyedSegment = {
+    key: "continue-prompt",
+    segment: { type: "continue-prompt" },
+  }
+  return [...segments.slice(0, insertAt), prompt, ...segments.slice(insertAt)]
+}
+
 interface NabuChatSidebarProps {
   appReady: boolean
 }
@@ -927,7 +757,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   const keyedMessages = useMemo(() => toGroupedMessages(history, derived), [history, derived])
   const rawSegments = useMemo(() => toKeyedSegments(keyedMessages), [keyedMessages])
   const waitingForInput = useMemo(() => isWaitingForAsk(history), [history])
-  const segments = useMemo(
+  const collapsedSegments = useMemo(
     () => collapseAfterPendingAsk(rawSegments, waitingForInput),
     [rawSegments, waitingForInput]
   )
@@ -1001,6 +831,12 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   )
 
   const spinnerLabels = loading && !isStreamingText ? getSpinnerLabels(history, draft) : null
+  const activePlan = lastPlan(derived.plans)
+  const showAbortBox = activePlan?.aborted === true
+  const segments = useMemo(
+    () => injectContinuePrompt(collapsedSegments, isWaitingForContinue),
+    [collapsedSegments, isWaitingForContinue]
+  )
 
   return (
     <div className="flex w-full grow flex-col overflow-hidden">
@@ -1014,39 +850,16 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
         )}
         {segments.flatMap(({ key, segment }, index) => {
           const isLast = index === segments.length - 1
-          const renderSegment = isPlanSegment(segment) ? (
-            <PlanSegmentRenderer
-              items={segment.items}
-              loading={loading}
-              files={files}
-              projectId={params.projectId ?? null}
-              currentFile={currentFile}
-              currentFileContent={currentFileContent}
-              navigate={navigate}
-            />
-          ) : isAskSegment(segment) ? (
-            <AskRenderer
-              message={segment}
+          const renderSegment = (
+            <SegmentRenderer
+              segment={segment}
               files={files}
               projectId={params.projectId ?? null}
               currentFile={currentFile}
               currentFileContent={currentFileContent}
               navigate={navigate}
               onSelect={respond}
-              isLast={isLast}
-            />
-          ) : isCollapsedSteps(segment) ? (
-            <div className="pl-[30px] w-full">
-              <CollapsedStepsIndicator count={segment.count} />
-            </div>
-          ) : (
-            <LeafRenderer
-              message={segment}
-              files={files}
-              projectId={params.projectId ?? null}
-              currentFile={currentFile}
-              currentFileContent={currentFileContent}
-              navigate={navigate}
+              onContinue={handleContinue}
               isLast={isLast}
             />
           )
@@ -1059,11 +872,11 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
           )
           return items
         })}
-        {isWaitingForContinue && (
+        {showAbortBox && (
           <>
             {segments.length > 0 && <Connector />}
             <div className="pl-[30px] w-full">
-              <PlanContinuePrompt onContinue={handleContinue} />
+              <AbortBox />
             </div>
           </>
         )}
