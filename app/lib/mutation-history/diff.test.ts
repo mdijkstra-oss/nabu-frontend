@@ -38,6 +38,7 @@ const pick = (entry: HistoryEntry) => ({
   verb: entry.verb,
   entityKind: entry.entityKind,
   entityId: entry.entityId,
+  actor: entry.actor,
   label: entry.label,
   ...(entry.color ? { color: entry.color } : {}),
 })
@@ -53,10 +54,11 @@ describe("diffFileContent", () => {
           verb: "added",
           entityKind: "annotation",
           entityId: "annotation-1",
+          actor: "ai",
           label: "hello world",
           color: "red",
         },
-        { verb: "updated", entityKind: "text", entityId: null, label: "test.md" },
+        { verb: "updated", entityKind: "text", entityId: null, actor: "ai", label: "test.md" },
       ],
     },
     {
@@ -68,10 +70,11 @@ describe("diffFileContent", () => {
           verb: "removed",
           entityKind: "annotation",
           entityId: "annotation-1",
+          actor: "ai",
           label: "hello world",
           color: "red",
         },
-        { verb: "updated", entityKind: "text", entityId: null, label: "test.md" },
+        { verb: "updated", entityKind: "text", entityId: null, actor: "ai", label: "test.md" },
       ],
     },
     {
@@ -83,6 +86,7 @@ describe("diffFileContent", () => {
           verb: "updated",
           entityKind: "annotation",
           entityId: "annotation-1",
+          actor: "ai",
           label: "new text",
           color: "red",
         },
@@ -97,6 +101,7 @@ describe("diffFileContent", () => {
           verb: "updated",
           entityKind: "annotation",
           entityId: "annotation-1",
+          actor: "ai",
           label: "text",
           color: "blue",
         },
@@ -111,7 +116,13 @@ describe("diffFileContent", () => {
         buildAnnotations([annotation("annotation-1", "text", { code: "code_2", color: undefined })])
       ),
       expected: [
-        { verb: "updated", entityKind: "annotation", entityId: "annotation-1", label: "text" },
+        {
+          verb: "updated",
+          entityKind: "annotation",
+          entityId: "annotation-1",
+          actor: "ai",
+          label: "text",
+        },
       ],
     },
     {
@@ -123,6 +134,7 @@ describe("diffFileContent", () => {
           verb: "updated",
           entityKind: "annotation",
           entityId: "annotation-1",
+          actor: "ai",
           label: "text",
           color: "red",
         },
@@ -137,6 +149,7 @@ describe("diffFileContent", () => {
           verb: "removed",
           entityKind: "annotation",
           entityId: "annotation-1",
+          actor: "ai",
           label: "keep me",
           color: "red",
         },
@@ -144,6 +157,7 @@ describe("diffFileContent", () => {
           verb: "added",
           entityKind: "annotation",
           entityId: "annotation-2",
+          actor: "ai",
           label: "new one",
           color: "red",
         },
@@ -164,6 +178,7 @@ describe("diffFileContent", () => {
           verb: "added",
           entityKind: "code",
           entityId: "callout-1",
+          actor: "ai",
           label: "My Code",
           color: "blue",
         },
@@ -178,6 +193,7 @@ describe("diffFileContent", () => {
           verb: "removed",
           entityKind: "code",
           entityId: "callout-1",
+          actor: "ai",
           label: "My Code",
           color: "blue",
         },
@@ -192,6 +208,7 @@ describe("diffFileContent", () => {
           verb: "updated",
           entityKind: "code",
           entityId: "callout-1",
+          actor: "ai",
           label: "New Title",
           color: "blue",
         },
@@ -206,6 +223,7 @@ describe("diffFileContent", () => {
           verb: "updated",
           entityKind: "code",
           entityId: "callout-1",
+          actor: "ai",
           label: "Title",
           color: "blue",
         },
@@ -215,13 +233,17 @@ describe("diffFileContent", () => {
       name: "tag added (no color)",
       oldRaw: buildDoc(buildAttributes({ tags: ["existing"] })),
       newRaw: buildDoc(buildAttributes({ tags: ["existing", "new-tag"] })),
-      expected: [{ verb: "added", entityKind: "tag", entityId: null, label: "new-tag" }],
+      expected: [
+        { verb: "added", entityKind: "tag", entityId: null, actor: "ai", label: "new-tag" },
+      ],
     },
     {
       name: "tag removed (no color)",
       oldRaw: buildDoc(buildAttributes({ tags: ["remove-me", "keep"] })),
       newRaw: buildDoc(buildAttributes({ tags: ["keep"] })),
-      expected: [{ verb: "removed", entityKind: "tag", entityId: null, label: "remove-me" }],
+      expected: [
+        { verb: "removed", entityKind: "tag", entityId: null, actor: "ai", label: "remove-me" },
+      ],
     },
     {
       name: "composite: annotation + tag in same diff",
@@ -235,11 +257,12 @@ describe("diffFileContent", () => {
           verb: "added",
           entityKind: "annotation",
           entityId: "annotation-1",
+          actor: "ai",
           label: "hello",
           color: "red",
         },
-        { verb: "removed", entityKind: "tag", entityId: null, label: "old-tag" },
-        { verb: "added", entityKind: "tag", entityId: null, label: "new-tag" },
+        { verb: "removed", entityKind: "tag", entityId: null, actor: "ai", label: "old-tag" },
+        { verb: "added", entityKind: "tag", entityId: null, actor: "ai", label: "new-tag" },
       ],
     },
     {
@@ -252,7 +275,9 @@ describe("diffFileContent", () => {
       name: "prose changed emits text updated",
       oldRaw: "# Title\n\nOld prose here.",
       newRaw: "# Title\n\nNew prose here.",
-      expected: [{ verb: "updated", entityKind: "text", entityId: null, label: "test.md" }],
+      expected: [
+        { verb: "updated", entityKind: "text", entityId: null, actor: "ai", label: "test.md" },
+      ],
     },
     {
       name: "prose unchanged emits nothing",
@@ -270,16 +295,17 @@ describe("diffFileContent", () => {
           verb: "added",
           entityKind: "annotation",
           entityId: "annotation-1",
+          actor: "ai",
           label: "New text.",
           color: "red",
         },
-        { verb: "updated", entityKind: "text", entityId: null, label: "test.md" },
+        { verb: "updated", entityKind: "text", entityId: null, actor: "ai", label: "test.md" },
       ],
     },
   ]
 
   it.each(cases)("$name", ({ oldRaw, newRaw, expected }) => {
-    const entries = diffFileContent(oldRaw, newRaw, "test.md", TS)
+    const entries = diffFileContent(oldRaw, newRaw, "test.md", TS, "ai")
     expect(entries.map(pick)).toEqual(expected)
     entries.forEach((e) => {
       expect(e.path).toBe("test.md")

@@ -92,7 +92,7 @@ const applyMutation = async (op: Operation): Promise<MutationResult> => {
       }
 
       updateFileRaw(result.path, result.content)
-      pushEntries(diffFileContent(oldContent, result.content, redirected.path, ts))
+      pushEntries(diffFileContent(oldContent, result.content, redirected.path, ts, "ai"))
       const ids = result.generatedIds ? formatGeneratedIds(result.generatedIds) : null
       const warnings = result.status === "partial" ? result.warnings : undefined
       const applied = buildAppliedDiff(result.path, oldContent ?? "", result.content)
@@ -102,8 +102,8 @@ const applyMutation = async (op: Operation): Promise<MutationResult> => {
       const oldContent = getFileRaw(redirected.path)
       if (!oldContent) return { error: `${redirected.path}: No such file` }
       pushEntries([
-        ...diffFileContent(oldContent, "", redirected.path, ts),
-        fileDeletedEntry(redirected.path, ts),
+        ...diffFileContent(oldContent, "", redirected.path, ts, "ai"),
+        fileDeletedEntry(redirected.path, ts, "ai"),
       ])
       deleteFile(redirected.path)
       return { ids: null }
@@ -112,7 +112,7 @@ const applyMutation = async (op: Operation): Promise<MutationResult> => {
       if (!getFileRaw(redirected.path)) return { error: `${redirected.path}: No such file` }
       if (getFileRaw(redirected.newPath)) return { error: `${redirected.newPath}: already exists` }
       renameFile(redirected.path, redirected.newPath)
-      pushEntries([fileRenamedEntry(redirected.path, redirected.newPath, ts)])
+      pushEntries([fileRenamedEntry(redirected.path, redirected.newPath, ts, "ai")])
       return { ids: null }
     }
     default:

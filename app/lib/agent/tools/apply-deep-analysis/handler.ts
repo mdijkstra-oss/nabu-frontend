@@ -122,7 +122,7 @@ const applyAnnotationsEager = async (
     })
     if (finalized.status === "error")
       return { status: "error", output: finalized.error, mutations: [] }
-    writeFileTracked(mutation.path, finalized.content)
+    writeFileTracked(mutation.path, finalized.content, "ai")
   }
 
   return { status: result.status, output: String(result.output), mutations: [] }
