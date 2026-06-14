@@ -11,6 +11,7 @@ import { useProject } from "./project"
 import { toDisplayName } from "~/lib/files/filename"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 import { ScrollGutter } from "~/ui/components/editor/ScrollGutter"
+import { ScrollShadow } from "~/ui/components/ScrollShadow"
 import { FileHeader } from "~/ui/components/editor/FileHeader"
 import { StatusBar } from "~/ui/components/StatusBar"
 import {
@@ -155,14 +156,14 @@ export default function ProjectFile() {
           ]}
           onAddTag={() => undefined}
         />
-        <div className="flex w-full grow shrink basis-0 min-h-0 items-stretch overflow-hidden">
-          <div
-            ref={scrollContainerRef}
-            className="flex grow shrink-0 basis-0 flex-col items-start pl-12 pr-6 py-6 overflow-auto"
+        <div className="flex w-full grow shrink basis-0 min-h-0 items-stretch">
+          <ScrollShadow
+            scrollRef={scrollContainerRef}
+            className="flex-col items-start pl-12 pr-6 py-6"
           >
             <div
               ref={editorContainerRef}
-              className="relative flex w-full grow flex-col items-start gap-8 pt-8"
+              className="relative flex w-full grow flex-col items-start gap-8"
             >
               <MilkdownEditor
                 key={`${currentFile}-${debugOptions.renderAsJson}`}
@@ -173,23 +174,23 @@ export default function ProjectFile() {
                 filePath={currentFile}
               />
             </div>
-          </div>
+          </ScrollShadow>
           <ScrollGutter
             contentRef={editorContainerRef}
             scrollContainerRef={scrollContainerRef}
             onScrollTo={handleScrollTo}
           />
         </div>
-      </div>
-      <div className="rounded-xl border border-solid border-panel-border bg-default-background">
-        <StatusBar
-          text={
-            rawContent
-              ? `${documentStatusText(rawContent)}${formatSelectionSuffix(editorSelection?.text)}`
-              : null
-          }
-          tooltip={rawContent ? documentStatusTooltip(rawContent) : undefined}
-        />
+        <div className="flex-none bg-default-background">
+          <StatusBar
+            text={
+              rawContent
+                ? `${documentStatusText(rawContent)}${formatSelectionSuffix(editorSelection?.text)}`
+                : null
+            }
+            tooltip={rawContent ? documentStatusTooltip(rawContent) : undefined}
+          />
+        </div>
       </div>
       <AnimatePresence>{actionBar}</AnimatePresence>
     </div>

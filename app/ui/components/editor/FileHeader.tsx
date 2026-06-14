@@ -45,12 +45,7 @@ export const FileHeader = ({
   className,
 }: FileHeaderProps) => {
   return (
-    <div
-      className={cn(
-        "flex w-full flex-col items-start gap-3 border-b border-solid border-neutral-border px-6 py-4",
-        className
-      )}
-    >
+    <div className={cn("flex w-full flex-col items-start gap-3 px-6 py-4", className)}>
       <div className="flex w-full items-start gap-2">
         <div className="flex grow shrink-0 basis-0 items-center gap-2">
           <span className="text-heading-2 font-heading-2 text-default-font">{title}</span>
