@@ -2,6 +2,8 @@ import type { JsonPatchOp } from "~/lib/patch/structured-json/apply"
 import { patchBlockContent } from "./patch"
 import { stampActors } from "./actor"
 import { getFileRaw, updateFileRaw } from "~/lib/files/store"
+import { diffFileContent } from "~/lib/mutation-history/diff"
+import { pushEntries } from "~/lib/mutation-history/store"
 
 export interface FilePatch {
   path: string
@@ -40,6 +42,7 @@ export const executeFileAction = (action: FileAction): void => {
     }
 
     const stamped = stampActors(original, result.content, "user")
+    pushEntries(diffFileContent(original, stamped, patch.path, Date.now(), "user"))
     updateFileRaw(patch.path, stamped, {
       immediate: action.immediate,
       skipPendingRefs: action.skipPendingRefs,
