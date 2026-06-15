@@ -34,7 +34,7 @@ export const SearchHeader = ({
         </span>
       )}
     </div>
-    <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-300 px-3 py-2 shadow-sm">
+    <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-300 bg-default-background px-3 py-2 shadow-sm">
       <div className="flex w-full items-center gap-2">
         <Search className="text-[16px] leading-[24px] text-neutral-400" />
         <TextField
