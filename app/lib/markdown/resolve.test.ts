@@ -36,8 +36,8 @@ describe("resolveEntityLink", () => {
     },
     {
       name: "resolves annotation ref",
-      href: "file://annotation-abc",
-      files: { "doc.md": fileWithAnnotation("annotation-abc", "hello world", "red") },
+      href: "file://annotation-1a2b3c4d",
+      files: { "doc.md": fileWithAnnotation("annotation-1a2b3c4d", "hello world", "red") },
       expected: {
         kind: "annotation",
         colors: {
@@ -46,7 +46,7 @@ describe("resolveEntityLink", () => {
           background: "var(--red-3)",
           backgroundHover: "var(--red-4)",
         },
-        url: "/project/proj1/file/doc.md?entity=annotation-abc",
+        url: "/project/proj1/file/doc.md?entity=annotation-1a2b3c4d",
         label: "hello world",
       },
     },
@@ -58,8 +58,8 @@ describe("resolveEntityLink", () => {
     },
     {
       name: "resolves callout ref",
-      href: "file://callout-xyz",
-      files: { "codebook.md": fileWithCallout("callout-xyz", "My Code", "blue") },
+      href: "file://callout-1xy2z3w4",
+      files: { "codebook.md": fileWithCallout("callout-1xy2z3w4", "My Code", "blue") },
       expected: {
         kind: "callout",
         colors: {
@@ -68,7 +68,7 @@ describe("resolveEntityLink", () => {
           background: "var(--blue-3)",
           backgroundHover: "var(--blue-4)",
         },
-        url: "/project/proj1/file/codebook.md?entity=callout-xyz",
+        url: "/project/proj1/file/codebook.md?entity=callout-1xy2z3w4",
         label: "My Code",
       },
     },
@@ -80,9 +80,9 @@ describe("resolveEntityLink", () => {
     },
     {
       name: "resolves tag ref",
-      href: "file://tag-abc12345",
+      href: "file://tag-1bc23456",
       files: {
-        "settings.hidden.md": fileWithTagDefinition("tag-abc12345", "interview", "green", "mic"),
+        "settings.hidden.md": fileWithTagDefinition("tag-1bc23456", "interview", "green", "mic"),
       },
       expected: {
         kind: "tag",
@@ -104,10 +104,10 @@ describe("resolveEntityLink", () => {
     },
     {
       name: "resolves search label with embedded entity IDs",
-      href: "file://search-a1b2c3d4",
+      href: "file://search-1a2b3c4d",
       files: {
-        "settings.hidden.md": fileWithSearch("search-a1b2c3d4", "callout-xyz00000 (candidates)"),
-        "codebook.md": fileWithCallout("callout-xyz00000", "Conspiracy theories", "blue"),
+        "settings.hidden.md": fileWithSearch("search-1a2b3c4d", "callout-1yz00000 (candidates)"),
+        "codebook.md": fileWithCallout("callout-1yz00000", "Conspiracy theories", "blue"),
       },
       expected: {
         kind: "search",

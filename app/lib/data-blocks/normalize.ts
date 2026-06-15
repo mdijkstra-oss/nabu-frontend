@@ -5,6 +5,7 @@ import {
   formatBlock,
   type CodeBlock,
 } from "./parse"
+import { ENTITY_ID_SUFFIX } from "~/lib/utils/entity-id"
 import {
   isSingleton,
   getSingletonLanguages,
@@ -99,10 +100,8 @@ export const normalizeBlockFields = (markdown: string): string => {
   return result
 }
 
-const SYSTEM_ID_SUFFIX = "(?=[a-z0-9]*\\d)[a-z0-9]{6,10}"
-
 const buildIdRegex = (prefix: string): RegExp =>
-  new RegExp(`\\b${prefix}-${SYSTEM_ID_SUFFIX}\\b`, "g")
+  new RegExp(`\\b${prefix}-${ENTITY_ID_SUFFIX}\\b`, "g")
 
 const buildEntityLookup = (
   sourceBlock: CodeBlock,

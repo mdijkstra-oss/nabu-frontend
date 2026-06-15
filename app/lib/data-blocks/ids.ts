@@ -1,13 +1,11 @@
 import type { FileStore } from "~/lib/files/store"
 import { collectAll } from "~/lib/files/collect"
+import { ENTITY_ID_SUFFIX } from "~/lib/utils/entity-id"
 
 export const extractEntityIdsFromSql = (sql: string, prefixes: string[]): string[] => {
   if (prefixes.length === 0) return []
   const escaped = prefixes.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-  const pattern = new RegExp(
-    `(?:${escaped.join("|")})-(?=[a-z0-9]*\\d)[a-z0-9]{6,10}(?![a-z0-9])`,
-    "g"
-  )
+  const pattern = new RegExp(`(?:${escaped.join("|")})-${ENTITY_ID_SUFFIX}(?![a-z0-9])`, "g")
   const matches = sql.match(pattern)
   if (!matches) return []
   return [...new Set(matches)]

@@ -18,7 +18,7 @@
 			"icon": "calendar-days"
 		},
 		{
-			"id": "tag-9a8b7c6d5e",
+			"id": "tag-9a8b7c6d",
 			"label": "analysis",
 			"display": "Analysis",
 			"color": "violet",

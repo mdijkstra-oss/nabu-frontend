@@ -1,4 +1,5 @@
 import { getEntityPrefixes } from "~/lib/data-blocks/registry"
+import { ENTITY_ID_SUFFIX } from "~/lib/utils/entity-id"
 
 type NameResolver = (id: string) => string | null
 type MissingFormatter = (id: string) => string | null
@@ -6,7 +7,7 @@ type MissingFormatter = (id: string) => string | null
 const buildEntityIdPattern = (prefixes: string[]): RegExp => {
   const prefixAlt = prefixes.join("|")
   return new RegExp(
-    `\\[[^\\]]*\\]\\([^)]+\\)|((?:${prefixAlt})-[a-z0-9]{6,10}|[\\w][\\w-]*\\.md)`,
+    `\\[[^\\]]*\\]\\([^)]+\\)|((?:${prefixAlt})-${ENTITY_ID_SUFFIX}|[\\w][\\w-]*\\.md)`,
     "gi"
   )
 }

@@ -18,49 +18,61 @@ describe("extractEntityIdsFromSql", () => {
   }[] = [
     {
       name: "finds ID in WHERE clause",
-      sql: "SELECT * FROM annotations WHERE callout_id = 'callout-abc1def2'",
+      sql: "SELECT * FROM annotations WHERE callout_id = 'callout-1abcdef2'",
       prefixes,
-      expected: ["callout-abc1def2"],
+      expected: ["callout-1abcdef2"],
     },
     {
       name: "finds multiple IDs across clauses",
-      sql: "SELECT * FROM t WHERE a = 'tag-x1y2z3' AND b = 'search-9abc0def'",
+      sql: "SELECT * FROM t WHERE a = 'tag-1xy2z3w4' AND b = 'search-9abc0def'",
       prefixes,
-      expected: ["tag-x1y2z3", "search-9abc0def"],
+      expected: ["tag-1xy2z3w4", "search-9abc0def"],
     },
     {
       name: "finds ID in JOIN condition",
-      sql: "SELECT * FROM a JOIN b ON a.id = 'chart-a1b2c3d4' WHERE 1=1",
+      sql: "SELECT * FROM a JOIN b ON a.id = 'chart-1a2b3c4d' WHERE 1=1",
       prefixes,
-      expected: ["chart-a1b2c3d4"],
+      expected: ["chart-1a2b3c4d"],
     },
     {
       name: "deduplicates repeated IDs",
-      sql: "SELECT 'callout-abc1def2', 'callout-abc1def2' FROM t",
+      sql: "SELECT 'callout-1abcdef2', 'callout-1abcdef2' FROM t",
       prefixes,
-      expected: ["callout-abc1def2"],
+      expected: ["callout-1abcdef2"],
     },
     {
-      name: "ignores strings without digit in suffix",
+      name: "ignores suffix without leading digit",
       sql: "SELECT * FROM t WHERE id = 'callout-abcdefgh'",
       prefixes,
       expected: [],
     },
     {
       name: "ignores strings with unknown prefix",
-      sql: "SELECT * FROM t WHERE id = 'unknown-abc1def2'",
+      sql: "SELECT * FROM t WHERE id = 'unknown-1abcdef2'",
       prefixes,
       expected: [],
     },
     {
-      name: "ignores suffix too short",
-      sql: "SELECT * FROM t WHERE id = 'callout-a1b2c'",
+      name: "ignores suffix too short (5 chars)",
+      sql: "SELECT * FROM t WHERE id = 'callout-1a2b3'",
       prefixes,
       expected: [],
     },
     {
-      name: "ignores suffix too long",
-      sql: "SELECT * FROM t WHERE id = 'callout-a1b2c3d4e5f'",
+      name: "ignores suffix too short (6 chars)",
+      sql: "SELECT * FROM t WHERE id = 'tag-1a2b3c'",
+      prefixes,
+      expected: [],
+    },
+    {
+      name: "ignores suffix too long (10 chars)",
+      sql: "SELECT * FROM t WHERE id = 'tag-1a2b3c4d5e'",
+      prefixes,
+      expected: [],
+    },
+    {
+      name: "ignores suffix too long (11 chars)",
+      sql: "SELECT * FROM t WHERE id = 'callout-1a2b3c4d5e6'",
       prefixes,
       expected: [],
     },
@@ -72,39 +84,27 @@ describe("extractEntityIdsFromSql", () => {
     },
     {
       name: "returns empty for empty prefixes",
-      sql: "SELECT * FROM t WHERE id = 'callout-abc1def2'",
+      sql: "SELECT * FROM t WHERE id = 'callout-1abcdef2'",
       prefixes: [],
       expected: [],
     },
     {
-      name: "handles ID at boundary of suffix length (6 chars)",
-      sql: "SELECT * FROM t WHERE id = 'tag-a1b2c3'",
-      prefixes,
-      expected: ["tag-a1b2c3"],
-    },
-    {
-      name: "handles ID at boundary of suffix length (10 chars)",
-      sql: "SELECT * FROM t WHERE id = 'tag-a1b2c3d4e5'",
-      prefixes,
-      expected: ["tag-a1b2c3d4e5"],
-    },
-    {
       name: "does not match suffix with uppercase",
-      sql: "SELECT * FROM t WHERE id = 'callout-Abc1def2'",
+      sql: "SELECT * FROM t WHERE id = 'callout-1ABCDEF2'",
       prefixes,
       expected: [],
     },
     {
       name: "does not extend match into trailing alphanumeric",
-      sql: "SELECT * FROM t WHERE id = 'callout-abc1def2extra'",
+      sql: "SELECT * FROM t WHERE id = 'callout-1abcdef2extra'",
       prefixes,
       expected: [],
     },
     {
       name: "finds ID not wrapped in quotes",
-      sql: "callout-abc1def2",
+      sql: "callout-1abcdef2",
       prefixes,
-      expected: ["callout-abc1def2"],
+      expected: ["callout-1abcdef2"],
     },
   ]
 
@@ -125,33 +125,33 @@ describe("validateSqlEntityReferences", () => {
   }[] = [
     {
       name: "all known IDs pass",
-      sql: "SELECT * FROM t WHERE id = 'callout-abc1def2'",
-      knownIds: ["callout-abc1def2"],
+      sql: "SELECT * FROM t WHERE id = 'callout-1abcdef2'",
+      knownIds: ["callout-1abcdef2"],
       expectedCount: 0,
     },
     {
       name: "unknown ID fails with message",
-      sql: "SELECT * FROM t WHERE id = 'callout-abc1def2'",
+      sql: "SELECT * FROM t WHERE id = 'callout-1abcdef2'",
       knownIds: [],
       expectedCount: 1,
-      containsId: "callout-abc1def2",
+      containsId: "callout-1abcdef2",
     },
     {
       name: "mix of known and unknown",
-      sql: "SELECT * FROM t WHERE a = 'callout-abc1def2' AND b = 'tag-x1y2z3'",
-      knownIds: ["callout-abc1def2"],
+      sql: "SELECT * FROM t WHERE a = 'callout-1abcdef2' AND b = 'tag-1xy2z3w4'",
+      knownIds: ["callout-1abcdef2"],
       expectedCount: 1,
-      containsId: "tag-x1y2z3",
+      containsId: "tag-1xy2z3w4",
     },
     {
       name: "no IDs in SQL returns empty",
       sql: "SELECT count(*) FROM annotations",
-      knownIds: ["callout-abc1def2"],
+      knownIds: ["callout-1abcdef2"],
       expectedCount: 0,
     },
     {
       name: "multiple unknown IDs",
-      sql: "SELECT 'callout-abc1def2', 'tag-x1y2z3' FROM t",
+      sql: "SELECT 'callout-1abcdef2', 'tag-1xy2z3w4' FROM t",
       knownIds: [],
       expectedCount: 2,
     },
@@ -219,23 +219,23 @@ describe("collectAllEntityIds", () => {
     {
       name: "collects callout IDs",
       files: {
-        "doc.md": `# Doc\n\n${block("json-callout", makeCallout("callout-abc1def2"))}`,
+        "doc.md": `# Doc\n\n${block("json-callout", makeCallout("callout-1abcdef2"))}`,
       },
-      expected: ["callout-abc1def2"],
+      expected: ["callout-1abcdef2"],
     },
     {
       name: "collects chart IDs",
       files: {
-        "doc.md": `# Doc\n\n${block("json-chart", makeChart("chart-x1y2z3w4"))}`,
+        "doc.md": `# Doc\n\n${block("json-chart", makeChart("chart-1xy2z3w4"))}`,
       },
-      expected: ["chart-x1y2z3w4"],
+      expected: ["chart-1xy2z3w4"],
     },
     {
       name: "collects annotation IDs",
       files: {
-        "doc.md": `# Doc\n\n${block("json-annotations", makeAnnotations([{ text: "hello", color: "red", reason: "test", id: "ann-a1b2c3d4" }]))}`,
+        "doc.md": `# Doc\n\n${block("json-annotations", makeAnnotations([{ text: "hello", color: "red", reason: "test", id: "ann-1a2b3c4d" }]))}`,
       },
-      expected: ["ann-a1b2c3d4"],
+      expected: ["ann-1a2b3c4d"],
     },
     {
       name: "skips annotations without IDs",
@@ -252,7 +252,7 @@ describe("collectAllEntityIds", () => {
           makeSettings(
             [
               {
-                id: "tag-a1b2c3d4",
+                id: "tag-1a2b3c4d",
                 label: "test",
                 display: "Test",
                 color: "red",
@@ -261,7 +261,7 @@ describe("collectAllEntityIds", () => {
             ],
             [
               {
-                id: "search-x1y2z3w4",
+                id: "search-1xy2z3w4",
                 title: "Test",
                 description: "test",
                 sql: "SELECT 1",
@@ -272,15 +272,15 @@ describe("collectAllEntityIds", () => {
           )
         )}`,
       },
-      expected: ["tag-a1b2c3d4", "search-x1y2z3w4"],
+      expected: ["tag-1a2b3c4d", "search-1xy2z3w4"],
     },
     {
       name: "collects across multiple files",
       files: {
-        "a.md": `# A\n\n${block("json-callout", makeCallout("callout-abc1def2"))}`,
-        "b.md": `# B\n\n${block("json-chart", makeChart("chart-x1y2z3w4"))}`,
+        "a.md": `# A\n\n${block("json-callout", makeCallout("callout-1abcdef2"))}`,
+        "b.md": `# B\n\n${block("json-chart", makeChart("chart-1xy2z3w4"))}`,
       },
-      expected: ["callout-abc1def2", "chart-x1y2z3w4"],
+      expected: ["callout-1abcdef2", "chart-1xy2z3w4"],
     },
     {
       name: "returns empty for files with no entities",

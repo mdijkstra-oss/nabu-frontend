@@ -1,4 +1,5 @@
 import { getEntityPrefixes } from "~/lib/data-blocks/registry"
+import { ENTITY_ID_PARTIAL } from "~/lib/utils/entity-id"
 
 export const filterCodeBlocks = (content: string): string | null => {
   const markers = content.match(/```/g)
@@ -32,7 +33,7 @@ const PARTIAL_HIDDEN = /\.generated\S*$/
 
 const buildPartialEntityPattern = (): RegExp => {
   const alt = getEntityPrefixes().join("|")
-  return new RegExp(`(?:${alt})-[a-z0-9]{0,7}$`, "i")
+  return new RegExp(`(?:${alt})-${ENTITY_ID_PARTIAL}$`, "i")
 }
 
 export const stripPartialEntity = (content: string): string => {

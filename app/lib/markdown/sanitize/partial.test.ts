@@ -168,7 +168,7 @@ describe("stripPartialEntity", () => {
     },
     {
       name: "strips partial tag ID at end",
-      input: "Using tag-abc",
+      input: "Using tag-3ab",
       expected: "Using",
     },
     {
@@ -178,7 +178,7 @@ describe("stripPartialEntity", () => {
     },
     {
       name: "strips partial search ID at end",
-      input: "Run search-aabb",
+      input: "Run search-4abb",
       expected: "Run",
     },
     {

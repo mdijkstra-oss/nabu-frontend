@@ -2,6 +2,7 @@ import { parseCodeBlocks, replaceBlockContents, type CodeBlock } from "./parse"
 import { resolveBlockLabel, getIdPaths } from "~/lib/data-blocks/registry"
 import type { IdPathConfig } from "~/lib/data-blocks/definition"
 import { tryParseJson, isObject, parsePath } from "./json"
+import { ENTITY_ID_SUFFIX_RE } from "~/lib/utils/entity-id"
 
 export interface GeneratedId {
   id: string
@@ -19,7 +20,7 @@ interface FillIdsResult {
 
 export const isSystemId = (id: string, prefix: string): boolean => {
   if (!id.startsWith(`${prefix}-`)) return false
-  return SYSTEM_ID_SUFFIX_RE.test(id.slice(prefix.length + 1))
+  return ENTITY_ID_SUFFIX_RE.test(id.slice(prefix.length + 1))
 }
 
 export const replaceUuidPlaceholders = (
@@ -101,7 +102,6 @@ export const formatGeneratedIds = (ids: GeneratedId[]): string => {
 }
 
 const UUID_PLACEHOLDER_REGEX = /\[uuid-([^\]]+)\]/g
-const SYSTEM_ID_SUFFIX_RE = /^(?=.*\d)[a-z0-9]{6,10}$/
 
 const persistentIdMap: UuidMapping = {}
 const shownIds = new Set<string>()

@@ -7,9 +7,10 @@
  */
 
 import type { FileStore } from "../store"
+import { ENTITY_ID_SUFFIX } from "~/lib/utils/entity-id"
 
 const PENDING_REF_PATTERN = /#\[([^\]]+)\]/g
-const ID_SOURCE = "[a-z]+-[a-z0-9]{8}"
+const ID_SOURCE = `[a-z]+-${ENTITY_ID_SUFFIX}`
 const ID_PATTERN = new RegExp(ID_SOURCE, "g")
 
 let definitionIndex = new Map<string, Set<string>>()

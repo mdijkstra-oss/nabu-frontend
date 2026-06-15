@@ -1,10 +1,10 @@
-const ENTITY_SUFFIX = "[a-z0-9]{8}"
+import { ENTITY_ID_SUFFIX } from "~/lib/utils/entity-id"
 
 const buildEntityPattern = (prefixes: string[]): RegExp =>
-  new RegExp(`^(${prefixes.join("|")})-${ENTITY_SUFFIX}$`)
+  new RegExp(`^(${prefixes.join("|")})-${ENTITY_ID_SUFFIX}$`)
 
 const buildEntityScanPattern = (prefixes: string[]): RegExp =>
-  new RegExp(`(?<![\\w-])(?:${prefixes.join("|")})-${ENTITY_SUFFIX}`, "g")
+  new RegExp(`(?<![\\w-])(?:${prefixes.join("|")})-${ENTITY_ID_SUFFIX}`, "g")
 
 export const extractEntityIdsFromRows = (
   rows: Record<string, unknown>[],

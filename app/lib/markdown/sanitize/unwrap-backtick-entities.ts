@@ -1,12 +1,13 @@
 import { getEntityPrefixes } from "~/lib/data-blocks/registry"
 import { SLUG_PATTERN } from "~/lib/markdown/linkify/tags"
+import { ENTITY_ID_SUFFIX } from "~/lib/utils/entity-id"
 
 const BACKTICK_PATTERN = /```[\s\S]*?```|\[[^\]]*\]\([^)]+\)|`([^`]+)`/g
 
 const buildEntityShapePattern = (prefixes: string[]): RegExp => {
   const prefixAlt = prefixes.join("|")
   return new RegExp(
-    `^(?:#${SLUG_PATTERN.source}|(?:${prefixAlt})-[a-z0-9]{8}|[\\w][\\w-]*\\.md|\\[[^\\]]*\\]\\([^)]+\\))$`,
+    `^(?:#${SLUG_PATTERN.source}|(?:${prefixAlt})-${ENTITY_ID_SUFFIX}|[\\w][\\w-]*\\.md|\\[[^\\]]*\\]\\([^)]+\\))$`,
     "i"
   )
 }

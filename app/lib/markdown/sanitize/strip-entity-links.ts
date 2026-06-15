@@ -1,8 +1,9 @@
 import { getEntityPrefixes } from "~/lib/data-blocks/registry"
+import { ENTITY_ID_SUFFIX } from "~/lib/utils/entity-id"
 
 const buildEntityIdInLinkPattern = (): RegExp => {
   const prefixAlt = getEntityPrefixes().join("|")
-  return new RegExp(`(?:${prefixAlt})-[a-z0-9]{8}|[\\w][\\w-]*\\.md`, "gi")
+  return new RegExp(`(?:${prefixAlt})-${ENTITY_ID_SUFFIX}|[\\w][\\w-]*\\.md`, "gi")
 }
 
 const MARKDOWN_LINK = /\[([^\]]+)\]\(([^)]+)\)/g

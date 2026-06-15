@@ -7,12 +7,16 @@ import { getToolHandlers } from "../../../executors/tool"
 import "../register"
 import { setFiles, getFile } from "~/lib/files/store"
 import { clearEntries } from "~/lib/mutation-history/store"
+import { ENTITY_ID_SUFFIX } from "~/lib/utils/entity-id"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FIXTURES_DIR = join(__dirname, "fixtures")
 const GENERATE = process.env.UPDATE_SNAPSHOTS === "1"
 
-const GENERATED_ID_RE = /\b(annotation|callout|chart|tag|search)-[a-z0-9]{6,10}\b/g
+const GENERATED_ID_RE = new RegExp(
+  `\\b(annotation|callout|chart|tag|search)-${ENTITY_ID_SUFFIX}\\b`,
+  "g"
+)
 
 const extractKnownIds = (content: string): Set<string> => {
   const ids = new Set<string>()

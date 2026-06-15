@@ -34,29 +34,34 @@ describe("extractEntityIdCandidates", () => {
       expected: ["annotation-1a2b3c4d"],
     },
     {
-      name: "malformed ID with underscores",
-      input: "Found annotation-user_frustration here",
-      expected: ["annotation-user_frustration"],
+      name: "captures valid base with underscore junk (dangling)",
+      input: "Found annotation-1a2b3c4d_frustration here",
+      expected: ["annotation-1a2b3c4d_frustration"],
     },
     {
-      name: "malformed ID with dashes",
-      input: "Found callout-my-code-123 here",
-      expected: ["callout-my-code-123"],
+      name: "captures valid base with dash junk (dangling)",
+      input: "Found callout-7xk2m9p1-code-123 here",
+      expected: ["callout-7xk2m9p1-code-123"],
+    },
+    {
+      name: "ignores token without a valid base",
+      input: "Found annotation-userfrust here",
+      expected: [],
     },
     {
       name: "ID at end of sentence with period",
-      input: "See annotation-abc12345.",
-      expected: ["annotation-abc12345"],
+      input: "See annotation-1bc23456.",
+      expected: ["annotation-1bc23456"],
     },
     {
       name: "ID in parentheses",
-      input: "(annotation-abc12345)",
-      expected: ["annotation-abc12345"],
+      input: "(annotation-1bc23456)",
+      expected: ["annotation-1bc23456"],
     },
     {
       name: "ID in backticks",
-      input: "Use `annotation-abc12345` here",
-      expected: ["annotation-abc12345"],
+      input: "Use `annotation-1bc23456` here",
+      expected: ["annotation-1bc23456"],
     },
     {
       name: "ignores bare prefix without suffix",
@@ -65,8 +70,8 @@ describe("extractEntityIdCandidates", () => {
     },
     {
       name: "ID in code block",
-      input: '```json\n{"id": "annotation-abc12345"}\n```',
-      expected: ["annotation-abc12345"],
+      input: '```json\n{"id": "annotation-1bc23456"}\n```',
+      expected: ["annotation-1bc23456"],
     },
   ] as const
 
