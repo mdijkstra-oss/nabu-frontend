@@ -6,6 +6,8 @@ const resolve = (id: string): string | null => {
     "annotation-1a2b3c4d": "user frustration",
     "callout-7xk2m9p1": "User Frustration",
     "callout-4a1b2c3d": "Theme A",
+    "callout-seg02advr": "Came for the ad",
+    "callout-ret02no": "Coming back — no",
     "interview-notes.md": "interview-notes",
     "P01.md": "P01",
   }
@@ -252,6 +254,23 @@ describe("linkifyEntityIds", () => {
       name: "strips name from capitalized prefix ID",
       input: "Callout-7xk2m9p1 — User Frustration",
       expected: "[User Frustration](file://callout-7xk2m9p1)",
+    },
+    {
+      name: "links 9-char callout ID",
+      input: "coded as callout-seg02advr today",
+      expected: "coded as [Came for the ad](file://callout-seg02advr) today",
+    },
+    {
+      name: "links 7-char callout ID",
+      input: "coded as callout-ret02no today",
+      expected: "coded as [Coming back — no](file://callout-ret02no) today",
+    },
+    {
+      name: "links non-8-char callout IDs with backtick labels in one message",
+      input:
+        "Cody Walsh is now coded as `Came for the ad` callout-seg02advr and `Coming back — no` callout-ret02no — a classic wave-1 visitor.",
+      expected:
+        "Cody Walsh is now coded as [Came for the ad](file://callout-seg02advr) and [Coming back — no](file://callout-ret02no) — a classic wave-1 visitor.",
     },
   ]
 

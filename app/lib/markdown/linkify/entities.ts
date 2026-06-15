@@ -6,7 +6,7 @@ type MissingFormatter = (id: string) => string | null
 const buildEntityIdPattern = (prefixes: string[]): RegExp => {
   const prefixAlt = prefixes.join("|")
   return new RegExp(
-    `\\[[^\\]]*\\]\\([^)]+\\)|((?:${prefixAlt})-[a-z0-9]{8}|[\\w][\\w-]*\\.md)`,
+    `\\[[^\\]]*\\]\\([^)]+\\)|((?:${prefixAlt})-[a-z0-9]{6,10}|[\\w][\\w-]*\\.md)`,
     "gi"
   )
 }
