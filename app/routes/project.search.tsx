@@ -8,7 +8,7 @@ import { useSearchResults } from "~/ui/hooks/useSearchResults"
 import { SearchHeader } from "~/ui/components/search/SearchHeader"
 import { SearchResultList } from "~/ui/components/search/SearchResultList"
 import { DebugOptionsProvider } from "~/ui/components/editor/DebugOptionsContext"
-import { StatusBar } from "~/ui/components/StatusBar"
+import { ScrollShadow } from "~/ui/components/ScrollShadow"
 import type { SearchHit } from "~/domain/search/types"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { formatDebugSql, hasSemanticTokens } from "~/lib/search/semantic"
@@ -135,20 +135,17 @@ export default function ProjectSearch() {
     return () => setPageContextOverride(undefined)
   }, [])
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const loadMoreRef = useRef(loadMore)
   const hasMoreRef = useRef(hasMore)
-  const cleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     loadMoreRef.current = loadMore
     hasMoreRef.current = hasMore
   })
 
-  const scrollRef = useCallback((el: HTMLDivElement | null) => {
-    if (cleanupRef.current) {
-      cleanupRef.current()
-      cleanupRef.current = null
-    }
+  useEffect(() => {
+    const el = scrollContainerRef.current
     if (!el) return
 
     const onScroll = () => {
@@ -158,8 +155,8 @@ export default function ProjectSearch() {
     }
 
     el.addEventListener("scroll", onScroll, { passive: true })
-    cleanupRef.current = () => el.removeEventListener("scroll", onScroll)
-  }, [])
+    return () => el.removeEventListener("scroll", onScroll)
+  }, [search])
 
   const resolveIds = useMemo(() => buildIdentifierResolver(files), [files])
 
@@ -190,31 +187,34 @@ export default function ProjectSearch() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col gap-2 bg-neutral-100 p-2">
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-auto rounded-xl border border-solid border-panel-border bg-default-background px-12 py-8"
+    <div className="flex h-full w-full flex-col bg-neutral-100">
+      <ScrollShadow
+        scrollRef={scrollContainerRef}
+        edges={{ top: false, bottom: !!actionBar }}
+        className="min-h-0 flex-col px-12 pt-6 pb-16"
       >
-        <div className="flex w-full max-w-[1024px] flex-col items-start gap-6">
+        <div className="mx-auto flex w-full max-w-[880px] flex-col items-start gap-6">
           <SearchHeader
             title={resolveIds(search.title)}
             description={resolveIds(search.description)}
             tags={tagOptions}
             activeTags={activeTags}
             onToggleTag={handleToggleTag}
+            statusText={statusText}
+            loading={isLoading}
           />
           {showDebugSql && (
             <div className="flex w-full flex-col gap-2">
-              <pre className="w-full rounded-md bg-neutral-100 px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
+              <pre className="w-full rounded-md bg-default-background px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
                 {formatDebugSql(search.sql)}
               </pre>
               {search.highlight && (
-                <pre className="w-full rounded-md bg-neutral-100 px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
+                <pre className="w-full rounded-md bg-default-background px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
                   {search.highlight}
                 </pre>
               )}
               {hydes.length > 0 && (
-                <pre className="w-full rounded-md bg-neutral-100 px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
+                <pre className="w-full rounded-md bg-default-background px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
                   {formatHydeDebug(hydes, keywords)}
                 </pre>
               )}
@@ -236,10 +236,7 @@ export default function ProjectSearch() {
             </DebugOptionsProvider>
           )}
         </div>
-      </div>
-      <div className="rounded-xl border border-solid border-panel-border bg-default-background">
-        <StatusBar text={statusText} loading={isLoading} />
-      </div>
+      </ScrollShadow>
       <AnimatePresence>{actionBar}</AnimatePresence>
     </div>
   )

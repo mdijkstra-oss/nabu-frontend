@@ -1,8 +1,9 @@
-import { memo, useMemo, useState, useEffect, useRef } from "react"
-import { FileText, Search } from "lucide-react"
+import { memo, useMemo, useState, useEffect, useRef, Fragment } from "react"
+import { FileText, Calendar, LocateFixed } from "lucide-react"
 import { IconButton } from "~/ui/components/IconButton"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { TagBadge } from "~/ui/components/TagBadge"
+import { Badge } from "~/ui/components/Badge"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
@@ -10,6 +11,8 @@ import { refreshHitsAsync } from "~/lib/search/refresh"
 import { useThrottledValue } from "~/ui/hooks/useThrottledValue"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
+import { getFileDate } from "~/domain/data-blocks/attributes/date/selectors"
+import { formatShortDate } from "~/lib/format/date"
 import { findTagDefinitionById } from "~/domain/data-blocks/settings/tags/selectors"
 import {
   spotlightFromText,
@@ -78,8 +81,6 @@ const buildHitUrl = (projectId: string, hit: SearchHit): string => {
   return base
 }
 
-const GUTTER = "w-10 shrink-0 flex items-center justify-center"
-
 const matchToSpotlights = (text: string): Spotlight[] => {
   const normalized = normalizeMatchWhitespace(text)
   const sentences = splitSentences(normalized)
@@ -119,17 +120,14 @@ const SearchSlicePreview = ({
 }) => {
   const debugOptions = useDebugOptions()
   return (
-    <div className="group/hit flex w-full items-center">
-      <div className={GUTTER} />
-      <div className="min-w-0 grow flex flex-col gap-2">
-        <div className="rounded-md border border-solid border-neutral-200 px-4 py-3">
-          <MilkdownEditor
-            content={text}
-            readOnly
-            filePath={filePath}
-            spotlight={matches ? matchesToSpotlights(matches) : null}
-          />
-        </div>
+    <div className="group/hit relative w-full pr-9">
+      <div className="flex min-w-0 flex-col gap-2">
+        <MilkdownEditor
+          content={text}
+          readOnly
+          filePath={filePath}
+          spotlight={matches ? matchesToSpotlights(matches) : null}
+        />
         {debugOptions.showHitScore && score !== undefined && (
           <div className="px-1 text-[12px] font-mono font-bold text-neutral-700">
             score: {score.toFixed(4)}
@@ -165,19 +163,19 @@ const SearchSlicePreview = ({
           </pre>
         )}
       </div>
-      <div className={GUTTER}>
-        {onNavigate && (
+      {onNavigate && (
+        <div className="absolute top-0 right-0 bottom-0 my-auto flex h-7 items-center">
           <TooltipWrap text="Show in file">
             <IconButton
               size="small"
-              variant="brand-tertiary"
-              icon={<Search />}
+              variant="neutral-secondary"
+              icon={<LocateFixed />}
               onClick={onNavigate}
-              className="bg-white border border-solid border-neutral-border hover:border-brand-200 opacity-0 transition-opacity group-hover/hit:opacity-100"
+              className="text-brand-600 opacity-0 transition-opacity hover:!border-brand-200 hover:!bg-brand-50 group-hover/hit:opacity-100"
             />
           </TooltipWrap>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -206,6 +204,7 @@ const RunGroupCard = memo(
     const tags = tagIds
       .map((id) => findTagDefinitionById(files, id))
       .filter((t): t is NonNullable<typeof t> => t != null)
+    const date = getFileDate(content)
 
     const isFileOnlyGroup = group.hits.every(hitIsFileOnly)
     const detailHits = group.hits.filter((h) => !hitIsFileOnly(h))
@@ -213,37 +212,54 @@ const RunGroupCard = memo(
     const handleOpenFile = () => onNavigate?.(fileUrl)
 
     const hitsToRender = isFileOnlyGroup ? [{ file: group.file }] : detailHits
+    const hitCount = isFileOnlyGroup ? 0 : detailHits.length
 
     return (
-      <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background shadow-sm">
-        <div className="flex w-full items-center gap-4 rounded-t-lg border-b border-solid border-neutral-border bg-neutral-50 px-4 py-3">
-          <FileText className="text-body font-body text-brand-600" />
+      <div className="flex w-full flex-col items-start rounded-[14px] border border-solid border-neutral-border bg-default-background px-6 py-5">
+        <div className="relative flex w-full items-center gap-2.5 pb-[18px] shadow-[0_9px_9px_-10px_rgba(0,0,0,0.18)]">
+          <FileText className="h-[18px] w-[18px] shrink-0 text-brand-600" />
           <button
             type="button"
-            className="grow shrink-0 basis-0 text-left text-body-bold font-body-bold text-default-font hover:text-brand-600 transition-colors cursor-pointer"
+            className="text-left text-body-bold font-body-bold text-default-font hover:text-brand-600 transition-colors cursor-pointer"
             onClick={handleOpenFile}
           >
             {toDisplayName(group.file)}
           </button>
-          {tags.map((tag) => (
-            <TagBadge key={tag.id} tag={tag} active={!activeTags || activeTags.has(tag.id)} />
-          ))}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
+            {tags.map((tag) => (
+              <TagBadge key={tag.id} tag={tag} active={!activeTags || activeTags.has(tag.id)} />
+            ))}
+            {date && (
+              <Badge variant="neutral" icon={<Calendar />}>
+                {formatShortDate(date)}
+              </Badge>
+            )}
+            {hitCount > 0 && (
+              <span className="text-caption font-caption text-subtext-color">
+                {hitCount} {hitCount === 1 ? "hit" : "hits"}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex w-full flex-col items-start gap-4 py-5">
+        <div className="flex w-full flex-col items-start pt-4">
           {hitsToRender.map((hit, i) =>
             hit.text ? (
-              <SearchSlicePreview
-                key={hitKey(hit, i)}
-                text={hit.text}
-                filePath={hit.file}
-                matches={hit.matches}
-                matchRanges={hit.matchRanges}
-                score={hit.score}
-                constituentScores={hit.constituentScores}
-                splitIndex={hit.splitIndex}
-                splitTotal={hit.splitTotal}
-                onNavigate={() => onNavigate?.(buildHitUrl(projectId, hit))}
-              />
+              <Fragment key={hitKey(hit, i)}>
+                {i > 0 && (
+                  <hr className="my-4 w-full border-0 border-t border-solid border-neutral-200" />
+                )}
+                <SearchSlicePreview
+                  text={hit.text}
+                  filePath={hit.file}
+                  matches={hit.matches}
+                  matchRanges={hit.matchRanges}
+                  score={hit.score}
+                  constituentScores={hit.constituentScores}
+                  splitIndex={hit.splitIndex}
+                  splitTotal={hit.splitTotal}
+                  onNavigate={() => onNavigate?.(buildHitUrl(projectId, hit))}
+                />
+              </Fragment>
             ) : null
           )}
         </div>

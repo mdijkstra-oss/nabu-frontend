@@ -7,6 +7,7 @@ interface ScrollShadowProps {
   scrollRef: RefObject<HTMLDivElement | null>
   children: ReactNode
   className?: string
+  edges?: { top?: boolean; bottom?: boolean }
 }
 
 interface ScrollEdges {
@@ -26,8 +27,10 @@ const buildBoxShadow = ({ top, bottom }: ScrollEdges): string => {
 const sameEdges = (a: ScrollEdges, b: ScrollEdges): boolean =>
   a.top === b.top && a.bottom === b.bottom
 
-export const ScrollShadow = ({ scrollRef, children, className }: ScrollShadowProps) => {
-  const [edges, setEdges] = useState<ScrollEdges>({ top: false, bottom: false })
+export const ScrollShadow = ({ scrollRef, children, className, edges }: ScrollShadowProps) => {
+  const enableTop = edges?.top ?? true
+  const enableBottom = edges?.bottom ?? true
+  const [visible, setVisible] = useState<ScrollEdges>({ top: false, bottom: false })
 
   useEffect(() => {
     const el = scrollRef.current
@@ -35,10 +38,10 @@ export const ScrollShadow = ({ scrollRef, children, className }: ScrollShadowPro
 
     const update = () => {
       const next: ScrollEdges = {
-        top: el.scrollTop > EDGE_TOLERANCE,
-        bottom: el.scrollTop + el.clientHeight < el.scrollHeight - EDGE_TOLERANCE,
+        top: enableTop && el.scrollTop > EDGE_TOLERANCE,
+        bottom: enableBottom && el.scrollTop + el.clientHeight < el.scrollHeight - EDGE_TOLERANCE,
       }
-      setEdges((prev) => (sameEdges(prev, next) ? prev : next))
+      setVisible((prev) => (sameEdges(prev, next) ? prev : next))
     }
 
     update()
@@ -53,7 +56,7 @@ export const ScrollShadow = ({ scrollRef, children, className }: ScrollShadowPro
       sizeObserver.disconnect()
       childObserver.disconnect()
     }
-  }, [scrollRef])
+  }, [scrollRef, enableTop, enableBottom])
 
   return (
     <div
@@ -62,7 +65,7 @@ export const ScrollShadow = ({ scrollRef, children, className }: ScrollShadowPro
         "flex grow shrink basis-0 overflow-auto transition-shadow duration-200",
         className
       )}
-      style={{ boxShadow: buildBoxShadow(edges) }}
+      style={{ boxShadow: buildBoxShadow(visible) }}
     >
       {children}
     </div>
