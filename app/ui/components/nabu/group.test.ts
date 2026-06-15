@@ -3,11 +3,15 @@ import type { Block } from "~/lib/agent/client/blocks"
 import { derive } from "~/lib/agent/derived"
 import {
   toGroupedMessages,
+  weaveEditGroups,
   type GroupedMessage,
+  type KeyedMessage,
   type PlanStartMessage,
   type PlanStepMessage,
   type LeafMessage,
+  type EditGroupMessage,
 } from "./group"
+import type { HistoryEntry, HistoryActor } from "~/lib/mutation-history/types"
 import {
   submitPlanCall,
   completeStepCall,
@@ -250,4 +254,90 @@ describe("toGroupedMessages", () => {
       expect(flagsOf(group(history))).toEqual(expected)
     })
   })
+})
+
+const keyedText = (ts: number, content = "msg"): KeyedMessage => ({
+  key: `m-${ts}`,
+  message: { type: "text", role: "assistant", content, timestamp: ts },
+})
+
+const histEntry = (
+  ts: number,
+  actor: HistoryActor,
+  overrides: Partial<HistoryEntry> = {}
+): HistoryEntry => ({
+  verb: "added",
+  entityKind: "annotation",
+  entityId: null,
+  path: "a.md",
+  timestamp: ts,
+  actor,
+  label: "x",
+  ...overrides,
+})
+
+const editGroupsOf = (result: KeyedMessage[]): EditGroupMessage[] =>
+  result.map((k) => k.message).filter((m): m is EditGroupMessage => m.type === "edit-group")
+
+const typesOf = (result: KeyedMessage[]): string[] => result.map((k) => k.message.type)
+
+describe("weaveEditGroups", () => {
+  it("returns messages unchanged when there are no entries", () => {
+    const messages = [keyedText(10), keyedText(20)]
+    expect(weaveEditGroups(messages, [])).toBe(messages)
+  })
+
+  const cases = [
+    {
+      name: "single edit between two messages becomes a group in between",
+      messages: [keyedText(10), keyedText(30)],
+      entries: [histEntry(20, "ai")],
+      check: (out: KeyedMessage[]) => {
+        expect(typesOf(out)).toEqual(["text", "edit-group", "text"])
+        expect(editGroupsOf(out)[0].entries).toHaveLength(1)
+      },
+    },
+    {
+      name: "consecutive same-actor edits collapse into one group",
+      messages: [keyedText(10), keyedText(50)],
+      entries: [histEntry(20, "ai"), histEntry(30, "ai"), histEntry(40, "ai")],
+      check: (out: KeyedMessage[]) => {
+        const groups = editGroupsOf(out)
+        expect(groups).toHaveLength(1)
+        expect(groups[0].entries).toHaveLength(3)
+        expect(groups[0].actor).toBe("ai")
+      },
+    },
+    {
+      name: "actor change splits into two adjacent groups in order",
+      messages: [keyedText(10), keyedText(50)],
+      entries: [histEntry(20, "ai"), histEntry(30, "user")],
+      check: (out: KeyedMessage[]) => {
+        const groups = editGroupsOf(out)
+        expect(groups.map((g) => g.actor)).toEqual(["ai", "user"])
+        expect(groups.map((g) => g.entries.length)).toEqual([1, 1])
+      },
+    },
+    {
+      name: "trailing edits after the last message appear at the end",
+      messages: [keyedText(10)],
+      entries: [histEntry(20, "user"), histEntry(30, "user")],
+      check: (out: KeyedMessage[]) => {
+        expect(typesOf(out)).toEqual(["text", "edit-group"])
+        expect(editGroupsOf(out)[0].entries).toHaveLength(2)
+      },
+    },
+    {
+      name: "edit before the first message appears at the start",
+      messages: [keyedText(10)],
+      entries: [histEntry(5, "ai")],
+      check: (out: KeyedMessage[]) => {
+        expect(typesOf(out)).toEqual(["edit-group", "text"])
+      },
+    },
+  ]
+
+  it.each(cases)("$name", ({ messages, entries, check }) =>
+    check(weaveEditGroups(messages, entries))
+  )
 })

@@ -1,4 +1,5 @@
 import type { Block } from "~/lib/agent/client/blocks"
+import type { HistoryEntry, HistoryActor } from "~/lib/mutation-history/types"
 import { type Derived, type DerivedPlan, type Step } from "~/lib/agent/derived"
 import {
   type TextMessage,
@@ -31,7 +32,19 @@ export interface PlanStepMessage {
   timestamp?: number
 }
 
-export type GroupedMessage = LeafMessage | AskMessage | PlanStartMessage | PlanStepMessage
+export interface EditGroupMessage {
+  type: "edit-group"
+  actor: HistoryActor
+  entries: HistoryEntry[]
+  timestamp: number
+}
+
+export type GroupedMessage =
+  | LeafMessage
+  | AskMessage
+  | PlanStartMessage
+  | PlanStepMessage
+  | EditGroupMessage
 
 interface PlanRange {
   plan: DerivedPlan
@@ -278,4 +291,67 @@ export const toGroupedMessages = (history: Block[], derived: Derived): KeyedMess
   const merged = [...leafKeyed, ...askKeyed, ...planKeyed].sort((a, b) => a.sortIndex - b.sortIndex)
 
   return stampAnswerRun(merged).map((e) => ({ key: e.key, message: e.item }))
+}
+
+const editGroupKey = (entries: HistoryEntry[]): string => {
+  const first = entries[0]
+  return `edit-${first.timestamp}-${first.actor}-${first.path}-${entries.length}`
+}
+
+const toEditGroup = (entries: HistoryEntry[]): KeyedMessage => ({
+  key: editGroupKey(entries),
+  message: {
+    type: "edit-group",
+    actor: entries[0].actor,
+    entries,
+    timestamp: entries[0].timestamp,
+  },
+})
+
+const effectiveTimestamps = (messages: KeyedMessage[]): number[] => {
+  let last = 0
+  return messages.map(({ message }) => {
+    last = message.timestamp ?? last
+    return last
+  })
+}
+
+export const weaveEditGroups = (
+  messages: KeyedMessage[],
+  entries: HistoryEntry[]
+): KeyedMessage[] => {
+  if (entries.length === 0) return messages
+  const edits = [...entries].sort((a, b) => a.timestamp - b.timestamp)
+  const timestamps = effectiveTimestamps(messages)
+  const out: KeyedMessage[] = []
+  let buffer: HistoryEntry[] = []
+  let editIndex = 0
+
+  const flush = (): void => {
+    if (buffer.length === 0) return
+    out.push(toEditGroup(buffer))
+    buffer = []
+  }
+
+  const absorb = (entry: HistoryEntry): void => {
+    if (buffer.length > 0 && buffer[0].actor !== entry.actor) flush()
+    buffer.push(entry)
+  }
+
+  const drainUntil = (limit: number): void => {
+    while (editIndex < edits.length && edits[editIndex].timestamp <= limit) {
+      absorb(edits[editIndex])
+      editIndex++
+    }
+  }
+
+  messages.forEach((km, i) => {
+    drainUntil(timestamps[i])
+    flush()
+    out.push(km)
+  })
+
+  drainUntil(Infinity)
+  flush()
+  return out
 }

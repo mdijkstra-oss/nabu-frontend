@@ -22,13 +22,16 @@ import { derive, hasActivePlan, isCurrentStepCheckpoint, lastPlan } from "~/lib/
 import { pushBlocks } from "~/lib/agent/client/store"
 import {
   toGroupedMessages,
+  weaveEditGroups,
   type GroupedMessage,
   type KeyedMessage,
   type LeafMessage,
   type PlanStartMessage,
   type PlanStepMessage,
+  type EditGroupMessage,
   type StepStatus,
 } from "./group"
+import { EditGroupCard } from "./EditGroupCard"
 import type { AskMessage } from "./messages"
 import { isWaitingForAsk } from "./messages"
 import { getSpinnerLabels, LABEL_ADVANCE_MS } from "./spinnerLabel"
@@ -45,9 +48,8 @@ import {
   getTagDisplay,
 } from "~/domain/data-blocks/settings/tags/selectors"
 import { resolveEntityName } from "~/lib/files/selectors"
-import { truncateLabel, presentEntry } from "~/lib/mutation-history/presentation"
+import { truncateLabel } from "~/lib/mutation-history/presentation"
 import { useMutationHistory } from "~/lib/mutation-history/useMutationHistory"
-import type { HistoryEntry } from "~/lib/mutation-history/types"
 import { prepareEntityMarkdown } from "~/lib/markdown/prepare"
 import { InlineMarkdown } from "~/ui/components/InlineMarkdown"
 import { autoGreetingDirective } from "~/lib/agent/actions/actions"
@@ -497,6 +499,8 @@ const isContinuePromptSegment = (s: FinalSegment): s is ContinuePromptSegment =>
 
 const isLeafSegment = (s: FinalSegment): s is LeafMessage => s.type === "text"
 
+const isEditGroupSegment = (s: FinalSegment): s is EditGroupMessage => s.type === "edit-group"
+
 const toKeyedSegments = (entries: KeyedMessage[]): KeyedSegment[] =>
   entries.map(({ key, message }) => ({ key, segment: message }))
 
@@ -600,39 +604,6 @@ const TickLabel = ({
   )
 }
 
-const findLastWriteEntry = (entries: HistoryEntry[]): HistoryEntry | null =>
-  entries.length > 0 ? entries[entries.length - 1] : null
-
-const isFileOperation = (entry: HistoryEntry): boolean => entry.entityKind === "file"
-
-const formatLastWriteLabel = (entry: HistoryEntry, currentFile: string | null): string => {
-  const { verbLabel, subtitle } = presentEntry(entry)
-  if (isFileOperation(entry)) return `${verbLabel}: ${subtitle}`
-  const isCurrentFile = entry.path === currentFile
-  return isCurrentFile ? `${verbLabel} in current file` : `${verbLabel} in ${subtitle}`
-}
-
-interface LastWriteBarProps {
-  entry: HistoryEntry
-  currentFile: string | null
-  onClick: () => void
-}
-
-const LastWriteBar = ({ entry, currentFile, onClick }: LastWriteBarProps) => {
-  const { icon: Icon } = presentEntry(entry)
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-2 bg-brand-100 px-4 py-1.5 text-left hover:bg-brand-200 transition-colors"
-    >
-      <Icon className="text-brand-500 w-3.5 h-3.5 flex-none" />
-      <span className="text-caption font-caption text-brand-700 truncate">
-        {formatLastWriteLabel(entry, currentFile)}
-      </span>
-    </button>
-  )
-}
-
 interface SegmentRendererProps {
   segment: FinalSegment
   files: Record<string, string>
@@ -641,6 +612,7 @@ interface SegmentRendererProps {
   currentFileContent: string | null
   navigate: (url: string) => void
   onSelect: (option: string) => void
+  onSelectFile: (path: string) => void
   onContinue: () => void
   isLast: boolean
 }
@@ -653,6 +625,7 @@ const SegmentRenderer = ({
   currentFileContent,
   navigate,
   onSelect,
+  onSelectFile,
   onContinue,
   isLast,
 }: SegmentRendererProps) => {
@@ -693,6 +666,8 @@ const SegmentRenderer = ({
       />
     )
   if (isPlanStepSegment(segment)) return <PlanStepCard message={segment} />
+  if (isEditGroupSegment(segment))
+    return <EditGroupCard message={segment} onSelectFile={onSelectFile} />
   if (isCollapsedSteps(segment))
     return (
       <div className="pl-[30px] w-full">
@@ -747,7 +722,6 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   }, [navigate, params.projectId])
   const { send, respond, run: runChat, cancel, loading, draft, history } = useChat()
   const mutationHistory = useMutationHistory()
-  const lastEntry = useMemo(() => findLastWriteEntry(mutationHistory), [mutationHistory])
   const { files, currentFile } = useFiles()
   const currentFileContent = currentFile ? (files[currentFile] ?? null) : null
 
@@ -755,7 +729,11 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
 
   const isStreamingText = draft?.type === "text" && preprocessStreaming(draft.content) !== null
   const keyedMessages = useMemo(() => toGroupedMessages(history, derived), [history, derived])
-  const rawSegments = useMemo(() => toKeyedSegments(keyedMessages), [keyedMessages])
+  const wovenMessages = useMemo(
+    () => weaveEditGroups(keyedMessages, mutationHistory),
+    [keyedMessages, mutationHistory]
+  )
+  const rawSegments = useMemo(() => toKeyedSegments(wovenMessages), [wovenMessages])
   const waitingForInput = useMemo(() => isWaitingForAsk(history), [history])
   const collapsedSegments = useMemo(
     () => collapseAfterPendingAsk(rawSegments, waitingForInput),
@@ -859,6 +837,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
               currentFileContent={currentFileContent}
               navigate={navigate}
               onSelect={respond}
+              onSelectFile={navigateToFile}
               onContinue={handleContinue}
               isLast={isLast}
             />
@@ -895,14 +874,6 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
           </>
         )}
       </AutoScroll>
-
-      {lastEntry && (
-        <LastWriteBar
-          entry={lastEntry}
-          currentFile={currentFile}
-          onClick={() => navigateToFile(lastEntry.path)}
-        />
-      )}
 
       <div className="px-3 pb-3 pt-4">
         <div

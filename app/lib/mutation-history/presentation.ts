@@ -1,6 +1,6 @@
 import type { ComponentType } from "react"
-import { Plus, Edit3, Trash, Tag, Type, FileText, ArrowRight } from "lucide-react"
-import type { HistoryEntry, HistoryVerb } from "./types"
+import { Plus, Edit3, Trash, Tag, Type, FileText, ArrowRight, User, Bot } from "lucide-react"
+import type { HistoryEntry, HistoryVerb, HistoryActor } from "./types"
 import { toDisplayName } from "~/lib/files/filename"
 
 type IconVariant = "brand" | "neutral" | "error" | "success" | "warning"
@@ -62,6 +62,11 @@ const entityKindIcon: Record<string, ComponentType<{ className?: string }>> = {
 
 const getIcon = (entry: HistoryEntry): ComponentType<{ className?: string }> =>
   entityKindIcon[entry.entityKind] ?? verbIcon[entry.verb]
+
+export const actorIcon: Record<HistoryActor, ComponentType<{ className?: string }>> = {
+  user: User,
+  ai: Bot,
+}
 
 export const presentEntry = (entry: HistoryEntry): EntryPresentation => ({
   icon: getIcon(entry),

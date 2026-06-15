@@ -10,6 +10,7 @@ export type TimelineMarker =
   | "step-done"
   | "step-cancelled"
   | "step-checkpoint"
+  | "edit"
 
 interface TimelineCardProps {
   kind: TimelineKind | null
@@ -30,6 +31,7 @@ const railClass: Record<TimelineMarker, string> = {
   "step-done": "bg-success-600",
   "step-cancelled": "bg-neutral-400",
   "step-checkpoint": "bg-brand-700",
+  edit: "bg-success-600",
 }
 
 const DEFAULT_KIND_CLASS = "text-[11px] font-bold uppercase tracking-[0.08em] text-brand-700"
