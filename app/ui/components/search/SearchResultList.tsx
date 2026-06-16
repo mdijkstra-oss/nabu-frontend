@@ -216,7 +216,7 @@ const RunGroupCard = memo(
 
     return (
       <div className="flex w-full flex-col items-start rounded-[14px] border border-solid border-neutral-border bg-default-background px-6 py-5">
-        <div className="relative flex w-full items-center gap-2.5 pb-[18px] shadow-[0_9px_9px_-10px_rgba(0,0,0,0.18)]">
+        <div className="relative flex w-full items-center gap-2.5 pb-[18px] shadow-header-divider">
           <FileText className="h-[18px] w-[18px] shrink-0 text-brand-600" />
           <button
             type="button"

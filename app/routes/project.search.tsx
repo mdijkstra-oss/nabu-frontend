@@ -193,7 +193,7 @@ export default function ProjectSearch() {
         edges={{ top: false, bottom: !!actionBar }}
         className="min-h-0 flex-col px-12 pt-6 pb-16"
       >
-        <div className="mx-auto flex w-full max-w-[880px] flex-col items-start gap-6">
+        <div className="flex w-full flex-col items-start gap-6">
           <SearchHeader
             title={resolveIds(search.title)}
             description={resolveIds(search.description)}
