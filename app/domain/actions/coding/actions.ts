@@ -2,8 +2,18 @@ import type { TaskConfig } from "~/lib/agent/dispatch"
 import type { FileSelectionRange } from "~/lib/editor/selection-context"
 import type { CodingFileRef } from "./selectors"
 import { concatPretty } from "~/lib/utils/format"
+import { toDisplayName } from "~/lib/files/filename"
 
 const SNIPPET_EDGE = 4
+const FILE_PREVIEW_LIMIT = 3
+
+const summarizeFiles = (paths: string[]): string => {
+  const names = paths.map(toDisplayName)
+  if (names.length <= FILE_PREVIEW_LIMIT) return concatPretty(names)
+  return `${names.slice(0, FILE_PREVIEW_LIMIT).join(", ")} (+${names.length - FILE_PREVIEW_LIMIT} more)`
+}
+
+const fileTargets = (paths: string[]): string => paths.map((p) => `{ path: "${p}" }`).join(", ")
 
 const snippetPreview = (text: string): string => {
   const words = text.split(/\s+/).filter(Boolean)
@@ -77,10 +87,38 @@ export const codeWithSearchSelection = (
 export const codeWithFiles = (refs: CodingFileRef[]): TaskConfig =>
   buildDeepAnalysisNudge(
     refs,
-    `targets: [${refs.map((r) => `{ path: "${r.file}" }`).join(", ")}] (file paths only — no start_line or end_line; the whole file will be analyzed)`,
+    `targets: [${fileTargets(refs.map((r) => r.file))}] (file paths only — no start_line or end_line; the whole file will be analyzed)`,
     `Can you code this file with ${buildFileList(refs)}`,
     true
   )
+
+const codeFile = (doc: string, dimensions: CodingFileRef[]): TaskConfig =>
+  buildDeepAnalysisNudge(
+    dimensions,
+    `targets: [${fileTargets([doc])}] (file paths only — no start_line or end_line; the whole file will be analyzed)`,
+    `Can you code this file with ${buildFileList(dimensions)}`,
+    true
+  )
+
+const buildPlanCodingNudge = (docs: string[], dimensions: CodingFileRef[]): TaskConfig => ({
+  context: `Follow these steps exactly:
+
+1. Run ls --show-tags to find codebook files.
+2. Call start_planning, then submit_plan with ONE step per file — ${docs.length} steps total, one for each of: ${docs.join(", ")}. Each step applies the single-file approach to exactly ONE file.
+3. Execute the steps in order. For each step, call apply_deep_analysis with these exact arguments:
+   - targets: [{ path: "<that step's single file>" }] (file paths only — no start_line or end_line; the whole file will be analyzed)
+   - ${dimensionInstruction(buildFileList(dimensions))}
+   - post_action: "annotate_as_code"
+   Then call complete_step before moving to the next file.
+
+Do not pre-read or chunk the target files yourself — apply_deep_analysis handles fetching, chunking, and analysis internally.${buildHiddenNote(dimensions)}
+
+After every file is coded, write a brief synthesis across all of them as your chat response.`,
+  userMessage: `Can you code these ${docs.length} files: ${summarizeFiles(docs)} with ${buildFileList(dimensions)}`,
+})
+
+export const codeFiles = (docs: string[], dimensions: CodingFileRef[]): TaskConfig =>
+  docs.length <= 1 ? codeFile(docs[0], dimensions) : buildPlanCodingNudge(docs, dimensions)
 
 export const codeWithSearch = (refs: CodingFileRef[], searchId: string): TaskConfig =>
   buildDeepAnalysisNudge(

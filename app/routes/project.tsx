@@ -89,6 +89,7 @@ import { dispatchTask } from "~/lib/agent/dispatch"
 import {
   buildRefineTask,
   codeWithFiles,
+  codeFiles,
   codeWithSearch,
   codeWithSelection,
   codeWithSearchSelection,
@@ -102,7 +103,7 @@ import { countAnnotationsInRange, buildClearSelectionOps } from "~/lib/editor/an
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 import { ActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
 import { pointAt, clearPointing } from "~/lib/ui/pointing"
-import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
+import { getSelectedCodes, getSelectedDocs } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getAllCodes, findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
 
@@ -492,10 +493,16 @@ export default function ProjectLayout() {
   }
 
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
+  const selectedDocs = useMemo(() => getSelectedDocs(files), [files])
   const editorSelection = useEditorSelection()
 
   const isOnDocumentPage = !!params.fileId
   const isOnSearchPage = !!params.searchId
+  const filesToCode = useMemo(
+    () =>
+      [...new Set([currentFile, ...selectedDocs])].filter((f): f is string => !!f && f in files),
+    [currentFile, selectedDocs, files]
+  )
   const totalCodeCount = useMemo(() => getAllCodes(files).length, [files])
   const hasSelectedCodes = selectedCodes.size > 0
   const hasAllCodesSelected = selectedCodes.size >= totalCodeCount && totalCodeCount > 0
@@ -575,9 +582,10 @@ export default function ProjectLayout() {
   }, [files, filterAnnotationsBySelectedCodes, resolveActiveRanges])
 
   const handleCodeSelectedCodes = useCallback(() => {
-    const refs = resolveCodingFiles(files, [...selectedCodes])
-    if (refs.length > 0) dispatchTask(codeWithFiles(refs))
-  }, [selectedCodes, files])
+    const dimensions = resolveCodingFiles(files, [...selectedCodes])
+    if (dimensions.length === 0 || filesToCode.length === 0) return
+    dispatchTask(codeFiles(filesToCode, dimensions))
+  }, [selectedCodes, files, filesToCode])
 
   const handleCodeSearchResults = useCallback(() => {
     if (!params.searchId) return
@@ -648,7 +656,11 @@ export default function ProjectLayout() {
     if (isOnDocumentPage) {
       actions.push({
         icon: <FileText />,
-        label: hasEditorSel ? "Code selection" : "Code file",
+        label: hasEditorSel
+          ? "Code selection"
+          : filesToCode.length > 1
+            ? `Code ${filesToCode.length} files`
+            : "Code file",
         onClick: hasEditorSel ? handleCodeSelection : handleCodeSelectedCodes,
         variant: "ai",
       })
@@ -681,6 +693,7 @@ export default function ProjectLayout() {
     handleCodeSearchResults,
     handleCodeSelection,
     selectedCodes,
+    filesToCode,
   ])
 
   const handleSearchCode = (code: Code) => {
