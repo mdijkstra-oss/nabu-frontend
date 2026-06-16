@@ -14,6 +14,7 @@ import { BarChart3, Book, Files, Search } from "lucide-react"
 import { MainSidebar } from "~/ui/components/sidebar/main/MainSidebar"
 import type { NavItem } from "~/ui/components/sidebar/main/MainSidebar"
 import { useResizable } from "~/ui/hooks/useResizable"
+import { usePointedAt } from "~/lib/ui/pointing"
 import { cn } from "~/ui/utils"
 
 type ActiveNav = "documents" | "search" | "exhibits" | "codes"
@@ -110,7 +111,9 @@ export const DefaultPageLayout = ({
   useEffect(() => {
     if (dismissSidebarRef) dismissSidebarRef.current = () => setHoveredNav(null)
   })
-  const activePanel = hoveredNav && sidebarPanels?.[hoveredNav]
+  const pointedAtCodes = usePointedAt("nav:codes")
+  const effectiveNav: ActiveNav | null = hoveredNav ?? (pointedAtCodes ? "codes" : null)
+  const activePanel = effectiveNav && sidebarPanels?.[effectiveNav]
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -172,12 +175,13 @@ export const DefaultPageLayout = ({
         <AnimatePresence>
           {activePanel && (
             <motion.div
-              key={hoveredNav}
+              key={effectiveNav}
               initial={{ x: -12, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -12, opacity: 0 }}
               transition={{ type: "spring", stiffness: 500, damping: 35 }}
               className="absolute left-full top-0 h-full z-20 shadow-xl"
+              onMouseEnter={() => effectiveNav && setHoveredNav(effectiveNav)}
             >
               {activePanel}
             </motion.div>

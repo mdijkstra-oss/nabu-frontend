@@ -144,7 +144,12 @@ export function ActionBar({ title, detail, titleAction, actions, onTitleHover }:
           onMouseEnter={detail ? () => setShowDetail(true) : undefined}
         >
           <span
-            className="-mx-2 -my-1 px-2 py-1 text-caption-bold font-caption-bold text-default-font cursor-default"
+            className={cn(
+              "-mx-2 -my-1 rounded-full px-2 py-1 text-caption-bold font-caption-bold text-default-font transition-colors",
+              onTitleHover
+                ? "cursor-pointer hover:bg-brand-50 hover:text-brand-700"
+                : "cursor-default"
+            )}
             onMouseEnter={onTitleHover ? () => onTitleHover(true) : undefined}
             onMouseLeave={onTitleHover ? () => onTitleHover(false) : undefined}
           >
