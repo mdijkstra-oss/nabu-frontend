@@ -11,10 +11,10 @@ import {
   type ReactNode,
 } from "react"
 import { useNavigate, useParams } from "react-router"
-import { AnimatePresence, motion } from "framer-motion"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { Check, ChevronRight, Circle, Loader2, MessageSquare, X } from "lucide-react"
+import { Check, ChevronRight, Circle, Layers, Loader2, MessageSquare, X } from "lucide-react"
+import { cn } from "~/ui/utils"
 import { TextFieldUnstyled } from "~/ui/components/TextFieldUnstyled"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { AnimatedListItem } from "~/ui/components/AnimatedListItem"
@@ -43,6 +43,7 @@ import {
   isLeafSegment,
   isEditGroupSegment,
 } from "./collapse"
+import { CollapsibleGroupCard, slateTone } from "./CollapsibleGroupCard"
 import type { AskMessage } from "./messages"
 import { isWaitingForAsk } from "./messages"
 import { getSpinnerLabels, LABEL_ADVANCE_MS } from "./spinnerLabel"
@@ -481,50 +482,28 @@ const PlanStepCard = memo(({ message }: PlanStepCardProps) => {
   )
 }, planStepPropsEqual)
 
-const stackSpring = { type: "spring" as const, stiffness: 500, damping: 38 }
+const upcomingKindClass = "text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500"
 
-const CollapsibleStepStack = ({ steps }: { steps: PlanStepMessage[] }) => {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className="w-full pl-[30px]">
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="relative flex w-full items-center gap-2 rounded-lg border border-solid border-neutral-200 bg-neutral-50 px-3 py-2 text-left transition-colors hover:bg-neutral-100"
-      >
-        {!expanded && (
-          <>
-            <span className="absolute -top-1 left-2 right-2 -z-10 h-full rounded-lg border border-solid border-neutral-200 bg-neutral-50/60" />
-            <span className="absolute -top-0.5 left-1 right-1 -z-10 h-full rounded-lg border border-solid border-neutral-200 bg-neutral-50/80" />
-          </>
-        )}
-        <ChevronRight
-          className={`text-subtext-color h-3.5 w-3.5 flex-none transition-transform ${expanded ? "rotate-90" : ""}`}
-        />
-        <span className="text-caption font-caption-bold text-subtext-color">
-          {expanded ? "Hide upcoming steps" : `${steps.length} more steps`}
-        </span>
-      </button>
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            key="stack-body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={stackSpring}
-            className="overflow-hidden"
-          >
-            <div className="flex flex-col gap-2 pt-2">
-              {steps.map((step, i) => (
-                <PlanStepCard key={`stack-step-${i}`} message={step} />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
+const StepStackRow = ({ step }: { step: PlanStepMessage }) => (
+  <div className={cn("flex items-center gap-2 px-3 py-1.5", step.nested && "pl-6")}>
+    <Circle className="h-2 w-2 flex-none text-slate-400" />
+    <span className="text-caption font-caption text-slate-700 truncate">{step.description}</span>
+  </div>
+)
+
+const CollapsibleStepStack = ({ steps }: { steps: PlanStepMessage[] }) => (
+  <TimelineCard kind="Upcoming" marker="step-pending" kindClassName={upcomingKindClass}>
+    <CollapsibleGroupCard
+      tone={slateTone}
+      glyph={<Layers className="h-3.5 w-3.5" />}
+      summary={`${steps.length} upcoming steps`}
+    >
+      {steps.map((step, i) => (
+        <StepStackRow key={`stack-step-${i}`} step={step} />
+      ))}
+    </CollapsibleGroupCard>
+  </TimelineCard>
+)
 
 const PlanContinuePrompt = ({ onContinue }: { onContinue: () => void }) => (
   <div className="flex w-full flex-col gap-1.5 max-w-[95%]">
