@@ -345,8 +345,12 @@ export const weaveEditGroups = (
     }
   }
 
+  const isPendingStepMessage = (m: GroupedMessage): boolean =>
+    m.type === "plan-step" && m.status === "pending"
+
   messages.forEach((km, i) => {
-    drainUntil(timestamps[i])
+    if (isPendingStepMessage(km.message)) drainUntil(Infinity)
+    else drainUntil(timestamps[i])
     flush()
     out.push(km)
   })

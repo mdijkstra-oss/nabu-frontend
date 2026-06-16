@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react"
 import { useNavigate, useParams } from "react-router"
+import { AnimatePresence, motion } from "framer-motion"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Check, ChevronRight, Circle, Loader2, MessageSquare, X } from "lucide-react"
@@ -23,15 +24,25 @@ import { pushBlocks } from "~/lib/agent/client/store"
 import {
   toGroupedMessages,
   weaveEditGroups,
-  type GroupedMessage,
-  type KeyedMessage,
   type LeafMessage,
   type PlanStartMessage,
   type PlanStepMessage,
-  type EditGroupMessage,
   type StepStatus,
 } from "./group"
 import { EditGroupCard } from "./EditGroupCard"
+import {
+  type FinalSegment,
+  toKeyedSegments,
+  injectContinuePrompt,
+  collapsePendingTail,
+  isAskSegment,
+  isPlanStartSegment,
+  isPlanStepSegment,
+  isStepStackSegment,
+  isContinuePromptSegment,
+  isLeafSegment,
+  isEditGroupSegment,
+} from "./collapse"
 import type { AskMessage } from "./messages"
 import { isWaitingForAsk } from "./messages"
 import { getSpinnerLabels, LABEL_ADVANCE_MS } from "./spinnerLabel"
@@ -470,68 +481,50 @@ const PlanStepCard = memo(({ message }: PlanStepCardProps) => {
   )
 }, planStepPropsEqual)
 
-interface CollapsedSteps {
-  type: "collapsed-steps"
-  count: number
+const stackSpring = { type: "spring" as const, stiffness: 500, damping: 38 }
+
+const CollapsibleStepStack = ({ steps }: { steps: PlanStepMessage[] }) => {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="w-full pl-[30px]">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="relative flex w-full items-center gap-2 rounded-lg border border-solid border-neutral-200 bg-neutral-50 px-3 py-2 text-left transition-colors hover:bg-neutral-100"
+      >
+        {!expanded && (
+          <>
+            <span className="absolute -top-1 left-2 right-2 -z-10 h-full rounded-lg border border-solid border-neutral-200 bg-neutral-50/60" />
+            <span className="absolute -top-0.5 left-1 right-1 -z-10 h-full rounded-lg border border-solid border-neutral-200 bg-neutral-50/80" />
+          </>
+        )}
+        <ChevronRight
+          className={`text-subtext-color h-3.5 w-3.5 flex-none transition-transform ${expanded ? "rotate-90" : ""}`}
+        />
+        <span className="text-caption font-caption-bold text-subtext-color">
+          {expanded ? "Hide upcoming steps" : `${steps.length} more steps`}
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="stack-body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={stackSpring}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-col gap-2 pt-2">
+              {steps.map((step, i) => (
+                <PlanStepCard key={`stack-step-${i}`} message={step} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
 }
-
-interface ContinuePromptSegment {
-  type: "continue-prompt"
-}
-
-type FinalSegment = GroupedMessage | CollapsedSteps | ContinuePromptSegment
-
-interface KeyedSegment {
-  key: string
-  segment: FinalSegment
-}
-
-const isAskSegment = (s: FinalSegment): s is AskMessage => s.type === "ask"
-
-const isPlanStartSegment = (s: FinalSegment): s is PlanStartMessage => s.type === "plan-start"
-
-const isPlanStepSegment = (s: FinalSegment): s is PlanStepMessage => s.type === "plan-step"
-
-const isCollapsedSteps = (s: FinalSegment): s is CollapsedSteps => s.type === "collapsed-steps"
-
-const isContinuePromptSegment = (s: FinalSegment): s is ContinuePromptSegment =>
-  s.type === "continue-prompt"
-
-const isLeafSegment = (s: FinalSegment): s is LeafMessage => s.type === "text"
-
-const isEditGroupSegment = (s: FinalSegment): s is EditGroupMessage => s.type === "edit-group"
-
-const toKeyedSegments = (entries: KeyedMessage[]): KeyedSegment[] =>
-  entries.map(({ key, message }) => ({ key, segment: message }))
-
-const countStepCards = (segments: KeyedSegment[]): number =>
-  segments.filter(({ segment }) => isPlanStepSegment(segment)).length
-
-const findLastAskIndex = (segments: KeyedSegment[]): number => {
-  for (let i = segments.length - 1; i >= 0; i--) {
-    if (isAskSegment(segments[i].segment)) return i
-  }
-  return -1
-}
-
-const collapseAfterPendingAsk = (segments: KeyedSegment[], waiting: boolean): KeyedSegment[] => {
-  if (!waiting) return segments
-  const lastAskIdx = findLastAskIndex(segments)
-  if (lastAskIdx === -1) return segments
-  const after = segments.slice(lastAskIdx + 1)
-  const count = countStepCards(after)
-  if (count === 0) return segments
-  return [
-    ...segments.slice(0, lastAskIdx + 1),
-    { key: "collapsed", segment: { type: "collapsed-steps", count } },
-  ]
-}
-
-const CollapsedStepsIndicator = ({ count }: { count: number }) => (
-  <span className="text-caption font-caption text-subtext-color">
-    Waiting for your input — {count} step{count !== 1 ? "s" : ""} remaining
-  </span>
-)
 
 const PlanContinuePrompt = ({ onContinue }: { onContinue: () => void }) => (
   <div className="flex w-full flex-col gap-1.5 max-w-[95%]">
@@ -668,12 +661,7 @@ const SegmentRenderer = ({
   if (isPlanStepSegment(segment)) return <PlanStepCard message={segment} />
   if (isEditGroupSegment(segment))
     return <EditGroupCard message={segment} onSelectFile={onSelectFile} />
-  if (isCollapsedSteps(segment))
-    return (
-      <div className="pl-[30px] w-full">
-        <CollapsedStepsIndicator count={segment.count} />
-      </div>
-    )
+  if (isStepStackSegment(segment)) return <CollapsibleStepStack steps={segment.steps} />
   if (isContinuePromptSegment(segment))
     return (
       <div className="pl-[30px] w-full">
@@ -681,31 +669,6 @@ const SegmentRenderer = ({
       </div>
     )
   return exhaustive(segment)
-}
-
-const findActiveCheckpointIndex = (segments: KeyedSegment[]): number =>
-  segments.findIndex(
-    (s) => isPlanStepSegment(s.segment) && s.segment.status === "active" && s.segment.checkpoint
-  )
-
-const findStepBoundaryAfter = (segments: KeyedSegment[], start: number): number => {
-  for (let i = start; i < segments.length; i++) {
-    const t = segments[i].segment.type
-    if (t === "plan-step" || t === "plan-start") return i
-  }
-  return segments.length
-}
-
-const injectContinuePrompt = (segments: KeyedSegment[], waiting: boolean): KeyedSegment[] => {
-  if (!waiting) return segments
-  const checkpointIdx = findActiveCheckpointIndex(segments)
-  if (checkpointIdx === -1) return segments
-  const insertAt = findStepBoundaryAfter(segments, checkpointIdx + 1)
-  const prompt: KeyedSegment = {
-    key: "continue-prompt",
-    segment: { type: "continue-prompt" },
-  }
-  return [...segments.slice(0, insertAt), prompt, ...segments.slice(insertAt)]
 }
 
 interface NabuChatSidebarProps {
@@ -735,10 +698,6 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   )
   const rawSegments = useMemo(() => toKeyedSegments(wovenMessages), [wovenMessages])
   const waitingForInput = useMemo(() => isWaitingForAsk(history), [history])
-  const collapsedSegments = useMemo(
-    () => collapseAfterPendingAsk(rawSegments, waitingForInput),
-    [rawSegments, waitingForInput]
-  )
 
   const [inputValue, setInputValue] = useState("")
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -812,8 +771,8 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
   const activePlan = lastPlan(derived.plans)
   const showAbortBox = activePlan?.aborted === true
   const segments = useMemo(
-    () => injectContinuePrompt(collapsedSegments, isWaitingForContinue),
-    [collapsedSegments, isWaitingForContinue]
+    () => collapsePendingTail(injectContinuePrompt(rawSegments, isWaitingForContinue)),
+    [rawSegments, isWaitingForContinue]
   )
 
   return (

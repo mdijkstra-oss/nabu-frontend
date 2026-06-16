@@ -19,7 +19,7 @@ describe("codeFiles", () => {
     expect(task.context).toContain("submit_plan")
     expect(task.context).toContain("complete_step")
     expect(task.context).toContain("3 steps total")
-    expect(task.userMessage).toBe("Can you code these 3 files: A, B & C with codebook.md")
+    expect(task.userMessage).toBe("Can you code these 3 files: a.md, b.md & c.md with codebook.md")
   })
 })
 
@@ -31,12 +31,12 @@ describe("codeFiles userMessage file preview", () => {
   }
 
   const cases: Case[] = [
-    { name: "two files joined", docs: ["a.md", "b.md"], expected: "A & B" },
-    { name: "three files joined", docs: ["a.md", "b.md", "c.md"], expected: "A, B & C" },
+    { name: "two files joined", docs: ["a.md", "b.md"], expected: "a.md & b.md" },
+    { name: "three files joined", docs: ["a.md", "b.md", "c.md"], expected: "a.md, b.md & c.md" },
     {
       name: "over limit truncates with count",
       docs: ["a.md", "b.md", "c.md", "d.md", "e.md"],
-      expected: "A, B, C (+2 more)",
+      expected: "a.md, b.md, c.md (+2 more)",
     },
   ]
 

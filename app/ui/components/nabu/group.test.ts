@@ -340,4 +340,22 @@ describe("weaveEditGroups", () => {
   it.each(cases)("$name", ({ messages, entries, check }) =>
     check(weaveEditGroups(messages, entries))
   )
+
+  const keyedStep = (status: "active" | "pending", ts?: number): KeyedMessage => ({
+    key: `s-${status}-${ts ?? "x"}`,
+    message: {
+      type: "plan-step",
+      description: "step",
+      status,
+      checkpoint: false,
+      nested: false,
+      ...(ts !== undefined && { timestamp: ts }),
+    },
+  })
+
+  it("edits during the active step render before the pending steps, not after", () => {
+    const messages = [keyedStep("active", 10), keyedStep("pending"), keyedStep("pending")]
+    const out = weaveEditGroups(messages, [histEntry(20, "ai")])
+    expect(typesOf(out)).toEqual(["plan-step", "edit-group", "plan-step", "plan-step"])
+  })
 })

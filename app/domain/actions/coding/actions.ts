@@ -2,15 +2,13 @@ import type { TaskConfig } from "~/lib/agent/dispatch"
 import type { FileSelectionRange } from "~/lib/editor/selection-context"
 import type { CodingFileRef } from "./selectors"
 import { concatPretty } from "~/lib/utils/format"
-import { toDisplayName } from "~/lib/files/filename"
 
 const SNIPPET_EDGE = 4
 const FILE_PREVIEW_LIMIT = 3
 
 const summarizeFiles = (paths: string[]): string => {
-  const names = paths.map(toDisplayName)
-  if (names.length <= FILE_PREVIEW_LIMIT) return concatPretty(names)
-  return `${names.slice(0, FILE_PREVIEW_LIMIT).join(", ")} (+${names.length - FILE_PREVIEW_LIMIT} more)`
+  if (paths.length <= FILE_PREVIEW_LIMIT) return concatPretty(paths)
+  return `${paths.slice(0, FILE_PREVIEW_LIMIT).join(", ")} (+${paths.length - FILE_PREVIEW_LIMIT} more)`
 }
 
 const fileTargets = (paths: string[]): string => paths.map((p) => `{ path: "${p}" }`).join(", ")
