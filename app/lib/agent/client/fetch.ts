@@ -166,6 +166,15 @@ const executeLlmCall = async (
   return streamToBlocks(response, callbacks)
 }
 
+// Debug-panel requester: fire an edited body at the same endpoint, no cache,
+// no retry, no raw-store recording. Returns the same JSON-stringified Block[]
+// shape as RawLlmCall.rawResponse so the panel renders it identically.
+export const resendRawRequest = async (endpoint: string, body: string): Promise<string> => {
+  const response = await fetchOnce({ url: buildUrl(endpoint), body })
+  const blocks = await streamToBlocks(response, {})
+  return JSON.stringify(blocks)
+}
+
 export const callLlm = async (options: CallLlmOptions): Promise<Block[]> => {
   const body = buildRequestBody(options)
   const cacheable = isCacheable(options)

@@ -1,6 +1,7 @@
 import { hashChunk } from "./hash"
 import { CHUNK_CHARS, CHUNK_STRIDE_CHARS, CHUNK_WORD_TOLERANCE } from "./constants"
 import { splitBySentences } from "~/lib/text/split"
+import { extractProse } from "~/lib/data-blocks/parse"
 import type { Segment } from "~/lib/text/types"
 
 export interface Chunk {
@@ -111,3 +112,10 @@ export const chunkText = (text: string): Chunk[] => {
     chunkEnd: window.end + leadingTrim,
   }))
 }
+
+// The ONLY way to turn a file's raw markdown into embedding chunks. Embedding
+// source is extractProse(content) — never the raw file, never a file *view*.
+// Hashes and offsets only line up across the system (sync, search, deep-analysis
+// find) because every producer goes through here. If you need a file's chunks,
+// call this — do not pair extractProse + chunkText yourself.
+export const chunkFileForEmbedding = (content: string): Chunk[] => chunkText(extractProse(content))

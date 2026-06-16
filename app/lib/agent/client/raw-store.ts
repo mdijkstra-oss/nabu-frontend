@@ -4,6 +4,7 @@ export interface RawLlmCall {
   requestBody: string
   rawResponse: string | null
   streamingContent: string
+  startedAt: number
   timestamp: number
   duration: number | null
 }
@@ -25,6 +26,7 @@ const notifyThrottled = (): void => {
 
 export const startRawCall = (endpoint: string, requestBody: string): number => {
   const id = nextId++
+  const now = Date.now()
   calls = [
     ...calls,
     {
@@ -33,7 +35,8 @@ export const startRawCall = (endpoint: string, requestBody: string): number => {
       requestBody,
       rawResponse: null,
       streamingContent: "",
-      timestamp: Date.now(),
+      startedAt: now,
+      timestamp: now,
       duration: null,
     },
   ]

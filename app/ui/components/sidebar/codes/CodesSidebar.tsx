@@ -251,7 +251,7 @@ export const CodesSidebar = ({
                 onClick={() => onSearchCode?.(hoveredCode)}
               />
               {onFindCandidates && hoveredCode.detail.trim().length > 0 && (
-                <TooltipWrap text="Find candidates">
+                <TooltipWrap text="Find passages that may fit this code">
                   <button
                     className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-black/10"
                     onClick={() => onFindCandidates(hoveredCode)}
@@ -261,7 +261,7 @@ export const CodesSidebar = ({
                 </TooltipWrap>
               )}
               {onFindFileCandidates && hoveredCode.detail.trim().length > 0 && (
-                <TooltipWrap text="Find candidates in this file">
+                <TooltipWrap text="Find passages in this file that may fit this code">
                   <button
                     className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors hover:bg-black/10"
                     onClick={() => onFindFileCandidates(hoveredCode)}

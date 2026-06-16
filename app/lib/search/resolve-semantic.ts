@@ -5,6 +5,7 @@ import type { EmbeddingsCache, EmbeddingsSource, Inclusions } from "~/domain/sea
 import type { CorpusDescription } from "~/domain/corpus/types"
 import type { HydeAngle } from "~/lib/corpus/hyde-schema"
 import { ok, err } from "~/lib/fp/result"
+import { errorMessage } from "~/lib/utils/error"
 import { fetchEmbeddingBatch } from "~/lib/embeddings/client"
 import { generateHydesForDescription, generateGenericHydes } from "~/lib/corpus/generate-hydes"
 import { generateFileHydes } from "~/lib/corpus/generate-file-hydes"
@@ -81,6 +82,9 @@ const invalid = (message: string): Result<ResolvedQuery, ResolveError> =>
 
 const notReady = (message: string): Result<ResolvedQuery, ResolveError> =>
   err({ type: "not_ready", message })
+
+const isInclusionsEmpty = (inclusions: Inclusions): boolean =>
+  Object.values(inclusions).every((angles) => angles.length === 0)
 
 const hasMatchingLanguages = (cached: Inclusions, languages: string[]): boolean => {
   const cachedLanguages = Object.keys(cached)
@@ -159,7 +163,7 @@ const resolveCorpusInclusions = async (
   const inclusions: Inclusions = {}
   for (const lang of languages) inclusions[lang] = []
 
-  await processPool(
+  const pool = await processPool(
     [...descriptionTasks, ...genericTasks],
     (task) => task(),
     (results: HydeResult[]) => {
@@ -167,6 +171,9 @@ const resolveCorpusInclusions = async (
     },
     { warmup: 1 }
   )
+
+  if (isInclusionsEmpty(inclusions) && pool.failures.length > 0)
+    return err({ message: errorMessage(pool.failures[0].error) })
 
   return ok(inclusions)
 }
@@ -206,7 +213,7 @@ const resolveFileInclusions = async (
     return [{ language, angles: response.inclusions }]
   })
 
-  await processPool(
+  const pool = await processPool(
     tasks,
     (task) => task(),
     (results: FileHydeResult[]) => {
@@ -214,6 +221,9 @@ const resolveFileInclusions = async (
     },
     { warmup: 1 }
   )
+
+  if (isInclusionsEmpty(inclusions) && pool.failures.length > 0)
+    return err({ message: errorMessage(pool.failures[0].error) })
 
   return ok({ inclusions })
 }
@@ -304,24 +314,18 @@ const resolveCorpusSql = async (
 const readFileContent = (filename: string): string | undefined =>
   resolveHiddenFile(filename) ?? getFileRaw(filename) ?? undefined
 
-const firstSentence = (text: string): string => {
-  const trimmed = text.trim()
-  const match = trimmed.match(/^(.+?[.!?])(\s|$)/s)
-  return (match ? match[1] : trimmed.split(/\r?\n/)[0]).trim()
-}
-
-const deriveFileHighlight = (fileContent: string, filename: string): string => {
-  const blocks = parseCodeBlocks(fileContent)
-  for (const block of blocks) {
+// Intent for the semantic filter: a callout's title + full definition if the
+// file holds one; otherwise the whole file content verbatim.
+const deriveFileHighlight = (fileContent: string): string => {
+  for (const block of parseCodeBlocks(fileContent)) {
     const parsed = parseBlockJson<Record<string, unknown>>(block)
     if (!parsed.ok) continue
     const title = typeof parsed.data.title === "string" ? parsed.data.title : ""
     const content = typeof parsed.data.content === "string" ? parsed.data.content : ""
-    const summary = firstSentence(content)
-    const joined = [title, summary].filter((s) => s.length > 0).join(" — ")
+    const joined = [title, content].filter((s) => s.length > 0).join("\n\n")
     if (joined.length > 0) return joined
   }
-  return `Passages matching the definition in ${filename}`
+  return fileContent
 }
 
 const resolveFileSql = async (
@@ -355,7 +359,7 @@ const resolveFileSql = async (
       type: "hybrid",
       plan,
       embeddings: { source, inclusions: fileResult.value.inclusions },
-      highlight: deriveFileHighlight(fileContent, filename),
+      highlight: deriveFileHighlight(fileContent),
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)

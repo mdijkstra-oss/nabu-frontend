@@ -452,7 +452,9 @@ Render layer reads `text` and highlights `matches` if present. Identical handlin
 
 ### 8.4 Chunk storage
 
-`lib/embeddings/chunk.ts::chunkText(text)` slides a `CHUNK_CHARS = 1600` window with `CHUNK_STRIDE_CHARS = 1280` (20% overlap), aligning cuts to whitespace within `CHUNK_WORD_TOLERANCE = 160`. Emits `Chunk { index, text, hash, chunkStart, chunkEnd }`. Offsets are byte positions in `text.trim()`, shifted by leading-whitespace count back to original-source coordinates.
+`lib/embeddings/chunk.ts::chunkText(text)` slides a `CHUNK_CHARS = 1600` window with `CHUNK_STRIDE_CHARS = 1280` (20% overlap), aligning cuts to whitespace within `CHUNK_WORD_TOLERANCE = 160`. Emits `Chunk { index, text, hash, chunkStart, chunkEnd }`. Offsets are byte positions in `text.trim()`, shifted by leading-whitespace count back to original-source coordinates. `hash = hashChunk(chunk.text)` — content-addressed, so identical chunk text ⇒ identical hash, and _different input text ⇒ different hash_.
+
+> **Single producer of embedding chunks: `chunkFileForEmbedding(content)`** (`lib/embeddings/chunk.ts`) = `chunkText(extractProse(content))`. Anything that needs a file's chunks/hashes — sync, search, deep-analysis find — MUST call this, never `chunkText(rawFile)` or `chunkText(getFileView(...))`. The embedding source is `extractProse(content)` and nothing else; chunking any other representation (raw markdown, a `getFileView` with boundary comments) yields hashes that silently never match the stored `files` table, so `hash IN (...)` candidate filters return zero rows. This is exactly the class of "make the same thing 5 different ways" bug the single primitive exists to prevent.
 
 The overlap exists for **recall** (boundary semantics), not dedup. Regions handle dedup structurally — `seedAndGrow` swallows byte-overlapping rank-close hits into one region and drops the rest, so chunk-overlap never produces duplicate regions. Chunk overlap could be tuned independently; the pipeline is correct for any stride.
 

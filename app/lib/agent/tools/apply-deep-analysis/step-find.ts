@@ -3,12 +3,14 @@ import type { FileStore } from "~/lib/files/store"
 import type { SearchHit } from "~/domain/search/types"
 import type { Target } from "./def"
 import type { Envelope } from "./envelope"
-import { chunkText } from "~/lib/embeddings/chunk"
+import { chunkFileForEmbedding } from "~/lib/embeddings/chunk"
+import { extractProse } from "~/lib/data-blocks/parse"
 import { lineToCharOffset } from "~/lib/text/lines"
 import { runSearchPipeline } from "~/lib/search/pipeline"
 import { findMatchOffset } from "~/lib/text/find"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
+import { errorMessage } from "~/lib/utils/error"
 import { BRANCH_CONCURRENCY, PER_DIM_TARGET, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
 import { stripGeneratedSuffix } from "~/lib/files/filename"
 import type { Tracer } from "./trace"
@@ -33,13 +35,14 @@ export interface SearchCtx {
 
 const escapeSqlString = (s: string): string => s.replace(/'/g, "''")
 
-export const chunkHashesForRanges = (rawFile: string, ranges: RangeInFile[]): string[] => {
-  if (ranges.length === 0 || rawFile.length === 0) return []
-  const chunks = chunkText(rawFile)
+export const chunkHashesForRanges = (content: string, ranges: RangeInFile[]): string[] => {
+  if (ranges.length === 0 || content.length === 0) return []
+  const chunks = chunkFileForEmbedding(content)
   if (chunks.length === 0) return []
+  const prose = extractProse(content)
   const spans = ranges.map((r) => ({
-    start: lineToCharOffset(rawFile, r.startLine - 1),
-    end: lineToCharOffset(rawFile, r.endLine),
+    start: lineToCharOffset(prose, r.startLine - 1),
+    end: lineToCharOffset(prose, r.endLine),
   }))
   return chunks
     .filter((c) => spans.some((s) => c.chunkStart < s.end && c.chunkEnd > s.start))
@@ -84,20 +87,13 @@ const collectRangesByTarget = (targets: readonly Target[]): Map<string, RangeInF
   return byFile
 }
 
-const collectPairsFromTargets = (
-  targets: readonly Target[],
-  resolveFile: (path: string) => string | undefined
-): FileHashPair[] => {
+const collectPairsFromTargets = (targets: readonly Target[], files: FileStore): FileHashPair[] => {
   const byFile = collectRangesByTarget(targets)
   const pairs: FileHashPair[] = []
   for (const [file, ranges] of byFile) {
-    const rawFile = resolveFile(file)
-    if (!rawFile) continue
-    const clampedRanges = ranges.map((r) => ({
-      startLine: r.startLine,
-      endLine: Math.min(r.endLine, rawFile.split("\n").length),
-    }))
-    const hashes = chunkHashesForRanges(rawFile, clampedRanges)
+    const content = files[file]
+    if (!content) continue
+    const hashes = chunkHashesForRanges(content, ranges)
     for (const hash of hashes) pairs.push({ file, hash })
   }
   return pairs
@@ -162,17 +158,22 @@ const envelopeFromMatch = (
   }
 }
 
+interface BranchResult {
+  envelopes: Envelope[]
+  error?: string
+}
+
 const runBranch = async (
   branch: Branch,
   search: SearchCtx,
   tracer?: Tracer
-): Promise<Envelope[]> => {
+): Promise<BranchResult> => {
   const code = stripGeneratedSuffix(branch.dimPath)
   const files = uniqueFilesFromPairs(branch.pairs)
   const rawDim = search.resolveFile(branch.dimPath)
   if (!rawDim) {
     tracer?.setFind(code, { candidates: 0, files, limit: PER_DIM_TARGET, title: branch.dimPath })
-    return []
+    return { envelopes: [], error: `dimension file unavailable: ${branch.dimPath}` }
   }
 
   const sql = buildCandidateSql(branch.dimPath, branch.pairs)
@@ -185,11 +186,11 @@ const runBranch = async (
     search.framework
   )
   if (!result.ok) {
-    console.warn(
-      `[apply-deep find] search failed for dim ${branch.dimPath}: ${result.error.message}`
-    )
     tracer?.setFind(code, { candidates: 0, files, limit: PER_DIM_TARGET, title: branch.dimPath })
-    return []
+    return {
+      envelopes: [],
+      error: `find failed for dimension ${branch.dimPath}: ${result.error.message}`,
+    }
   }
 
   tracer?.setFind(code, {
@@ -215,7 +216,7 @@ const runBranch = async (
       if (env) envelopes.push(env)
     }
   }
-  return envelopes
+  return { envelopes }
 }
 
 const dedupBySpan = (envelopes: Envelope[]): Envelope[] => {
@@ -230,24 +231,37 @@ const dedupBySpan = (envelopes: Envelope[]): Envelope[] => {
   return out
 }
 
+export interface FindOutcome {
+  envelopes: Envelope[]
+  errors: string[]
+}
+
 export const runFind = async (
   targets: readonly Target[],
   dimensionPaths: readonly string[],
   search: SearchCtx,
   tracer?: Tracer
-): Promise<Envelope[]> => {
-  if (dimensionPaths.length === 0) return []
-  const pairs = collectPairsFromTargets(targets, search.resolveFile)
-  if (pairs.length === 0) return []
+): Promise<FindOutcome> => {
+  if (dimensionPaths.length === 0) return { envelopes: [], errors: [] }
+  const pairs = collectPairsFromTargets(targets, search.files)
+  if (pairs.length === 0) return { envelopes: [], errors: [] }
 
   const branches: Branch[] = dimensionPaths.map((dimPath) => ({ dimPath, pairs }))
 
-  const pool = await processPool<Branch, Envelope>(
+  const pool = await processPool<Branch, BranchResult>(
     branches,
-    (branch) => runBranch(branch, search, tracer),
+    async (branch) => [await runBranch(branch, search, tracer)],
     noop,
     { concurrency: BRANCH_CONCURRENCY }
   )
 
-  return dedupBySpan(pool.results)
+  const envelopes: Envelope[] = []
+  const errors: string[] = []
+  for (const br of pool.results) {
+    envelopes.push(...br.envelopes)
+    if (br.error) errors.push(br.error)
+  }
+  for (const f of pool.failures) errors.push(errorMessage(f.error))
+
+  return { envelopes: dedupBySpan(envelopes), errors }
 }

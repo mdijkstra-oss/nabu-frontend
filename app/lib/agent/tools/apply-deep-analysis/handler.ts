@@ -292,6 +292,19 @@ const sumConfidence = (results: readonly TargetResult[]): { confirmed: number; r
     { confirmed: 0, reviewed: 0 }
   )
 
+const degradeWithWarnings = (
+  result: HandlerResult<string>,
+  warnings: readonly string[]
+): HandlerResult<string> => {
+  if (warnings.length === 0 || result.status === "error") return result
+  const note = `${warnings.length} analysis sub-call(s) failed and were dropped:\n${warnings.map((w) => `- ${w}`).join("\n")}`
+  return {
+    ...result,
+    status: "partial",
+    message: result.message ? `${result.message}\n${note}` : note,
+  }
+}
+
 const appendSynthesisDirective = (
   result: HandlerResult<string>,
   flat: readonly TargetResult[],
@@ -373,12 +386,12 @@ registerTool(
       think(STARTING)
       think(READING_FRAMEWORK)
 
-      const envelopes = await runFind(targets, expanded.dimension, searchCtx, tracer)
+      const find = await runFind(targets, expanded.dimension, searchCtx, tracer)
 
       const analyzedCodes = new Set(extractDimensionIds([scoped], getFileView))
 
       const pipelineResult = await runAnalysisPipeline(
-        envelopes,
+        find.envelopes,
         scoped,
         getFileView,
         scope,
@@ -386,13 +399,13 @@ registerTool(
       )
       tracer.flush()
 
-      const warnings: string[] = []
-      if (pipelineResult.errors.length > 0) warnings.push(...pipelineResult.errors)
+      const warnings = [...find.errors, ...pipelineResult.errors]
+      if (warnings.length > 0) console.warn("[deep-analysis] degraded sub-calls:", warnings)
 
-      if (pipelineResult.envelopes.length === 0 && pipelineResult.errors.length > 0) {
+      if (pipelineResult.envelopes.length === 0 && warnings.length > 0) {
         return {
           status: "error",
-          output: pipelineResult.errors.join("; "),
+          output: `Deep analysis failed — no spans produced:\n${warnings.map((w) => `- ${w}`).join("\n")}`,
           mutations: [],
         }
       }
@@ -412,7 +425,7 @@ registerTool(
         if (post_action === "return") {
           result = {
             status: "ok",
-            output: formatReturnOutput(mapped, lines.start, lines.end, warnings),
+            output: formatReturnOutput(mapped, lines.start, lines.end),
             mutations: [],
           }
         } else {
@@ -427,7 +440,8 @@ registerTool(
       }
 
       const merged = flat.length === 1 ? flat[0].result : mergeTargetResults(flat)
-      return appendSynthesisDirective(merged, flat, synthesize === true)
+      const degraded = degradeWithWarnings(merged, warnings)
+      return appendSynthesisDirective(degraded, flat, synthesize === true)
     },
   })
 )

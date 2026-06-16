@@ -136,8 +136,9 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
   },
   {
     key: "fileSpecificCandidates",
-    label: "Show file-specific candidates",
-    description: "Enable per-file candidate search on the current file.",
+    label: "Suggest passages in the open file",
+    description:
+      "Adds a button to each code that finds passages in the currently open file that may fit it.",
     icon: <Filter />,
     defaultValue: false,
   },

@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect, useSyncExternalStore } from "react"
-import { ChevronRight, ChevronDown, Copy, Check, ListX, ListChecks } from "lucide-react"
+import { ChevronRight, ChevronDown, Copy, Check, ListX, ListChecks, Send, X } from "lucide-react"
 import { AutoScroll } from "~/ui/components/AutoScroll"
 import { getRawCalls, subscribeRawCalls, type RawLlmCall } from "~/lib/agent/client/raw-store"
+import { resendRawRequest } from "~/lib/agent/client/fetch"
 import { findMatchOffset } from "~/lib/text/find"
 
 const isPending = (call: RawLlmCall): boolean => call.duration === null
@@ -154,10 +155,71 @@ const Section = ({
   )
 }
 
+interface RequesterProps {
+  endpoint: string
+  initialBody: string
+  onClose: () => void
+}
+
+const Requester = ({ endpoint, initialBody, onClose }: RequesterProps) => {
+  const [body, setBody] = useState(() => prettyJson(initialBody))
+  const [output, setOutput] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleSend = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await resendRawRequest(endpoint, body)
+      setOutput(formatRawOutput(res))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col bg-white">
+      <div className="flex items-center justify-between border-b border-neutral-200 px-3 py-2">
+        <span className="text-xs font-mono font-medium text-neutral-700">{endpoint}</span>
+        <button onClick={onClose} className="p-1 text-neutral-400 hover:text-neutral-600">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="flex flex-1 flex-col gap-2 overflow-hidden p-3">
+        <span className="text-xs font-medium text-neutral-500">Request</span>
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          spellCheck={false}
+          className="h-1/2 w-full resize-none rounded border border-neutral-200 bg-neutral-50 p-2 font-mono text-xs text-neutral-700 focus:border-neutral-400 focus:outline-none"
+        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSend}
+            disabled={loading}
+            className="rounded bg-neutral-800 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+          >
+            {loading ? "Sending…" : "Resend"}
+          </button>
+          {error && <span className="text-xs text-red-500">{error}</span>}
+        </div>
+        <span className="text-xs font-medium text-neutral-500">Response</span>
+        <pre className="flex-1 overflow-auto rounded bg-neutral-50 p-2 font-mono text-xs whitespace-pre-wrap text-neutral-700">
+          {output || (loading ? "…" : "(press Resend)")}
+        </pre>
+      </div>
+    </div>
+  )
+}
+
 interface RawCallEntryProps {
   call: RawLlmCall
   selected: boolean
   onToggleSelect: () => void
+  onOpenRequester: (endpoint: string, body: string) => void
 }
 
 const PendingDot = () => (
@@ -166,11 +228,11 @@ const PendingDot = () => (
 
 const CanceledDot = () => <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400" />
 
-const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => {
+const RawCallEntry = ({ call, selected, onToggleSelect, onOpenRequester }: RawCallEntryProps) => {
   const pending = isPending(call)
   const canceled = isCanceled(call)
   const [expanded, setExpanded] = useState(false)
-  const time = new Date(call.timestamp).toLocaleTimeString()
+  const startTime = new Date(call.startedAt).toLocaleTimeString()
 
   const handleCheckbox = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -205,11 +267,17 @@ const RawCallEntry = ({ call, selected, onToggleSelect }: RawCallEntryProps) => 
           </span>
         </div>
         <span className="text-xs text-neutral-400">
-          {formatDuration(call.duration)} · {time}
+          {startTime} · {formatDuration(call.duration)}
         </span>
       </button>
       {expanded && (
         <div className="flex flex-col gap-2 border-t border-neutral-100 px-3 py-2">
+          <button
+            onClick={() => onOpenRequester(call.endpoint, call.requestBody)}
+            className="flex items-center gap-1 self-start rounded border border-neutral-200 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+          >
+            <Send className="w-3 h-3" /> Open in requester
+          </button>
           <Section
             label="Input"
             displayContent={prettyJson(call.requestBody)}
@@ -257,6 +325,9 @@ const callMatchesFilter = (call: RawLlmCall, filter: string): boolean => {
 const filterCalls = (calls: RawLlmCall[], filter: string): RawLlmCall[] =>
   filter.length < FILTER_MIN_LENGTH ? calls : calls.filter((c) => callMatchesFilter(c, filter))
 
+const sortByStart = (calls: RawLlmCall[]): RawLlmCall[] =>
+  [...calls].sort((a, b) => a.startedAt - b.startedAt)
+
 const useDebouncedValue = (value: string, delay: number): string => {
   const [debounced, setDebounced] = useState(value)
   useEffect(() => {
@@ -272,14 +343,17 @@ export const DebugRawTab = () => {
   const calls = useRawCalls()
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [copiedAll, setCopiedAll] = useState(false)
+  const [requester, setRequester] = useState<{ endpoint: string; body: string } | null>(null)
   const [filterText, setFilterText] = useState("")
   const debouncedFilter = useDebouncedValue(filterText, FILTER_DEBOUNCE_MS)
-  const filteredCalls = filterCalls(calls, debouncedFilter)
+  const filteredCalls = sortByStart(filterCalls(calls, debouncedFilter))
   const isFiltering = debouncedFilter.length >= FILTER_MIN_LENGTH
 
   const hasSelection = selectedIds.size > 0
 
   const handleToggle = (id: number) => setSelectedIds((prev) => toggleId(prev, id))
+
+  const handleOpenRequester = (endpoint: string, body: string) => setRequester({ endpoint, body })
 
   const handleDeselectAll = () => setSelectedIds(new Set())
 
@@ -308,7 +382,7 @@ export const DebugRawTab = () => {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="relative flex flex-1 flex-col overflow-hidden">
       <div className="border-b border-neutral-100 px-3 py-1.5">
         <input
           type="text"
@@ -362,9 +436,17 @@ export const DebugRawTab = () => {
             call={call}
             selected={selectedIds.has(call.id)}
             onToggleSelect={() => handleToggle(call.id)}
+            onOpenRequester={handleOpenRequester}
           />
         ))}
       </AutoScroll>
+      {requester && (
+        <Requester
+          endpoint={requester.endpoint}
+          initialBody={requester.body}
+          onClose={() => setRequester(null)}
+        />
+      )}
     </div>
   )
 }

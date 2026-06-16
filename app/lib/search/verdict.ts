@@ -18,13 +18,9 @@ export const FILTER_CONCURRENCY = 5
 
 const SEMANTIC_FILTER_ENDPOINT = "/semantic-filter"
 const REF_SEPARATOR = "-"
-const MIN_WORD_COUNT = 3
-const WORD_SPLIT_RE = /\s+/
 
 const FILTER_CALL_TO_ACTION =
   'Return { results: [{ start, end, reasonToKeep }, ...] } where start and end are prefixed sentence refs like "a-3" and reasonToKeep names the clause or signal the passage satisfies.'
-
-const hasEnoughWords = (text: string): boolean => text.split(WORD_SPLIT_RE).length >= MIN_WORD_COUNT
 
 interface PreparedHit {
   hit: SearchHit
@@ -201,7 +197,7 @@ export const extractMatchTexts = (sentences: string[], spans: Spanned[]): string
       for (let i = lo; i <= hi; i++) parts.push(sentences[i - 1])
       return parts.join(" ").trim()
     })
-    .filter(hasEnoughWords)
+    .filter((t) => t.length > 0)
 
 const reconstructBatchHits = (prepared: PreparedHit[], results: FilteredSpan[][]): SearchHit[] =>
   prepared.flatMap((p, i) => {

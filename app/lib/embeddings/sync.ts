@@ -3,8 +3,7 @@ import { debounce } from "~/lib/utils/debounce"
 import { processPool } from "~/lib/utils/pool"
 import { isEmbeddableFile } from "./filter"
 import { companionFilename, buildCompanionMarkdown, parseCompanionEntries } from "./companion"
-import { extractProse } from "~/lib/data-blocks/parse"
-import { chunkText } from "./chunk"
+import { chunkFileForEmbedding } from "./chunk"
 import { diffChunks, type EmbeddingEntry } from "./diff"
 import { fetchEmbeddingBatch } from "./client"
 import { EMBEDDING_SYNC_DEBOUNCE, MAX_EMBEDDING_BATCH_SIZE } from "./constants"
@@ -51,8 +50,7 @@ const prepareFile = (
   content: string,
   companionContent: string | undefined
 ): FileChunks => {
-  const embeddableText = extractProse(content)
-  const chunks = chunkText(embeddableText)
+  const chunks = chunkFileForEmbedding(content)
   const existing = companionContent ? parseCompanionEntries(companionContent) : []
   const { keep, needed } = diffChunks(existing, chunks)
   return { filename, entries: keep, needed }
