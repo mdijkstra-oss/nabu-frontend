@@ -3,12 +3,13 @@
 import { useState, type ReactNode } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Check, Minus } from "lucide-react"
-import { solidBackground, hoveredElementBorder } from "~/ui/theme/radix"
+import { solidBackground, hoveredElementBorder, elementBorder } from "~/ui/theme/radix"
 
 interface CheckableWrapProps {
   color: string
   checked: boolean
   partial?: boolean
+  muted?: boolean
   bodyTogglesSelection?: boolean
   onToggle: () => void
   children: ReactNode
@@ -23,6 +24,7 @@ export const CheckableWrap = ({
   color,
   checked,
   partial = false,
+  muted = false,
   bodyTogglesSelection = false,
   onToggle,
   children,
@@ -33,6 +35,8 @@ export const CheckableWrap = ({
   const showPreview = boxHovered && !checked && !partial
   const isFilled = checked || partial || showPreview
   const showDash = partial && !checked && !showPreview
+  const filledColor = muted ? elementBorder(color) : solidBackground(color)
+  const emptyBorder = muted ? elementBorder(color) : hoveredElementBorder(color)
 
   const toggle = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -59,8 +63,8 @@ export const CheckableWrap = ({
             width: CHECKBOX_SIZE,
             height: CHECKBOX_SIZE,
             minWidth: CHECKBOX_SIZE,
-            borderColor: isFilled ? solidBackground(color) : hoveredElementBorder(color),
-            backgroundColor: isFilled ? solidBackground(color) : "transparent",
+            borderColor: isFilled ? filledColor : emptyBorder,
+            backgroundColor: isFilled ? filledColor : "transparent",
             opacity: showPreview ? 0.4 : (checked || partial) && boxHovered ? 0.7 : 1,
           }}
           onClick={toggle}

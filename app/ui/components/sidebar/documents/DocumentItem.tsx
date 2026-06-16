@@ -1,7 +1,8 @@
 "use client"
 
-import { elementBackground, solidBackground, type RadixColor } from "~/ui/theme/radix"
+import { elementBackground, type RadixColor } from "~/ui/theme/radix"
 import { annotationIcon as AnnotationIcon } from "~/domain/data-blocks/attributes/schema"
+import { SelectionBar } from "./SelectionBar"
 
 interface DocumentItemProps {
   title: string
@@ -9,6 +10,7 @@ interface DocumentItemProps {
   annotationCount?: number
   color?: RadixColor
   selected?: boolean
+  checked?: boolean
   onClick?: () => void
 }
 
@@ -21,13 +23,14 @@ export function DocumentItem({
   annotationCount = 0,
   color = "lime",
   selected = false,
+  checked = false,
   onClick,
 }: DocumentItemProps) {
   const showMeta = hasMetaRow(editedAt, annotationCount)
   return (
     <div
       style={{ "--tag-element": elementBackground(color) } as React.CSSProperties}
-      className={`flex w-full min-h-[3rem] flex-col px-3 py-2 cursor-pointer relative ${
+      className={`group flex w-full min-h-[3rem] flex-col pl-2 pr-3 py-2 cursor-pointer relative ${
         showMeta ? "items-start gap-1 justify-start" : "justify-center"
       } ${
         selected
@@ -36,12 +39,7 @@ export function DocumentItem({
       }`}
       onClick={onClick}
     >
-      {selected && (
-        <div
-          className="flex w-1 flex-col items-center gap-2 absolute left-0 top-0 bottom-0"
-          style={{ backgroundColor: solidBackground(color) }}
-        />
-      )}
+      <SelectionBar color={color} active={selected} checked={checked} />
       <span className="w-full flex-none line-clamp-1 text-body font-body text-default-font">
         {title}
       </span>

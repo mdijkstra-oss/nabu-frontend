@@ -29,6 +29,7 @@ import {
 } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedDocs } from "~/domain/actions/select-docs/apply"
 import { DocumentItem } from "./DocumentItem"
+import { SelectionBar } from "./SelectionBar"
 
 export type DocSortMode = "name" | "date"
 
@@ -175,14 +176,15 @@ const SelectableDocument = ({
   onToggle: () => void
   onSelect: () => void
 }) => (
-  <div className="w-full px-2">
-    <CheckableWrap color={color} checked={isChecked} onToggle={onToggle}>
+  <div className="w-full">
+    <CheckableWrap color={color} checked={isChecked} muted onToggle={onToggle}>
       <DocumentItem
         title={doc.title}
         editedAt={doc.editedAt}
         annotationCount={doc.annotationCount}
         color={color}
         selected={isCurrent}
+        checked={isChecked}
         onClick={onSelect}
       />
     </CheckableWrap>
@@ -312,11 +314,12 @@ export function DocumentsSidebar({
                   color={resolved.color}
                   checked={tagState === "all"}
                   partial={tagState === "partial"}
+                  muted
                   bodyTogglesSelection
                   onToggle={() => toggleTag(docs)}
                 >
                   <div
-                    className="relative flex w-full items-center gap-2 px-4 py-2.5 hover:bg-neutral-50"
+                    className="group relative flex w-full items-center gap-2 pl-2 pr-4 py-2.5 hover:bg-neutral-50"
                     style={
                       highlighted
                         ? { backgroundColor: elementBackground(resolved.color) }
@@ -324,12 +327,11 @@ export function DocumentsSidebar({
                     }
                     onMouseEnter={() => setHoveredTag(tag)}
                   >
-                    {isActive && (
-                      <div
-                        className="absolute left-0 top-0 bottom-0 w-1"
-                        style={{ backgroundColor: solidBackground(resolved.color) }}
-                      />
-                    )}
+                    <SelectionBar
+                      color={resolved.color}
+                      active={isActive}
+                      checked={tagState === "all"}
+                    />
                     <span className="flex-none" style={{ color: lowContrastText(resolved.color) }}>
                       <TagIcon className="text-body font-body" />
                     </span>
