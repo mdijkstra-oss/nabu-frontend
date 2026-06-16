@@ -10,6 +10,11 @@ import { Badge } from "~/ui/components/Badge"
 import { CheckableWrap } from "~/ui/components/CheckableWrap"
 import { matchesAny, matchesAllWords } from "~/lib/utils/filter"
 import {
+  sortDocuments,
+  type DocumentEntry as ListItem,
+  type DocSortMode,
+} from "~/domain/documents/selectors"
+import {
   elementBackground,
   solidBackground,
   lowContrastText,
@@ -31,16 +36,7 @@ import { writeSelectedDocs } from "~/domain/actions/select-docs/apply"
 import { DocumentItem } from "./DocumentItem"
 import { SelectionBar } from "./SelectionBar"
 
-export type DocSortMode = "name" | "date"
-
-interface ListItem {
-  id: string
-  title: string
-  date: string
-  editedAt: string
-  tags: string[]
-  annotationCount: number
-}
+export type { DocSortMode } from "~/domain/documents/selectors"
 
 interface DocumentsSidebarProps {
   documents: ListItem[]
@@ -75,25 +71,8 @@ const groupByTag = (docs: ListItem[]): TagGroup[] => {
   return Array.from(tagMap, ([tag, docs]) => ({ tag, docs }))
 }
 
-const compareByName = (a: ListItem, b: ListItem): number => a.title.localeCompare(b.title)
-
-const compareByDate = (a: ListItem, b: ListItem): number => {
-  if (a.date && b.date) {
-    const cmp = b.date.localeCompare(a.date)
-    return cmp !== 0 ? cmp : a.title.localeCompare(b.title)
-  }
-  if (a.date) return -1
-  if (b.date) return 1
-  return a.title.localeCompare(b.title)
-}
-
-const docComparators: Record<DocSortMode, (a: ListItem, b: ListItem) => number> = {
-  name: compareByName,
-  date: compareByDate,
-}
-
 const sortDocs = (groups: TagGroup[], mode: DocSortMode): TagGroup[] =>
-  groups.map((g) => ({ ...g, docs: [...g.docs].sort(docComparators[mode]) }))
+  groups.map((g) => ({ ...g, docs: sortDocuments(g.docs, mode) }))
 
 const filterGroups = (groups: TagGroup[], query: string): TagGroup[] => {
   if (query.length === 0) return groups
@@ -110,7 +89,10 @@ const filterGroups = (groups: TagGroup[], query: string): TagGroup[] => {
 }
 
 const filterDocs = (docs: ListItem[], query: string, mode: DocSortMode): ListItem[] =>
-  [...docs].filter((doc) => matchesAllWords(query, [doc.title])).sort(docComparators[mode])
+  sortDocuments(
+    docs.filter((doc) => matchesAllWords(query, [doc.title])),
+    mode
+  )
 
 const sortGroups = (
   groups: TagGroup[],

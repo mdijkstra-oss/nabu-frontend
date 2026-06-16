@@ -14,10 +14,12 @@ import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayou
 import { useFiles } from "~/ui/hooks/useFiles"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { useFileImport } from "~/ui/hooks/useFileImport"
+import { DocumentsSidebar } from "~/ui/components/sidebar/documents/DocumentsSidebar"
 import {
-  DocumentsSidebar,
+  buildDocumentEntries,
+  type DocumentEntry,
   type DocSortMode,
-} from "~/ui/components/sidebar/documents/DocumentsSidebar"
+} from "~/domain/documents/selectors"
 import { CodesSidebar } from "~/ui/components/sidebar/codes/CodesSidebar"
 import type { Code } from "~/ui/components/sidebar/codes/types"
 import { ExhibitsSidebar } from "~/ui/components/sidebar/exhibits/ExhibitsSidebar"
@@ -71,8 +73,8 @@ import {
   getStoredAnnotations,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { findDocumentForCallout } from "~/domain/data-blocks/callout/selectors"
-import { toDisplayName, isHiddenFile } from "~/lib/files/filename"
-import { HIDDEN_TAG_ID, HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hidden"
+import { isHiddenFile } from "~/lib/files/filename"
+import { HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hidden"
 import { buildIdentifierResolver } from "~/lib/files/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import type { SearchEntry } from "~/domain/search/types"
@@ -83,7 +85,6 @@ import {
 } from "~/domain/search/queries"
 import { collectExhibits } from "~/domain/exhibits/selectors"
 import type { ExhibitItem } from "~/domain/exhibits/types"
-import { formatShortDate } from "~/lib/format/date"
 import { getSettings, setSetting } from "~/lib/storage"
 import { dispatchTask } from "~/lib/agent/dispatch"
 import {
@@ -108,40 +109,6 @@ import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getAllCodes, findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
 
 export type { DebugOptions } from "~/ui/components/editor/debug-config"
-
-interface SidebarDocument {
-  id: string
-  title: string
-  date: string
-  editedAt: string
-  tags: string[]
-  annotationCount: number
-}
-
-const tagsWithHidden = (tags: string[], filename: string): string[] =>
-  isHiddenFile(filename) ? [...tags, HIDDEN_TAG_ID] : tags
-
-const formatEditedAt = (date: string | undefined): string => (date ? formatShortDate(date) : "")
-
-const filesToSidebarDocuments = (
-  files: Record<string, string>,
-  getFileTags: (filename: string) => string[],
-  getFileDateFn: (filename: string) => string | undefined,
-  debugMode: boolean
-): SidebarDocument[] =>
-  Object.keys(files)
-    .filter((filename) => debugMode || !isHiddenFile(filename))
-    .map((filename) => {
-      const rawDate = getFileDateFn(filename) ?? ""
-      return {
-        id: filename,
-        title: toDisplayName(filename),
-        date: rawDate,
-        editedAt: formatEditedAt(rawDate || undefined),
-        tags: tagsWithHidden(getFileTags(filename), filename),
-        annotationCount: getAnnotationCount(files[filename] ?? ""),
-      }
-    })
 
 const DEBUG_STORAGE_KEY = "nabu-debug-options"
 
@@ -222,6 +189,10 @@ export interface ProjectContextValue {
     filename: string
   ) => { text: string; color: string; reason?: string; code?: string }[] | undefined
   tagDefinitions: TagDefinition[]
+  documents: DocumentEntry[]
+  docSortMode: DocSortMode
+  onDocSortChange: (mode: DocSortMode) => void
+  onSelectDocument: (filename: string) => void
   actionBar: ReactNode
 }
 
@@ -432,7 +403,7 @@ export default function ProjectLayout() {
   ])
 
   const documents = useMemo(
-    () => filesToSidebarDocuments(files, getFileTags, getFileDateFn, !!debugOptions.expanded),
+    () => buildDocumentEntries(files, getFileTags, getFileDateFn, !!debugOptions.expanded),
     [files, getFileTags, getFileDateFn, debugOptions.expanded]
   )
 
@@ -865,6 +836,10 @@ export default function ProjectLayout() {
                   getFileDate: getFileDateFn,
                   getFileAnnotations,
                   tagDefinitions,
+                  documents,
+                  docSortMode,
+                  onDocSortChange: handleDocSortChange,
+                  onSelectDocument: handleDocumentSelect,
                   actionBar:
                     (isOnDocumentPage || isOnSearchPage) && hasSelectedCodes ? (
                       <ActionBar
