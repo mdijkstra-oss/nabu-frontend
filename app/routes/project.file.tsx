@@ -26,7 +26,35 @@ import {
   getDocumentType,
   getDocumentSubject,
 } from "~/domain/data-blocks/attributes/topics/selectors"
+import { getSelectedDocs } from "~/domain/data-blocks/ux/selectors"
 import { Clipboard, Copy, FileText, Share2, Trash } from "lucide-react"
+
+const MAX_PAPER = 3
+const PAPER_STEP = 7
+
+const PaperStack = ({ count }: { count: number }) => {
+  const sheets = Math.min(count, MAX_PAPER)
+  if (sheets === 0) return null
+  return (
+    <>
+      {Array.from({ length: sheets }, (_, i) => {
+        const depth = i + 1
+        return (
+          <div
+            key={depth}
+            aria-hidden
+            className="absolute inset-0 rounded-xl border border-solid border-panel-border bg-default-background"
+            style={{
+              transform: `translate(${depth * PAPER_STEP}px, ${depth * PAPER_STEP}px)`,
+              zIndex: 10 - depth,
+              boxShadow: "0 1px 3px rgb(0 0 0 / 0.08)",
+            }}
+          />
+        )
+      })}
+    </>
+  )
+}
 
 const formatClassificationLine = (
   type: string | undefined,
@@ -113,6 +141,10 @@ export default function ProjectFile() {
     () => (currentFile ? getFileDateFn(currentFile) : undefined),
     [currentFile, getFileDateFn]
   )
+  const otherSelectedCount = useMemo(
+    () => [...getSelectedDocs(files)].filter((id) => id !== currentFile).length,
+    [files, currentFile]
+  )
 
   const handleRemoveTag = useCallback(
     (tagId: string) => {
@@ -141,55 +173,58 @@ export default function ProjectFile() {
 
   return (
     <div className="flex h-full w-full flex-col gap-2 bg-neutral-100 p-2">
-      <div className="flex flex-1 min-h-0 flex-col rounded-xl border border-solid border-panel-border bg-default-background overflow-hidden">
-        <FileHeader
-          title={toDisplayName(currentFile)}
-          date={fileDate}
-          tags={tags}
-          onRemoveTag={handleRemoveTag}
-          menuItems={[
-            { icon: <Clipboard />, label: "Copy raw", onClick: copyRawMarkdown },
-            { icon: <Share2 />, label: "Share", onClick: () => undefined },
-            { icon: <Copy />, label: "Duplicate", onClick: () => undefined },
-            { icon: <FileText />, label: "Export", onClick: () => undefined },
-            { icon: <Trash />, label: "Delete", onClick: () => undefined },
-          ]}
-          onAddTag={() => undefined}
-        />
-        <div className="flex w-full grow shrink basis-0 min-h-0 items-stretch">
-          <ScrollShadow
-            scrollRef={scrollContainerRef}
-            className="flex-col items-start pl-12 pr-6 py-6"
-          >
-            <div
-              ref={editorContainerRef}
-              className="relative flex w-full grow flex-col items-start gap-8"
+      <div className="relative flex flex-1 min-h-0">
+        <PaperStack count={otherSelectedCount} />
+        <div className="relative z-10 flex h-full w-full min-h-0 flex-col rounded-xl border border-solid border-panel-border bg-default-background overflow-hidden">
+          <FileHeader
+            title={toDisplayName(currentFile)}
+            date={fileDate}
+            tags={tags}
+            onRemoveTag={handleRemoveTag}
+            menuItems={[
+              { icon: <Clipboard />, label: "Copy raw", onClick: copyRawMarkdown },
+              { icon: <Share2 />, label: "Share", onClick: () => undefined },
+              { icon: <Copy />, label: "Duplicate", onClick: () => undefined },
+              { icon: <FileText />, label: "Export", onClick: () => undefined },
+              { icon: <Trash />, label: "Delete", onClick: () => undefined },
+            ]}
+            onAddTag={() => undefined}
+          />
+          <div className="flex w-full grow shrink basis-0 min-h-0 items-stretch">
+            <ScrollShadow
+              scrollRef={scrollContainerRef}
+              className="flex-col items-start pl-12 pr-6 py-6"
             >
-              <MilkdownEditor
-                key={`${currentFile}-${debugOptions.renderAsJson}`}
-                content={formatContent(content, currentFile)}
-                debugMode={debugOptions.renderAsJson}
-                debugOptions={debugOptions}
-                spotlight={spotlight}
-                filePath={currentFile}
-              />
-            </div>
-          </ScrollShadow>
-          <ScrollGutter
-            contentRef={editorContainerRef}
-            scrollContainerRef={scrollContainerRef}
-            onScrollTo={handleScrollTo}
-          />
-        </div>
-        <div className="flex-none bg-default-background">
-          <StatusBar
-            text={
-              rawContent
-                ? `${documentStatusText(rawContent)}${formatSelectionSuffix(editorSelection?.text)}`
-                : null
-            }
-            tooltip={rawContent ? documentStatusTooltip(rawContent) : undefined}
-          />
+              <div
+                ref={editorContainerRef}
+                className="relative flex w-full grow flex-col items-start gap-8"
+              >
+                <MilkdownEditor
+                  key={`${currentFile}-${debugOptions.renderAsJson}`}
+                  content={formatContent(content, currentFile)}
+                  debugMode={debugOptions.renderAsJson}
+                  debugOptions={debugOptions}
+                  spotlight={spotlight}
+                  filePath={currentFile}
+                />
+              </div>
+            </ScrollShadow>
+            <ScrollGutter
+              contentRef={editorContainerRef}
+              scrollContainerRef={scrollContainerRef}
+              onScrollTo={handleScrollTo}
+            />
+          </div>
+          <div className="flex-none bg-default-background">
+            <StatusBar
+              text={
+                rawContent
+                  ? `${documentStatusText(rawContent)}${formatSelectionSuffix(editorSelection?.text)}`
+                  : null
+              }
+              tooltip={rawContent ? documentStatusTooltip(rawContent) : undefined}
+            />
+          </div>
         </div>
       </div>
       <AnimatePresence>{actionBar}</AnimatePresence>

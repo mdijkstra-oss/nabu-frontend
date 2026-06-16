@@ -2,12 +2,14 @@
 
 import { useState, type ReactNode } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Check } from "lucide-react"
+import { Check, Minus } from "lucide-react"
 import { solidBackground, hoveredElementBorder } from "~/ui/theme/radix"
 
 interface CheckableWrapProps {
   color: string
   checked: boolean
+  partial?: boolean
+  bodyTogglesSelection?: boolean
   onToggle: () => void
   children: ReactNode
 }
@@ -17,13 +19,22 @@ const GAP = 10
 
 const springTransition = { type: "spring" as const, stiffness: 500, damping: 35 }
 
-export const CheckableWrap = ({ color, checked, onToggle, children }: CheckableWrapProps) => {
+export const CheckableWrap = ({
+  color,
+  checked,
+  partial = false,
+  bodyTogglesSelection = false,
+  onToggle,
+  children,
+}: CheckableWrapProps) => {
   const [rowHovered, setRowHovered] = useState(false)
   const [boxHovered, setBoxHovered] = useState(false)
-  const isVisible = rowHovered || checked
-  const showPreview = boxHovered && !checked
+  const isVisible = rowHovered || checked || partial
+  const showPreview = boxHovered && !checked && !partial
+  const isFilled = checked || partial || showPreview
+  const showDash = partial && !checked && !showPreview
 
-  const handleCheckboxClick = (e: React.MouseEvent) => {
+  const toggle = (e: React.MouseEvent) => {
     e.stopPropagation()
     onToggle()
   }
@@ -48,17 +59,16 @@ export const CheckableWrap = ({ color, checked, onToggle, children }: CheckableW
             width: CHECKBOX_SIZE,
             height: CHECKBOX_SIZE,
             minWidth: CHECKBOX_SIZE,
-            borderColor:
-              checked || showPreview ? solidBackground(color) : hoveredElementBorder(color),
-            backgroundColor: checked || showPreview ? solidBackground(color) : "transparent",
-            opacity: showPreview ? 0.4 : checked && boxHovered ? 0.7 : 1,
+            borderColor: isFilled ? solidBackground(color) : hoveredElementBorder(color),
+            backgroundColor: isFilled ? solidBackground(color) : "transparent",
+            opacity: showPreview ? 0.4 : (checked || partial) && boxHovered ? 0.7 : 1,
           }}
-          onClick={handleCheckboxClick}
+          onClick={toggle}
           onMouseEnter={() => setBoxHovered(true)}
           onMouseLeave={() => setBoxHovered(false)}
         >
           <AnimatePresence>
-            {(checked || showPreview) && (
+            {isFilled && (
               <motion.span
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -66,13 +76,22 @@ export const CheckableWrap = ({ color, checked, onToggle, children }: CheckableW
                 transition={springTransition}
                 className="flex items-center justify-center"
               >
-                <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                {showDash ? (
+                  <Minus className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                ) : (
+                  <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                )}
               </motion.span>
             )}
           </AnimatePresence>
         </button>
       </motion.div>
-      <div className="min-w-0 grow">{children}</div>
+      <div
+        className={`min-w-0 grow ${bodyTogglesSelection ? "cursor-pointer" : ""}`}
+        onClick={bodyTogglesSelection ? toggle : undefined}
+      >
+        {children}
+      </div>
     </div>
   )
 }

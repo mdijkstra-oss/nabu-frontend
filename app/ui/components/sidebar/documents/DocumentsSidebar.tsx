@@ -1,12 +1,13 @@
 "use client"
 
 import type { ComponentType } from "react"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useSyncExternalStore } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { ArrowDownAZ, Calendar, Hash, Folder } from "lucide-react"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
 import { Badge } from "~/ui/components/Badge"
+import { CheckableWrap } from "~/ui/components/CheckableWrap"
 import { matchesAny, matchesAllWords } from "~/lib/utils/filter"
 import {
   elementBackground,
@@ -18,6 +19,15 @@ import {
 import { resolveIcon } from "~/ui/theme/icon-map"
 import { humanize } from "~/lib/text/humanize"
 import { ToggleGroup } from "~/ui/components/ToggleGroup"
+import { getFiles, subscribe } from "~/lib/files/store"
+import {
+  getSelectedDocs,
+  toggleSelectedDoc,
+  selectionState,
+  addIds,
+  removeIds,
+} from "~/domain/data-blocks/ux/selectors"
+import { writeSelectedDocs } from "~/domain/actions/select-docs/apply"
 import { DocumentItem } from "./DocumentItem"
 
 export type DocSortMode = "name" | "date"
@@ -147,6 +157,38 @@ const resolveTag = (lookup: Map<string, ResolvedTag>, tag: string): ResolvedTag 
     ? UNGROUPED_TAG
     : (lookup.get(tag) ?? { color: DEFAULT_TAG_COLOR, display: humanize(tag), icon: Hash })
 
+const firstTagColor = (doc: ListItem, lookup: Map<string, ResolvedTag>): RadixColor =>
+  doc.tags.length > 0 ? resolveTag(lookup, doc.tags[0]).color : DEFAULT_TAG_COLOR
+
+const SelectableDocument = ({
+  doc,
+  color,
+  isCurrent,
+  isChecked,
+  onToggle,
+  onSelect,
+}: {
+  doc: ListItem
+  color: RadixColor
+  isCurrent: boolean
+  isChecked: boolean
+  onToggle: () => void
+  onSelect: () => void
+}) => (
+  <div className="w-full px-2">
+    <CheckableWrap color={color} checked={isChecked} onToggle={onToggle}>
+      <DocumentItem
+        title={doc.title}
+        editedAt={doc.editedAt}
+        annotationCount={doc.annotationCount}
+        color={color}
+        selected={isCurrent}
+        onClick={onSelect}
+      />
+    </CheckableWrap>
+  </div>
+)
+
 export function DocumentsSidebar({
   documents,
   selectedId,
@@ -161,6 +203,19 @@ export function DocumentsSidebar({
   const [hoveredTag, setHoveredTag] = useState<string | null>(null)
   const isFiltering = searchValue.trim().length > 0
   const tagLookup = useMemo(() => buildTagLookup(tagDefinitions ?? []), [tagDefinitions])
+
+  const files = useSyncExternalStore(subscribe, getFiles)
+  const selectedDocs = useMemo(() => getSelectedDocs(files), [files])
+
+  const toggleDoc = (id: string) => writeSelectedDocs(toggleSelectedDoc([...selectedDocs], id))
+
+  const toggleTag = (docs: ListItem[]) => {
+    const ids = docs.map((d) => d.id)
+    const current = [...selectedDocs]
+    writeSelectedDocs(
+      selectionState(selectedDocs, ids) === "all" ? removeIds(current, ids) : addIds(current, ids)
+    )
+  }
 
   const unsortedGroups = useMemo(() => groupByTag(documents), [documents])
   const activeTags = useMemo(
@@ -226,13 +281,14 @@ export function DocumentsSidebar({
       <div className="flex w-full grow shrink-0 basis-0 flex-col items-start pb-2 overflow-y-auto">
         {isFiltering
           ? filteredDocs.map((doc) => (
-              <DocumentItem
+              <SelectableDocument
                 key={doc.id}
-                title={doc.title}
-                editedAt={doc.editedAt}
-                annotationCount={doc.annotationCount}
-                selected={doc.id === selectedId}
-                onClick={() => onDocumentSelect?.(doc.id)}
+                doc={doc}
+                color={firstTagColor(doc, tagLookup)}
+                isCurrent={doc.id === selectedId}
+                isChecked={selectedDocs.has(doc.id)}
+                onToggle={() => toggleDoc(doc.id)}
+                onSelect={() => onDocumentSelect?.(doc.id)}
               />
             ))
           : groups.flatMap(({ tag, docs }, i) => {
@@ -246,34 +302,48 @@ export function DocumentsSidebar({
                 activeGroupCount > 0 &&
                 i === activeGroupCount - 1 &&
                 i < groups.length - 1
+              const tagState = selectionState(
+                selectedDocs,
+                docs.map((d) => d.id)
+              )
               const row = (
-                <div
+                <CheckableWrap
                   key={tag}
-                  className="relative flex w-full cursor-default items-center gap-2 px-4 py-2.5 hover:bg-neutral-50"
-                  style={
-                    highlighted ? { backgroundColor: elementBackground(resolved.color) } : undefined
-                  }
-                  onMouseEnter={() => setHoveredTag(tag)}
+                  color={resolved.color}
+                  checked={tagState === "all"}
+                  partial={tagState === "partial"}
+                  bodyTogglesSelection
+                  onToggle={() => toggleTag(docs)}
                 >
-                  {isActive && (
-                    <div
-                      className="absolute left-0 top-0 bottom-0 w-1"
-                      style={{ backgroundColor: solidBackground(resolved.color) }}
-                    />
-                  )}
-                  <span className="flex-none" style={{ color: lowContrastText(resolved.color) }}>
-                    <TagIcon className="text-body font-body" />
-                  </span>
-                  <span
-                    className="grow shrink-0 basis-0 truncate text-body font-body text-default-font"
-                    style={highlighted ? { color: highContrastText(resolved.color) } : undefined}
+                  <div
+                    className="relative flex w-full items-center gap-2 px-4 py-2.5 hover:bg-neutral-50"
+                    style={
+                      highlighted
+                        ? { backgroundColor: elementBackground(resolved.color) }
+                        : undefined
+                    }
+                    onMouseEnter={() => setHoveredTag(tag)}
                   >
-                    {resolved.display}
-                  </span>
-                  <Badge variant="neutral" className="flex-none">
-                    {docs.length}
-                  </Badge>
-                </div>
+                    {isActive && (
+                      <div
+                        className="absolute left-0 top-0 bottom-0 w-1"
+                        style={{ backgroundColor: solidBackground(resolved.color) }}
+                      />
+                    )}
+                    <span className="flex-none" style={{ color: lowContrastText(resolved.color) }}>
+                      <TagIcon className="text-body font-body" />
+                    </span>
+                    <span
+                      className="grow shrink-0 basis-0 truncate text-body font-body text-default-font"
+                      style={highlighted ? { color: highContrastText(resolved.color) } : undefined}
+                    >
+                      {resolved.display}
+                    </span>
+                    <Badge variant="neutral" className="flex-none">
+                      {docs.length}
+                    </Badge>
+                  </div>
+                </CheckableWrap>
               )
               if (needsDivider)
                 return [
@@ -318,14 +388,14 @@ export function DocumentsSidebar({
             </div>
             <div className="flex w-full grow shrink-0 basis-0 flex-col items-start overflow-y-auto">
               {hoveredGroup.docs.map((doc) => (
-                <DocumentItem
+                <SelectableDocument
                   key={doc.id}
-                  title={doc.title}
-                  editedAt={doc.editedAt}
-                  annotationCount={doc.annotationCount}
+                  doc={doc}
                   color={hoveredResolved?.color ?? DEFAULT_TAG_COLOR}
-                  selected={doc.id === selectedId}
-                  onClick={() => {
+                  isCurrent={doc.id === selectedId}
+                  isChecked={selectedDocs.has(doc.id)}
+                  onToggle={() => toggleDoc(doc.id)}
+                  onSelect={() => {
                     onDocumentSelect?.(doc.id)
                     setHoveredTag(null)
                   }}

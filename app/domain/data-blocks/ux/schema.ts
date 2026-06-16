@@ -2,6 +2,7 @@ import { z } from "zod"
 
 const BaseUx = z.object({
   selectedCodes: z.array(z.string()).optional(),
+  selectedDocs: z.array(z.string()).optional(),
 })
 
 export const uxSchema = () => BaseUx
