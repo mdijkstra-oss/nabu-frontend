@@ -31,16 +31,16 @@ const CLOSED_PEEK = 2 // blank shells behind the doc while reading (no content m
 const OPEN_BEHIND = 7 // real cards rendered behind the focused one in the carousel
 const FULL_PEEKS = 3 // first N peeks at full opacity; the rest fade toward 0 ("there's more")
 const DEPTH_SHRINK = 0.03 // each deeper card slightly smaller
-const FLY_SCALE = 1.45 // scrolling: leaving card zooms past the viewer ("through the screen")
+const FALL = 1400 // flyer travel: front card drops fully off the bottom / swoops back up (deck-local px)
 const fanSpring = { type: "spring" as const, stiffness: 280, damping: 30 }
 
-// The flyer is a throwaway copy of the seam doc, layered above the fan. Forward it just
-// fades off the front (no zoom); backward it zooms in from the viewer to land at the
-// front. The fan underneath just re-ranks one step.
+// The flyer is a throwaway copy of the seam doc, layered above the fan — no zoom, just a
+// vertical drop with a fade. Forward it falls off the bottom while fading out; backward it
+// swoops back up from below while fading in. The fan underneath just re-ranks one step.
 const flyerStart = (dir: number, center: number) =>
-  dir >= 0 ? { y: center, scale: 1, opacity: 1 } : { y: center, scale: FLY_SCALE, opacity: 0 }
+  dir >= 0 ? { y: center, opacity: 1 } : { y: center + FALL, opacity: 0 }
 const flyerEnd = (dir: number, center: number) =>
-  dir >= 0 ? { y: center, scale: 1, opacity: 0 } : { y: center, scale: 1, opacity: 1 }
+  dir >= 0 ? { y: center + FALL, opacity: 0 } : { y: center, opacity: 1 }
 
 const sortLabels: Record<DocSortMode, string> = {
   date: "Newest first",
@@ -284,7 +284,7 @@ export const StackToolbar = ({ count, sortMode, onSortChange, onClose }: StackTo
     animate={{ y: 0, opacity: 1 }}
     exit={{ y: 8, opacity: 0 }}
     transition={{ type: "spring", stiffness: 500, damping: 28 }}
-    className="flex w-full items-center gap-4 rounded-xl border border-solid border-neutral-border bg-sidebar px-5 py-2.5 whitespace-nowrap"
+    className="relative z-10 flex w-full items-center gap-4 rounded-xl border border-solid border-neutral-border bg-sidebar px-5 py-2.5 whitespace-nowrap"
   >
     <Layers className="h-3.5 w-3.5 flex-none text-subtext-color" />
     <span className="text-caption-bold font-caption-bold text-default-font">
