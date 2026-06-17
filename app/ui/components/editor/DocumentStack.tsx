@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { Layers, ChevronDown, X } from "lucide-react"
 import type { DocumentEntry, DocSortMode } from "~/domain/documents/selectors"
 import { sortDocuments } from "~/domain/documents/selectors"
+import { previewContent } from "~/domain/documents/preview"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { getSelectedDocs } from "~/domain/data-blocks/ux/selectors"
 import { DocumentBubble } from "./DocumentBubble"
@@ -16,13 +17,20 @@ interface DocumentStackProps {
   files: Record<string, string>
   tagDefinitions: TagDefinition[]
   sortMode: DocSortMode
-  onSortChange: (mode: DocSortMode) => void
   onSelectDocument: (id: string) => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
   className?: string
   front: ReactNode
 }
 
-const MAX_DEPTH = 5
+// Two independent knobs:
+const OPEN_SCALE = 0.8 // camera zoom-out for the whole deck
+const OFFSET = 52 // how much each document rises above the one in front (deck-local px)
+const CLOSED_PEEK = 3 // blank shells behind the doc while reading (no content mounted)
+const OPEN_BEHIND = 7 // real cards rendered behind the focused one in the carousel
+const FULL_PEEKS = 3 // first N peeks at full opacity; the rest fade toward 0 ("there's more")
+const DEPTH_SHRINK = 0.03 // each deeper card slightly smaller
 const fanSpring = { type: "spring" as const, stiffness: 280, damping: 30 }
 
 const sortLabels: Record<DocSortMode, string> = {
@@ -30,18 +38,41 @@ const sortLabels: Record<DocSortMode, string> = {
   name: "A – Z",
 }
 
-const closedTransform = (depth: number) => ({
-  x: depth * 7,
-  y: depth * 5,
-  scale: 1 - depth * 0.015,
-  opacity: 1,
-})
+const stepScale = (depth: number) => 1 - depth * DEPTH_SHRINK
 
-const openTransform = (depth: number) => ({
+// Each step's offset is scaled by the card size at that level, so deeper
+// (smaller) cards sit closer together instead of a flat px gap.
+const riseTo = (depth: number): number => {
+  let rise = 0
+  for (let k = 1; k <= depth; k++) rise += OFFSET * stepScale(k)
+  return rise
+}
+
+// First FULL_PEEKS solid, then fade per step toward 0 by OPEN_BEHIND.
+const cardOpacity = (depth: number): number =>
+  depth < FULL_PEEKS
+    ? 1
+    : Math.max(0, 1 - (depth - FULL_PEEKS + 1) / (OPEN_BEHIND - FULL_PEEKS + 1))
+
+// Blank bubble — same shape/height as a doc, no content mounted (cheap door peek).
+const BubbleShell = ({ className }: { className?: string }) => (
+  <div
+    className={cn(
+      "h-full w-full rounded-xl border border-solid border-panel-border bg-default-background",
+      className
+    )}
+  />
+)
+
+// Closed: a small bottom-right offset so the deck peeks as the "door".
+const closedTransform = (depth: number) => ({ x: depth * 7, y: depth * 7, scale: 1, opacity: 1 })
+
+// Open: rise per depth, centered on the solid fan so faded extras trail off the top.
+const openTransform = (depth: number, maxDepth: number) => ({
   x: 0,
-  y: -depth * 36,
-  scale: 1 - depth * 0.05,
-  opacity: Math.max(1 - depth * 0.16, 0.15),
+  y: riseTo(Math.min(maxDepth, FULL_PEEKS)) / 2 - riseTo(depth),
+  scale: stepScale(depth),
+  opacity: cardOpacity(depth),
 })
 
 export const DocumentStack = ({
@@ -50,8 +81,9 @@ export const DocumentStack = ({
   files,
   tagDefinitions,
   sortMode,
-  onSortChange,
   onSelectDocument,
+  open,
+  onOpenChange,
   className,
   front,
 }: DocumentStackProps) => {
@@ -65,132 +97,155 @@ export const DocumentStack = ({
     return current ? [current, ...others] : others
   }, [documents, files, activeId, sortMode])
 
-  const selectedCount = useMemo(() => getSelectedDocs(files).size, [files])
   const tagDefMap = useMemo(() => new Map(tagDefinitions.map((d) => [d.id, d])), [tagDefinitions])
   const resolveTags = (ids: string[]): TagDefinition[] =>
     ids.map((id) => tagDefMap.get(id)).filter((d): d is TagDefinition => d !== undefined)
 
-  const [open, setOpen] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState(0)
   const lastWheelRef = useRef(0)
 
-  const clamped = open ? Math.min(Math.max(focusedIndex, 0), Math.max(ordered.length - 1, 0)) : 0
+  const total = ordered.length
+  const wrap = (i: number) => (total > 0 ? ((i % total) + total) % total : 0)
+  const clamped = open ? wrap(focusedIndex) : 0
 
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false)
-      if (e.key === "ArrowDown" || e.key === "ArrowRight")
-        setFocusedIndex((i) => Math.min(i + 1, ordered.length - 1))
-      if (e.key === "ArrowUp" || e.key === "ArrowLeft") setFocusedIndex((i) => Math.max(i - 1, 0))
+      if (e.key === "Escape") onOpenChange(false)
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") setFocusedIndex((i) => i + 1)
+      if (e.key === "ArrowUp" || e.key === "ArrowLeft") setFocusedIndex((i) => i - 1)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [open, ordered.length])
+  }, [open, onOpenChange])
 
   const handleWheel = (e: React.WheelEvent) => {
     if (!open) return
     if (e.timeStamp - lastWheelRef.current < 220 || Math.abs(e.deltaY) < 8) return
     lastWheelRef.current = e.timeStamp
-    const step = e.deltaY > 0 ? 1 : -1
-    setFocusedIndex((i) => Math.min(Math.max(i + step, 0), ordered.length - 1))
+    setFocusedIndex((i) => i + (e.deltaY > 0 ? 1 : -1))
   }
 
   const enterCarousel = () => {
     setFocusedIndex(0)
-    setOpen(true)
+    onOpenChange(true)
   }
 
   const transport = (id: string) => {
-    setOpen(false)
+    onOpenChange(false)
     if (id !== activeId) onSelectDocument(id)
   }
 
   const visible = ordered
-    .map((doc, i) => ({ doc, depth: i - clamped }))
-    .filter(({ depth }) => depth >= 0 && depth <= MAX_DEPTH)
+    .map((doc, i) => ({ doc, depth: open ? wrap(i - clamped) : i - clamped }))
+    .filter(({ depth }) => depth >= 0 && (open ? cardOpacity(depth) > 0 : depth <= CLOSED_PEEK))
+  const maxDepth = visible.reduce((m, v) => Math.max(m, v.depth), 0)
 
   return (
-    <div className={cn("relative isolate flex flex-col", className)} onWheel={handleWheel}>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="relative z-[120] flex-none overflow-hidden"
-          >
-            <div className="mb-4 flex w-full items-center gap-4 rounded-xl border border-solid border-neutral-border bg-sidebar px-5 py-2.5 whitespace-nowrap">
-              <Layers className="h-3.5 w-3.5 flex-none text-subtext-color" />
-              <span className="text-caption-bold font-caption-bold text-default-font">
-                {selectedCount} doc{selectedCount === 1 ? "" : "s"} selected
-              </span>
-              <div className="grow" />
-              <div className="h-4 w-px flex-none bg-neutral-border" />
-              <SortDropdown sortMode={sortMode} onSortChange={onSortChange} />
-              <button
-                type="button"
-                aria-label="Close stack"
-                onClick={() => setOpen(false)}
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-subtext-color transition-colors hover:bg-brand-50 hover:text-brand-700"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div
-        className="relative grow w-full min-h-0"
-        style={open ? { perspective: 2000 } : undefined}
+    <div className={cn("relative isolate", className)} onWheel={handleWheel}>
+      <motion.div
+        className="relative h-full w-full min-h-0 origin-center"
+        animate={{ scale: open ? OPEN_SCALE : 1 }}
+        transition={fanSpring}
       >
         <AnimatePresence initial={false}>
           {visible.map(({ doc, depth }) => {
             const isCurrent = doc.id === activeId
+            const liftable = open && depth > 0
             return (
               <motion.div
                 key={doc.id}
-                className="absolute inset-0 origin-top"
+                className={cn("absolute inset-0 origin-center", liftable && "group")}
                 style={{ zIndex: 100 - depth }}
-                initial={{ opacity: 0 }}
-                animate={open ? openTransform(depth) : closedTransform(depth)}
-                exit={{ opacity: 0, y: 70, scale: 1.04 }}
+                initial={false}
+                animate={open ? openTransform(depth, maxDepth) : closedTransform(depth)}
+                exit={{ scale: 0.5, opacity: 0 }}
                 transition={fanSpring}
               >
-                {isCurrent ? (
-                  front
-                ) : (
-                  <DocumentBubble
-                    filename={doc.id}
-                    content={files[doc.id] ?? ""}
-                    tags={resolveTags(doc.tags)}
-                    date={doc.date}
-                    readOnly
-                    className="shadow-lg"
-                  />
-                )}
+                <div
+                  className={cn(
+                    "h-full w-full",
+                    liftable &&
+                      "transition-transform duration-200 ease-out group-hover:-translate-y-[1.5%]"
+                  )}
+                >
+                  {open ? (
+                    <DocumentBubble
+                      filename={doc.id}
+                      content={depth < FULL_PEEKS ? previewContent(files[doc.id] ?? "") : ""}
+                      tags={resolveTags(doc.tags)}
+                      date={doc.date}
+                      readOnly
+                      headerOnly={depth >= FULL_PEEKS}
+                      headerClassName={isCurrent ? "bg-sidebar" : undefined}
+                      className="shadow-lg"
+                    />
+                  ) : isCurrent ? (
+                    front
+                  ) : (
+                    <BubbleShell className="shadow-lg" />
+                  )}
+                </div>
                 {(open || depth > 0) && (
                   <button
                     type="button"
-                    aria-label={open ? `Open ${doc.title}` : "Open document stack"}
+                    aria-label={
+                      !open
+                        ? "Open document stack"
+                        : depth === 0
+                          ? `Open ${doc.title}`
+                          : `Bring ${doc.title} forward`
+                    }
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (open) transport(doc.id)
-                      else enterCarousel()
+                      if (!open) enterCarousel()
+                      else if (depth === 0) transport(doc.id)
+                      else setFocusedIndex(() => clamped + depth)
                     }}
-                    className="absolute inset-0 z-[1]"
+                    className="absolute inset-0 z-[1] cursor-pointer"
                   />
                 )}
               </motion.div>
             )
           })}
         </AnimatePresence>
-      </div>
+      </motion.div>
     </div>
   )
 }
+
+interface StackToolbarProps {
+  count: number
+  sortMode: DocSortMode
+  onSortChange: (mode: DocSortMode) => void
+  onClose: () => void
+}
+
+export const StackToolbar = ({ count, sortMode, onSortChange, onClose }: StackToolbarProps) => (
+  <motion.div
+    initial={{ y: 8, opacity: 0 }}
+    animate={{ y: 0, opacity: 1 }}
+    exit={{ y: 8, opacity: 0 }}
+    transition={{ type: "spring", stiffness: 500, damping: 28 }}
+    className="flex w-full items-center gap-4 rounded-xl border border-solid border-neutral-border bg-sidebar px-5 py-2.5 whitespace-nowrap"
+  >
+    <Layers className="h-3.5 w-3.5 flex-none text-subtext-color" />
+    <span className="text-caption-bold font-caption-bold text-default-font">
+      {count} doc{count === 1 ? "" : "s"} selected
+    </span>
+    <div className="grow" />
+    <div className="h-4 w-px flex-none bg-neutral-border" />
+    <SortDropdown sortMode={sortMode} onSortChange={onSortChange} />
+    <button
+      type="button"
+      aria-label="Close stack"
+      onClick={onClose}
+      className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-subtext-color transition-colors hover:bg-brand-50 hover:text-brand-700"
+    >
+      <X className="h-4 w-4" />
+    </button>
+  </motion.div>
+)
 
 const sortOrder: DocSortMode[] = ["date", "name"]
 
@@ -222,11 +277,11 @@ const SortDropdown = ({
               onClick={() => setOpen(false)}
             />
             <motion.div
-              initial={{ opacity: 0, y: -4 }}
+              initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
+              exit={{ opacity: 0, y: 4 }}
               transition={{ duration: 0.12 }}
-              className="absolute right-0 top-full z-20 mt-1 flex w-40 flex-col overflow-hidden rounded-md border border-solid border-neutral-border bg-default-background shadow-lg"
+              className="absolute bottom-full right-0 z-20 mb-1 flex w-40 flex-col overflow-hidden rounded-md border border-solid border-neutral-border bg-default-background shadow-lg"
             >
               {sortOrder.map((mode) => (
                 <button

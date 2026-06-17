@@ -38,6 +38,8 @@ interface DocumentBubbleProps {
   tags: TagDefinition[]
   date?: string
   readOnly?: boolean
+  headerOnly?: boolean
+  headerClassName?: string
   debugMode?: boolean
   debugOptions?: DebugOptions
   spotlight?: Spotlight | Spotlight[] | null
@@ -54,6 +56,8 @@ export const DocumentBubble = ({
   tags,
   date,
   readOnly = false,
+  headerOnly = false,
+  headerClassName,
   debugMode = false,
   debugOptions,
   spotlight = null,
@@ -95,8 +99,11 @@ export const DocumentBubble = ({
         onRemoveTag={onRemoveTag}
         menuItems={menuItems}
         onAddTag={onAddTag}
+        className={headerClassName}
       />
-      {readOnly ? (
+      {headerOnly ? (
+        <div className="grow min-h-0" />
+      ) : readOnly ? (
         <div className="flex w-full grow min-h-0 flex-col items-start overflow-hidden pl-12 pr-6 py-6">
           <MilkdownEditor
             key={`${filename}-${debugMode}`}
@@ -135,12 +142,14 @@ export const DocumentBubble = ({
           />
         </div>
       )}
-      <div className="flex-none bg-default-background">
-        <StatusBar
-          text={statusText}
-          tooltip={readOnly ? undefined : documentStatusTooltip(content)}
-        />
-      </div>
+      {!headerOnly && (
+        <div className="flex-none bg-default-background">
+          <StatusBar
+            text={statusText}
+            tooltip={readOnly ? undefined : documentStatusTooltip(content)}
+          />
+        </div>
+      )}
     </div>
   )
 }
