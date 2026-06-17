@@ -31,7 +31,15 @@ const CLOSED_PEEK = 3 // blank shells behind the doc while reading (no content m
 const OPEN_BEHIND = 7 // real cards rendered behind the focused one in the carousel
 const FULL_PEEKS = 3 // first N peeks at full opacity; the rest fade toward 0 ("there's more")
 const DEPTH_SHRINK = 0.03 // each deeper card slightly smaller
+const FLY_SCALE = 1.45 // scrolling: leaving card zooms past the viewer ("through the screen")
 const fanSpring = { type: "spring" as const, stiffness: 280, damping: 30 }
+
+// Direction-aware enter/exit: forward (dir>0) the front flies through the screen and a new
+// card appears at the back; backward (dir<0) it inverts.
+const cardVariants = {
+  enter: (dir: number) => (dir >= 0 ? { opacity: 0 } : { opacity: 0, scale: FLY_SCALE }),
+  exit: (dir: number) => (dir >= 0 ? { opacity: 0 } : { opacity: 0, scale: 0.9 }),
+}
 
 const sortLabels: Record<DocSortMode, string> = {
   date: "Newest first",
@@ -68,12 +76,18 @@ const BubbleShell = ({ className }: { className?: string }) => (
 const closedTransform = (depth: number) => ({ x: depth * 7, y: depth * 7, scale: 1, opacity: 1 })
 
 // Open: rise per depth, centered on the solid fan so faded extras trail off the top.
-const openTransform = (depth: number, maxDepth: number) => ({
-  x: 0,
-  y: riseTo(Math.min(maxDepth, FULL_PEEKS)) / 2 - riseTo(depth),
-  scale: stepScale(depth),
-  opacity: cardOpacity(depth),
-})
+// depth -1 is the pre-staged "incoming" copy: parked at the front origin, oversized and
+// invisible, so scrolling back animates it in from there instead of sliding from the stack.
+const openTransform = (depth: number, maxDepth: number) => {
+  const center = riseTo(Math.min(maxDepth, FULL_PEEKS)) / 2
+  if (depth < 0) return { x: 0, y: center, scale: FLY_SCALE, opacity: 0 }
+  return {
+    x: 0,
+    y: center - riseTo(depth),
+    scale: stepScale(depth),
+    opacity: cardOpacity(depth),
+  }
+}
 
 export const DocumentStack = ({
   documents,
@@ -102,7 +116,13 @@ export const DocumentStack = ({
     ids.map((id) => tagDefMap.get(id)).filter((d): d is TagDefinition => d !== undefined)
 
   const [focusedIndex, setFocusedIndex] = useState(0)
+  const [direction, setDirection] = useState(1)
   const lastWheelRef = useRef(0)
+
+  const step = (delta: number) => {
+    setDirection(delta)
+    setFocusedIndex((i) => i + delta)
+  }
 
   const total = ordered.length
   const wrap = (i: number) => (total > 0 ? ((i % total) + total) % total : 0)
@@ -112,8 +132,8 @@ export const DocumentStack = ({
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onOpenChange(false)
-      if (e.key === "ArrowDown" || e.key === "ArrowRight") setFocusedIndex((i) => i + 1)
-      if (e.key === "ArrowUp" || e.key === "ArrowLeft") setFocusedIndex((i) => i - 1)
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") step(1)
+      if (e.key === "ArrowUp" || e.key === "ArrowLeft") step(-1)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
@@ -123,7 +143,7 @@ export const DocumentStack = ({
     if (!open) return
     if (e.timeStamp - lastWheelRef.current < 220 || Math.abs(e.deltaY) < 8) return
     lastWheelRef.current = e.timeStamp
-    setFocusedIndex((i) => i + (e.deltaY > 0 ? 1 : -1))
+    step(e.deltaY > 0 ? 1 : -1)
   }
 
   const enterCarousel = () => {
@@ -136,10 +156,26 @@ export const DocumentStack = ({
     if (id !== activeId) onSelectDocument(id)
   }
 
-  const visible = ordered
-    .map((doc, i) => ({ doc, depth: open ? wrap(i - clamped) : i - clamped }))
-    .filter(({ depth }) => depth >= 0 && (open ? cardOpacity(depth) > 0 : depth <= CLOSED_PEEK))
-  const maxDepth = visible.reduce((m, v) => Math.max(m, v.depth), 0)
+  // Build in depth order (front → back) so the keyed list only ever adds/removes at the
+  // ends — never reorders at the wrap seam (which made AnimatePresence misfire).
+  const visible: { doc: DocumentEntry; depth: number }[] = []
+  for (let depth = 0; depth < total; depth++) {
+    if (open) {
+      // Always leave at least one doc out (depth < total - 1) so the wrapping card has
+      // an exit/enter slot — otherwise, when the whole set fits, it slides instead.
+      if (cardOpacity(depth) <= 0 || depth >= total - 1) break
+      visible.push({ doc: ordered[wrap(clamped + depth)], depth })
+    } else {
+      if (depth > CLOSED_PEEK || clamped + depth >= total) break
+      visible.push({ doc: ordered[clamped + depth], depth })
+    }
+  }
+  const maxDepth = visible.length ? visible[visible.length - 1].depth : 0
+
+  // Pre-stage the backward-incoming doc (the one just off the front) at the front origin so
+  // it flies in from the right spot on back-scroll. It's the wrap doc, never in the stack.
+  if (open && total > 1 && direction < 0)
+    visible.unshift({ doc: ordered[wrap(clamped - 1)], depth: -1 })
 
   return (
     <div className={cn("relative isolate", className)} onWheel={handleWheel}>
@@ -148,19 +184,26 @@ export const DocumentStack = ({
         animate={{ scale: open ? OPEN_SCALE : 1 }}
         transition={fanSpring}
       >
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} custom={direction}>
           {visible.map(({ doc, depth }) => {
             const isCurrent = doc.id === activeId
             const liftable = open && depth > 0
+            const staged = depth < 0
             return (
               <motion.div
                 key={doc.id}
-                className={cn("absolute inset-0 origin-center", liftable && "group")}
+                className={cn(
+                  "absolute inset-0 origin-center",
+                  liftable && "group",
+                  staged && "pointer-events-none"
+                )}
                 style={{ zIndex: 100 - depth }}
-                initial={false}
+                custom={direction}
+                variants={cardVariants}
+                initial="enter"
                 animate={open ? openTransform(depth, maxDepth) : closedTransform(depth)}
-                exit={{ scale: 0.5, opacity: 0 }}
-                transition={fanSpring}
+                exit="exit"
+                transition={staged ? { duration: 0 } : fanSpring}
               >
                 <div
                   className={cn(
@@ -186,7 +229,7 @@ export const DocumentStack = ({
                     <BubbleShell className="shadow-lg" />
                   )}
                 </div>
-                {(open || depth > 0) && (
+                {depth >= 0 && (open || depth > 0) && (
                   <button
                     type="button"
                     aria-label={
@@ -200,7 +243,10 @@ export const DocumentStack = ({
                       e.stopPropagation()
                       if (!open) enterCarousel()
                       else if (depth === 0) transport(doc.id)
-                      else setFocusedIndex(() => clamped + depth)
+                      else {
+                        setDirection(1)
+                        setFocusedIndex(() => clamped + depth)
+                      }
                     }}
                     className="absolute inset-0 z-[1] cursor-pointer"
                   />
