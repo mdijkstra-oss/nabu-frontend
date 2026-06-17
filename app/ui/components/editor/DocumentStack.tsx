@@ -119,7 +119,7 @@ export const DocumentStack = ({
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="flex-none overflow-hidden"
+            className="relative z-[120] flex-none overflow-hidden"
           >
             <div className="mb-4 flex w-full items-center gap-4 rounded-xl border border-solid border-neutral-border bg-sidebar px-5 py-2.5 whitespace-nowrap">
               <Layers className="h-3.5 w-3.5 flex-none text-subtext-color" />
@@ -168,7 +168,7 @@ export const DocumentStack = ({
                     tags={resolveTags(doc.tags)}
                     date={doc.date}
                     readOnly
-                    className="shadow-xl"
+                    className="shadow-lg"
                   />
                 )}
                 {(open || depth > 0) && (

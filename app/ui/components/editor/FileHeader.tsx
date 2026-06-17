@@ -1,16 +1,16 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { AnimatePresence, motion } from "framer-motion"
-import { Button } from "~/ui/components/Button"
-import { DropdownMenu } from "~/ui/components/DropdownMenu"
-import { IconButton } from "~/ui/components/IconButton"
-import { TagBadge } from "~/ui/components/TagBadge"
 import { MoreHorizontal, Plus } from "lucide-react"
 import * as SubframeCore from "@subframe/core"
+import { DropdownMenu } from "~/ui/components/DropdownMenu"
+import { IconButton } from "~/ui/components/IconButton"
+import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { cn } from "~/ui/utils"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
-import { formatDisplayDate } from "~/lib/format/date"
+import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
+import { solidBackground } from "~/ui/theme/radix"
+import { formatShortDate } from "~/lib/format/date"
 
 interface MenuItem {
   icon: ReactNode
@@ -23,16 +23,31 @@ interface FileHeaderProps {
   date?: string
   tags?: TagDefinition[]
   onRemoveTag?: (tagId: string) => void
-  menuItems?: MenuItem[]
   onAddTag?: () => void
+  menuItems?: MenuItem[]
+  onTitleClick?: () => void
+  trailing?: ReactNode
   className?: string
 }
 
-const tagAnimation = {
-  initial: { opacity: 0, scale: 0.8 },
-  animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 0.8 },
-  transition: { type: "spring" as const, stiffness: 500, damping: 35 },
+const TagDot = ({ tag, onRemove }: { tag: TagDefinition; onRemove?: () => void }) => {
+  const dot = "h-2.5 w-2.5 flex-none rounded-full"
+  const style = { backgroundColor: solidBackground(tag.color) }
+  return (
+    <TooltipWrap text={getTagDisplay(tag)}>
+      {onRemove ? (
+        <button
+          type="button"
+          aria-label={`Remove ${getTagDisplay(tag)}`}
+          onClick={onRemove}
+          className={cn(dot, "cursor-pointer transition-transform hover:scale-125")}
+          style={style}
+        />
+      ) : (
+        <span className={dot} style={style} />
+      )}
+    </TooltipWrap>
+  )
 }
 
 export const FileHeader = ({
@@ -40,68 +55,69 @@ export const FileHeader = ({
   date,
   tags = [],
   onRemoveTag,
-  menuItems = [],
   onAddTag,
+  menuItems = [],
+  onTitleClick,
+  trailing,
   className,
-}: FileHeaderProps) => {
-  return (
-    <div
-      className={cn(
-        "flex w-full flex-col items-start gap-3 px-6 py-4 shadow-header-divider",
-        className
-      )}
-    >
-      <div className="flex w-full items-start gap-2">
-        <div className="flex grow shrink-0 basis-0 items-center gap-2">
-          <span className="text-heading-2 font-heading-2 text-default-font">{title}</span>
-        </div>
-        {menuItems.length > 0 && (
-          <SubframeCore.DropdownMenu.Root>
-            <SubframeCore.DropdownMenu.Trigger asChild>
-              <IconButton size="small" icon={<MoreHorizontal />} />
-            </SubframeCore.DropdownMenu.Trigger>
-            <SubframeCore.DropdownMenu.Portal>
-              <SubframeCore.DropdownMenu.Content side="bottom" align="end" sideOffset={4} asChild>
-                <DropdownMenu>
-                  {menuItems.map((item) => (
-                    <DropdownMenu.DropdownItem
-                      key={item.label}
-                      icon={item.icon}
-                      onClick={item.onClick}
-                    >
-                      {item.label}
-                    </DropdownMenu.DropdownItem>
-                  ))}
-                </DropdownMenu>
-              </SubframeCore.DropdownMenu.Content>
-            </SubframeCore.DropdownMenu.Portal>
-          </SubframeCore.DropdownMenu.Root>
-        )}
-      </div>
+}: FileHeaderProps) => (
+  <div
+    className={cn("flex w-full items-center gap-2.5 px-4 py-2.5 shadow-header-divider", className)}
+  >
+    {tags.length > 0 && (
+      <span className="flex flex-none items-center gap-1">
+        {tags.map((tag) => (
+          <TagDot
+            key={tag.id}
+            tag={tag}
+            onRemove={onRemoveTag ? () => onRemoveTag(tag.id) : undefined}
+          />
+        ))}
+      </span>
+    )}
+    {onTitleClick ? (
+      <button
+        type="button"
+        onClick={onTitleClick}
+        className="min-w-0 grow truncate text-left text-body-bold font-body-bold text-default-font transition-colors hover:text-brand-600"
+      >
+        {title}
+      </button>
+    ) : (
+      <span className="min-w-0 grow truncate text-body-bold font-body-bold text-default-font">
+        {title}
+      </span>
+    )}
+    <div className="flex flex-none items-center gap-2.5">
+      {trailing}
       {date && (
         <span className="text-caption font-caption text-subtext-color">
-          {formatDisplayDate(date)}
+          {formatShortDate(date)}
         </span>
       )}
-      {(tags.length > 0 || onAddTag) && (
-        <div className="flex w-full flex-wrap items-center gap-2">
-          <AnimatePresence initial={false}>
-            {tags.map((tag) => (
-              <motion.span key={tag.id} {...tagAnimation}>
-                <TagBadge
-                  tag={tag}
-                  onRemove={onRemoveTag ? () => onRemoveTag(tag.id) : undefined}
-                />
-              </motion.span>
-            ))}
-          </AnimatePresence>
-          {onAddTag && (
-            <Button variant="neutral-tertiary" size="small" icon={<Plus />} onClick={onAddTag}>
-              Add tag
-            </Button>
-          )}
-        </div>
+      {onAddTag && <IconButton size="small" icon={<Plus />} onClick={onAddTag} />}
+      {menuItems.length > 0 && (
+        <SubframeCore.DropdownMenu.Root>
+          <SubframeCore.DropdownMenu.Trigger asChild>
+            <IconButton size="small" icon={<MoreHorizontal />} />
+          </SubframeCore.DropdownMenu.Trigger>
+          <SubframeCore.DropdownMenu.Portal>
+            <SubframeCore.DropdownMenu.Content side="bottom" align="end" sideOffset={4} asChild>
+              <DropdownMenu>
+                {menuItems.map((item) => (
+                  <DropdownMenu.DropdownItem
+                    key={item.label}
+                    icon={item.icon}
+                    onClick={item.onClick}
+                  >
+                    {item.label}
+                  </DropdownMenu.DropdownItem>
+                ))}
+              </DropdownMenu>
+            </SubframeCore.DropdownMenu.Content>
+          </SubframeCore.DropdownMenu.Portal>
+        </SubframeCore.DropdownMenu.Root>
       )}
     </div>
-  )
-}
+  </div>
+)
