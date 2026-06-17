@@ -26,20 +26,21 @@ interface DocumentStackProps {
 
 // Two independent knobs:
 const OPEN_SCALE = 0.8 // camera zoom-out for the whole deck
-const OFFSET = 52 // how much each document rises above the one in front (deck-local px)
-const CLOSED_PEEK = 3 // blank shells behind the doc while reading (no content mounted)
+const OFFSET = 64 // how much each document rises above the one in front (deck-local px)
+const CLOSED_PEEK = 2 // blank shells behind the doc while reading (no content mounted)
 const OPEN_BEHIND = 7 // real cards rendered behind the focused one in the carousel
 const FULL_PEEKS = 3 // first N peeks at full opacity; the rest fade toward 0 ("there's more")
 const DEPTH_SHRINK = 0.03 // each deeper card slightly smaller
 const FLY_SCALE = 1.45 // scrolling: leaving card zooms past the viewer ("through the screen")
 const fanSpring = { type: "spring" as const, stiffness: 280, damping: 30 }
 
-// Direction-aware enter/exit: forward (dir>0) the front flies through the screen and a new
-// card appears at the back; backward (dir<0) it inverts.
-const cardVariants = {
-  enter: (dir: number) => (dir >= 0 ? { opacity: 0 } : { opacity: 0, scale: FLY_SCALE }),
-  exit: (dir: number) => (dir >= 0 ? { opacity: 0 } : { opacity: 0, scale: 0.9 }),
-}
+// The flyer is a throwaway copy of the seam doc, layered above the fan. Forward it starts
+// at the front and zooms out through the viewer ("falls off"); backward it zooms in from
+// the viewer to land at the front. The fan underneath just re-ranks one step.
+const flyerStart = (dir: number, center: number) =>
+  dir >= 0 ? { y: center, scale: 1, opacity: 1 } : { y: center, scale: FLY_SCALE, opacity: 0 }
+const flyerEnd = (dir: number, center: number) =>
+  dir >= 0 ? { y: center, scale: FLY_SCALE, opacity: 0 } : { y: center, scale: 1, opacity: 1 }
 
 const sortLabels: Record<DocSortMode, string> = {
   date: "Newest first",
@@ -76,18 +77,12 @@ const BubbleShell = ({ className }: { className?: string }) => (
 const closedTransform = (depth: number) => ({ x: depth * 7, y: depth * 7, scale: 1, opacity: 1 })
 
 // Open: rise per depth, centered on the solid fan so faded extras trail off the top.
-// depth -1 is the pre-staged "incoming" copy: parked at the front origin, oversized and
-// invisible, so scrolling back animates it in from there instead of sliding from the stack.
-const openTransform = (depth: number, maxDepth: number) => {
-  const center = riseTo(Math.min(maxDepth, FULL_PEEKS)) / 2
-  if (depth < 0) return { x: 0, y: center, scale: FLY_SCALE, opacity: 0 }
-  return {
-    x: 0,
-    y: center - riseTo(depth),
-    scale: stepScale(depth),
-    opacity: cardOpacity(depth),
-  }
-}
+const openTransform = (depth: number, maxDepth: number) => ({
+  x: 0,
+  y: riseTo(Math.min(maxDepth, FULL_PEEKS)) / 2 - riseTo(depth),
+  scale: stepScale(depth),
+  opacity: cardOpacity(depth),
+})
 
 export const DocumentStack = ({
   documents,
@@ -156,26 +151,27 @@ export const DocumentStack = ({
     if (id !== activeId) onSelectDocument(id)
   }
 
-  // Build in depth order (front → back) so the keyed list only ever adds/removes at the
-  // ends — never reorders at the wrap seam (which made AnimatePresence misfire).
-  const visible: { doc: DocumentEntry; depth: number }[] = []
-  for (let depth = 0; depth < total; depth++) {
-    if (open) {
-      // Always leave at least one doc out (depth < total - 1) so the wrapping card has
-      // an exit/enter slot — otherwise, when the whole set fits, it slides instead.
-      if (cardOpacity(depth) <= 0 || depth >= total - 1) break
-      visible.push({ doc: ordered[wrap(clamped + depth)], depth })
-    } else {
-      if (depth > CLOSED_PEEK || clamped + depth >= total) break
-      visible.push({ doc: ordered[clamped + depth], depth })
-    }
+  // The fan keeps min(N, cap) cards mounted, so the stack always shows every selected doc
+  // up to the cap — never one short. Cards only shift position; the doc crossing the seam
+  // snaps to its new spot instead of sliding, and the flyer (below) owns the fall-off /
+  // zoom-in spectacle.
+  const cards: { doc: DocumentEntry; depth: number }[] = []
+  if (open) {
+    const count = Math.min(total, OPEN_BEHIND)
+    for (let depth = 0; depth < count; depth++)
+      cards.push({ doc: ordered[wrap(clamped + depth)], depth })
+  } else {
+    for (let depth = 0; depth <= CLOSED_PEEK && depth < total; depth++)
+      cards.push({ doc: ordered[depth], depth })
   }
-  const maxDepth = visible.length ? visible[visible.length - 1].depth : 0
+  const maxDepth = cards.length ? cards[cards.length - 1].depth : 0
+  const center = riseTo(Math.min(maxDepth, FULL_PEEKS)) / 2
 
-  // Pre-stage the backward-incoming doc (the one just off the front) at the front origin so
-  // it flies in from the right spot on back-scroll. It's the wrap doc, never in the stack.
-  if (open && total > 1 && direction < 0)
-    visible.unshift({ doc: ordered[wrap(clamped - 1)], depth: -1 })
+  // The one doc crossing the seam this step: forward it just fell off the front (wrapping
+  // to the back); backward it just rose from the back to the front. Its real card snaps to
+  // the new spot while a throwaway flyer plays the actual motion on top.
+  const seamDoc =
+    !open || total <= 1 ? null : direction >= 0 ? ordered[wrap(clamped - 1)] : ordered[clamped]
 
   return (
     <div className={cn("relative isolate", className)} onWheel={handleWheel}>
@@ -184,26 +180,20 @@ export const DocumentStack = ({
         animate={{ scale: open ? OPEN_SCALE : 1 }}
         transition={fanSpring}
       >
-        <AnimatePresence initial={false} custom={direction}>
-          {visible.map(({ doc, depth }) => {
+        <AnimatePresence initial={false}>
+          {cards.map(({ doc, depth }) => {
             const isCurrent = doc.id === activeId
             const liftable = open && depth > 0
-            const staged = depth < 0
+            const snap = doc.id === seamDoc?.id
             return (
               <motion.div
                 key={doc.id}
-                className={cn(
-                  "absolute inset-0 origin-center",
-                  liftable && "group",
-                  staged && "pointer-events-none"
-                )}
+                className={cn("absolute inset-0 origin-center", liftable && "group")}
                 style={{ zIndex: 100 - depth }}
-                custom={direction}
-                variants={cardVariants}
-                initial="enter"
+                initial={false}
                 animate={open ? openTransform(depth, maxDepth) : closedTransform(depth)}
-                exit="exit"
-                transition={staged ? { duration: 0 } : fanSpring}
+                exit={{ opacity: 0, transition: { duration: 0 } }}
+                transition={snap ? { duration: 0 } : fanSpring}
               >
                 <div
                   className={cn(
@@ -229,7 +219,7 @@ export const DocumentStack = ({
                     <BubbleShell className="shadow-lg" />
                   )}
                 </div>
-                {depth >= 0 && (open || depth > 0) && (
+                {(open || depth > 0) && (
                   <button
                     type="button"
                     aria-label={
@@ -255,6 +245,27 @@ export const DocumentStack = ({
             )
           })}
         </AnimatePresence>
+        {open && seamDoc && (
+          <AnimatePresence initial={false}>
+            <motion.div
+              key={`flyer-${focusedIndex}`}
+              className="absolute inset-0 origin-center pointer-events-none"
+              style={{ zIndex: 200 }}
+              initial={flyerStart(direction, center)}
+              animate={flyerEnd(direction, center)}
+              transition={fanSpring}
+            >
+              <DocumentBubble
+                filename={seamDoc.id}
+                content={previewContent(files[seamDoc.id] ?? "")}
+                tags={resolveTags(seamDoc.tags)}
+                date={seamDoc.date}
+                readOnly
+                className="shadow-lg"
+              />
+            </motion.div>
+          </AnimatePresence>
+        )}
       </motion.div>
     </div>
   )

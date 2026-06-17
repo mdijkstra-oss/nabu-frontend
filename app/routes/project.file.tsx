@@ -78,7 +78,7 @@ export default function ProjectFile() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 bg-neutral-100 p-2">
+    <div className="flex h-full w-full flex-col gap-4 bg-neutral-100 p-4">
       <DocumentStack
         documents={documents}
         activeId={currentFile}
