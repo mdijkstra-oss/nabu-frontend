@@ -34,13 +34,13 @@ const DEPTH_SHRINK = 0.03 // each deeper card slightly smaller
 const FLY_SCALE = 1.45 // scrolling: leaving card zooms past the viewer ("through the screen")
 const fanSpring = { type: "spring" as const, stiffness: 280, damping: 30 }
 
-// The flyer is a throwaway copy of the seam doc, layered above the fan. Forward it starts
-// at the front and zooms out through the viewer ("falls off"); backward it zooms in from
-// the viewer to land at the front. The fan underneath just re-ranks one step.
+// The flyer is a throwaway copy of the seam doc, layered above the fan. Forward it just
+// fades off the front (no zoom); backward it zooms in from the viewer to land at the
+// front. The fan underneath just re-ranks one step.
 const flyerStart = (dir: number, center: number) =>
   dir >= 0 ? { y: center, scale: 1, opacity: 1 } : { y: center, scale: FLY_SCALE, opacity: 0 }
 const flyerEnd = (dir: number, center: number) =>
-  dir >= 0 ? { y: center, scale: FLY_SCALE, opacity: 0 } : { y: center, scale: 1, opacity: 1 }
+  dir >= 0 ? { y: center, scale: 1, opacity: 0 } : { y: center, scale: 1, opacity: 1 }
 
 const sortLabels: Record<DocSortMode, string> = {
   date: "Newest first",
