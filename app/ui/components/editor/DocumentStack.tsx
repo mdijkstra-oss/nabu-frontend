@@ -31,16 +31,10 @@ const CLOSED_PEEK = 2 // blank shells behind the doc while reading (no content m
 const OPEN_BEHIND = 7 // real cards rendered behind the focused one in the carousel
 const FULL_PEEKS = 3 // first N peeks at full opacity; the rest fade toward 0 ("there's more")
 const DEPTH_SHRINK = 0.03 // each deeper card slightly smaller
-const FALL = 1400 // flyer travel: front card drops fully off the bottom / swoops back up (deck-local px)
+const FALL = 1400 // front card's vertical travel as it drops off the bottom / swoops back up (deck-local px)
+const STEP = 120 // px of native scroll per document — the scroll-snap interval (higher = slower flip)
+const REST = 0.05 // fraction of each step the front doc sits still before the flip — a "page" you can stop on
 const fanSpring = { type: "spring" as const, stiffness: 280, damping: 30 }
-
-// The flyer is a throwaway copy of the seam doc, layered above the fan — no zoom, just a
-// vertical drop with a fade. Forward it falls off the bottom while fading out; backward it
-// swoops back up from below while fading in. The fan underneath just re-ranks one step.
-const flyerStart = (dir: number, center: number) =>
-  dir >= 0 ? { y: center, opacity: 1 } : { y: center + FALL, opacity: 0 }
-const flyerEnd = (dir: number, center: number) =>
-  dir >= 0 ? { y: center + FALL, opacity: 0 } : { y: center, opacity: 1 }
 
 const sortLabels: Record<DocSortMode, string> = {
   date: "Newest first",
@@ -76,13 +70,32 @@ const BubbleShell = ({ className }: { className?: string }) => (
 // Closed: a small bottom-right offset so the deck peeks as the "door".
 const closedTransform = (depth: number) => ({ x: depth * 7, y: depth * 7, scale: 1, opacity: 1 })
 
-// Open: rise per depth, centered on the solid fan so faded extras trail off the top.
-const openTransform = (depth: number, maxDepth: number) => ({
-  x: 0,
-  y: riseTo(Math.min(maxDepth, FULL_PEEKS)) / 2 - riseTo(depth),
-  scale: stepScale(depth),
-  opacity: cardOpacity(depth),
-})
+// Ease scroll progress so each doc rests at the front for REST of the step, then flips quickly in
+// the remainder — turns every doc into a plateau you can comfortably stop on instead of everything
+// being perpetually mid-motion.
+const magnet = (p: number): number => {
+  const i = Math.floor(p)
+  const f = p - i
+  const edge = REST / 2
+  if (f <= edge) return i
+  if (f >= 1 - edge) return i + 1
+  const t = (f - edge) / (1 - REST)
+  return i + t * t * (3 - 2 * t)
+}
+
+// Continuous rise, so fractional depths (mid-scroll) interpolate smoothly.
+const riseAt = (depth: number): number => {
+  if (depth <= 0) return 0
+  const lo = Math.floor(depth)
+  return riseTo(lo) + (riseTo(lo + 1) - riseTo(lo)) * (depth - lo)
+}
+
+// Open: depth >= 0 rises into the fan (centered so faded extras trail off the top); depth in
+// [-1, 0] is the front card mid-fall — dropping off the bottom and fading as it goes.
+const openTransform = (depth: number, center: number) =>
+  depth <= 0
+    ? { x: 0, y: center - depth * FALL, scale: 1, opacity: 1 }
+    : { x: 0, y: center - riseAt(depth), scale: stepScale(depth), opacity: cardOpacity(depth) }
 
 export const DocumentStack = ({
   documents,
@@ -110,163 +123,183 @@ export const DocumentStack = ({
   const resolveTags = (ids: string[]): TagDefinition[] =>
     ids.map((id) => tagDefMap.get(id)).filter((d): d is TagDefinition => d !== undefined)
 
-  const [focusedIndex, setFocusedIndex] = useState(0)
-  const [direction, setDirection] = useState(1)
-  const lastWheelRef = useRef(0)
-
-  const step = (delta: number) => {
-    setDirection(delta)
-    setFocusedIndex((i) => i + delta)
-  }
+  // `progress` is continuous (scrollTop / STEP): an integer centers a doc at the front, a
+  // fraction is mid-transition. The native scroll position is the single source of truth.
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [stageH, setStageH] = useState(0)
+  const [progress, setProgress] = useState(0)
+  const [scrolling, setScrolling] = useState(false)
+  const scrollEnd = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const ignoreScroll = useRef(false)
 
   const total = ordered.length
-  const wrap = (i: number) => (total > 0 ? ((i % total) + total) % total : 0)
-  const clamped = open ? wrap(focusedIndex) : 0
+
+  const onScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    setProgress(el.scrollTop / STEP)
+    if (ignoreScroll.current) return // programmatic (open jump) — don't count it as a gesture
+    setScrolling(true)
+    clearTimeout(scrollEnd.current)
+    scrollEnd.current = setTimeout(() => setScrolling(false), 80)
+  }
+  const scrollToSlot = (slot: number) =>
+    scrollRef.current?.scrollTo({ top: slot * STEP, behavior: "smooth" })
+  const scrollByDocs = (n: number) =>
+    scrollRef.current?.scrollBy({ top: n * STEP, behavior: "smooth" })
+
+  // Measure the stage height — the sticky parent is zero-height, so the absolute fan needs one.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setStageH(el.clientHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // On open, jump (instantly, not counted as a gesture) to the first doc.
+  useEffect(() => {
+    if (!open) return
+    const el = scrollRef.current
+    if (!el) return
+    const id = requestAnimationFrame(() => {
+      ignoreScroll.current = true
+      el.scrollTop = 0
+      setProgress(0)
+      requestAnimationFrame(() => {
+        ignoreScroll.current = false
+      })
+    })
+    return () => cancelAnimationFrame(id)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onOpenChange(false)
-      if (e.key === "ArrowDown" || e.key === "ArrowRight") step(1)
-      if (e.key === "ArrowUp" || e.key === "ArrowLeft") step(-1)
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") scrollByDocs(1)
+      if (e.key === "ArrowUp" || e.key === "ArrowLeft") scrollByDocs(-1)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onOpenChange])
 
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!open) return
-    if (e.timeStamp - lastWheelRef.current < 220 || Math.abs(e.deltaY) < 8) return
-    lastWheelRef.current = e.timeStamp
-    step(e.deltaY > 0 ? 1 : -1)
-  }
-
-  const enterCarousel = () => {
-    setFocusedIndex(0)
-    onOpenChange(true)
-  }
+  const enterCarousel = () => onOpenChange(true)
 
   const transport = (id: string) => {
     onOpenChange(false)
     if (id !== activeId) onSelectDocument(id)
   }
 
-  // The fan keeps min(N, cap) cards mounted, so the stack always shows every selected doc
-  // up to the cap — never one short. Cards only shift position; the doc crossing the seam
-  // snaps to its new spot instead of sliding, and the flyer (below) owns the fall-off /
-  // zoom-in spectacle.
-  const cards: { doc: DocumentEntry; depth: number }[] = []
+  // Open: a window of the fan around the current scroll slot — depths -1..cap, each doc looked up
+  // through wrap() so the track loops endlessly. Closed: the small "door" peek (live doc + a couple
+  // of blank shells). Same doc-keyed cards in both, so the open/close scale morphs between them.
+  const cap = Math.min(total - 1, OPEN_BEHIND)
+  const center = riseAt(Math.min(Math.max(cap, 0), FULL_PEEKS)) / 2
+
+  const cards: { doc: DocumentEntry; depth: number; slot: number }[] = []
   if (open) {
-    const count = Math.min(total, OPEN_BEHIND)
-    for (let depth = 0; depth < count; depth++)
-      cards.push({ doc: ordered[wrap(clamped + depth)], depth })
+    const p = magnet(progress)
+    const lo = Math.max(0, Math.ceil(p - 1))
+    const hi = Math.min(total - 1, Math.floor(p + cap))
+    for (let i = lo; i <= hi; i++) cards.push({ doc: ordered[i], depth: i - p, slot: i })
   } else {
     for (let depth = 0; depth <= CLOSED_PEEK && depth < total; depth++)
-      cards.push({ doc: ordered[depth], depth })
+      cards.push({ doc: ordered[depth], depth, slot: depth })
   }
-  const maxDepth = cards.length ? cards[cards.length - 1].depth : 0
-  const center = riseTo(Math.min(maxDepth, FULL_PEEKS)) / 2
 
-  // The one doc crossing the seam this step: forward it just fell off the front (wrapping
-  // to the back); backward it just rose from the back to the front. Its real card snaps to
-  // the new spot while a throwaway flyer plays the actual motion on top.
-  const seamDoc =
-    !open || total <= 1 ? null : direction >= 0 ? ordered[wrap(clamped - 1)] : ordered[clamped]
+  const fanTransition = scrolling ? { duration: 0 } : fanSpring
 
   return (
-    <div className={cn("relative isolate", className)} onWheel={handleWheel}>
-      <motion.div
-        className="relative h-full w-full min-h-0 origin-center"
-        animate={{ scale: open ? OPEN_SCALE : 1 }}
-        transition={fanSpring}
-      >
-        <AnimatePresence initial={false}>
-          {cards.map(({ doc, depth }) => {
-            const isCurrent = doc.id === activeId
-            const liftable = open && depth > 0
-            const snap = doc.id === seamDoc?.id
-            return (
-              <motion.div
-                key={doc.id}
-                className={cn("absolute inset-0 origin-center", liftable && "group")}
-                style={{ zIndex: 100 - depth }}
-                initial={false}
-                animate={open ? openTransform(depth, maxDepth) : closedTransform(depth)}
-                exit={{ opacity: 0, transition: { duration: 0 } }}
-                transition={snap ? { duration: 0 } : fanSpring}
-              >
-                <div
-                  className={cn(
-                    "h-full w-full",
-                    liftable &&
-                      "transition-transform duration-200 ease-out group-hover:-translate-y-[1.5%]"
-                  )}
-                >
-                  {open ? (
-                    <DocumentBubble
-                      filename={doc.id}
-                      content={depth < FULL_PEEKS ? previewContent(files[doc.id] ?? "") : ""}
-                      tags={resolveTags(doc.tags)}
-                      date={doc.date}
-                      readOnly
-                      headerOnly={depth >= FULL_PEEKS}
-                      headerClassName={isCurrent ? "bg-sidebar" : undefined}
-                      className="shadow-lg"
-                    />
-                  ) : isCurrent ? (
-                    front
-                  ) : (
-                    <BubbleShell className="shadow-lg" />
-                  )}
-                </div>
-                {(open || depth > 0) && (
-                  <button
-                    type="button"
-                    aria-label={
-                      !open
-                        ? "Open document stack"
-                        : depth === 0
-                          ? `Open ${doc.title}`
-                          : `Bring ${doc.title} forward`
-                    }
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (!open) enterCarousel()
-                      else if (depth === 0) transport(doc.id)
-                      else {
-                        setDirection(1)
-                        setFocusedIndex(() => clamped + depth)
-                      }
-                    }}
-                    className="absolute inset-0 z-[1] cursor-pointer"
-                  />
-                )}
-              </motion.div>
-            )
-          })}
-        </AnimatePresence>
-        {open && seamDoc && (
-          <AnimatePresence initial={false}>
-            <motion.div
-              key={`flyer-${focusedIndex}`}
-              className="absolute inset-0 origin-center pointer-events-none"
-              style={{ zIndex: 200 }}
-              initial={flyerStart(direction, center)}
-              animate={flyerEnd(direction, center)}
-              transition={fanSpring}
-            >
-              <DocumentBubble
-                filename={seamDoc.id}
-                content={previewContent(files[seamDoc.id] ?? "")}
-                tags={resolveTags(seamDoc.tags)}
-                date={seamDoc.date}
-                readOnly
-                className="shadow-lg"
-              />
-            </motion.div>
-          </AnimatePresence>
+    <div className={cn("relative isolate", className)}>
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className={cn(
+          "relative h-full w-full [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          open ? "overflow-x-hidden overflow-y-scroll snap-y snap-mandatory" : "overflow-visible"
         )}
-      </motion.div>
+      >
+        {/* Pinned stage — zero-height so it adds no scroll length; stays at the top while the snap
+            track scrolls beneath it. Holds the visual fan and all click targets. */}
+        <div className="sticky top-0 z-10 h-0 w-full">
+          <motion.div
+            className="absolute left-0 top-0 w-full origin-center"
+            style={{ height: stageH }}
+            initial={false}
+            animate={{ scale: open ? OPEN_SCALE : 1 }}
+            transition={fanSpring}
+          >
+            {cards.map(({ doc, depth, slot }) => {
+              const isCurrent = doc.id === activeId
+              const atFront = Math.round(depth) === 0
+              const liftable = open && depth > 0.5
+              return (
+                <motion.div
+                  key={doc.id}
+                  className={cn("absolute inset-0 origin-center", liftable && "group")}
+                  style={{ zIndex: open ? Math.round(500 - depth * 10) : 100 - depth }}
+                  initial={false}
+                  animate={open ? openTransform(depth, center) : closedTransform(depth)}
+                  transition={fanTransition}
+                >
+                  <div
+                    className={cn(
+                      "h-full w-full",
+                      liftable &&
+                        "transition-transform duration-200 ease-out group-hover:-translate-y-[1.5%]"
+                    )}
+                  >
+                    {open ? (
+                      <DocumentBubble
+                        filename={doc.id}
+                        content={depth < FULL_PEEKS ? previewContent(files[doc.id] ?? "") : ""}
+                        tags={resolveTags(doc.tags)}
+                        date={doc.date}
+                        readOnly
+                        headerOnly={depth >= FULL_PEEKS}
+                        headerClassName={isCurrent ? "bg-sidebar" : undefined}
+                        className="shadow-lg"
+                      />
+                    ) : isCurrent ? (
+                      front
+                    ) : (
+                      <BubbleShell className="shadow-lg" />
+                    )}
+                  </div>
+                  {(open || depth > 0) && (
+                    <button
+                      type="button"
+                      aria-label={
+                        !open
+                          ? "Open document stack"
+                          : atFront
+                            ? `Open ${doc.title}`
+                            : `Bring ${doc.title} forward`
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (!open) enterCarousel()
+                        else if (atFront) transport(doc.id)
+                        else scrollToSlot(slot)
+                      }}
+                      className="absolute inset-0 z-[1] cursor-pointer"
+                    />
+                  )}
+                </motion.div>
+              )
+            })}
+          </motion.div>
+        </div>
+        {open && (
+          <>
+            {ordered.map((doc) => (
+              <div key={doc.id} aria-hidden className="snap-start" style={{ height: STEP }} />
+            ))}
+            <div aria-hidden style={{ height: Math.max(0, stageH - STEP) }} />
+          </>
+        )}
+      </div>
     </div>
   )
 }
