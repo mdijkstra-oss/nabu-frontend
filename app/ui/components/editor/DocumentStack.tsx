@@ -2,12 +2,13 @@
 
 import { useState, useMemo, useRef, useEffect, type ReactNode } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Layers, ChevronDown, X } from "lucide-react"
+import { ChevronDown } from "lucide-react"
 import type { DocumentEntry, DocSortMode } from "~/domain/documents/selectors"
 import { sortDocuments } from "~/domain/documents/selectors"
 import { previewContent } from "~/domain/documents/preview"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { getSelectedDocs } from "~/domain/data-blocks/ux/selectors"
+import { scoreWords } from "~/lib/utils/filter"
 import { DocumentBubble } from "./DocumentBubble"
 import { cn } from "~/ui/utils"
 
@@ -22,6 +23,8 @@ interface DocumentStackProps {
   onOpenChange: (open: boolean) => void
   className?: string
   front: ReactNode
+  search?: string
+  onSearchClear?: () => void
 }
 
 // Two independent knobs:
@@ -108,6 +111,8 @@ export const DocumentStack = ({
   onOpenChange,
   className,
   front,
+  search = "",
+  onSearchClear,
 }: DocumentStackProps) => {
   const ordered = useMemo(() => {
     const selected = getSelectedDocs(files)
@@ -131,6 +136,7 @@ export const DocumentStack = ({
   const [scrolling, setScrolling] = useState(false)
   const scrollEnd = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const ignoreScroll = useRef(false)
+  const skipHomeScroll = useRef(false)
 
   const total = ordered.length
 
@@ -184,10 +190,39 @@ export const DocumentStack = ({
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onOpenChange])
 
+  // Typing scrolls to the best token-scored match (debounced). Clearing the box or no match returns
+  // to the current doc — unless the clear came from clicking another card, which already navigated.
+  useEffect(() => {
+    if (!open) return
+    const q = search.trim()
+    const t = setTimeout(() => {
+      if (!q) {
+        if (skipHomeScroll.current) {
+          skipHomeScroll.current = false
+          return
+        }
+        scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+        return
+      }
+      let bestIdx = -1
+      let bestScore = 0
+      ordered.forEach((d, i) => {
+        const s = scoreWords(q, [d.title])
+        if (s > bestScore) {
+          bestScore = s
+          bestIdx = i
+        }
+      })
+      scrollRef.current?.scrollTo({ top: Math.max(0, bestIdx) * STEP, behavior: "smooth" })
+    }, 180)
+    return () => clearTimeout(t)
+  }, [search, open, ordered])
+
   const enterCarousel = () => onOpenChange(true)
 
   const transport = (id: string) => {
     onOpenChange(false)
+    onSearchClear?.()
     if (id !== activeId) onSelectDocument(id)
   }
 
@@ -281,7 +316,11 @@ export const DocumentStack = ({
                         e.stopPropagation()
                         if (!open) enterCarousel()
                         else if (atFront) transport(doc.id)
-                        else scrollToSlot(slot)
+                        else {
+                          skipHomeScroll.current = true
+                          onSearchClear?.()
+                          scrollToSlot(slot)
+                        }
                       }}
                       className="absolute inset-0 z-[1] cursor-pointer"
                     />
@@ -308,32 +347,36 @@ interface StackToolbarProps {
   count: number
   sortMode: DocSortMode
   onSortChange: (mode: DocSortMode) => void
-  onClose: () => void
+  search: string
+  onSearchChange: (value: string) => void
 }
 
-export const StackToolbar = ({ count, sortMode, onSortChange, onClose }: StackToolbarProps) => (
+export const StackToolbar = ({
+  count,
+  sortMode,
+  onSortChange,
+  search,
+  onSearchChange,
+}: StackToolbarProps) => (
   <motion.div
-    initial={{ y: 8, opacity: 0 }}
+    initial={{ y: -8, opacity: 0 }}
     animate={{ y: 0, opacity: 1 }}
-    exit={{ y: 8, opacity: 0 }}
+    exit={{ y: -8, opacity: 0 }}
     transition={{ type: "spring", stiffness: 500, damping: 28 }}
-    className="relative z-10 flex w-full items-center gap-4 rounded-xl border border-solid border-neutral-border bg-sidebar px-5 py-2.5 whitespace-nowrap"
+    className="relative flex w-full items-center px-1 whitespace-nowrap"
   >
-    <Layers className="h-3.5 w-3.5 flex-none text-subtext-color" />
-    <span className="text-caption-bold font-caption-bold text-default-font">
-      {count} doc{count === 1 ? "" : "s"} selected
+    <span className="text-caption font-caption text-subtext-color">
+      {count} document{count === 1 ? "" : "s"} in selection
     </span>
     <div className="grow" />
-    <div className="h-4 w-px flex-none bg-neutral-border" />
     <SortDropdown sortMode={sortMode} onSortChange={onSortChange} />
-    <button
-      type="button"
-      aria-label="Close stack"
-      onClick={onClose}
-      className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-subtext-color transition-colors hover:bg-brand-50 hover:text-brand-700"
-    >
-      <X className="h-4 w-4" />
-    </button>
+    <input
+      type="text"
+      value={search}
+      onChange={(e) => onSearchChange(e.target.value)}
+      placeholder="Search documents…"
+      className="absolute left-1/2 top-1/2 w-64 -translate-x-1/2 -translate-y-1/2 rounded-md border border-solid border-neutral-border bg-default-background px-3 py-1.5 text-center text-caption font-caption text-default-font placeholder:text-subtext-color focus:border-brand-300 focus:outline-none"
+    />
   </motion.div>
 )
 
@@ -371,7 +414,7 @@ const SortDropdown = ({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
               transition={{ duration: 0.12 }}
-              className="absolute bottom-full right-0 z-20 mb-1 flex w-40 flex-col overflow-hidden rounded-md border border-solid border-neutral-border bg-default-background shadow-lg"
+              className="absolute top-full right-0 z-20 mt-1 flex w-40 flex-col overflow-hidden rounded-md border border-solid border-neutral-border bg-default-background shadow-lg"
             >
               {sortOrder.map((mode) => (
                 <button

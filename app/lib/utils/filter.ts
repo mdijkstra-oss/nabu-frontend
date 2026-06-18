@@ -17,3 +17,12 @@ export const matchesAllWords = (query: string, texts: string[]): boolean => {
   const combined = texts.map(normalize).join(" ")
   return words.every((word) => combined.includes(word))
 }
+
+// How many distinct query words appear in the texts (order-independent). 0 = no match; higher =
+// stronger. Use to rank "most matches win".
+export const scoreWords = (query: string, texts: string[]): number => {
+  const words = [...new Set(normalize(query).split(/\s+/).filter(Boolean))]
+  if (words.length === 0) return 0
+  const combined = texts.map(normalize).join(" ")
+  return words.reduce((score, word) => (combined.includes(word) ? score + 1 : score), 0)
+}

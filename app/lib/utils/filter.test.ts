@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { matchesFilter, matchesAny, matchesAllWords } from "./filter"
+import { matchesFilter, matchesAny, matchesAllWords, scoreWords } from "./filter"
 
 describe("matchesFilter", () => {
   const cases = [
@@ -95,5 +95,33 @@ describe("matchesAllWords", () => {
 
   it.each(cases)("$name", ({ query, texts, expected }) => {
     expect(matchesAllWords(query, texts)).toBe(expected)
+  })
+})
+
+describe("scoreWords", () => {
+  const cases = [
+    { query: "", texts: ["foo"], expected: 0, name: "empty query scores zero" },
+    { query: "foo", texts: ["foobar"], expected: 1, name: "single word match" },
+    { query: "foo bar", texts: ["foo bar baz"], expected: 2, name: "both words match" },
+    { query: "foo baz", texts: ["foo bar"], expected: 1, name: "one of two matches" },
+    { query: "qux", texts: ["foo bar"], expected: 0, name: "no words match" },
+    { query: "FOO Bar", texts: ["foo bar"], expected: 2, name: "case insensitive" },
+    { query: "x y", texts: ["x marks", "the y"], expected: 2, name: "words across texts" },
+    {
+      query: "foo foo",
+      texts: ["foo bar"],
+      expected: 1,
+      name: "duplicate query words counted once",
+    },
+    {
+      query: "policy commitment",
+      texts: ["policy-commitment report"],
+      expected: 2,
+      name: "separators normalized",
+    },
+  ]
+
+  it.each(cases)("$name", ({ query, texts, expected }) => {
+    expect(scoreWords(query, texts)).toBe(expected)
   })
 })

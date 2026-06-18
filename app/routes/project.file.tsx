@@ -36,6 +36,7 @@ export default function ProjectFile() {
   } = useProject()
   const [searchParams] = useSearchParams()
   const [stackOpen, setStackOpen] = useState(false)
+  const [docSearch, setDocSearch] = useState("")
   const spotlight = useMemo(() => parseSpotlight(searchParams.get("spotlight")), [searchParams])
   const selectedCount = useMemo(() => {
     const selected = getSelectedDocs(files)
@@ -79,6 +80,18 @@ export default function ProjectFile() {
 
   return (
     <div className="flex h-full w-full flex-col gap-4 bg-neutral-100 p-4">
+      <AnimatePresence>
+        {stackOpen && (
+          <StackToolbar
+            key="stack"
+            count={selectedCount}
+            sortMode={docSortMode}
+            onSortChange={onDocSortChange}
+            search={docSearch}
+            onSearchChange={setDocSearch}
+          />
+        )}
+      </AnimatePresence>
       <DocumentStack
         documents={documents}
         activeId={currentFile}
@@ -88,6 +101,8 @@ export default function ProjectFile() {
         onSelectDocument={onSelectDocument}
         open={stackOpen}
         onOpenChange={setStackOpen}
+        search={docSearch}
+        onSearchClear={() => setDocSearch("")}
         className="flex flex-1 min-h-0"
         front={
           <DocumentBubble
@@ -110,19 +125,7 @@ export default function ProjectFile() {
           />
         }
       />
-      <AnimatePresence mode="wait">
-        {stackOpen ? (
-          <StackToolbar
-            key="stack"
-            count={selectedCount}
-            sortMode={docSortMode}
-            onSortChange={onDocSortChange}
-            onClose={() => setStackOpen(false)}
-          />
-        ) : (
-          actionBar
-        )}
-      </AnimatePresence>
+      <AnimatePresence mode="wait">{!stackOpen && actionBar}</AnimatePresence>
     </div>
   )
 }
