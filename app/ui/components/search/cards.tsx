@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect, useRef, Fragment } from "react"
+import { memo, Fragment } from "react"
 import { LocateFixed } from "lucide-react"
 import { IconButton } from "~/ui/components/IconButton"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
@@ -6,8 +6,6 @@ import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 import { FileHeader } from "~/ui/components/editor/FileHeader"
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
-import { refreshHitsAsync } from "~/lib/search/refresh"
-import { useThrottledValue } from "~/ui/hooks/useThrottledValue"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
 import { getFileDate } from "~/domain/data-blocks/attributes/date/selectors"
@@ -23,19 +21,12 @@ import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
 
 const normalizeMatchWhitespace = (match: string): string => match.replace(/\n\n+/g, " ")
 
-export interface SearchResultListProps {
-  hits: SearchHit[]
-  files: FileStore
-  projectId: string
-  onNavigate?: (url: string) => void
-}
-
-interface RunGroup {
+export interface RunGroup {
   file: string
   hits: SearchHit[]
 }
 
-const groupByRun = (hits: SearchHit[]): RunGroup[] => {
+export const groupByRun = (hits: SearchHit[]): RunGroup[] => {
   const groups: RunGroup[] = []
   for (const hit of hits) {
     const last = groups[groups.length - 1]
@@ -55,7 +46,7 @@ const hitKey = (hit: SearchHit, index: number): string => {
   return `file:${hit.file}:${index}`
 }
 
-const groupKey = (group: RunGroup): string => {
+export const groupKey = (group: RunGroup): string => {
   const head = group.hits[0]
   if (!head) return group.file
   if (head.id) return `${group.file}\0${head.id}`
@@ -63,7 +54,7 @@ const groupKey = (group: RunGroup): string => {
   return group.file
 }
 
-const buildFileUrl = (projectId: string, file: string): string =>
+export const buildFileUrl = (projectId: string, file: string): string =>
   `/project/${projectId}/file/${encodeURIComponent(file)}`
 
 const buildHitUrl = (projectId: string, hit: SearchHit): string => {
@@ -177,7 +168,7 @@ const SearchSlicePreview = ({
   )
 }
 
-interface RunGroupCardProps {
+export interface RunGroupCardProps {
   group: RunGroup
   files: FileStore
   projectId: string
@@ -191,7 +182,7 @@ const areGroupPropsEqual = (prev: RunGroupCardProps, next: RunGroupCardProps): b
   prev.projectId === next.projectId &&
   prev.onNavigate === next.onNavigate
 
-const RunGroupCard = memo(({ group, files, projectId, onNavigate }: RunGroupCardProps) => {
+export const RunGroupCard = memo(({ group, files, projectId, onNavigate }: RunGroupCardProps) => {
   const fileUrl = buildFileUrl(projectId, group.file)
   const content = files[group.file] ?? ""
   const tagIds = getTags(content)
@@ -249,50 +240,3 @@ const RunGroupCard = memo(({ group, files, projectId, onNavigate }: RunGroupCard
     </div>
   )
 }, areGroupPropsEqual)
-
-export const SearchResultList = ({ hits, files, projectId, onNavigate }: SearchResultListProps) => {
-  const throttledFiles = useThrottledValue(files, 500)
-  const hitsRef = useRef(hits)
-  useEffect(() => {
-    hitsRef.current = hits
-  })
-  const prevFilesRef = useRef<FileStore | undefined>(undefined)
-  const [refreshed, setRefreshed] = useState<{ source: SearchHit[]; output: SearchHit[] } | null>(
-    null
-  )
-
-  useEffect(() => {
-    const startingHits = hitsRef.current
-    const prevFiles = prevFilesRef.current
-    prevFilesRef.current = throttledFiles
-    let cancelled = false
-    const isCancelled = () => cancelled
-
-    refreshHitsAsync(startingHits, throttledFiles, isCancelled, prevFiles).then((output) => {
-      if (cancelled) return
-      if (output === startingHits) return
-      setRefreshed({ source: startingHits, output })
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [throttledFiles])
-
-  const liveHits = refreshed && refreshed.source === hits ? refreshed.output : hits
-  const groups = useMemo(() => groupByRun(liveHits), [liveHits])
-
-  return (
-    <div className="flex w-full flex-col items-start gap-6">
-      {groups.map((group) => (
-        <RunGroupCard
-          key={groupKey(group)}
-          group={group}
-          files={files}
-          projectId={projectId}
-          onNavigate={onNavigate}
-        />
-      ))}
-    </div>
-  )
-}

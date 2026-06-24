@@ -11,6 +11,15 @@ export const getSelectedCodes = (files: FileStore): Set<string> =>
 export const getSelectedDocs = (files: FileStore): Set<string> =>
   new Set(getUx(files[SETTINGS_FILE] ?? "")?.selectedDocs ?? [])
 
+export const getSelectedDocsOrdered = (files: FileStore): string[] =>
+  getUx(files[SETTINGS_FILE] ?? "")?.selectedDocs ?? []
+
+export const selectedFiles = (files: FileStore, currentFile: string | null): string[] => {
+  const ordered = getSelectedDocsOrdered(files)
+  if (!currentFile) return ordered
+  return [currentFile, ...ordered.filter((id) => id !== currentFile)]
+}
+
 const toggleId = (ids: string[], id: string): string[] =>
   ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
 

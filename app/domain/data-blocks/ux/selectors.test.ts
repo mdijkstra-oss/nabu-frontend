@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest"
-import { toggleSelectedDoc, selectionState, addIds, removeIds } from "./selectors"
+import {
+  toggleSelectedDoc,
+  selectionState,
+  addIds,
+  removeIds,
+  getSelectedDocsOrdered,
+  getSelectedDocs,
+  selectedFiles,
+} from "./selectors"
+import { SETTINGS_FILE } from "~/lib/files/filename"
+
+const withSelection = (docs: string[]): Record<string, string> => ({
+  [SETTINGS_FILE]: "```json-ux\n" + JSON.stringify({ selectedDocs: docs }) + "\n```\n",
+})
 
 describe("toggleSelectedDoc", () => {
   interface Case {
@@ -47,5 +60,33 @@ describe("addIds / removeIds", () => {
 
   it("removes a subset", () => {
     expect(removeIds(["a", "b", "c"], ["a", "c"])).toEqual(["b"])
+  })
+})
+
+describe("getSelectedDocsOrdered", () => {
+  it("preserves stored order (the Set getter does not)", () => {
+    const files = withSelection(["c.md", "a.md", "b.md"])
+    expect(getSelectedDocsOrdered(files)).toEqual(["c.md", "a.md", "b.md"])
+    expect(getSelectedDocs(files).has("a.md")).toBe(true)
+  })
+
+  it("is empty when there is no ux block", () => {
+    expect(getSelectedDocsOrdered({})).toEqual([])
+  })
+})
+
+describe("selectedFiles", () => {
+  const files = withSelection(["b.md", "c.md"])
+
+  it("puts the current file first without duplicating it", () => {
+    expect(selectedFiles(files, "c.md")).toEqual(["c.md", "b.md"])
+  })
+
+  it("prepends a current file that is not in the selection", () => {
+    expect(selectedFiles(files, "a.md")).toEqual(["a.md", "b.md", "c.md"])
+  })
+
+  it("falls back to the ordered selection when there is no current file", () => {
+    expect(selectedFiles(files, null)).toEqual(["b.md", "c.md"])
   })
 })

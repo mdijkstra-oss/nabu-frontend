@@ -9,7 +9,7 @@ export const buildFlaggedSearch = (codeId: string, title: string): NewSearchData
   sql: buildFlaggedAnnotationsSql(codeId),
 })
 
-const escapeSqlString = (s: string): string => s.replace(/'/g, "''")
+export const escapeSqlString = (s: string): string => s.replace(/'/g, "''")
 
 const buildCandidateFilename = (codeId: string): string => `${codeId}.generated.hidden.md`
 

@@ -1,7 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useSyncExternalStore } from "react"
 import { getFiles, subscribe } from "~/lib/files/store"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
+import {
+  isSelectionSearch,
+  parseSelectionOrder,
+  selectionHits,
+} from "~/domain/search/selection-search"
 import { getDatabase } from "~/domain/db/database"
 import { getLlmHost } from "~/lib/agent/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
@@ -12,6 +17,7 @@ import { SEARCH_PAGE_SIZE } from "~/lib/search/fusion"
 import type { SearchEntry, SearchHit } from "~/domain/search/types"
 import type { HydeQuery, KeywordsQuery } from "~/lib/search/semantic"
 import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
+import { useLiveHits } from "./useLiveHits"
 
 export type SearchPhase = "idle" | "resolving" | "searching" | "filtering" | "done"
 
@@ -101,6 +107,7 @@ export const useSearchResults = (
   }, [])
 
   useEffect(() => {
+    if (isSelectionSearch(findSearchById(getFiles(), searchId))) return
     if (!searchSql || !dbReady) return
 
     const db = getDatabase()
@@ -240,14 +247,21 @@ export const useSearchResults = (
     }
   }, [searchId, searchSql, revision, dbReady, loadMore, debugOptions])
 
+  const isSelection = isSelectionSearch(search)
+  const selectionResults = useMemo(
+    () => (isSelection && search ? selectionHits(files, parseSelectionOrder(search)) : null),
+    [isSelection, search, files]
+  )
+  const liveResults = useLiveHits(settled.results, files, !isSelection)
+
   return {
     search,
-    results: settled.results,
+    results: selectionResults ?? liveResults,
     hydes: settled.hydes,
     keywords: settled.keywords,
-    phase: settled.phase,
-    error: settled.error,
-    hasMore: settled.hasMore,
+    phase: isSelection ? "done" : settled.phase,
+    error: isSelection ? null : settled.error,
+    hasMore: isSelection ? false : settled.hasMore,
     loadMore,
   }
 }

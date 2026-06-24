@@ -5,18 +5,31 @@ import { AnimatePresence } from "framer-motion"
 import { useParams, useNavigate } from "react-router"
 import { useProject } from "./project"
 import { useSearchResults } from "~/ui/hooks/useSearchResults"
-import { SearchHeader } from "~/ui/components/search/SearchHeader"
-import { SearchResultList } from "~/ui/components/search/SearchResultList"
+import { SearchBar } from "~/ui/components/search/SearchBar"
+import { StatusCountLine } from "~/ui/components/search/StatusCountLine"
+import { LayoutToggle } from "~/ui/components/search/LayoutToggle"
+import { ResultRail } from "~/ui/components/search/ResultRail"
+import { CardLayoutEngine, type CardLayoutHandle } from "~/ui/components/search/CardLayoutEngine"
+import { RunGroupCard, groupByRun, buildFileUrl } from "~/ui/components/search/cards"
+import { TagBadge } from "~/ui/components/TagBadge"
 import { DebugOptionsProvider } from "~/ui/components/editor/DebugOptionsContext"
-import { ScrollShadow } from "~/ui/components/ScrollShadow"
 import type { SearchHit } from "~/domain/search/types"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
+import type { LayoutMode, VisibleBand } from "~/lib/ui/card-layout"
 import { formatDebugSql, hasSemanticTokens } from "~/lib/search/semantic"
 import { formatHydeDebug } from "~/lib/search/format-hydes"
 import type { SearchPhase } from "~/ui/hooks/useSearchResults"
-import { buildIdentifierResolver } from "~/lib/files/selectors"
 import { setPageContextOverride } from "~/lib/editor/chat-context"
 import { buildSearchContextMessage } from "~/domain/search/context"
+import {
+  getRecentSearches,
+  getSavedSearches,
+  getSearchEntries,
+  toggleSearchSaved,
+} from "~/domain/data-blocks/settings/searches/selectors"
+import { updateSearchEntries } from "~/lib/agent/tools/search/settings"
+import { dispatchTask } from "~/lib/agent/dispatch"
+import { getFiles } from "~/lib/files/store"
 
 const collectUniqueFiles = (hits: SearchHit[]): string[] => [...new Set(hits.map((h) => h.file))]
 
@@ -57,7 +70,7 @@ const filterHitsByTags = (
         return isUntagged(tags) || hasAnyActiveTag(tags, activeTags)
       })
 
-const countUniqueFiles = (hits: SearchHit[]): number => new Set(hits.map((h) => h.file)).size
+const countUniqueFiles = (hits: SearchHit[]): number => collectUniqueFiles(hits).length
 
 const searchStatusText = (
   phase: SearchPhase,
@@ -77,12 +90,17 @@ export default function ProjectSearch() {
   const params = useParams<{ projectId: string; searchId: string }>()
   const navigate = useNavigate()
   const { files, dbReady, debugOptions, getFileTags, tagDefinitions, actionBar } = useProject()
-  const [revision, _setRevision] = useState(0)
+  const [revision] = useState(0)
   const { search, results, hydes, keywords, phase, error, hasMore, loadMore } = useSearchResults(
     params.searchId ?? "",
     revision,
     dbReady
   )
+
+  const [mode, setMode] = useState<LayoutMode>("stacked")
+  const [band, setBand] = useState<VisibleBand>({ from: 0, to: -1, current: 0, total: 0 })
+  const engineRef = useRef<CardLayoutHandle>(null)
+
   const tagOptions = useMemo(() => {
     const uniqueFiles = collectUniqueFiles(results)
     const tagIds = collectTagIds(uniqueFiles, getFileTags)
@@ -105,6 +123,32 @@ export default function ProjectSearch() {
     () => filterHitsByTags(results, activeTags, getFileTags),
     [results, activeTags, getFileTags]
   )
+  const groups = useMemo(() => groupByRun(filteredResults), [filteredResults])
+  const scopeFiles = useMemo(() => collectUniqueFiles(filteredResults), [filteredResults])
+
+  const recentSearches = useMemo(() => getRecentSearches(files), [files])
+  const savedSearches = useMemo(() => getSavedSearches(files), [files])
+
+  const handleSelectSearch = useCallback(
+    (id: string) => navigate(`/project/${params.projectId}/search/${id}`),
+    [navigate, params.projectId]
+  )
+  const handleToggleSave = useCallback(
+    (id: string) => updateSearchEntries(toggleSearchSaved(getSearchEntries(getFiles()), id)),
+    []
+  )
+  const handlePickCorpus = useCallback(
+    (file: string) => navigate(buildFileUrl(params.projectId ?? "", file)),
+    [navigate, params.projectId]
+  )
+  const handleRunAi = useCallback(
+    (query: string) =>
+      dispatchTask({
+        context: `The researcher wants to search the corpus for: "${query}". Use the search tool to find passages that match this intent and present the results.`,
+        userMessage: `Search for: ${query}`,
+      }),
+    []
+  )
 
   const editorSelection = useEditorSelection()
   const fileCount = useMemo(() => countUniqueFiles(filteredResults), [filteredResults])
@@ -121,7 +165,6 @@ export default function ProjectSearch() {
   const isDone = !isPending && phase === "done"
 
   const searchDataRef = useRef({ search, results, files })
-
   useEffect(() => {
     searchDataRef.current = { search, results, files }
   }, [search, results, files])
@@ -134,31 +177,6 @@ export default function ProjectSearch() {
     })
     return () => setPageContextOverride(undefined)
   }, [])
-
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const loadMoreRef = useRef(loadMore)
-  const hasMoreRef = useRef(hasMore)
-
-  useEffect(() => {
-    loadMoreRef.current = loadMore
-    hasMoreRef.current = hasMore
-  })
-
-  useEffect(() => {
-    const el = scrollContainerRef.current
-    if (!el) return
-
-    const onScroll = () => {
-      const remaining = el.scrollHeight - el.scrollTop - el.clientHeight
-      const isNearBottom = remaining < el.clientHeight
-      if (isNearBottom && hasMoreRef.current) loadMoreRef.current()
-    }
-
-    el.addEventListener("scroll", onScroll, { passive: true })
-    return () => el.removeEventListener("scroll", onScroll)
-  }, [search])
-
-  const resolveIds = useMemo(() => buildIdentifierResolver(files), [files])
 
   const showDebugSql = !!debugOptions.renderAsJson
 
@@ -186,56 +204,85 @@ export default function ProjectSearch() {
     )
   }
 
+  const projectId = params.projectId
+
   return (
-    <div className="flex h-full w-full flex-col bg-neutral-100">
-      <ScrollShadow
-        scrollRef={scrollContainerRef}
-        edges={{ top: false, bottom: !!actionBar }}
-        className="min-h-0 flex-col px-12 pt-6 pb-16"
-      >
-        <div className="flex w-full flex-col items-start gap-6">
-          <SearchHeader
-            title={resolveIds(search.title)}
-            description={resolveIds(search.description)}
-            tags={tagOptions}
-            activeTags={activeTags}
-            onToggleTag={handleToggleTag}
-            statusText={statusText}
-            loading={isLoading}
-          />
-          {showDebugSql && (
-            <div className="flex w-full flex-col gap-2">
-              <pre className="w-full rounded-md bg-default-background px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
-                {formatDebugSql(search.sql)}
-              </pre>
-              {search.highlight && (
-                <pre className="w-full rounded-md bg-default-background px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
-                  {search.highlight}
-                </pre>
-              )}
-              {hydes.length > 0 && (
-                <pre className="w-full rounded-md bg-default-background px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
-                  {formatHydeDebug(hydes, keywords)}
-                </pre>
-              )}
-            </div>
-          )}
-          {isDone && results.length === 0 ? (
-            <div className="flex w-full items-center justify-center py-16">
-              <span className="text-body font-body text-subtext-color">No results found</span>
-            </div>
-          ) : (
+    <div className="flex h-full w-full flex-col bg-neutral-100 px-12 pt-6 pb-4">
+      <div className="flex w-full flex-col gap-4">
+        <SearchBar
+          recentSearches={recentSearches}
+          savedSearches={savedSearches}
+          currentSearch={search}
+          scopeFiles={scopeFiles}
+          onSelectSearch={handleSelectSearch}
+          onToggleSave={handleToggleSave}
+          onPickInStack={(file) => engineRef.current?.scrollToFile(file)}
+          onPickCorpus={handlePickCorpus}
+          onRunAi={handleRunAi}
+        />
+        <div className="flex w-full items-center justify-between gap-4">
+          <StatusCountLine loading={isLoading} statusText={statusText} />
+          <LayoutToggle mode={mode} onChange={setMode} />
+        </div>
+        {tagOptions.length > 0 && !isLoading && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-body font-body text-subtext-color">Filter by:</span>
+            {tagOptions.map((tag) => {
+              const active = activeTags.has(tag.id)
+              return (
+                <TagBadge
+                  key={tag.id}
+                  tag={tag}
+                  active={active}
+                  disabled={active && activeTags.size === 1}
+                  onClick={() => handleToggleTag(tag.id)}
+                />
+              )
+            })}
+          </div>
+        )}
+        {showDebugSql && (
+          <pre className="w-full rounded-md bg-default-background px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
+            {formatDebugSql(search.sql)}
+            {hydes.length > 0 && `\n\n${formatHydeDebug(hydes, keywords)}`}
+          </pre>
+        )}
+      </div>
+
+      <div className="mt-6 flex min-h-0 flex-1 gap-2">
+        {isDone && groups.length === 0 ? (
+          <div className="flex w-full items-center justify-center py-16">
+            <span className="text-body font-body text-subtext-color">No results found</span>
+          </div>
+        ) : (
+          <>
             <DebugOptionsProvider value={debugOptions}>
-              <SearchResultList
-                hits={filteredResults}
-                files={files}
-                projectId={params.projectId}
-                onNavigate={navigate}
+              <CardLayoutEngine
+                ref={engineRef}
+                groups={groups}
+                mode={mode}
+                onBandChange={setBand}
+                onNearEnd={hasMore ? loadMore : undefined}
+                className="flex-1"
+                renderCard={(group) => (
+                  <RunGroupCard
+                    group={group}
+                    files={files}
+                    projectId={projectId}
+                    onNavigate={navigate}
+                  />
+                )}
               />
             </DebugOptionsProvider>
-          )}
-        </div>
-      </ScrollShadow>
+            <ResultRail
+              band={band}
+              onScrollTo={(i) => engineRef.current?.scrollToIndex(i)}
+              onStep={(n) => engineRef.current?.scrollByCards(n)}
+            />
+          </>
+        )}
+      </div>
+
       <AnimatePresence>{actionBar}</AnimatePresence>
     </div>
   )

@@ -129,6 +129,11 @@ export const queryBm25 = (
   })
 }
 
+export const indexedLanguages = (): string[] => [...states.keys()]
+
+export const ownedHashesForFile = (language: string, file: string): Set<string> =>
+  states.get(language)?.ownership.get(file) ?? new Set()
+
 export const languageStats = (): Record<string, { docs: number; files: number }> => {
   const out: Record<string, { docs: number; files: number }> = {}
   for (const [language, state] of states) {

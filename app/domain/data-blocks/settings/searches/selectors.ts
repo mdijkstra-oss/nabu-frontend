@@ -21,6 +21,9 @@ export const getSavedSearches = (files: FileStore): SearchEntry[] =>
     .filter((s) => s.saved)
     .sort(byCreatedAtDesc)
 
+export const getLatestSearch = (files: FileStore): SearchEntry | undefined =>
+  getSearchEntries(files).slice().sort(byCreatedAtDesc)[0]
+
 export const toggleSearchSaved = (entries: SearchEntry[], id: string): SearchEntry[] =>
   entries.map((e) => (e.id === id ? { ...e, saved: !e.saved } : e))
 

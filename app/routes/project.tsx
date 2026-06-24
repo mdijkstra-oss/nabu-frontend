@@ -23,15 +23,8 @@ import {
 import { CodesSidebar } from "~/ui/components/sidebar/codes/CodesSidebar"
 import type { Code } from "~/ui/components/sidebar/codes/types"
 import { ExhibitsSidebar } from "~/ui/components/sidebar/exhibits/ExhibitsSidebar"
-import { SearchSidebar } from "~/ui/components/sidebar/search/SearchSidebar"
-import {
-  getSearchEntries,
-  getRecentSearches,
-  getSavedSearches,
-  toggleSearchSaved,
-  removeSearch,
-} from "~/domain/data-blocks/settings/searches/selectors"
-import { updateSearchEntries, saveNewSearch } from "~/lib/agent/tools/search/settings"
+import { getLatestSearch } from "~/domain/data-blocks/settings/searches/selectors"
+import { saveNewSearch } from "~/lib/agent/tools/search/settings"
 import { NabuProvider } from "~/ui/components/nabu/context"
 import { NabuChatSidebar } from "~/ui/components/nabu/NabuChatSidebar"
 import { DebugMenuButton } from "~/ui/components/debug/DebugMenuButton"
@@ -75,9 +68,7 @@ import {
 import { findDocumentForCallout } from "~/domain/data-blocks/callout/selectors"
 import { isHiddenFile } from "~/lib/files/filename"
 import { HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hidden"
-import { buildIdentifierResolver } from "~/lib/files/selectors"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
-import type { SearchEntry } from "~/domain/search/types"
 import {
   buildFlaggedSearch,
   buildCandidateSearch,
@@ -96,6 +87,7 @@ import {
   codeWithSearchSelection,
 } from "~/domain/actions/coding/actions"
 import { resolveCodingFiles } from "~/domain/actions/coding/selectors"
+import { isSelectionSearch, parseSelectionOrder } from "~/domain/search/selection-search"
 import { useEditorSelection } from "~/ui/hooks/useEditorSelection"
 import { resolveEditorSelection, resolveSearchSelections } from "~/lib/editor/selection-context"
 import { clearCodingsPatches } from "~/domain/actions/clear-codings/apply"
@@ -142,20 +134,6 @@ const saveDebugOptions = (options: DebugOptions): void => {
   }
 }
 
-const resolveSearchEntry = (
-  entry: SearchEntry,
-  resolve: (text: string) => string
-): SearchEntry => ({
-  ...entry,
-  title: resolve(entry.title),
-  description: resolve(entry.description),
-})
-
-const resolveSearchEntries = (
-  entries: SearchEntry[],
-  resolve: (text: string) => string
-): SearchEntry[] => entries.map((e) => resolveSearchEntry(e, resolve))
-
 const isSyncMetaCommand = (command: Command): command is Command & { fileCount: number } =>
   command.action === "SyncMeta" && typeof command.fileCount === "number"
 
@@ -172,6 +150,9 @@ const computeFileProgress = (loaded: number, total: number): number => {
   if (total === 0) return Math.min(FILE_WEIGHT - 5, loaded * 2)
   return Math.round((loaded / total) * FILE_WEIGHT)
 }
+
+const formatCodeFilesLabel = (count: number): string =>
+  count > 1 ? `Code ${count} files` : "Code file"
 
 const computeWeightedProgress = (processed: number, total: number, weight: number): number =>
   total === 0 ? 0 : Math.round((processed / total) * weight)
@@ -420,30 +401,19 @@ export default function ProjectLayout() {
     navigate(`/project/${params.projectId}/file/${encodeURIComponent(filename)}`)
   }
 
-  const resolveIds = useMemo(() => buildIdentifierResolver(files), [files])
-  const recentSearches = useMemo(
-    () => resolveSearchEntries(getRecentSearches(files), resolveIds),
-    [files, resolveIds]
+  const latestSearch = useMemo(() => getLatestSearch(files), [files])
+
+  const handleNavChange = useCallback(
+    (nav: ActiveNav) => {
+      if (nav === "search") {
+        dismissSidebarRef.current?.()
+        if (latestSearch) navigate(`/project/${params.projectId}/search/${latestSearch.id}`)
+        return
+      }
+      setActiveNav(nav)
+    },
+    [latestSearch, navigate, params.projectId]
   )
-  const savedSearches = useMemo(
-    () => resolveSearchEntries(getSavedSearches(files), resolveIds),
-    [files, resolveIds]
-  )
-
-  const handleSearchSave = (id: string) => {
-    const entries = getSearchEntries(files)
-    updateSearchEntries(toggleSearchSaved(entries, id))
-  }
-
-  const handleSearchRemove = (id: string) => {
-    const entries = getSearchEntries(files)
-    updateSearchEntries(removeSearch(entries, id))
-  }
-
-  const handleSearchSelect = (id: string) => {
-    dismissSidebarRef.current?.()
-    navigate(`/project/${params.projectId}/search/${id}`)
-  }
 
   const handleEditCode = (code: Code) => {
     if (!params.projectId) return
@@ -474,6 +444,12 @@ export default function ProjectLayout() {
       [...new Set([currentFile, ...selectedDocs])].filter((f): f is string => !!f && f in files),
     [currentFile, selectedDocs, files]
   )
+  const searchSelectionDocs = useMemo(() => {
+    if (!isOnSearchPage || !params.searchId) return null
+    const search = findSearchById(files, params.searchId)
+    if (!search || !isSelectionSearch(search)) return null
+    return parseSelectionOrder(search).filter((f) => f in files)
+  }, [isOnSearchPage, params.searchId, files])
   const totalCodeCount = useMemo(() => getAllCodes(files).length, [files])
   const hasSelectedCodes = selectedCodes.size > 0
   const hasAllCodesSelected = selectedCodes.size >= totalCodeCount && totalCodeCount > 0
@@ -563,7 +539,13 @@ export default function ProjectLayout() {
     const search = findSearchById(files, params.searchId)
     if (!search) return
     const refs = resolveCodingFiles(files, [...selectedCodes])
-    if (refs.length > 0) dispatchTask(codeWithSearch(refs, params.searchId))
+    if (refs.length === 0) return
+    if (isSelectionSearch(search)) {
+      const docs = parseSelectionOrder(search).filter((f) => f in files)
+      if (docs.length > 0) dispatchTask(codeFiles(docs, refs))
+      return
+    }
+    dispatchTask(codeWithSearch(refs, params.searchId))
   }, [params.searchId, files, selectedCodes])
 
   const handleCodeSelection = useCallback(() => {
@@ -627,18 +609,18 @@ export default function ProjectLayout() {
     if (isOnDocumentPage) {
       actions.push({
         icon: <FileText />,
-        label: hasEditorSel
-          ? "Code selection"
-          : filesToCode.length > 1
-            ? `Code ${filesToCode.length} files`
-            : "Code file",
+        label: hasEditorSel ? "Code selection" : formatCodeFilesLabel(filesToCode.length),
         onClick: hasEditorSel ? handleCodeSelection : handleCodeSelectedCodes,
         variant: "ai",
       })
     } else if (isOnSearchPage) {
       actions.push({
         icon: <FileText />,
-        label: hasEditorSel ? "Code selection" : "Code results",
+        label: hasEditorSel
+          ? "Code selection"
+          : searchSelectionDocs
+            ? formatCodeFilesLabel(searchSelectionDocs.length)
+            : "Code results",
         onClick: hasEditorSel ? handleCodeSelection : handleCodeSearchResults,
         variant: "ai",
       })
@@ -665,6 +647,7 @@ export default function ProjectLayout() {
     handleCodeSelection,
     selectedCodes,
     filesToCode,
+    searchSelectionDocs,
   ])
 
   const handleSearchCode = (code: Code) => {
@@ -746,16 +729,6 @@ export default function ProjectLayout() {
         onNew={() => undefined}
       />
     ),
-    search: (
-      <SearchSidebar
-        recentSearches={recentSearches}
-        savedSearches={savedSearches}
-        selectedId={params.searchId}
-        onSave={handleSearchSave}
-        onRemove={handleSearchRemove}
-        onSelect={handleSearchSelect}
-      />
-    ),
     ...(codebook
       ? {
           codes: (
@@ -809,8 +782,9 @@ export default function ProjectLayout() {
           activeNav={activeNav}
           showCodes={!!codebook}
           showExhibits={exhibits.length > 0}
+          showSearch={!!latestSearch}
           annotationCount={fileAnnotationCount}
-          onNavChange={setActiveNav}
+          onNavChange={handleNavChange}
           dismissSidebarRef={dismissSidebarRef}
           sidebarPanels={sidebarPanels}
           sidebarFooterExtra={

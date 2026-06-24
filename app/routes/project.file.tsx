@@ -1,14 +1,16 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo } from "react"
 import { AnimatePresence } from "framer-motion"
-import { useSearchParams } from "react-router"
+import { useSearchParams, useNavigate, useParams } from "react-router"
 import { parseSpotlight } from "~/lib/editor/spotlight/parse"
 import { patchBlock } from "~/lib/data-blocks/patch"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
-import { getSelectedDocs } from "~/domain/data-blocks/ux/selectors"
+import { selectedFiles } from "~/domain/data-blocks/ux/selectors"
+import { buildSelectionEntry } from "~/domain/search/selection-search"
+import { saveNewSearch } from "~/lib/agent/tools/search/settings"
 import { useProject } from "./project"
 import { DocumentBubble } from "~/ui/components/editor/DocumentBubble"
-import { DocumentStack, StackToolbar } from "~/ui/components/editor/DocumentStack"
+import { DocumentStack } from "~/ui/components/editor/DocumentStack"
 import { Clipboard, Copy, FileText, Share2, Trash } from "lucide-react"
 
 const ATTRIBUTES_LANGUAGE = "json-attributes"
@@ -28,25 +30,24 @@ export default function ProjectFile() {
     getFileTags,
     getFileDate: getFileDateFn,
     tagDefinitions,
-    documents,
-    docSortMode,
-    onDocSortChange,
-    onSelectDocument,
     actionBar,
   } = useProject()
+  const params = useParams<{ projectId: string }>()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [stackOpen, setStackOpen] = useState(false)
-  const [docSearch, setDocSearch] = useState("")
   const spotlight = useMemo(() => parseSpotlight(searchParams.get("spotlight")), [searchParams])
-  const selectedCount = useMemo(() => {
-    const selected = getSelectedDocs(files)
-    return selected.size + (currentFile && !selected.has(currentFile) ? 1 : 0)
-  }, [files, currentFile])
 
   const content = currentFile ? files[currentFile] : undefined
   const copyRawMarkdown = useCallback(() => {
     if (content) navigator.clipboard.writeText(content)
   }, [content])
+
+  const openStack = useCallback(() => {
+    const ids = selectedFiles(files, currentFile)
+    if (ids.length <= 1) return
+    const id = saveNewSearch(buildSelectionEntry(ids))
+    navigate(`/project/${params.projectId}/search/${id}`)
+  }, [files, currentFile, params.projectId, navigate])
 
   const tagDefMap = useMemo(() => new Map(tagDefinitions.map((d) => [d.id, d])), [tagDefinitions])
   const tags = useMemo(() => {
@@ -80,29 +81,10 @@ export default function ProjectFile() {
 
   return (
     <div className="flex h-full w-full flex-col gap-4 bg-neutral-100 p-4">
-      <AnimatePresence>
-        {stackOpen && (
-          <StackToolbar
-            key="stack"
-            count={selectedCount}
-            sortMode={docSortMode}
-            onSortChange={onDocSortChange}
-            search={docSearch}
-            onSearchChange={setDocSearch}
-          />
-        )}
-      </AnimatePresence>
       <DocumentStack
-        documents={documents}
-        activeId={currentFile}
         files={files}
-        tagDefinitions={tagDefinitions}
-        sortMode={docSortMode}
-        onSelectDocument={onSelectDocument}
-        open={stackOpen}
-        onOpenChange={setStackOpen}
-        search={docSearch}
-        onSearchClear={() => setDocSearch("")}
+        activeId={currentFile}
+        onUnderlyingClick={openStack}
         className="flex flex-1 min-h-0"
         front={
           <DocumentBubble
@@ -125,7 +107,7 @@ export default function ProjectFile() {
           />
         }
       />
-      <AnimatePresence mode="wait">{!stackOpen && actionBar}</AnimatePresence>
+      <AnimatePresence mode="wait">{actionBar}</AnimatePresence>
     </div>
   )
 }
