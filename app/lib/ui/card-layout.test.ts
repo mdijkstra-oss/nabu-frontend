@@ -9,7 +9,6 @@ import {
   cumulativeTop,
   reconcileAnchor,
   visibleBand,
-  stackCap,
   LAYOUT,
 } from "./card-layout"
 
@@ -119,32 +118,27 @@ describe("reconcileAnchor", () => {
 })
 
 describe("visibleBand", () => {
-  it("stacked: window around the magnet-snapped front", () => {
+  it("stacked: current is the magnet-snapped front", () => {
     const total = 9
-    const band = visibleBand({ mode: "stacked", progress: 3, cap: stackCap(total), total })
+    const band = visibleBand({ mode: "stacked", progress: 3, total })
     expect(band.current).toBe(3)
-    expect(band.from).toBeLessThanOrEqual(3)
-    expect(band.to).toBeGreaterThanOrEqual(3)
     expect(band.total).toBe(total)
   })
   it("stacked: empty total yields an empty band", () => {
-    expect(visibleBand({ mode: "stacked", progress: 0, cap: 0, total: 0 })).toMatchObject({
-      from: 0,
-      to: -1,
+    expect(visibleBand({ mode: "stacked", progress: 0, total: 0 })).toMatchObject({
+      current: 0,
       total: 0,
     })
   })
-  it("flat: reports the contiguous on-screen run", () => {
+  it("flat: current is the first on-screen card", () => {
     const heights = [100, 100, 100, 100, 100]
     const band = visibleBand({ mode: "flat", heights, scrollTop: 120, viewport: 250 })
-    expect(band.from).toBe(1)
-    expect(band.to).toBe(3)
     expect(band.current).toBe(1)
+    expect(band.total).toBe(5)
   })
-  it("flat: a short result set with everything visible spans all cards", () => {
+  it("flat: a short result set with everything visible starts at the first card", () => {
     const heights = [80, 80]
     const band = visibleBand({ mode: "flat", heights, scrollTop: 0, viewport: 500 })
-    expect(band.from).toBe(0)
-    expect(band.to).toBe(1)
+    expect(band.current).toBe(0)
   })
 })

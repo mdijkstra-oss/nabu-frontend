@@ -10,8 +10,6 @@ export interface CardPosition {
 }
 
 export interface VisibleBand {
-  from: number
-  to: number
   current: number
   total: number
 }
@@ -34,7 +32,6 @@ export type LayoutParams = StackedParams | FlatParams
 export interface StackedBandParams {
   mode: "stacked"
   progress: number
-  cap: number
   total: number
 }
 
@@ -139,37 +136,29 @@ export const reconcileAnchor = (
   heights: number[]
 ): number => (toMode === "flat" ? cumulativeTop(heights, frontIndex) : frontIndex * LAYOUT.step)
 
-const emptyBand: VisibleBand = { from: 0, to: -1, current: 0, total: 0 }
+const emptyBand: VisibleBand = { current: 0, total: 0 }
 
-const stackedBand = (progress: number, cap: number, total: number): VisibleBand => {
+const stackedBand = (progress: number, total: number): VisibleBand => {
   if (total === 0) return emptyBand
   const p = magnet(progress)
-  const from = Math.max(0, Math.ceil(p - 1))
-  const to = Math.min(total - 1, Math.floor(p + cap))
   const current = Math.min(total - 1, Math.max(0, Math.round(p)))
-  return { from, to, current, total }
+  return { current, total }
 }
 
 const flatBand = (heights: number[], scrollTop: number, viewport: number): VisibleBand => {
   const total = heights.length
   if (total === 0) return emptyBand
   const bottom = scrollTop + viewport
-  let from = -1
-  let to = -1
   let top = 0
   for (let i = 0; i < total; i++) {
     const next = top + (heights[i] ?? 0)
-    if (next > scrollTop && top < bottom) {
-      if (from === -1) from = i
-      to = i
-    }
+    if (next > scrollTop && top < bottom) return { current: i, total }
     top = next
   }
-  if (from === -1) return { from: 0, to: 0, current: 0, total }
-  return { from, to, current: from, total }
+  return { current: 0, total }
 }
 
 export const visibleBand = (params: BandParams): VisibleBand =>
   params.mode === "stacked"
-    ? stackedBand(params.progress, params.cap, params.total)
+    ? stackedBand(params.progress, params.total)
     : flatBand(params.heights, params.scrollTop, params.viewport)

@@ -13,15 +13,13 @@ interface ResultRailProps {
 }
 
 export const ResultRail = ({ band, onScrollTo, onStep }: ResultRailProps) => {
-  const { from, to, current, total } = band
+  const { current, total } = band
   const trackRef = useRef<HTMLDivElement | null>(null)
   const [dragging, setDragging] = useState(false)
 
   if (total <= 1) return null
 
   const y = (p: number): number => (p / (total - 1)) * TRACK
-  const bandTop = y(Math.max(0, from))
-  const bandHeight = Math.max(4, y(Math.max(from, to)) - bandTop)
 
   const indexFromClientY = (clientY: number): number => {
     const el = trackRef.current
@@ -55,10 +53,6 @@ export const ResultRail = ({ band, onScrollTo, onStep }: ResultRailProps) => {
       >
         <div className="absolute left-1/2 top-0 h-full w-0.5 -translate-x-1/2 rounded bg-neutral-300" />
         <div
-          className="absolute left-1/2 w-1 -translate-x-1/2 rounded bg-brand-400/80"
-          style={{ top: bandTop, height: bandHeight }}
-        />
-        <div
           className="absolute left-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-900 ring-4 ring-neutral-100"
           style={{ top: y(current) }}
         />
@@ -70,7 +64,7 @@ export const ResultRail = ({ band, onScrollTo, onStep }: ResultRailProps) => {
         type="button"
         aria-label="Previous"
         onClick={() => onStep(-1)}
-        className="mt-4 text-neutral-400 transition-colors hover:text-neutral-700"
+        className="mt-4 cursor-pointer text-neutral-400 transition-colors hover:text-neutral-700"
       >
         <ChevronUp className="h-5 w-5" />
       </button>
@@ -78,7 +72,7 @@ export const ResultRail = ({ band, onScrollTo, onStep }: ResultRailProps) => {
         type="button"
         aria-label="Next"
         onClick={() => onStep(1)}
-        className="mt-1 text-neutral-400 transition-colors hover:text-neutral-700"
+        className="mt-1 cursor-pointer text-neutral-400 transition-colors hover:text-neutral-700"
       >
         <ChevronDown className="h-5 w-5" />
       </button>

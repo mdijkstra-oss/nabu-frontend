@@ -82,9 +82,9 @@ export const CardLayoutEngine = forwardRef<CardLayoutHandle, CardLayoutEnginePro
 
     const band =
       mode === "stacked"
-        ? visibleBand({ mode, progress, cap, total })
+        ? visibleBand({ mode, progress, total })
         : visibleBand({ mode, heights, scrollTop, viewport: stageH })
-    const { from, to, current } = band
+    const { current } = band
 
     const bandRef = useRef(band)
     const heightsRef = useRef(heights)
@@ -94,8 +94,8 @@ export const CardLayoutEngine = forwardRef<CardLayoutHandle, CardLayoutEnginePro
     })
 
     useEffect(() => {
-      onBandChange?.({ from, to, current, total })
-    }, [from, to, current, total, onBandChange])
+      onBandChange?.({ current, total })
+    }, [current, total, onBandChange])
 
     const updateHeight = useCallback((index: number, height: number) => {
       setHeights((prev) => {
@@ -222,7 +222,7 @@ export const CardLayoutEngine = forwardRef<CardLayoutHandle, CardLayoutEnginePro
               return (
                 <motion.div
                   key={groupKey(group)}
-                  className="absolute inset-0 origin-center overflow-hidden"
+                  className="absolute inset-0 origin-center overflow-hidden [&>*]:h-full [&>*]:overflow-hidden"
                   style={{ zIndex: pos.zIndex }}
                   initial={false}
                   animate={{ y: pos.y, scale: pos.scale, opacity: pos.opacity }}

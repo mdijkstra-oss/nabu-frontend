@@ -98,7 +98,7 @@ export default function ProjectSearch() {
   )
 
   const [mode, setMode] = useState<LayoutMode>("stacked")
-  const [band, setBand] = useState<VisibleBand>({ from: 0, to: -1, current: 0, total: 0 })
+  const [band, setBand] = useState<VisibleBand>({ current: 0, total: 0 })
   const engineRef = useRef<CardLayoutHandle>(null)
 
   const tagOptions = useMemo(() => {
