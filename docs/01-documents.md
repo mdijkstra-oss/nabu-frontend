@@ -58,9 +58,9 @@ Editing tools for agentic calls are generated from the same declaration. Every t
 
 Entity ids are one strict format across the whole system: the entity's prefix, then eight characters matching `[0-9][a-z0-9]{7}`. Blocks declare which of their fields are ids and what prefix they carry, which is what lets the model write `callout-3kf9m2qp` in prose and have it resolve to a code. Tags are referenced by slug instead, as `#covid-19`.
 
-A resolved id is never shown raw (eg in chat). It renders as a pill carrying the entity's label, its colour where it has one, and a link to the definition — in documents and in chat alike, so the model can name a code and the researcher can click straight through to it.
+An id is never shown raw. What it renders as, and how a quotation is matched back to the passage it came from, is [grounded answers](03-grounded-answers.md).
 
-Ids referenced before their defining file has loaded are marked pending and resolved when the definition arrives — see [sync](04-sync.md).
+Ids referenced before their defining file has loaded are marked pending and resolved when the definition arrives — see [sync](07-sync.md).
 
 ## Writes
 
@@ -207,8 +207,8 @@ Every field of the config object introduced under [registering a block](#registe
 
 ## See also
 
-- [Sync](04-sync.md) — how files reach disk, and how references resolve when they arrive out of order
-- [Agentic tools](03-agentic/tools.md) — how the generated tools are executed and applied
+- [Sync](07-sync.md) — how files reach disk, and how references resolve when they arrive out of order
+- [Agentic tools](06-tools.md) — how the generated tools are executed and applied
 
 ## Next: querying
 

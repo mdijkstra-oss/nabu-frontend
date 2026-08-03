@@ -46,14 +46,17 @@ That lets the LLM query history and report change over time, and it lets other r
 
 Nabu uses focused prompts across different tasks, and for high-value tasks lets multiple models from different providers weigh in.
 
-Where they disagree, the case [escalates to a third model](docs/03-agentic/consensus.md) that sees both arguments. The disagreement is the useful part: the spans two models split on are close to the spans two human coders would argue about, so a run reports not only what it found but where the codebook itself is ambiguous.
+Where they disagree, the case [escalates to a third model](docs/04-consensus.md) that sees both arguments. The disagreement is the useful part: the spans two models split on are close to the spans two human coders would argue about, so a run reports not only what it found but where the codebook itself is ambiguous.
 
 ## Technical implementations
 
 - [Documents](docs/01-documents.md) — the file format, block declarations, and what they project into
 - [Querying](docs/02-querying.md) — SQL over the tables, HyDE and rank fusion over the vectors, and the filtering cascade
-- [Agentic](docs/03-agentic/) — the [loop](docs/03-agentic/loop.md), its [tools](docs/03-agentic/tools.md) with a shell-like interface, and the [consensus](docs/03-agentic/consensus.md) pass
-- [Sync](docs/04-sync.md) — local-first persistence and out-of-order reference resolution
+- [Grounded answers](docs/03-grounded-answers.md) — identifiers resolved to names, quoted prose matched back to its passage
+- [Consensus](docs/04-consensus.md) — two models judging independently, a third deciding the splits, and flags where a definition is ambiguous
+- [The loop](docs/05-loop.md) — modes derived from history, per-turn context, and the guards on what a turn may do
+- [Tools](docs/06-tools.md) — generated block editing, and a shell-like interface for reading
+- [Sync](docs/07-sync.md) — local-first persistence and out-of-order reference resolution
 
 ### Tech stack
 
@@ -65,7 +68,9 @@ Where they disagree, the case [escalates to a third model](docs/03-agentic/conse
 
 ## Related repositories
 
-The services Nabu runs against live in their own repositories. They are being cleaned up and will be linked here.
+- [nabu-storage](https://github.com/mdijkstra-oss/nabu-storage) — file storage and sync, the Go service behind `VITE_API_HOST`
+
+The model gateway lives in its own repository too. It is being cleaned up and will be linked here.
 
 ## Known gaps
 

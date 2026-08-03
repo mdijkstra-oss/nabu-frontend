@@ -66,7 +66,7 @@ ORDER BY _semantic_score DESC
 LIMIT 30
 ```
 
-Before execution, a resolver extracts the tokens, generates and embeds the hypothetical passages, runs fusion, and rewrites the query against the resulting chunk set — neither function reaches DuckDB as written. `EMBEDDINGS_FROM_FILE('code.md')` makes a document the query instead: the named file is embedded and searched against the corpus, which is how a corpus is compared against itself — what echoes a note, what covers the same ground, what is a near-duplicate. Point it at a codebook entry and the spans that entry might apply to come back, which is what the [analysis pass](03-agentic/consensus.md) runs once per code.
+Before execution, a resolver extracts the tokens, generates and embeds the hypothetical passages, runs fusion, and rewrites the query against the resulting chunk set — neither function reaches DuckDB as written. `EMBEDDINGS_FROM_FILE('code.md')` makes a document the query instead: the named file is embedded and searched against the corpus, which is how a corpus is compared against itself — what echoes a note, what covers the same ground, what is a near-duplicate. Point it at a codebook entry and the spans that entry might apply to come back, which is what the [analysis pass](04-consensus.md) runs once per code.
 
 Meaning and structure therefore compose: proportionality framing, in press conferences from March 2020, in documents not yet coded, is one `WHERE` clause rather than a pipeline anyone has to orchestrate. Nothing outside the resolver ever handles a vector.
 
@@ -113,4 +113,8 @@ Every stage after `probe` can be disabled individually at runtime. Turning off f
 
 ## See also
 
-- [Consensus](03-agentic/consensus.md) — the analysis pass that runs this cascade once per code
+- [Consensus](04-consensus.md) — the analysis pass that runs this cascade once per code
+
+## Next: grounded answers
+
+A search result knows where it came from; an answer written in prose does not. [Grounded answers](03-grounded-answers.md) is how that is closed — identifiers resolved to the things they name, and quoted prose matched back to the passage it was taken from, so a claim in a chat message costs one click to check.
