@@ -1,52 +1,71 @@
 # Nabu
 
-A local-first workspace for qualitative document analysis. Documents are markdown files. Codes, annotations, settings and embeddings are JSON blocks inside those same files. An agent reads the corpus, proposes codings against a codebook, and a two-model consensus pass decides which of them survive.
+> Nabu is the ancient Mesopotamian (Babylonian/Assyrian) god of writing, scribes, and wisdom, often depicted with stylus and tablet; scribes worked under his patronage and commonly invoked him in their texts.
 
-Everything that looks like a database — SQL tables, vector search, a full-text index — is derived from the files and rebuilt when they change. There is no schema to migrate and no server to query.
+Nabu is an IRE — an Integrated Research Environment — bringing together the best of agentic IDEs in a world where prose documents are the source of truth.
 
-## The idea
+> [!NOTE]
+> A walkthrough video is in progress and will sit here.
 
-- **Files are the database.** A project is a map of filename to markdown, and nothing else is authoritative.
-- **One declaration, many artifacts.** A block type is declared once; validation, DuckDB tables, and the agent's tools for editing it are generated from that declaration.
-- **Model decisions are contested, not trusted.** Two models judge each proposed coding independently; disagreement escalates to an adjudicator that is allowed to answer "inconsistent".
+Researchers are generally not as tech-oriented as the software engineers IDEs are built for, so many abstractions hide the machinery underlying the system. It has to be easy to use and still have powerful capabilities, and LLMs are what make that gap bridgeable.
 
-## What a document looks like
+The first area of research targeted is qualitative coding, though in theory it extends to other domains.
 
-````markdown
-# Press conference, 12 March 2020
+## Concepts
 
-The prime minister opened by describing the measures as proportionate.
+### Documents as sources of truth
 
-```json-annotations
-{
-  "annotations": [
-    {
-      "id": "ann_1",
-      "text": "describing the measures as proportionate",
-      "reason": "Frames restriction as calibrated rather than severe",
-      "code": "3kf9m2qp"
-    }
-  ]
-}
-```
-````
+All information lives in documents a user or an LLM can edit and manipulate. The format of choice is Markdown with JSON code blocks, edited in a block-based WYSIWYG editor hiding technicalities.
 
-The prose is the document. The block is a record. Both are diffable, both are the input to the next agent turn, and the block is also a row in a SQL table.
+Everything queryable is either in the document, or projected from it for easier retrieval. Projections are derived, so every change happens by changing the content of a document and there are no database writes.
 
-## Documentation
+That keeps queried data from going stale, and matches what models are trained to do for agentic programming: manipulate text files.
 
-- [Data model](docs/01-data-model.md) — blocks as truth, the registry, and everything derived from it
+Systems are in place to ensure the information in the documents stays valid against its spec.
+
+#### Embeddings
+
+The first part of the projection is embeddings, which let the LLM use RAG to find information across the corpus at speed.
+
+#### Structured data
+
+Structured data is embedded in the document as code blocks, and the renderer hides the block itself — what the user sees is a table or a graph etc. Document-wide information is stored the same way: what is annotated, tags and more. This data is projected into a DuckDB-WASM instance the LLM can query freely.
+
+#### Full history of change
+
+> [!WARNING]
+> Partly built. Part of history of current session is neatly laid out. But backend does not have GIT implementation yet.
+
+With files as the source of truth, another page can be taken out of programming: version control. Placing the files under version control lets the LLM query history and report change over time to the researcher, and lets other researchers see which paths were taken instead of only the final output. Time travel, reversion etc than becomes available too.
+
+### Multimodal consensus
+
+Nabu uses focused prompts across different tasks, and for high value tasks lets multiple models from different providers weigh in, and escalates where they disagree.
+
+## Technical implementations
+
+- [Data model](docs/01-data-model.md) — documents as sources of truth
 - [Retrieval](docs/02-retrieval.md) — chunking, embeddings, HyDE, rank fusion, the filtering cascade
-- [Agentic](docs/03-agentic/) — the [loop](docs/03-agentic/loop.md), its [tools](docs/03-agentic/tools.md), and the [consensus](docs/03-agentic/consensus.md) pass
+- [Agentic](docs/03-agentic/) — the [loop](docs/03-agentic/loop.md), its [tools](docs/03-agentic/tools.md) with shell like interface, and the [consensus](docs/03-agentic/consensus.md) pass
 - [Sync](docs/04-sync.md) — local-first persistence and out-of-order reference resolution
 
-## Model gateway
+### Tech stack
 
-The app never names a model. It posts to named endpoints — `/hyde-generator`, `/semantic-filter`, `/deep-analysis-filter?model=0` — and a gateway resolves each name to a provider, model, reasoning effort and cache policy declared in markdown frontmatter.
+- **App** — React 19, React Router 7, TypeScript, Vite
+- **Data** — DuckDB-WASM, MiniSearch for BM25
+- **Editor** — Milkdown on ProseMirror
+- **Schemas** — Zod, on both the validation and the tool-definition side
+- **Tests** — Vitest with Playwright browser mode
 
-That indirection is what makes the consensus pass possible: `?model=0` and `?model=1` are two different models behind one prompt, and the frontend cannot tell which. It is also what keeps provider differences out of the app entirely.
+## Related repositories
 
-The gateway is [hermes-logos](../hermes-logos), a separate Go service.
+The services Nabu runs against live in their own repositories. They are being cleaned up and will be linked here.
+
+## Known gaps
+
+- **No authentication** — local-first and single-user for now
+- **No git backend** — history covers the current session only
+- **Thin test coverage**
 
 ## Running it
 
@@ -62,8 +81,7 @@ The app expects two services:
 | Persistence and sync | `localhost:8080`        | `VITE_API_HOST` |
 | Model gateway        | `http://localhost:8081` | `VITE_LLM_HOST` |
 
-> [!NOTE]
-> Without the gateway the app still loads, opens documents and runs SQL — search, coding and chat are the parts that need it.
+## Development
 
 ```bash
 npm test          # vitest
@@ -71,20 +89,3 @@ npm run typecheck # react-router typegen && tsc
 npm run lint
 npm run storybook
 ```
-
-## Layout
-
-```text
-app/lib/       Generic engines. Imports nothing above it.
-app/domain/    Block definitions, projections, corpus, search context.
-app/ui/        Components, hooks, layouts, theme.
-app/routes/    React Router entry points.
-```
-
-Dependencies flow one way: `lib` knows nothing of `domain`, and `domain` knows nothing of `ui`. Where a `lib` module needs domain knowledge it takes it as a parameter — the search pipeline receives a `FileStore`, the nudges receive a `getFiles` function.
-
-Conventions that hold throughout: `Result<T, E>` instead of thrown errors at boundaries, exhaustiveness checks on every switch over a closed set, table-driven tests with recorded fixtures rather than mocks, and no comments except where the reason for a decision cannot be read off the code.
-
-## Stack
-
-React 19, React Router 7, TypeScript, Vite. DuckDB-WASM with Apache Arrow for SQL. MiniSearch for BM25. Milkdown and ProseMirror for the editor. Zod for schemas, on both the validation and the tool-definition side. Vitest with Playwright browser mode.
