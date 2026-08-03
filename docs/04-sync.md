@@ -17,7 +17,7 @@ const (
 
 `SyncMeta` carries a file count for progress reporting and changes nothing. There are no endpoints for annotations, codes or settings, because those are not things the server knows about. They are JSON blocks inside file content, so writing one is writing a file. The server stores bytes at paths; the meaning of those bytes is entirely the client's business.
 
-That is what keeps the [data model](01-data-model.md) free to change. Adding a block type does not touch the backend at all.
+That is what keeps the [data model](01-documents.md) free to change. Adding a block type does not touch the backend at all.
 
 ```mermaid
 sequenceDiagram
@@ -92,4 +92,4 @@ On connect the server sends the project's files sorted by name. Sorting makes th
 
 ## See also
 
-- [Data model](01-data-model.md) — what the bytes at those paths contain
+- [Data model](01-documents.md) — what the bytes at those paths contain

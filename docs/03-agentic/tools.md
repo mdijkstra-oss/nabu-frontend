@@ -75,7 +75,7 @@ scenarios/echo-operators-in-quotes.json
 
 ## Editing
 
-Block edits go through the tools generated from the registry — `patch_callout`, `add_annotation`, `delete_chart` and the rest, described in the [data model](../01-data-model.md). They take typed operations against the record's own fields rather than text:
+Block edits go through the tools generated from the registry — `patch_callout`, `add_annotation`, `delete_chart` and the rest, described in the [data model](../01-documents.md). They take typed operations against the record's own fields rather than text:
 
 ```json
 {
@@ -97,7 +97,7 @@ Writes aimed at a generated file are redirected to the source it was generated f
 
 ## Querying
 
-`query` executes SQL against the projected tables, with the generated DDL supplied in the request so the agent writes against a schema it can see. `search` runs the [retrieval cascade](../02-retrieval.md), including the `SEMANTIC()` extension.
+`query` executes SQL against the projected tables, with the generated DDL supplied in the request so the agent writes against a schema it can see. `search` runs the [retrieval cascade](../02-querying.md), including the `SEMANTIC()` extension.
 
 The distinction is deliberate: SQL answers questions about structure — how many documents carry this code, which are untagged, what the date range is — and search answers questions about content. Both return file paths that the shell can then read.
 
@@ -131,4 +131,4 @@ Because mode is derived from history, pushing a marker block _is_ the state chan
 ## See also
 
 - [The loop](loop.md) — how tools are selected per mode and results are fed back
-- [Data model](../01-data-model.md) — where block tools come from
+- [Data model](../01-documents.md) — where block tools come from

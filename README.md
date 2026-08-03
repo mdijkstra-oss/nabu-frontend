@@ -2,7 +2,7 @@
 
 > Nabu is the ancient Mesopotamian (Babylonian/Assyrian) god of writing, scribes, and wisdom, often depicted with stylus and tablet; scribes worked under his patronage and commonly invoked him in their texts.
 
-Nabu is an IRE — an Integrated Research Environment — bringing together the best of agentic IDEs in a world where prose documents are the source of truth.
+Nabu is an IRE — an Integrated Research Environment — applying the machinery of agentic IDEs to a world where prose documents are the source of truth.
 
 > [!NOTE]
 > A walkthrough video is in progress and will sit here.
@@ -25,28 +25,34 @@ Systems are in place to ensure the information in the documents stays valid agai
 
 #### Embeddings
 
-The first part of the projection is embeddings, which let the LLM use RAG to find information across the corpus at speed.
+The first part of the projection is embeddings, which let the LLM use [RAG](docs/02-querying.md) to find information across the corpus at speed.
 
 #### Structured data
 
-Structured data is embedded in the document as code blocks, and the renderer hides the block itself — what the user sees is a table or a graph etc. Document-wide information is stored the same way: what is annotated, tags and more. This data is projected into a DuckDB-WASM instance the LLM can query freely.
+Structured data is embedded in the document as code blocks, and the renderer hides the block itself — what the user sees is a table or a graph. Document-wide information is stored the same way: what is annotated, tags and more.
+
+This data is projected into a [DuckDB-WASM instance](docs/02-querying.md), so anything that turns on counting is answerable directly: how often a code appears across a corpus, which documents carry none, how the balance shifted month by month. An answer can be written back into a document as a chart, which stores the query rather than the numbers and so keeps describing the corpus as it grows.
 
 #### Full history of change
 
 > [!WARNING]
 > Partly built. Part of history of current session is neatly laid out. But backend does not have GIT implementation yet.
 
-With files as the source of truth, another page can be taken out of programming: version control. Placing the files under version control lets the LLM query history and report change over time to the researcher, and lets other researchers see which paths were taken instead of only the final output. Time travel, reversion etc than becomes available too.
+With files as the source of truth, another page can be taken out of programming: version control.
+
+That lets the LLM query history and report change over time, and it lets other researchers see which paths were taken instead of only the final output. Time travel and reversion follow from the same place.
 
 ### Multimodal consensus
 
-Nabu uses focused prompts across different tasks, and for high value tasks lets multiple models from different providers weigh in, and escalates where they disagree.
+Nabu uses focused prompts across different tasks, and for high-value tasks lets multiple models from different providers weigh in.
+
+Where they disagree, the case [escalates to a third model](docs/03-agentic/consensus.md) that sees both arguments. The disagreement is the useful part: the spans two models split on are close to the spans two human coders would argue about, so a run reports not only what it found but where the codebook itself is ambiguous.
 
 ## Technical implementations
 
-- [Data model](docs/01-data-model.md) — documents as sources of truth
-- [Retrieval](docs/02-retrieval.md) — chunking, embeddings, HyDE, rank fusion, the filtering cascade
-- [Agentic](docs/03-agentic/) — the [loop](docs/03-agentic/loop.md), its [tools](docs/03-agentic/tools.md) with shell like interface, and the [consensus](docs/03-agentic/consensus.md) pass
+- [Documents](docs/01-documents.md) — the file format, block declarations, and what they project into
+- [Querying](docs/02-querying.md) — SQL over the tables, HyDE and rank fusion over the vectors, and the filtering cascade
+- [Agentic](docs/03-agentic/) — the [loop](docs/03-agentic/loop.md), its [tools](docs/03-agentic/tools.md) with a shell-like interface, and the [consensus](docs/03-agentic/consensus.md) pass
 - [Sync](docs/04-sync.md) — local-first persistence and out-of-order reference resolution
 
 ### Tech stack
@@ -55,7 +61,7 @@ Nabu uses focused prompts across different tasks, and for high value tasks lets 
 - **Data** — DuckDB-WASM, MiniSearch for BM25
 - **Editor** — Milkdown on ProseMirror
 - **Schemas** — Zod, on both the validation and the tool-definition side
-- **Tests** — Vitest with Playwright browser mode
+- **Tests** — Vitest for unit suites, Storybook for component work
 
 ## Related repositories
 
@@ -64,8 +70,7 @@ The services Nabu runs against live in their own repositories. They are being cl
 ## Known gaps
 
 - **No authentication** — local-first and single-user for now
-- **No git backend** — history covers the current session only
-- **Thin test coverage**
+- **Unit tests only** — Vitest suites cover the agent, block parsing, search and text handling well, and the projection and file-store layers thinly. There are no component, integration or end-to-end tests, and nothing runs automated in a browser.
 
 ## Running it
 
@@ -89,3 +94,7 @@ npm run typecheck # react-router typegen && tsc
 npm run lint
 npm run storybook
 ```
+
+## Next: documents
+
+Everything above rests on one idea — a project is a list of Markdown files — and [documents](docs/01-documents.md) is where it gets concrete: the format, how a block type is declared once, and what each declaration projects into. From there the path runs on through querying, the agent, and sync.

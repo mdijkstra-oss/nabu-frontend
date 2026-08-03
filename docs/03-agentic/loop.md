@@ -124,7 +124,7 @@ sequenceDiagram
   Note over L: no tool calls → run ends
 ```
 
-Every request also carries the block JSON Schemas and the current database DDL, both generated from the registry described in the [data model](../01-data-model.md).
+Every request also carries the block JSON Schemas and the current database DDL, both generated from the registry described in the [data model](../01-documents.md).
 
 ## Guards
 

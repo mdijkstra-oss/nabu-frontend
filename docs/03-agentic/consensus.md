@@ -24,7 +24,7 @@ flowchart TD
 
 ## Find
 
-Each selected code becomes its own retrieval branch, running the [search cascade](../02-retrieval.md) with the code's own definition text as the query — that is what `EMBEDDINGS_FROM_FILE` exists for. Branches run concurrently, and candidates are restricted to the chunk hashes that overlap the targeted documents and line ranges, so scope is enforced before any model sees anything.
+Each selected code becomes its own retrieval branch, running the [search cascade](../02-querying.md) with the code's own definition text as the query — that is what `EMBEDDINGS_FROM_FILE` exists for. Branches run concurrently, and candidates are restricted to the chunk hashes that overlap the targeted documents and line ranges, so scope is enforced before any model sees anything.
 
 Matches come back as sentence ranges rather than chunks, since the filter stage of retrieval already works at sentence granularity.
 
@@ -141,5 +141,5 @@ Retrieval branches run ten at a time, batch processing five, and every stage is 
 
 ## See also
 
-- [Retrieval](../02-retrieval.md) — the pipeline each find branch runs
+- [Retrieval](../02-querying.md) — the pipeline each find branch runs
 - [Tools](tools.md) — how the resulting annotations are written back
