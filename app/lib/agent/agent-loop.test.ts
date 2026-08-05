@@ -9,7 +9,16 @@ import {
 } from "./agent-loop"
 import { hasNewUserBlock } from "./executors/delegation"
 import { deriveMode } from "./executors/modes"
-import { textBlock, userBlock, toolCallBlock, terminalResult, toolResult } from "./test-helpers"
+import {
+  textBlock,
+  userBlock,
+  toolCallBlock,
+  terminalResult,
+  toolResult,
+  submitPlanCall,
+  completeStepCall,
+  cancelCall,
+} from "./test-helpers"
 
 describe("shouldContinue", () => {
   const cases: { name: string; blocks: Block[]; expected: boolean }[] = [
@@ -196,27 +205,27 @@ describe("deriveMode", () => {
       expected: "chat",
     },
     {
-      name: "start_planning pushes prompt marker → plan",
+      name: "start_planning result → plan",
       blocks: [
         toolCallBlock("start_planning", "c1"),
-        toolResult("c1", { status: "ok", output: "Planning mode." }),
-        { type: "system", content: "<!-- prompt: planning -->" } as Block,
+        terminalResult("start_planning", "c1", { status: "ok", output: "Planning mode." }),
       ],
       expected: "plan",
     },
     {
       name: "submit_plan result → exec",
       blocks: [
-        { type: "system", content: "<!-- prompt: planning -->" } as Block,
-        toolCallBlock("submit_plan", "c2", { task: "do stuff", steps: [] }),
-        terminalResult("submit_plan", "c2", { status: "ok", output: "exec mode" }),
+        toolCallBlock("start_planning", "c1"),
+        terminalResult("start_planning", "c1", { status: "ok", output: "Planning mode." }),
+        ...submitPlanCall("Task", [{ title: "Step 1", expected: "Done" }]),
       ],
       expected: "exec",
     },
     {
       name: "cancel result → chat",
       blocks: [
-        { type: "system", content: "<!-- prompt: planning -->" } as Block,
+        toolCallBlock("start_planning", "c1"),
+        terminalResult("start_planning", "c1", { status: "ok", output: "Planning mode." }),
         terminalResult("cancel", "c2", { status: "ok", output: { reason: "nah" } }),
       ],
       expected: "chat",
@@ -224,21 +233,47 @@ describe("deriveMode", () => {
     {
       name: "uses last signal (plan then exec)",
       blocks: [
-        { type: "system", content: "<!-- prompt: planning -->" } as Block,
+        toolCallBlock("start_planning", "c1"),
+        terminalResult("start_planning", "c1", { status: "ok", output: "Planning mode." }),
         textBlock("here's the plan"),
-        terminalResult("submit_plan", "c2", { status: "ok", output: "exec" }),
+        ...submitPlanCall("Task", [{ title: "Step 1", expected: "Done" }]),
       ],
       expected: "exec",
     },
     {
-      name: "prompt marker survives non-trigger results",
+      name: "plan survives non-trigger results",
       blocks: [
-        { type: "system", content: "<!-- prompt: planning -->" } as Block,
+        toolCallBlock("start_planning", "c1"),
+        terminalResult("start_planning", "c1", { status: "ok", output: "Planning mode." }),
         toolCallBlock("run_local_shell", "c2"),
         toolResult("c2", { status: "ok", output: "file content" }),
         textBlock("analyzing..."),
       ],
       expected: "plan",
+    },
+    {
+      name: "completing the last step ends exec → chat",
+      blocks: [
+        ...submitPlanCall("Task", [{ title: "Step 1", expected: "Done" }]),
+        ...completeStepCall(),
+      ],
+      expected: "chat",
+    },
+    {
+      name: "exec holds while steps remain",
+      blocks: [
+        ...submitPlanCall("Task", [
+          { title: "Step 1", expected: "Done" },
+          { title: "Step 2", expected: "Done" },
+        ]),
+        ...completeStepCall(),
+      ],
+      expected: "exec",
+    },
+    {
+      name: "cancelling a plan ends exec → chat",
+      blocks: [...submitPlanCall("Task", [{ title: "Step 1", expected: "Done" }]), ...cancelCall()],
+      expected: "chat",
     },
   ]
 

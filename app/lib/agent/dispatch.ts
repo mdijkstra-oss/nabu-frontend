@@ -8,11 +8,6 @@ export interface TaskConfig {
   userMessage: string
 }
 
-const MODE_DIRECTIVE = /^<!-- prompt: .+ -->$/
-
-const isModeDirective = (block: Block): boolean =>
-  block.type === "system" && MODE_DIRECTIVE.test(block.content)
-
 const MAX_DEDUP_LOOKBACK = 75
 
 const dedupFloor = (history: Block[]): number => Math.max(0, history.length - MAX_DEDUP_LOOKBACK)
@@ -22,7 +17,7 @@ const collectRecentSystemContents = (history: Block[]): Set<string> => {
   const contents = new Set<string>()
   for (let i = floor; i < history.length; i++) {
     const block = history[i]
-    if (block.type === "system" && !isModeDirective(block)) {
+    if (block.type === "system") {
       contents.add(block.content)
     }
   }
@@ -32,7 +27,7 @@ const collectRecentSystemContents = (history: Block[]): Set<string> => {
 const isNewBlock =
   (existing: Set<string>) =>
   (block: Block): boolean =>
-    block.type !== "system" || isModeDirective(block) || !existing.has(block.content)
+    block.type !== "system" || !existing.has(block.content)
 
 export const buildTaskBlocks = (config: TaskConfig, currentHistory: Block[]): Block[] => {
   const blocks: Block[] = []

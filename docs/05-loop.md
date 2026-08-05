@@ -45,13 +45,13 @@ Being pure functions of history, they are tested as such: recorded conversations
 
 ## Modes
 
-There are three, and each is a row in a table declaring the tools it exposes, the tool results that switch into it, the marker it writes, and the nudges it composes.
+There are three, and each is a row in a table declaring the tools it exposes, the tool results that switch into it, the route it calls, and the nudges it composes.
 
-| Mode   | Can do                                                     | Entered by        |
-| ------ | ---------------------------------------------------------- | ----------------- |
-| `chat` | read, search, query, edit blocks and files, start planning | default; `cancel` |
-| `plan` | read, search, query, ask, submit a plan                    | `start_planning`  |
-| `exec` | everything in chat, plus completing plan steps             | `submit_plan`     |
+| Mode   | Can do                                                     | Entered by        | Route                   |
+| ------ | ---------------------------------------------------------- | ----------------- | ----------------------- |
+| `chat` | read, search, query, edit blocks and files, start planning | default; `cancel` | `/qual-coder`           |
+| `plan` | read, search, query, ask, submit a plan                    | `start_planning`  | `/qual-coder.planning`  |
+| `exec` | everything in chat, plus completing plan steps             | `submit_plan`     | `/qual-coder.execution` |
 
 Planning has no mutating tools at all. The restriction is structural rather than instructed — they are absent from the request, so a plan cannot half-execute itself while it is being written.
 
@@ -59,15 +59,11 @@ Availability is checked again when a call comes back, and the failure distinguis
 
 ## The mode is read back out of the chain
 
-There is no mode variable. Two kinds of block set it — a `tool_result` whose tool is registered as a trigger, and a system block carrying a marker — and the last one in the chain wins.
+There is no mode variable. A `tool_result` whose tool is registered as a trigger sets the mode, the last one in the chain wins, and chat is where the chain falls through to. Nothing about the mode is written into the conversation — it picks which route the next request goes to, and the prompt that tells the model it is planning waits behind that route.
 
-```text
-<!-- prompt: planning -->
-```
+Execution is the one mode no trigger ends. `complete_step` runs on every step and only the last one finishes the plan, which is a distinction a trigger keyed on a tool's name cannot make. So the plan decides: `submit_plan` opens execution and it lasts exactly as long as the derived plan still has a step to do. Completing the last step and cancelling both retire the plan, and the mode falls through to chat on its own.
 
-`start_planning` writes that marker; `submit_plan` writes the execution one. Chat declares no marker at all, so it is where the chain falls through to.
-
-A transition never consults the mode it is leaving, so every marker is an unconditional jump. What keeps the edges sane is the mode table instead: `submit_plan` can only be called from `plan` because `plan` is the only mode listing it, and `plan` has no triggers of its own, so it is reachable only through the marker `start_planning` writes.
+A transition never consults the mode it is leaving. What keeps the edges sane is the mode table: `submit_plan` can only be called from `plan` because `plan` is the only mode listing it, and `start_planning` can only be called from `chat` for the same reason.
 
 ## Guards
 

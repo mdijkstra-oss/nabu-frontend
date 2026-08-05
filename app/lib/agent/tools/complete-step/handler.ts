@@ -1,7 +1,6 @@
 import { getAllBlocks } from "../../client/store"
 import { derive, hasAskSinceStepChange } from "../../derived"
 import { tool, registerTool } from "../../executors/tool"
-import { deactivatePlan } from "../../executors/modes"
 import { completeStep as def } from "./def"
 
 type StepKind = "final" | "checkpoint" | "continue"
@@ -27,7 +26,6 @@ const _completeStep = registerTool(
     ...def,
     handler: async (_files, args) => {
       const kind = classifyStep()
-      if (kind === "final") deactivatePlan()
       return {
         status: "ok",
         output: args,

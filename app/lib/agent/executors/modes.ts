@@ -3,7 +3,7 @@ import type { Nudger } from "../steering/nudge-tools"
 import type { Block } from "../client/blocks"
 import { pushBlocks } from "../client/store"
 import type { StepDef } from "../derived"
-import { serializePlanBlock } from "../derived"
+import { serializePlanBlock, derive, hasActivePlan } from "../derived"
 import {
   blockPatchTools,
   blockDeleteTools,
@@ -35,7 +35,7 @@ import { getFiles } from "~/lib/files/store"
 interface ModeConfig {
   tools: AnyTool[]
   triggers: string[]
-  prompt?: string
+  endpoint: string
   nudges: Nudger[]
 }
 
@@ -73,12 +73,13 @@ const raw: Record<ModeName, ModeConfig> = {
       askTool,
     ],
     triggers: ["cancel"],
+    endpoint: "/qual-coder",
     nudges: [baselineNudge, memoryNudge, settingsNudge],
   },
   plan: {
     tools: [runLocalShell, queryTool, searchTool, submitPlanTool, cancel, askTool],
-    triggers: [],
-    prompt: "planning",
+    triggers: ["start_planning"],
+    endpoint: "/qual-coder.planning",
     nudges: [baselineNudge, memoryNudge, settingsNudge],
   },
   exec: {
@@ -101,7 +102,7 @@ const raw: Record<ModeName, ModeConfig> = {
       askTool,
     ],
     triggers: ["submit_plan"],
-    prompt: "execution",
+    endpoint: "/qual-coder.execution",
     nudges: [baselineNudge, memoryNudge, settingsNudge, stepStateNudge, planProgressNudge],
   },
 }
@@ -118,47 +119,27 @@ const triggerToMode: Record<string, ModeName> = Object.fromEntries(
 
 export const DEFAULT_MODE: ModeName = "chat"
 
-export const ENDPOINT = "/qual-coder"
-
-const promptToMode: Record<string, ModeName> = {
-  planning: "plan",
-  execution: "exec",
-  chat: "chat",
-}
-
-const modeFromPromptMarker = (content: string): ModeName | undefined => {
-  const match = content.match(/<!-- prompt: (\w+) -->/)
-  return match ? promptToMode[match[1]] : undefined
-}
-
-export const deriveMode = (blocks: Block[]): ModeName => {
+const triggeredMode = (blocks: Block[]): ModeName => {
   for (let i = blocks.length - 1; i >= 0; i--) {
     const block = blocks[i]
     if (block.type === "tool_result" && block.toolName) {
       const mode = triggerToMode[block.toolName]
       if (mode) return mode
     }
-    if (block.type === "system") {
-      const mode = modeFromPromptMarker(block.content)
-      if (mode) return mode
-    }
   }
   return DEFAULT_MODE
 }
 
-export const modeSystemBlocks = (mode: ModeName): Block[] => {
-  const config = modes[mode]
-  if (!config.prompt) return []
-  return [{ type: "system", content: `<!-- prompt: ${config.prompt} -->` }]
+// Completing the last step and cancelling both retire the plan without producing a
+// trigger of their own, so the plan itself decides how long execution lasts.
+export const deriveMode = (blocks: Block[]): ModeName => {
+  const mode = triggeredMode(blocks)
+  if (mode !== "exec") return mode
+  return hasActivePlan(derive(blocks).plans) ? "exec" : DEFAULT_MODE
 }
 
 export const activatePlan = (task: string, steps: StepDef[], decisions: string[]): void => {
   pushBlocks([{ type: "system", content: serializePlanBlock(task, steps, decisions) }])
-  pushBlocks(modeSystemBlocks("exec"))
-}
-
-export const deactivatePlan = (): void => {
-  pushBlocks([{ type: "system", content: "<!-- prompt: chat -->" }])
 }
 
 const allKnownToolNames = new Set<string>(

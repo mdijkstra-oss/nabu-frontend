@@ -6,14 +6,11 @@ import {
   parsePlanBlock,
   processCompleteStep,
   updateLastPlan,
-  hasActivePlan,
 } from "./plan"
 
 export interface Derived {
   plans: DerivedPlan[]
 }
-
-type Mode = "chat" | "plan" | "exec"
 
 type EnrichedToolCall = ToolCall & { succeeded: boolean }
 interface EnrichedToolCallBlock {
@@ -104,11 +101,6 @@ const processBlock = (derived: Derived, block: EnrichedBlock): Derived => {
 
 export const derive = (history: Block[], _files: FileStore = {}): Derived =>
   enrichWithResults(history).reduce(processBlock, { plans: [] })
-
-export const getMode = (d: Derived): Mode => {
-  if (hasActivePlan(d.plans)) return "exec"
-  return "chat"
-}
 
 const isBlockPlanMarker = (block: Block): boolean =>
   block.type === "system" && isPlanMarker(block.content)

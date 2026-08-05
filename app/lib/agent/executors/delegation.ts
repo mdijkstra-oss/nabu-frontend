@@ -1,10 +1,10 @@
 import type { Block, ToolCall } from "../client/blocks"
 import type { ToolResult } from "../types"
 import type { ToolExecutor } from "../turn"
-import { pushBlocks, getAllBlocks, subscribeBlocks } from "../client/store"
+import { getAllBlocks, subscribeBlocks } from "../client/store"
 import { getFiles } from "~/lib/files/store"
 import { derive, lastPlan, guardCompleteStep } from "../derived"
-import { deriveMode, modeSystemBlocks, checkToolAvailability } from "./modes"
+import { deriveMode, checkToolAvailability } from "./modes"
 
 type SpecialHandler = (call: { args: unknown }) => Promise<ToolResult<unknown>>
 
@@ -50,7 +50,6 @@ const handleCancelInMode = (call: ToolCall): ToolResult<unknown> => {
   const blocks = getAllBlocks()
   const mode = deriveMode(blocks)
   if (mode === "chat") return { status: "error", output: "Nothing to cancel." }
-  pushBlocks(modeSystemBlocks("chat"))
   const reason = (call.args as { reason?: string }).reason ?? "Cancelled"
   return { status: "ok", output: `Cancelled: ${reason}.` }
 }

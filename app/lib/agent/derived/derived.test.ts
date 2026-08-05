@@ -4,7 +4,6 @@ import {
   derive,
   lastPlan,
   hasActivePlan,
-  getMode,
   isPlanPaused,
   guardCompleteStep,
   isLastStep,
@@ -118,33 +117,6 @@ describe("derived", () => {
     ]
 
     it.each(cases)("$name", ({ history, check }) => check(history))
-  })
-
-  describe("getMode", () => {
-    const cases = [
-      {
-        name: "empty history returns chat",
-        history: [] as Block[],
-        expected: "chat",
-      },
-      {
-        name: "active plan returns exec",
-        history: [...submitPlanCall("Task", [{ title: "Step 1", expected: "Complete" }])],
-        expected: "exec",
-      },
-      {
-        name: "completed plan returns chat",
-        history: [
-          ...submitPlanCall("Task", [{ title: "Step 1", expected: "Complete" }]),
-          ...completeStepCall(),
-        ],
-        expected: "chat",
-      },
-    ]
-
-    it.each(cases)("$name", ({ history, expected }) => {
-      expect(getMode(derive(history))).toBe(expected)
-    })
   })
 
   describe("isPlanPaused", () => {
