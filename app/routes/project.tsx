@@ -104,17 +104,6 @@ export type { DebugOptions } from "~/ui/components/editor/debug-config"
 
 const DEBUG_STORAGE_KEY = "nabu-debug-options"
 
-const requestCompaction = (): void => {
-  if (typeof window === "undefined") return
-  try {
-    const stored = localStorage.getItem(DEBUG_STORAGE_KEY)
-    const options = stored ? JSON.parse(stored) : {}
-    localStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify({ ...options, forceCompaction: true }))
-  } catch (_) {
-    void _
-  }
-}
-
 const loadDebugOptions = (): DebugOptions => {
   if (typeof window === "undefined") return DEFAULT_DEBUG_OPTIONS
   try {
@@ -163,7 +152,6 @@ export interface ProjectContextValue {
   dbReady: boolean
   debugOptions: DebugOptions
   toggleDebugOption: (key: string) => void
-  requestCompaction: () => void
   getFileTags: (filename: string) => string[]
   getFileDate: (filename: string) => string | undefined
   getFileAnnotations: (
@@ -788,11 +776,7 @@ export default function ProjectLayout() {
           dismissSidebarRef={dismissSidebarRef}
           sidebarPanels={sidebarPanels}
           sidebarFooterExtra={
-            <DebugMenuButton
-              debugOptions={debugOptions}
-              onToggleOption={toggleDebugOption}
-              onRequestCompaction={requestCompaction}
-            />
+            <DebugMenuButton debugOptions={debugOptions} onToggleOption={toggleDebugOption} />
           }
           rightPanel={<NabuChatSidebar appReady={!loading} />}
         >
@@ -805,7 +789,6 @@ export default function ProjectLayout() {
                   dbReady: !loading,
                   debugOptions,
                   toggleDebugOption,
-                  requestCompaction,
                   getFileTags,
                   getFileDate: getFileDateFn,
                   getFileAnnotations,

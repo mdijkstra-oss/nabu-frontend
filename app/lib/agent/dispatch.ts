@@ -1,6 +1,5 @@
 import type { Block, SystemBlock } from "./client/blocks"
 import { pushBlocks, getLoading, getAllBlocksWithDraft } from "./client/store"
-import { isCompactedResult } from "./compact"
 import { run, type RunnerDeps } from "./runner"
 import { getPageContext, findLastContextMessage } from "~/lib/editor/chat-context"
 
@@ -16,13 +15,7 @@ const isModeDirective = (block: Block): boolean =>
 
 const MAX_DEDUP_LOOKBACK = 75
 
-const dedupFloor = (history: Block[]): number => {
-  const lookbackFloor = Math.max(0, history.length - MAX_DEDUP_LOOKBACK)
-  for (let i = history.length - 1; i >= lookbackFloor; i--) {
-    if (isCompactedResult(history[i])) return i + 1
-  }
-  return lookbackFloor
-}
+const dedupFloor = (history: Block[]): number => Math.max(0, history.length - MAX_DEDUP_LOOKBACK)
 
 const collectRecentSystemContents = (history: Block[]): Set<string> => {
   const floor = dedupFloor(history)

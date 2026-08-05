@@ -15,8 +15,7 @@ import { extractEntityIdCandidates } from "~/lib/markdown/linkify/extract"
 import { modes, deriveMode, ENDPOINT } from "./executors/modes"
 import { getFiles } from "~/lib/files/store"
 import { resolveEntityName } from "~/lib/files/selectors"
-import { compactHistory, stepCompactHistory } from "./compact"
-import { readDebugOption, writeDebugOption } from "./debug"
+import { readDebugOption } from "./debug"
 
 interface AgentLoopConfig {
   executor: ToolExecutor
@@ -29,7 +28,6 @@ interface IterationConfig {
   tools: AnyTool[]
   toolChoice?: string
   nudges: Nudger[]
-  processBlocks?: (blocks: Block[]) => Block[]
   transformResponse?: (blocks: Block[]) => Block[]
   blockSchemas?: BlockSchemaDefinition[]
   databaseSchema?: string
@@ -68,8 +66,7 @@ export const runAgentLoop = async (config: AgentRunConfig): Promise<void> => {
     const tools = iter.tools.map(toToolDefinition)
     const nudge = collect(...iter.nudges)
 
-    const visible = iter.processBlocks ? iter.processBlocks(sourceBlocks) : sourceBlocks
-    const nudgeBlocks = await nudge(excludeReasoning(visible))
+    const nudgeBlocks = await nudge(excludeReasoning(sourceBlocks))
     if (nudgeBlocks.length === 0) return
 
     const nonEmpty = nudgeBlocks.filter((b) => !isEmptyNudgeBlock(b))
@@ -84,10 +81,7 @@ export const runAgentLoop = async (config: AgentRunConfig): Promise<void> => {
       execute: executor,
       callbacks,
       source,
-      readBlocks: () => {
-        const blocks = filterBySource(getAllBlocks(), source)
-        return iter.processBlocks ? iter.processBlocks(blocks) : blocks
-      },
+      readBlocks: () => filterBySource(getAllBlocks(), source),
       transformBlocks: iter.transformResponse,
     })
 
@@ -100,15 +94,6 @@ export const runAgentLoop = async (config: AgentRunConfig): Promise<void> => {
 
 const readReasoningSummary = (): string =>
   readDebugOption("reasoningSummaryAuto", false) ? "auto" : "concise"
-
-const readStepCompaction = (): boolean => readDebugOption("stepCompaction", false)
-
-const consumeForceCompaction = (): boolean => {
-  const value = readDebugOption("forceCompaction", false)
-  if (!value) return false
-  writeDebugOption("forceCompaction", false)
-  return true
-}
 
 const shouldPauseOnError = (blocks: Block[]): boolean =>
   hasToolError(blocks) && readDebugOption("showStreamPanel", false)
@@ -166,11 +151,6 @@ export const hasRejection = (blocks: Block[]): boolean => blocks.some(isRejectio
 const rejectDanglingEntityIds = (blocks: Block[]): Block[] =>
   hasToolCalls(blocks) ? blocks : blocks.map(rejectDanglingBlock)
 
-const compactBlocks = (blocks: Block[]): Block[] => {
-  const compacted = compactHistory(blocks, getFiles())
-  return readStepCompaction() ? stepCompactHistory(compacted) : compacted
-}
-
 const MAX_REJECTIONS = 3
 
 const buildRejectionGuard = (): ((newBlocks: Block[]) => boolean) => {
@@ -200,10 +180,9 @@ export const agentLoop = async (config: AgentLoopConfig): Promise<void> =>
       const mode = deriveMode(blocks)
       const modeConfig = modes[mode]
       return {
-        endpoint: `${ENDPOINT}&reasoning_summary=${readReasoningSummary()}${consumeForceCompaction() ? "&compact=true" : ""}`,
+        endpoint: `${ENDPOINT}&reasoning_summary=${readReasoningSummary()}`,
         tools: modeConfig.tools,
         nudges: modeConfig.nudges,
-        processBlocks: compactBlocks,
         transformResponse: rejectDanglingEntityIds,
         blockSchemas: getBlockSchemaDefinitions(),
         databaseSchema: getDatabaseSchema(),

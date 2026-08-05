@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { Bug, Check, Minimize, Trash2 } from "lucide-react"
+import { Bug, Check, Trash2 } from "lucide-react"
 import * as SubframeCore from "@subframe/core"
 import { IconButton } from "~/ui/components/IconButton"
 import { DropdownMenu } from "~/ui/components/DropdownMenu"
@@ -11,7 +11,6 @@ import { clearAllCaches } from "~/lib/utils/storage-cache"
 interface DebugMenuButtonProps {
   debugOptions: DebugOptions
   onToggleOption: (key: string) => void
-  onRequestCompaction: () => void
 }
 
 const DEBUG_NOTICES: string[] = [
@@ -39,11 +38,7 @@ const renderToggleItem = (
   </DropdownMenu.DropdownItem>
 )
 
-export const DebugMenuButton = ({
-  debugOptions,
-  onToggleOption,
-  onRequestCompaction,
-}: DebugMenuButtonProps) => (
+export const DebugMenuButton = ({ debugOptions, onToggleOption }: DebugMenuButtonProps) => (
   <SubframeCore.DropdownMenu.Root>
     <SubframeCore.DropdownMenu.Trigger asChild>
       <IconButton
@@ -81,13 +76,6 @@ export const DebugMenuButton = ({
               onToggleOption
             )
           )}
-          <DropdownMenu.DropdownItem
-            icon={<Minimize />}
-            onClick={onRequestCompaction}
-            title="Run agent context compaction right now."
-          >
-            Force compaction
-          </DropdownMenu.DropdownItem>
           <DropdownMenu.DropdownItem
             icon={<Trash2 />}
             onClick={clearAllCaches}

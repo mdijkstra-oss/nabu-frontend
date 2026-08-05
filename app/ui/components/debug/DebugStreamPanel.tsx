@@ -21,7 +21,6 @@ import { formatBlockSchemasContent, formatDatabaseSchemaContent } from "~/lib/ag
 import { isErrorResult, isDebugPauseBlock } from "~/lib/agent/derived"
 import type { Block, ToolCall } from "~/lib/agent/client/blocks"
 import { exhaustive } from "~/lib/utils/exhaustive"
-import { isCompactedResult, stepCompactedIndices } from "~/lib/agent/compact"
 import { DebugRawTab } from "./DebugRawTab"
 import { DebugStatsTab } from "./DebugStatsTab"
 
@@ -383,28 +382,11 @@ interface DebugStreamPanelProps {
 const useBlockStore = () =>
   useSyncExternalStore(subscribeBlocks, getAllBlocksWithDraft, getAllBlocksWithDraft)
 
-const readStepCompaction = (): boolean => {
-  try {
-    const stored = localStorage.getItem("nabu-debug-options")
-    return stored ? (JSON.parse(stored).stepCompaction ?? true) : true
-  } catch {
-    return true
-  }
-}
-
 const isPaused = (blocks: Block[]): boolean => blocks.some(isDebugPauseBlock)
-
-const blocksSinceCompaction = (blocks: Block[]): number => {
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    if (isCompactedResult(blocks[i])) return blocks.length - i - 1
-  }
-  return blocks.length
-}
 
 export const DebugStreamPanel = ({ onClose }: DebugStreamPanelProps) => {
   const { position, handleMouseDown } = useDraggable({ x: 106, y: 16 }, { x: "left" })
   const allBlocks = useBlockStore()
-  const compacted = readStepCompaction() ? stepCompactedIndices(allBlocks) : new Set<number>()
   const roundtripStarts = computeRoundtripStarts(allBlocks)
   const mode = deriveMode(allBlocks)
   const paused = isPaused(allBlocks)
@@ -453,7 +435,7 @@ export const DebugStreamPanel = ({ onClose }: DebugStreamPanelProps) => {
           Debug
           {isStreamTab && (
             <span className="text-xs text-neutral-400 ml-2">
-              {mode} · {blocksSinceCompaction(allBlocks)}b
+              {mode} · {allBlocks.length}b
             </span>
           )}
           {isStreamTab && hasSelection && (
@@ -562,10 +544,9 @@ export const DebugStreamPanel = ({ onClose }: DebugStreamPanelProps) => {
           {allBlocks.map((block, i) => {
             const source = getSource(block)
             const indent = isSubagentBlock(source) ? "ml-4" : ""
-            const opacity = compacted.has(i) ? "opacity-50" : ""
             const roundtrip = roundtripStarts.get(i)
             return (
-              <div key={i} className={`${indent} ${opacity}`}>
+              <div key={i} className={indent}>
                 {roundtrip !== undefined && <RoundtripBadge number={roundtrip} />}
                 <BlockRenderer
                   block={block}

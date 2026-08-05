@@ -50,13 +50,6 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
-    key: "stepCompaction",
-    label: "Step compaction",
-    description: "Fade blocks that have been compacted out of agent context.",
-    icon: <Filter />,
-    defaultValue: false,
-  },
-  {
     key: "skipCache",
     label: "Skip cache",
     description: "Bypass the local embedding/result cache and refetch.",

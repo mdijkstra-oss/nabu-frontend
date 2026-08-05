@@ -36,7 +36,6 @@ const toolLabels: Record<string, string[]> = {
     "Analyzing patterns",
   ],
   ask: ["Asking", "Waiting for answer", "Checking in"],
-  compacted: ["Summarizing conversation", "Compressing context", "Condensing"],
 }
 
 const DEFAULT_LABELS: string[] = ["Thinking"]

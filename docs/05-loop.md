@@ -2,7 +2,7 @@
 
 A conversation is one chain of blocks, appended in order and never rewritten: what the user typed, what the model said and reasoned, every tool call and every tool result, the errors, and the system markers written between them.
 
-Everything the client needs in order to decide what happens next is computed from that chain rather than held beside it — which mode the agent is in, which tools it may call, what context to inject this turn, how much history to send. Read the chain from the top and you arrive at the same state every time. That is what makes it a state machine, and its transitions are entries in the transcript rather than assignments in memory.
+Everything the client needs in order to decide what happens next is computed from that chain rather than held beside it — which mode the agent is in, which tools it may call, what context to inject this turn. Read the chain from the top and you arrive at the same state every time. That is what makes it a state machine, and its transitions are entries in the transcript rather than assignments in memory.
 
 So a conversation can be replayed, a mode change can be diffed, and the agent's state cannot drift from the record of how it got there.
 
@@ -15,7 +15,6 @@ sequenceDiagram
   participant S as File store
 
   L->>L: derive mode from history
-  L->>L: compact history
   L->>N: collect(nudges)
   N-->>L: blocks to inject, or none
   Note over L: none → run ends
@@ -87,12 +86,7 @@ The loop then continues so the model can answer again, capped at three consecuti
 
 ## Compaction
 
-> [!WARNING]
-> Unreliable as it stands. Long conversations are not yet being shortened the way this describes.
-
-Long conversations are compacted before being sent, on boundaries the plan defines rather than by token count. Blocks between two completed steps are dropped unless they are structurally load-bearing: user messages, system blocks, and the tool calls and results that record what a step did.
-
-What a step did survives; how it did it does not. Mode markers, plan submissions and step completions are never dropped, so a compacted history reconstructs the same mode and the same plan state as the full one — which matters, because both are read back out of it.
+Not implemented. Every turn sends the whole conversation, so a long one grows until it hits the model's context limit.
 
 ## Next: tools
 
