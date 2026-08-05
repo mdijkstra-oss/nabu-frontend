@@ -16,6 +16,7 @@ import { resolveHiddenFile } from "./hidden-blocks"
 import { countLines } from "~/lib/text/stats"
 import { debounce, createScopedDebounce } from "~/lib/utils/debounce"
 import { sendCommand } from "~/lib/server/sync/commands"
+import type { Command } from "~/lib/server/sync/types"
 import { normalizeContent as normalize } from "~/lib/patch/diff/normalize"
 import {
   normalizeSingletonOrder,
@@ -80,26 +81,41 @@ export const withoutPersist = <T>(fn: () => T): T => {
   }
 }
 
+// A rejected command leaves the file in this tab and nowhere else, and a reload is
+// the moment that becomes visible. Reporting the server's reason is what makes the
+// difference between a lost file and a fixable one.
+const reportPersistFailure = (action: string, path: string, reason: string): void => {
+  console.error(`[sync] ${action} ${path} was not saved: ${reason}`)
+}
+
+const persist = async (pid: string, path: string, command: Command): Promise<void> => {
+  const result = await sendCommand(pid, command).catch((e: unknown) => ({
+    ok: false as const,
+    error: e instanceof Error ? e.message : String(e),
+  }))
+  if (!result.ok) reportPersistFailure(command.action, path, result.error)
+}
+
 const persistWrite = (path: string): void => {
   if (!projectId || !persistEnabled || persistSuppressed) return
   const pid = projectId
   persistDebounce.call(path, async () => {
     const content = files[path]
     if (content === undefined) return
-    await sendCommand(pid, { action: "WriteFile", path, content: stripPendingRefs(content) })
+    await persist(pid, path, { action: "WriteFile", path, content: stripPendingRefs(content) })
   })
 }
 
 const persistDeleteCommand = (path: string): void => {
   if (!projectId || !persistEnabled || persistSuppressed) return
   persistDebounce.cancel(path)
-  sendCommand(projectId, { action: "DeleteFile", path }).catch(() => undefined)
+  void persist(projectId, path, { action: "DeleteFile", path })
 }
 
 const persistRenameCommand = (oldPath: string, newPath: string): void => {
   if (!projectId || !persistEnabled || persistSuppressed) return
   persistDebounce.cancel(oldPath)
-  sendCommand(projectId, { action: "RenameFile", path: oldPath, newPath }).catch(() => undefined)
+  void persist(projectId, oldPath, { action: "RenameFile", path: oldPath, newPath })
 }
 
 export const getFiles = (): FileStore => files

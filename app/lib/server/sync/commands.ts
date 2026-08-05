@@ -8,7 +8,7 @@ interface ErrorResponse {
 const parseErrorBody = async (response: Response): Promise<string> => {
   try {
     const body = (await response.json()) as ErrorResponse
-    return body.error ?? "Unknown error"
+    return body.error || response.statusText
   } catch {
     return response.statusText
   }
