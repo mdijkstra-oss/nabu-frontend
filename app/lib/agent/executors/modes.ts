@@ -118,7 +118,7 @@ const triggerToMode: Record<string, ModeName> = Object.fromEntries(
 
 export const DEFAULT_MODE: ModeName = "chat"
 
-export const ENDPOINT = "/qual-coder?chat=true"
+export const ENDPOINT = "/qual-coder"
 
 const promptToMode: Record<string, ModeName> = {
   planning: "plan",

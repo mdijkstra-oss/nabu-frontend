@@ -43,13 +43,6 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
-    key: "reasoningSummaryAuto",
-    label: "Reasoning summary",
-    description: "Use auto reasoning summary verbosity instead of concise.",
-    icon: <Bot />,
-    defaultValue: false,
-  },
-  {
     key: "skipCache",
     label: "Skip cache",
     description: "Bypass the local embedding/result cache and refetch.",

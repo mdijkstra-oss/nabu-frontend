@@ -76,20 +76,14 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 
 - **No authentication** — local-first and single-user for now
 - **Unit tests only** — Vitest suites cover the agent, block parsing, search and text handling well, and the projection and file-store layers thinly. There are no component, integration or end-to-end tests, and nothing runs automated in a browser.
-- **The gateway is not reachable yet** — two fields this app sends predate the format it serves, and one of the mechanisms it relies on has nothing on the other side. See below.
+- **The gateway is not reachable yet** — one of the mechanisms this app relies on has nothing on the other side. See below.
 
 ### What the gateway expects
 
 > [!WARNING]
 > The app cannot yet talk to [nabu-prompts](https://github.com/mdijkstra-oss/nabu-prompts). Every agent prompt is there and every route resolves; what does not line up is on this side.
 
-The gateway speaks [`openai-responses`](https://platform.openai.com/docs/api-reference/responses). What this app receives already matches — `app/lib/agent/client/parse.ts` reads that event stream, and the items `convert.ts` builds are Responses input items. The body it sends carries `input` and `text.format`, and the two cache breakpoints on the consensus steps are `prompt_cache_breakpoint` markers on content parts. One thing is still not the format's:
-
-| what is sent              | what the format spells it              | where                                                    |
-| ------------------------- | -------------------------------------- | -------------------------------------------------------- |
-| `?model=0` and `?model=1` | the route suffixes `.fast` and `.deep` | `app/lib/agent/tools/apply-deep-analysis/step-filter.ts` |
-
-It does not fail, which is what makes it the one to fix. The consensus step selects its two voters by that query parameter; the gateway routes on the path and ignores it, so both calls reach the same model and a two-model consensus becomes one model voting twice with nothing in the log to say so.
+The gateway speaks [`openai-responses`](https://platform.openai.com/docs/api-reference/responses). What this app receives already matches — `app/lib/agent/client/parse.ts` reads that event stream, and the items `convert.ts` builds are Responses input items. The body it sends carries `input` and `text.format`, and the two cache breakpoints on the consensus steps are `prompt_cache_breakpoint` markers on content parts.
 
 Reasoning and function calls go back as the objects they arrived as. `parse.ts` keeps each output item whole on the block it builds and `convert.ts` returns that object rather than rebuilding one, so provider state this app has no name for survives the turn boundary along with the fields it does know. Assistant text is still assembled from its deltas, which carry nothing beyond the text.
 

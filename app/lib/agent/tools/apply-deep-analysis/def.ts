@@ -78,7 +78,10 @@ export type ApplyDeepAnalysisArgs = z.infer<typeof ApplyDeepAnalysisArgs>
 
 export const FILTER_ENDPOINT = "/deep-analysis-filter"
 export const ADJUDICATE_ENDPOINT = "/deep-analysis-adjudicate"
-export const FILTER_RUNS = 2
+// One route suffix per voter. The gateway resolves a model from the path, so a
+// voter that is not a suffix here is not a voter.
+export const FILTER_VOTERS = ["openai", "anthropic"] as const
+export const FILTER_RUNS = FILTER_VOTERS.length
 export const ADJUDICATE_RUNS = 1
 export const SPAN_STEP_CONTEXT_SENTENCES = 6
 export const BRANCH_CONCURRENCY = 10

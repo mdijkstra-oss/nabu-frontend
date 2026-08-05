@@ -4,7 +4,7 @@ import { callAndParse } from "../../client/call-parse"
 import { buildFilterMessages, FILTER_CTA, buildFilterSchema } from "./messages"
 import { renderEnvelopeBlocks } from "./triplet"
 import { collectCodeIds } from "./envelope"
-import { FILTER_ENDPOINT, FILTER_RUNS, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
+import { FILTER_ENDPOINT, FILTER_RUNS, FILTER_VOTERS, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
 import { shouldShowModelIndex } from "./debug-flags"
 import type { Tracer, FilterEntry, FilterOutcome, FilterVote } from "./trace"
 
@@ -61,10 +61,9 @@ const mergeVotes = (votes: IndexedJudgment[]): MergedJudgment => {
   return { outcome: "contested", reason: keepReason, review: removeReason }
 }
 
-const callFilterModel = async (modelIdx: number, messages: Message[], validCodes: string[]) => {
+const callFilterModel = async (voter: string, messages: Message[], validCodes: string[]) => {
   const schema = buildFilterSchema(validCodes)
-  const endpoint = `${FILTER_ENDPOINT}?model=${modelIdx}`
-  return callAndParse(endpoint, messages, schema)
+  return callAndParse(`${FILTER_ENDPOINT}.${voter}`, messages, schema)
 }
 
 const buildVoteList = (
@@ -98,9 +97,7 @@ export const filterEnvelopes = async (
   const messages = buildFilterMessages(blocks, codeIds, sources, resolve, FILTER_CTA)
 
   const validCodes = [...codeIds]
-  const modelCalls = Array.from({ length: FILTER_RUNS }, (_, i) =>
-    callFilterModel(i, messages, validCodes)
-  )
+  const modelCalls = FILTER_VOTERS.map((voter) => callFilterModel(voter, messages, validCodes))
   const results = await Promise.all(modelCalls)
 
   const errors: string[] = []
