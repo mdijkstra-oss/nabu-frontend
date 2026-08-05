@@ -76,7 +76,7 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 
 - **No authentication** — local-first and single-user for now
 - **Unit tests only** — Vitest suites cover the agent, block parsing, search and text handling well, and the projection and file-store layers thinly. There are no component, integration or end-to-end tests, and nothing runs automated in a browser.
-- **The gateway is not reachable yet** — four fields this app sends predate the format it serves, and one of the mechanisms it relies on has nothing on the other side. See below.
+- **The gateway is not reachable yet** — two fields this app sends predate the format it serves, and one of the mechanisms it relies on has nothing on the other side. See below.
 
 ### What the gateway expects
 
