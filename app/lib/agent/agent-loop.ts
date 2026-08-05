@@ -26,7 +26,6 @@ interface AgentLoopConfig {
 interface IterationConfig {
   endpoint: string
   tools: AnyTool[]
-  toolChoice?: string
   nudges: Nudger[]
   transformResponse?: (blocks: Block[]) => Block[]
   blockSchemas?: BlockSchemaDefinition[]
@@ -42,12 +41,6 @@ interface AgentRunConfig {
   shouldContinue?: (newBlocks: Block[]) => boolean
   resolve: (blocks: Block[]) => IterationConfig
   afterTurn?: (newBlocks: Block[]) => Promise<void>
-}
-
-const withToolChoice = (endpoint: string, toolChoice?: string): string => {
-  if (!toolChoice) return endpoint
-  const sep = endpoint.includes("?") ? "&" : "?"
-  return `${endpoint}${sep}tool_choice=${toolChoice}`
 }
 
 export const excludeReasoning = (blocks: Block[]): Block[] =>
@@ -73,7 +66,7 @@ export const runAgentLoop = async (config: AgentRunConfig): Promise<void> => {
     if (nonEmpty.length > 0) pushBlocks(nonEmpty, source)
 
     const caller = buildCaller({
-      endpoint: withToolChoice(iter.endpoint, iter.toolChoice),
+      endpoint: iter.endpoint,
       tools,
       toolSchemas: toSchemaMap(iter.tools),
       blockSchemas: iter.blockSchemas,
@@ -91,9 +84,6 @@ export const runAgentLoop = async (config: AgentRunConfig): Promise<void> => {
     if (!continueCheck(newBlocks)) return
   }
 }
-
-const readReasoningSummary = (): string =>
-  readDebugOption("reasoningSummaryAuto", false) ? "auto" : "concise"
 
 const shouldPauseOnError = (blocks: Block[]): boolean =>
   hasToolError(blocks) && readDebugOption("showStreamPanel", false)
@@ -180,7 +170,7 @@ export const agentLoop = async (config: AgentLoopConfig): Promise<void> =>
       const mode = deriveMode(blocks)
       const modeConfig = modes[mode]
       return {
-        endpoint: `${ENDPOINT}&reasoning_summary=${readReasoningSummary()}`,
+        endpoint: ENDPOINT,
         tools: modeConfig.tools,
         nudges: modeConfig.nudges,
         transformResponse: rejectDanglingEntityIds,

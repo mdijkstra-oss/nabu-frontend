@@ -90,7 +90,6 @@ interface CallLlmOptions {
   blockSchemas?: BlockSchemaDefinition[]
   databaseSchema?: string
   responseFormat?: ResponseFormat
-  temperature?: number
   callbacks?: ParseCallbacks
   signal?: AbortSignal
 }
@@ -120,27 +119,22 @@ const buildRequestBody = (options: CallLlmOptions): string => {
   if (options.databaseSchema)
     extras.push(toSystem(formatDatabaseSchemaContent(options.databaseSchema)))
   const input = extras.length > 0 ? [...extras, ...options.messages] : options.messages
-  const body: Record<string, unknown> = { input }
+  // The backend buffers unless the caller asks for events, and streamToBlocks reads
+  // nothing but them.
+  const body: Record<string, unknown> = { input, stream: true }
   if (options.tools) body.tools = options.tools
   if (options.responseFormat) body.text = { format: options.responseFormat }
   return JSON.stringify(body)
 }
 
-const buildUrl = (endpoint: string, temperature?: number): string => {
-  const base = `${getLlmHost()}${endpoint}`
-  if (temperature === undefined) return base
-  const sep = endpoint.includes("?") ? "&" : "?"
-  return `${base}${sep}temperature=${temperature}`
-}
+const buildUrl = (endpoint: string): string => `${getLlmHost()}${endpoint}`
 
 const LLM_CACHE_PREFIX = "llm"
 const LLM_CACHE_CAP = 10_000
 const UNCACHEABLE_ENDPOINTS = ["/qual-coder", "/semantic-filter"]
 
 const isCacheable = (options: CallLlmOptions): boolean =>
-  !options.callbacks &&
-  options.temperature === undefined &&
-  !UNCACHEABLE_ENDPOINTS.some((p) => options.endpoint.includes(p))
+  !options.callbacks && !UNCACHEABLE_ENDPOINTS.some((p) => options.endpoint.includes(p))
 
 const hasErrorBlock = (blocks: Block[]): boolean => blocks.some((b) => b.type === "error")
 
@@ -158,7 +152,7 @@ const executeLlmCall = async (
   rawId: number
 ): Promise<Block[]> => {
   const response = await fetchOnce({
-    url: buildUrl(options.endpoint, options.temperature),
+    url: buildUrl(options.endpoint),
     body,
     signal: options.signal,
   })
