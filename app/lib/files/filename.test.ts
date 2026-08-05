@@ -16,9 +16,41 @@ describe("normalizeFilename", () => {
     { input: "already_normal.md", expected: "already_normal.md" },
     { input: "Mixed Case With Spaces.md", expected: "mixed_case_with_spaces.md" },
     { input: "  extra  spaces  .md", expected: "__extra__spaces__.md" },
+    { input: "Interview Håkon.md", expected: "interview_hakon.md" },
+    { input: "Café Señor Ünal.md", expected: "cafe_senor_unal.md" },
+    { input: "Straße Æon Øst.md", expected: "strasse_aeon_ost.md" },
+    { input: "Q&A session.md", expected: "q_a_session.md" },
+    { input: "Notes #3 (final).md", expected: "notes__3_(final).md" },
+    { input: "interview: part 1.md", expected: "interview__part_1.md" },
+    { input: "research/notes.md", expected: "research_notes.md" },
+    { input: ".scratch.md", expected: "scratch.md" },
+    { input: "draft..md", expected: "draft.md" },
+    { input: "../../etc/passwd", expected: "etc_passwd" },
+    { input: "###", expected: "___" },
+    { input: "...", expected: "untitled.md" },
+    { input: "", expected: "untitled.md" },
   ]
   it.each(cases)('"$input" → "$expected"', ({ input, expected }) => {
     expect(normalizeFilename(input)).toBe(expected)
+  })
+
+  it("is idempotent", () => {
+    for (const { expected } of cases) {
+      expect(normalizeFilename(expected)).toBe(expected)
+    }
+  })
+
+  // The server's own rule, restated. A name this produces that it rejects is a file
+  // the user loses.
+  it("only produces names the server stores", () => {
+    const storable = /^[a-z0-9\-_.(),']+$/
+    const inputs = [...cases.map((c) => c.input), "Ünïcødé ☃ 名前.md", "a".repeat(200) + ".md"]
+    for (const input of inputs) {
+      const name = normalizeFilename(input)
+      expect(name).toMatch(storable)
+      expect(name.startsWith(".")).toBe(false)
+      expect(name).not.toContain("..")
+    }
   })
 })
 
