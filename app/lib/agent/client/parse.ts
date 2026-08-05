@@ -17,7 +17,7 @@ interface ParseState {
   reasoningContent: string
   reasoningId: string | undefined
   reasoningEncryptedContent: string | undefined
-  reasoningExtraContent: unknown | undefined
+  reasoningRaw: unknown | undefined
   pendingToolCalls: ToolCall[]
   streamingToolName: string | null
   blocks: Block[]
@@ -29,7 +29,7 @@ export const initialParseState = (): ParseState => ({
   reasoningContent: "",
   reasoningId: undefined,
   reasoningEncryptedContent: undefined,
-  reasoningExtraContent: undefined,
+  reasoningRaw: undefined,
   pendingToolCalls: [],
   streamingToolName: null,
   blocks: [],
@@ -43,14 +43,16 @@ const parseToolArgs = (args: string): Record<string, unknown> => {
   }
 }
 
+// A reasoning item with no summary text still has to reach the block list, or the state
+// it carries never makes it into the next request.
 const flushReasoning = (state: ParseState): ParseState =>
-  state.reasoningContent
+  state.reasoningContent || state.reasoningRaw
     ? {
         ...state,
         reasoningContent: "",
         reasoningId: undefined,
         reasoningEncryptedContent: undefined,
-        reasoningExtraContent: undefined,
+        reasoningRaw: undefined,
         blocks: [
           ...state.blocks,
           {
@@ -58,7 +60,7 @@ const flushReasoning = (state: ParseState): ParseState =>
             content: state.reasoningContent,
             id: state.reasoningId,
             encryptedContent: state.reasoningEncryptedContent,
-            extraContent: state.reasoningExtraContent,
+            raw: state.reasoningRaw,
           },
         ],
       }
@@ -155,7 +157,7 @@ export const processLine = (
           id: item.call_id,
           name: item.name,
           args: parseToolArgs(item.arguments),
-          ...(item.extra_content ? { extraContent: item.extra_content } : {}),
+          raw: item,
         }
         callbacks.onToolCall?.(toolCall)
         return { ...state, pendingToolCalls: [...state.pendingToolCalls, toolCall] }
@@ -165,7 +167,7 @@ export const processLine = (
           ...state,
           reasoningId: item.id,
           reasoningEncryptedContent: item.encrypted_content,
-          reasoningExtraContent: item.extra_content,
+          reasoningRaw: item,
         }
       }
     }

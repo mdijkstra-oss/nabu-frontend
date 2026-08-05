@@ -43,13 +43,13 @@ const processLines = (lines: string[], callbacks: ParseCallbacks = {}) => {
 const flushBlocks = (lines: string[], callbacks: ParseCallbacks = {}): Block[] => {
   const state = processLines(lines, callbacks)
   const blocks = [...state.blocks]
-  if (state.reasoningContent)
+  if (state.reasoningContent || state.reasoningRaw)
     blocks.push({
       type: "reasoning",
       content: state.reasoningContent,
       id: state.reasoningId,
       encryptedContent: state.reasoningEncryptedContent,
-      extraContent: state.reasoningExtraContent,
+      raw: state.reasoningRaw,
     })
   if (state.textContent) blocks.push({ type: "text", content: state.textContent })
   if (state.pendingToolCalls.length > 0)
@@ -101,7 +101,19 @@ describe("parser", () => {
           "event: response.output_item.done",
           'data: {"item":{"type":"function_call","call_id":"call_1","name":"execute_sql","arguments":"{\\"sql\\":\\"SELECT 1\\"}"}}',
         ],
-        expectedCalls: [{ id: "call_1", name: "execute_sql", args: { sql: "SELECT 1" } }],
+        expectedCalls: [
+          {
+            id: "call_1",
+            name: "execute_sql",
+            args: { sql: "SELECT 1" },
+            raw: {
+              type: "function_call",
+              call_id: "call_1",
+              name: "execute_sql",
+              arguments: '{"sql":"SELECT 1"}',
+            },
+          },
+        ],
       },
       {
         name: "fires onToolName on output_item.added",
@@ -142,8 +154,18 @@ describe("parser", () => {
           'data: {"item":{"type":"function_call","call_id":"call_2","name":"b","arguments":"{}"}}',
         ],
         expectedCalls: [
-          { id: "call_1", name: "a", args: {} },
-          { id: "call_2", name: "b", args: {} },
+          {
+            id: "call_1",
+            name: "a",
+            args: {},
+            raw: { type: "function_call", call_id: "call_1", name: "a", arguments: "{}" },
+          },
+          {
+            id: "call_2",
+            name: "b",
+            args: {},
+            raw: { type: "function_call", call_id: "call_2", name: "b", arguments: "{}" },
+          },
         ],
       },
     ]
@@ -184,16 +206,22 @@ describe("parser", () => {
       const toolBlock = blocks.find((b) => b.type === "tool_call")
       expect(textBlock?.type === "text" ? textBlock.content : "").toBe("Let me help")
       expect(toolBlock?.type === "tool_call" ? toolBlock.calls : []).toEqual([
-        { id: "call_1", name: "submit_plan", args: {} },
+        {
+          id: "call_1",
+          name: "submit_plan",
+          args: {},
+          raw: { type: "function_call", call_id: "call_1", name: "submit_plan", arguments: "{}" },
+        },
       ])
     })
 
-    it("captures encrypted reasoning content from output_item.done", () => {
+    it("keeps the reasoning item whole", () => {
+      const item = { type: "reasoning", id: "rs_abc", encrypted_content: "gAAAA_encrypted_blob" }
       const blocks = flushBlocks([
         "event: response.reasoning_summary_text.delta",
         'data: {"delta":"Deep thought"}',
         "event: response.output_item.done",
-        'data: {"item":{"type":"reasoning","id":"rs_abc","encrypted_content":"gAAAA_encrypted_blob"}}',
+        `data: {"item":${JSON.stringify(item)}}`,
         "event: response.output_text.delta",
         'data: {"delta":"Result"}',
       ])
@@ -204,18 +232,38 @@ describe("parser", () => {
           content: "Deep thought",
           id: "rs_abc",
           encryptedContent: "gAAAA_encrypted_blob",
+          raw: item,
         },
         { type: "text", content: "Result" },
       ])
     })
 
-    it("captures gemini extra_content reasoning from output_item.done", () => {
-      const extraContent = { google: { thought_signature: "dGVzdHNpZw==" } }
+    it("keeps a field the parser has no name for", () => {
+      const item = {
+        type: "reasoning",
+        id: "rs_0",
+        provider_state: { thought_signature: "dGVzdHNpZw==" },
+      }
       const blocks = flushBlocks([
         "event: response.reasoning_summary_text.delta",
         'data: {"delta":"Gemini thought"}',
         "event: response.output_item.done",
-        `data: {"item":{"type":"reasoning","id":"rs_0","extra_content":${JSON.stringify(extraContent)}}}`,
+        `data: {"item":${JSON.stringify(item)}}`,
+        "event: response.output_text.delta",
+        'data: {"delta":"Answer"}',
+      ])
+
+      expect(blocks).toEqual([
+        { type: "reasoning", content: "Gemini thought", id: "rs_0", raw: item },
+        { type: "text", content: "Answer" },
+      ])
+    })
+
+    it("keeps a reasoning item that carried no summary text", () => {
+      const item = { type: "reasoning", id: "rs_1", encrypted_content: "gAAAA_blob" }
+      const blocks = flushBlocks([
+        "event: response.output_item.done",
+        `data: {"item":${JSON.stringify(item)}}`,
         "event: response.output_text.delta",
         'data: {"delta":"Answer"}',
       ])
@@ -223,9 +271,10 @@ describe("parser", () => {
       expect(blocks).toEqual([
         {
           type: "reasoning",
-          content: "Gemini thought",
-          id: "rs_0",
-          extraContent,
+          content: "",
+          id: "rs_1",
+          encryptedContent: "gAAAA_blob",
+          raw: item,
         },
         { type: "text", content: "Answer" },
       ])
@@ -273,9 +322,39 @@ describe("parser", () => {
 
       expect(blocks).toEqual([
         { type: "reasoning", content: "First thought" },
-        { type: "tool_call", calls: [{ id: "call_1", name: "read_file", args: {} }] },
+        {
+          type: "tool_call",
+          calls: [
+            {
+              id: "call_1",
+              name: "read_file",
+              args: {},
+              raw: {
+                type: "function_call",
+                call_id: "call_1",
+                name: "read_file",
+                arguments: "{}",
+              },
+            },
+          ],
+        },
         { type: "reasoning", content: "Second thought" },
-        { type: "tool_call", calls: [{ id: "call_2", name: "write_file", args: {} }] },
+        {
+          type: "tool_call",
+          calls: [
+            {
+              id: "call_2",
+              name: "write_file",
+              args: {},
+              raw: {
+                type: "function_call",
+                call_id: "call_2",
+                name: "write_file",
+                arguments: "{}",
+              },
+            },
+          ],
+        },
       ])
     })
   })
@@ -410,13 +489,19 @@ describe("blocksToMessages", () => {
       ],
     },
     {
-      name: "converts reasoning with encrypted content to reasoning input item",
+      name: "sends the reasoning item back unchanged",
       blocks: [
         {
           type: "reasoning" as const,
           content: "thought",
           id: "rs_1",
           encryptedContent: "gAAAA_blob",
+          raw: {
+            type: "reasoning",
+            id: "rs_1",
+            summary: [{ type: "summary_text", text: "thought" }],
+            encrypted_content: "gAAAA_blob",
+          },
         },
       ],
       expected: [
@@ -429,64 +514,62 @@ describe("blocksToMessages", () => {
       ],
     },
     {
-      name: "skips reasoning without encrypted content or extra content",
+      name: "sends back fields the app has no name for",
+      blocks: [
+        {
+          type: "reasoning" as const,
+          content: "thought",
+          id: "rs_0",
+          raw: {
+            type: "reasoning",
+            id: "rs_0",
+            provider_state: { thought_signature: "dGVzdHNpZw==" },
+            some_future_field: [1, 2, 3],
+          },
+        },
+      ],
+      expected: [
+        {
+          type: "reasoning",
+          id: "rs_0",
+          provider_state: { thought_signature: "dGVzdHNpZw==" },
+          some_future_field: [1, 2, 3],
+        },
+      ],
+    },
+    {
+      name: "skips a reasoning block with no item behind it",
       blocks: [{ type: "reasoning" as const, content: "thought" }],
       expected: [],
     },
     {
-      name: "converts reasoning with gemini extra_content",
+      name: "sends the function_call item back unchanged",
       blocks: [
         {
-          type: "reasoning" as const,
-          content: "thought",
-          id: "rs_0",
-          extraContent: { google: { thought_signature: "dGVzdHNpZw==" } },
+          type: "tool_call" as const,
+          calls: [
+            {
+              id: "1",
+              name: "foo",
+              args: { x: 1 },
+              raw: {
+                type: "function_call",
+                call_id: "1",
+                name: "foo",
+                arguments: '{"x":1}',
+                provider_state: "sig",
+              },
+            },
+          ],
         },
       ],
       expected: [
         {
-          type: "reasoning",
-          id: "rs_0",
-          extra_content: { google: { thought_signature: "dGVzdHNpZw==" } },
-        },
-      ],
-    },
-    {
-      name: "converts reasoning without id when extra_content present",
-      blocks: [
-        {
-          type: "reasoning" as const,
-          content: "thought",
-          extraContent: { google: { thought_signature: "dGVzdHNpZw==" } },
-        },
-      ],
-      expected: [
-        {
-          type: "reasoning",
-          id: "",
-          extra_content: { google: { thought_signature: "dGVzdHNpZw==" } },
-        },
-      ],
-    },
-    {
-      name: "converts anthropic reasoning with empty id and extra_content",
-      blocks: [
-        {
-          type: "reasoning" as const,
-          content: "deep thought",
-          id: "",
-          extraContent: {
-            anthropic: { thinking: "deep thought", signature: "encrypted_sig" },
-          },
-        },
-      ],
-      expected: [
-        {
-          type: "reasoning",
-          id: "",
-          extra_content: {
-            anthropic: { thinking: "deep thought", signature: "encrypted_sig" },
-          },
+          type: "function_call",
+          call_id: "1",
+          name: "foo",
+          arguments: '{"x":1}',
+          provider_state: "sig",
         },
       ],
     },

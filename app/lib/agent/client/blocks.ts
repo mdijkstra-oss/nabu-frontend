@@ -2,7 +2,9 @@ export interface ToolCall {
   id: string
   name: string
   args: Record<string, unknown>
-  extraContent?: unknown
+  // The output item verbatim. Sent back as-is, because a field this app has no name
+  // for is still state the model needs on the next turn.
+  raw?: unknown
 }
 
 export interface TextBlock {
@@ -39,7 +41,7 @@ export interface ReasoningBlock {
   content: string
   id?: string
   encryptedContent?: string
-  extraContent?: unknown
+  raw?: unknown
   draft?: true
 }
 

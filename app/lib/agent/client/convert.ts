@@ -10,24 +10,12 @@ export interface InputTextPart {
 
 export type MessageContent = string | InputTextPart[]
 
+// Only the items this app authors are described here. An item the model produced is
+// echoed back as the object it arrived as, so its shape is the backend's to define.
 type InputItem =
   | { type: "message"; role: "system" | "user" | "assistant"; content: MessageContent }
-  | {
-      type: "function_call"
-      call_id: string
-      status: string
-      name: string
-      arguments: string
-      extra_content?: unknown
-    }
+  | { type: "function_call"; call_id: string; status: string; name: string; arguments: string }
   | { type: "function_call_output"; call_id: string; status: string; output: string }
-  | {
-      type: "reasoning"
-      id: string
-      summary?: { type: "summary_text"; text: string }[]
-      encrypted_content?: string
-      extra_content?: unknown
-    }
 
 export interface ResponseFormat {
   type: "json_schema"
@@ -59,14 +47,17 @@ const blockToInputItem = (block: Block): InputItem | InputItem[] => {
     return { type: "message", role: "user", content: block.content }
   }
   if (block.type === "tool_call") {
-    return block.calls.map((c) => ({
-      type: "function_call" as const,
-      call_id: c.id,
-      status: "completed",
-      name: c.name,
-      arguments: JSON.stringify(c.args),
-      ...(c.extraContent ? { extra_content: c.extraContent } : {}),
-    }))
+    return block.calls.map((c) =>
+      c.raw !== undefined
+        ? (c.raw as InputItem)
+        : {
+            type: "function_call" as const,
+            call_id: c.id,
+            status: "completed",
+            name: c.name,
+            arguments: JSON.stringify(c.args),
+          }
+    )
   }
   if (block.type === "tool_result") {
     return {
@@ -76,21 +67,10 @@ const blockToInputItem = (block: Block): InputItem | InputItem[] => {
       output: JSON.stringify(block.result),
     }
   }
+  // A reasoning block with no item behind it was drafted here during streaming and was
+  // never the model's to begin with.
   if (block.type === "reasoning") {
-    const hasEncrypted = !!block.encryptedContent
-    const hasExtra = !!block.extraContent
-    if (!hasEncrypted && !hasExtra) return []
-    return {
-      type: "reasoning" as const,
-      id: block.id ?? "",
-      ...(hasEncrypted
-        ? {
-            summary: [{ type: "summary_text" as const, text: block.content }],
-            encrypted_content: block.encryptedContent,
-          }
-        : {}),
-      ...(hasExtra ? { extra_content: block.extraContent } : {}),
-    }
+    return block.raw !== undefined ? (block.raw as InputItem) : []
   }
   if (block.type === "progress") {
     return []

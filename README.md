@@ -83,16 +83,15 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 > [!WARNING]
 > The app cannot yet talk to [nabu-prompts](https://github.com/mdijkstra-oss/nabu-prompts). Every agent prompt is there and every route resolves; what does not line up is on this side.
 
-The gateway speaks [`openai-responses`](https://platform.openai.com/docs/api-reference/responses). What this app receives already matches — `app/lib/agent/client/parse.ts` reads that event stream, and the items `convert.ts` builds are Responses input items. The body it sends carries `input` and `text.format`, and the two cache breakpoints on the consensus steps are `prompt_cache_breakpoint` markers on content parts. Two things still are not the format's:
+The gateway speaks [`openai-responses`](https://platform.openai.com/docs/api-reference/responses). What this app receives already matches — `app/lib/agent/client/parse.ts` reads that event stream, and the items `convert.ts` builds are Responses input items. The body it sends carries `input` and `text.format`, and the two cache breakpoints on the consensus steps are `prompt_cache_breakpoint` markers on content parts. One thing is still not the format's:
 
 | what is sent              | what the format spells it              | where                                                    |
 | ------------------------- | -------------------------------------- | -------------------------------------------------------- |
-| `extra_content`           | `encrypted_content`                    | `app/lib/agent/client/convert.ts`                        |
 | `?model=0` and `?model=1` | the route suffixes `.fast` and `.deep` | `app/lib/agent/tools/apply-deep-analysis/step-filter.ts` |
 
-The second is the one to fix first, because it does not fail. The consensus step selects its two voters by that query parameter; the gateway routes on the path and ignores it, so both calls reach the same model and a two-model consensus becomes one model voting twice with nothing in the log to say so.
+It does not fail, which is what makes it the one to fix. The consensus step selects its two voters by that query parameter; the gateway routes on the path and ignores it, so both calls reach the same model and a two-model consensus becomes one model voting twice with nothing in the log to say so.
 
-`extra_content` is this app's own field for provider state the caller must echo back. The gateway carries all of it — an Anthropic thinking signature, a Gemini thought signature, DeepSeek's reasoning — under `encrypted_content` on the item it arrived on, which is the field `parse.ts` already reads for OpenAI. Sent under the old name it is dropped, and a conversation loses its reasoning state at every turn boundary.
+Reasoning and function calls go back as the objects they arrived as. `parse.ts` keeps each output item whole on the block it builds and `convert.ts` returns that object rather than rebuilding one, so provider state this app has no name for survives the turn boundary along with the fields it does know. Assistant text is still assembled from its deltas, which carry nothing beyond the text.
 
 One mechanism has no equivalent on the other side at all. `app/lib/agent/executors/modes.ts` pushes `<!-- prompt: planning -->` as a system message for the server to expand, and the gateway never decodes the message array, so the marker reaches the model as literal text. The mode prompts are in nabu-prompts, reachable by no route.
 
