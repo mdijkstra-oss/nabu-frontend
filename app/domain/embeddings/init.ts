@@ -1,5 +1,5 @@
 import { subscribe, getFiles, getFile, updateFileRaw, deleteFile } from "~/lib/files/store"
-import { getLlmHost } from "~/lib/agent/env"
+import { getEmbeddingsHost } from "~/lib/embeddings/env"
 import { startEmbeddingSync } from "~/lib/embeddings/sync"
 
 type OnSyncProgress = (processed: number, total: number) => void
@@ -11,6 +11,6 @@ export const startEmbeddings = (onProgress?: OnSyncProgress): Promise<void> =>
     updateFile: updateFileRaw,
     deleteFile,
     subscribe,
-    baseUrl: getLlmHost(),
+    baseUrl: getEmbeddingsHost(),
     onProgress,
   }).ready

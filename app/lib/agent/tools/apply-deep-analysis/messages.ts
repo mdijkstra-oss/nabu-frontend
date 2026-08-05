@@ -9,12 +9,35 @@ import { stripBoundaryComments } from "~/lib/patch/resolve/json-boundary"
 import { calloutToDeepSource } from "~/domain/data-blocks/callout/definition"
 import { getCallouts } from "~/domain/data-blocks/callout/selectors"
 import { GENERATED_SUFFIX } from "~/lib/files/filename"
-import { cacheMarker } from "../../client/call-parse"
+import type { MessageContent } from "../../client/convert"
 
-interface Message {
+export interface Message {
   type: "message"
   role: "system" | "user"
-  content: string
+  content: MessageContent
+}
+
+const textOf = (content: MessageContent): string =>
+  typeof content === "string" ? content : content.map((part) => part.text).join("")
+
+// The cached prefix ends at the last message, so the breakpoint rides on its
+// final content part. Nothing preceding means nothing to cache.
+const markCacheBreakpoint = (messages: Message[]): Message[] => {
+  const last = messages.at(-1)
+  if (!last) return messages
+  return [
+    ...messages.slice(0, -1),
+    {
+      ...last,
+      content: [
+        {
+          type: "input_text",
+          text: textOf(last.content),
+          prompt_cache_breakpoint: { mode: "explicit" },
+        },
+      ],
+    },
+  ]
 }
 
 export interface ScopedSources {
@@ -178,12 +201,12 @@ const buildTargetMessages = (
   resolve: ContentResolver,
   callToAction: string
 ): Message[] => {
-  const messages: Message[] = [...resolvePathMessages(sources.framework, resolve)]
-  messages.push(cacheMarker())
+  const messages: Message[] = markCacheBreakpoint(resolvePathMessages(sources.framework, resolve))
   messages.push(
-    ...buildCodeSourceMessages(codeIds, { framework: [], dimension: sources.dimension }, resolve)
+    ...markCacheBreakpoint(
+      buildCodeSourceMessages(codeIds, { framework: [], dimension: sources.dimension }, resolve)
+    )
   )
-  messages.push(cacheMarker())
   for (const block of targetBlocks) {
     messages.push({ type: "message", role: "system", content: block })
   }

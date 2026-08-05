@@ -6,6 +6,7 @@ import { companionFilename, buildCompanionMarkdown, parseCompanionEntries } from
 import { chunkFileForEmbedding } from "./chunk"
 import { diffChunks, type EmbeddingEntry } from "./diff"
 import { fetchEmbeddingBatch } from "./client"
+import { getEmbeddingsDimensions } from "./env"
 import { EMBEDDING_SYNC_DEBOUNCE, MAX_EMBEDDING_BATCH_SIZE } from "./constants"
 
 import { detectLanguage } from "~/lib/language/detect"
@@ -52,7 +53,7 @@ const prepareFile = (
 ): FileChunks => {
   const chunks = chunkFileForEmbedding(content)
   const existing = companionContent ? parseCompanionEntries(companionContent) : []
-  const { keep, needed } = diffChunks(existing, chunks)
+  const { keep, needed } = diffChunks(existing, chunks, getEmbeddingsDimensions())
   return { filename, entries: keep, needed }
 }
 

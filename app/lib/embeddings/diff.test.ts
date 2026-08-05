@@ -3,6 +3,8 @@ import { diffChunks, type EmbeddingEntry } from "./diff"
 import type { Chunk } from "./chunk"
 
 describe("diffChunks", () => {
+  const DIMENSIONS = 2
+
   const entry = (
     hash: string,
     text: string,
@@ -14,6 +16,14 @@ describe("diffChunks", () => {
     embedding: [0.1, 0.2],
     chunkStart,
     chunkEnd,
+  })
+
+  const entryAtWidth = (hash: string, text: string, width: number): EmbeddingEntry => ({
+    hash,
+    text,
+    embedding: Array.from({ length: width }, (_, i) => i / 10),
+    chunkStart: 0,
+    chunkEnd: text.length,
   })
 
   const chunk = (
@@ -79,10 +89,24 @@ describe("diffChunks", () => {
       expectedKeep: [entry("aaa", "hello", 200, 205)],
       expectedNeeded: [],
     },
+    {
+      name: "a hash hit at the wrong width is needed, not kept",
+      existing: [entryAtWidth("aaa", "hello", 3)],
+      current: [chunk("aaa", "hello", 0)],
+      expectedKeep: [],
+      expectedNeeded: [chunk("aaa", "hello", 0)],
+    },
+    {
+      name: "widths are judged one entry at a time",
+      existing: [entryAtWidth("aaa", "hello", 3), entry("bbb", "world")],
+      current: [chunk("aaa", "hello", 0), chunk("bbb", "world", 1)],
+      expectedKeep: [entry("bbb", "world")],
+      expectedNeeded: [chunk("aaa", "hello", 0)],
+    },
   ]
 
   it.each(cases)("$name", ({ existing, current, expectedKeep, expectedNeeded }) => {
-    const result = diffChunks(existing, current)
+    const result = diffChunks(existing, current, DIMENSIONS)
     expect(result.keep).toEqual(expectedKeep)
     expect(result.needed).toEqual(expectedNeeded)
   })

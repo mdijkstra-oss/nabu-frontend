@@ -2,7 +2,7 @@ import type { ToolResult } from "../../types"
 import { SearchArgs } from "./def"
 import { registerSpecialHandler } from "../../executors/delegation"
 import { getDatabase } from "~/domain/db/database"
-import { getLlmHost } from "~/lib/agent/env"
+import { getEmbeddingsHost } from "~/lib/embeddings/env"
 import { stripPaging } from "~/lib/search/paging"
 import { SEMANTIC_ABSENCE_HINT } from "~/lib/search/semantic"
 import { runSearchPipeline } from "~/lib/search/pipeline"
@@ -50,7 +50,7 @@ const handleSearch = async (call: { args: unknown }): Promise<ToolResult<unknown
   const db = getDatabase()
   if (!db) return { status: "error", output: "Database not ready. Try again shortly." }
 
-  const ctx = await buildSemanticContext(db, getLlmHost())
+  const ctx = await buildSemanticContext(db, getEmbeddingsHost())
   const sql = stripPaging(parsed.data.sql)
 
   const files = getFiles()

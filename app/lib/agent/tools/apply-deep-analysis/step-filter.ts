@@ -1,5 +1,5 @@
 import type { Envelope } from "./envelope"
-import type { ScopedSources, ContentResolver } from "./messages"
+import type { ScopedSources, ContentResolver, Message } from "./messages"
 import { callAndParse } from "../../client/call-parse"
 import { buildFilterMessages, FILTER_CTA, buildFilterSchema } from "./messages"
 import { renderEnvelopeBlocks } from "./triplet"
@@ -61,11 +61,7 @@ const mergeVotes = (votes: IndexedJudgment[]): MergedJudgment => {
   return { outcome: "contested", reason: keepReason, review: removeReason }
 }
 
-const callFilterModel = async (
-  modelIdx: number,
-  messages: { type: "message"; role: "system" | "user"; content: string }[],
-  validCodes: string[]
-) => {
+const callFilterModel = async (modelIdx: number, messages: Message[], validCodes: string[]) => {
   const schema = buildFilterSchema(validCodes)
   const endpoint = `${FILTER_ENDPOINT}?model=${modelIdx}`
   return callAndParse(endpoint, messages, schema)

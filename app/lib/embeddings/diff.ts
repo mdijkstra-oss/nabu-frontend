@@ -14,8 +14,18 @@ export interface DiffResult {
   needed: Chunk[]
 }
 
-export const diffChunks = (existing: EmbeddingEntry[], current: Chunk[]): DiffResult => {
-  const existingByHash = new Map(existing.map((e) => [e.hash, e]))
+// WHY the width is part of the diff: an entry at another width is not stale, it
+// is incomparable — cosine against it returns a number rather than an error. A
+// hash hit at the wrong width is therefore a miss, which puts the chunk back in
+// `needed` and rewrites the companion at the current width.
+export const diffChunks = (
+  existing: EmbeddingEntry[],
+  current: Chunk[],
+  dimensions: number
+): DiffResult => {
+  const existingByHash = new Map(
+    existing.filter((e) => e.embedding.length === dimensions).map((e) => [e.hash, e])
+  )
 
   const keep: EmbeddingEntry[] = []
   const needed: Chunk[] = []

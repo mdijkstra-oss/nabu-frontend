@@ -69,13 +69,34 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 ## Related repositories
 
 - [nabu-storage](https://github.com/mdijkstra-oss/nabu-storage) — file storage and sync, the Go service behind `VITE_API_HOST`
-
-The model gateway lives in its own repository too. It is being cleaned up and will be linked here.
+- [nabu-prompts](https://github.com/mdijkstra-oss/nabu-prompts) — the model gateway behind `VITE_LLM_HOST`: one Markdown file per agent, served by chancery over dragoman
+- [nabu-embeddings](https://github.com/mdijkstra-oss/nabu-embeddings) — the `/embeddings` route behind `VITE_EMBEDDINGS_HOST`, holding the provider key a browser cannot
 
 ## Known gaps
 
 - **No authentication** — local-first and single-user for now
 - **Unit tests only** — Vitest suites cover the agent, block parsing, search and text handling well, and the projection and file-store layers thinly. There are no component, integration or end-to-end tests, and nothing runs automated in a browser.
+- **The gateway is not reachable yet** — four fields this app sends predate the format it serves, and one of the mechanisms it relies on has nothing on the other side. See below.
+
+### What the gateway expects
+
+> [!WARNING]
+> The app cannot yet talk to [nabu-prompts](https://github.com/mdijkstra-oss/nabu-prompts). Every agent prompt is there and every route resolves; what does not line up is on this side.
+
+The gateway speaks [`openai-responses`](https://platform.openai.com/docs/api-reference/responses). What this app receives already matches — `app/lib/agent/client/parse.ts` reads that event stream, and the items `convert.ts` builds are Responses input items. The body it sends carries `input` and `text.format`, and the two cache breakpoints on the consensus steps are `prompt_cache_breakpoint` markers on content parts. Two things still are not the format's:
+
+| what is sent              | what the format spells it              | where                                                    |
+| ------------------------- | -------------------------------------- | -------------------------------------------------------- |
+| `extra_content`           | `encrypted_content`                    | `app/lib/agent/client/convert.ts`                        |
+| `?model=0` and `?model=1` | the route suffixes `.fast` and `.deep` | `app/lib/agent/tools/apply-deep-analysis/step-filter.ts` |
+
+The second is the one to fix first, because it does not fail. The consensus step selects its two voters by that query parameter; the gateway routes on the path and ignores it, so both calls reach the same model and a two-model consensus becomes one model voting twice with nothing in the log to say so.
+
+`extra_content` is this app's own field for provider state the caller must echo back. The gateway carries all of it — an Anthropic thinking signature, a Gemini thought signature, DeepSeek's reasoning — under `encrypted_content` on the item it arrived on, which is the field `parse.ts` already reads for OpenAI. Sent under the old name it is dropped, and a conversation loses its reasoning state at every turn boundary.
+
+One mechanism has no equivalent on the other side at all. `app/lib/agent/executors/modes.ts` pushes `<!-- prompt: planning -->` as a system message for the server to expand, and the gateway never decodes the message array, so the marker reaches the model as literal text. The mode prompts are in nabu-prompts, reachable by no route.
+
+None of this touches [querying](docs/02-querying.md), which reaches [its own service](#embeddings) rather than the gateway.
 
 ## Running it
 
@@ -84,12 +105,33 @@ npm install
 npm run dev
 ```
 
-The app expects two services:
+The app expects three services:
 
-| Service              | Default                 | Env var         |
-| -------------------- | ----------------------- | --------------- |
-| Persistence and sync | `localhost:8080`        | `VITE_API_HOST` |
-| Model gateway        | `http://localhost:8081` | `VITE_LLM_HOST` |
+| Service              | Default                 | Env var                | Repository                                                          |
+| -------------------- | ----------------------- | ---------------------- | ------------------------------------------------------------------- |
+| Persistence and sync | `localhost:8080`        | `VITE_API_HOST`        | [nabu-storage](https://github.com/mdijkstra-oss/nabu-storage)       |
+| Model gateway        | `http://localhost:8081` | `VITE_LLM_HOST`        | [nabu-prompts](https://github.com/mdijkstra-oss/nabu-prompts)       |
+| Embeddings           | `http://localhost:8082` | `VITE_EMBEDDINGS_HOST` | [nabu-embeddings](https://github.com/mdijkstra-oss/nabu-embeddings) |
+
+All three come up with `docker compose up` in their own directory. The gateway needs a provider key in its `.env` for each service its agents name, and the embeddings proxy needs one of its own.
+
+### Embeddings
+
+Two variables besides the host describe what the corpus is made of:
+
+| Env var                      | Default                  |
+| ---------------------------- | ------------------------ |
+| `VITE_EMBEDDINGS_MODEL`      | `text-embedding-3-large` |
+| `VITE_EMBEDDINGS_DIMENSIONS` | `1024`                   |
+
+Both travel in the request body, because the proxy forwards what it is given and adds only the key. Neither is a preference: every vector in a `.embeddings.hidden.md` companion was written at that model and that width, and a vector of one width scored against another returns a number rather than an error.
+
+Changing either is therefore a re-embedding of the whole corpus.
+
+A new width performs that itself. `diffChunks` treats a chunk whose stored vector is the wrong length as one it has never seen, and the sweep runs at startup where every file counts as changed, so the cost is one pass and no manual deletion.
+
+> [!IMPORTANT]
+> A new model at the same width is not detected. Nothing records which model wrote an entry, so `text-embedding-3-small` at 1024 would be mixed into vectors from `text-embedding-3-large` at 1024 and scored against them. Delete every `.embeddings.hidden.md` companion by hand when changing the model alone.
 
 ## Development
 

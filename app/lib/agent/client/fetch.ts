@@ -119,10 +119,10 @@ const buildRequestBody = (options: CallLlmOptions): string => {
     extras.push(toSystem(formatBlockSchemasContent(options.blockSchemas)))
   if (options.databaseSchema)
     extras.push(toSystem(formatDatabaseSchemaContent(options.databaseSchema)))
-  const messages = extras.length > 0 ? [...extras, ...options.messages] : options.messages
-  const body: Record<string, unknown> = { messages }
+  const input = extras.length > 0 ? [...extras, ...options.messages] : options.messages
+  const body: Record<string, unknown> = { input }
   if (options.tools) body.tools = options.tools
-  if (options.responseFormat) body.response_format = options.responseFormat
+  if (options.responseFormat) body.text = { format: options.responseFormat }
   return JSON.stringify(body)
 }
 

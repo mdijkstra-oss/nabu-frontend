@@ -2,8 +2,16 @@ import type { z } from "zod"
 import type { Block } from "./blocks"
 import { toStrictSchema } from "../executors/strict-schema"
 
+export interface InputTextPart {
+  type: "input_text"
+  text: string
+  prompt_cache_breakpoint?: { mode: "explicit" }
+}
+
+export type MessageContent = string | InputTextPart[]
+
 type InputItem =
-  | { type: "message"; role: "system" | "user" | "assistant"; content: string }
+  | { type: "message"; role: "system" | "user" | "assistant"; content: MessageContent }
   | {
       type: "function_call"
       call_id: string
@@ -23,20 +31,16 @@ type InputItem =
 
 export interface ResponseFormat {
   type: "json_schema"
-  json_schema: {
-    name: string
-    schema: unknown
-    strict: boolean
-  }
+  name: string
+  schema: unknown
+  strict: boolean
 }
 
 export const toResponseFormat = <T extends z.ZodType>(schema: T): ResponseFormat => ({
   type: "json_schema",
-  json_schema: {
-    name: "response",
-    schema: toStrictSchema(schema.toJSONSchema()),
-    strict: true,
-  },
+  name: "response",
+  schema: toStrictSchema(schema.toJSONSchema()),
+  strict: true,
 })
 
 export const extractText = (blocks: Block[]): string => {

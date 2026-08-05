@@ -25,7 +25,7 @@ import {
   writeDescriptions,
   processDescriptionSync,
 } from "~/lib/corpus/sync-descriptions"
-import { getLlmHost } from "~/lib/agent/env"
+import { getEmbeddingsHost } from "~/lib/embeddings/env"
 import type { CorpusDescription } from "~/domain/corpus/types"
 import type { GroupedClassification, FileClassification } from "~/lib/corpus/tree"
 import type { LabelRemaps } from "~/lib/corpus/cluster"
@@ -172,7 +172,7 @@ const useCorpora = (): CorporaResult & { remapped: { key: string; count: number 
     const subjects = filterExcludedLabels([...subjectCounts.keys()])
     const classifications = collectClassifications(files)
 
-    const baseUrl = getLlmHost()
+    const baseUrl = getEmbeddingsHost()
 
     Promise.all([
       groupNearbyLabels(types, baseUrl, DEFAULT_CLUSTER_THRESHOLD, typeCounts),
@@ -203,7 +203,7 @@ const regenerateDescriptions = async (): Promise<void> => {
   const rows = await fetchLanguageStats(db)
   const languages = filterSignificantLanguages(rows)
   writeDescriptions([])
-  await processDescriptionSync(() => getFiles(), languages, getLlmHost())
+  await processDescriptionSync(() => getFiles(), languages, getEmbeddingsHost())
 }
 
 export const DebugStatsTab = () => {

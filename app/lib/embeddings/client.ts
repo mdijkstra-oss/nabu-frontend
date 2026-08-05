@@ -1,5 +1,6 @@
 import { ok, err, type Result } from "~/lib/fp/result"
 import { getLlmHeaders } from "~/lib/agent/env"
+import { getEmbeddingsModel, getEmbeddingsDimensions } from "./env"
 
 export interface EmbeddingError {
   type: "network" | "api"
@@ -17,7 +18,12 @@ interface EmbeddingsApiResponse {
   usage: { total_tokens: number }
 }
 
-const buildRequestBody = (input: string[]): string => JSON.stringify({ input })
+const buildRequestBody = (input: string[]): string =>
+  JSON.stringify({
+    input,
+    model: getEmbeddingsModel(),
+    dimensions: getEmbeddingsDimensions(),
+  })
 
 const sortByIndex = (data: EmbeddingData[]): number[][] =>
   data.sort((a, b) => a.index - b.index).map((d) => d.embedding)

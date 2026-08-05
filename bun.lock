@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "nabu-theatron",
+      "name": "nabu-frontend",
       "dependencies": {
         "@duckdb/duckdb-wasm": "^1.33.1-dev20.0",
         "@milkdown/kit": "^7.18.0",

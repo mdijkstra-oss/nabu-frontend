@@ -1,14 +1,9 @@
 import type { z } from "zod"
 import { callLlm } from "./fetch"
 import { extractText, toResponseFormat } from "./convert"
+import type { MessageContent } from "./convert"
 
 export type CallResult<T> = { ok: true; data: T } | { ok: false; error: string }
-
-export const cacheMarker = (): { type: "message"; role: "system"; content: string } => ({
-  type: "message",
-  role: "system",
-  content: "<!-- cache -->",
-})
 
 const CODE_FENCE_RE = /^```\w*\n([\s\S]*)\n```\s*$/
 
@@ -40,7 +35,7 @@ const attemptParse = <T>(text: string, schema: z.ZodType<T>): CallResult<T> => {
 
 export const callAndParse = async <T>(
   endpoint: string,
-  messages: { type: "message"; role: "system" | "user"; content: string }[],
+  messages: { type: "message"; role: "system" | "user"; content: MessageContent }[],
   schema: z.ZodType<T>
 ): Promise<CallResult<T>> => {
   const responseFormat = toResponseFormat(schema)
