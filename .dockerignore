@@ -1,4 +1,14 @@
-.react-router
-build
-node_modules
-README.md
+# The build needs the manifests, the app, the static files, the three configs
+# vite reads, and the Caddyfile the final stage serves through. An allowlist
+# rather than a list of things to keep out: .gitignore has no effect on a build
+# context, and a denylist ships .env the day it is written under a name nobody
+# thought to exclude.
+*
+!package.json
+!package-lock.json
+!react-router.config.ts
+!vite.config.ts
+!tsconfig.json
+!app
+!public
+!Caddyfile

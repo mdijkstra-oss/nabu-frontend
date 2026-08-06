@@ -1,0 +1,21 @@
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	root * /srv
+	encode gzip
+
+	# route preserves the order written here. Outside one, Caddy sorts by its
+	# own directive order and file_server would answer /health with the app.
+	route {
+		respond /health "ok" 200
+
+		# The client resolves every path below the entry point, so a deep link
+		# reloaded in the browser has to be answered with the entry point rather
+		# than a 404.
+		try_files {path} /index.html
+		file_server
+	}
+}
