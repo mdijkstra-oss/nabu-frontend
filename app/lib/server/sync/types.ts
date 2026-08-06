@@ -1,18 +1,10 @@
-export type Action =
-  | "CreateFile"
-  | "UpdateFile"
-  | "WriteFile"
-  | "DeleteFile"
-  | "RenameFile"
-  | "Commit"
-  | "SyncMeta"
+export type Action = "WriteFile" | "DeleteFile" | "RenameFile" | "SyncMeta"
 
 export interface Command {
   action: Action
   path?: string
   newPath?: string
   content?: string
-  diff?: string
   fileCount?: number
 }
 

@@ -10,60 +10,29 @@ import { migrations } from "~/domain/data-blocks/migrations"
 import type { Command } from "./types"
 import { exhaustive } from "~/lib/utils/exhaustive"
 
-interface ResolvedContent {
-  path: string
-  content: string
-}
-
-const resolveContent = (command: Command): ResolvedContent | undefined => {
-  const { action, path, content } = command
-  if (!path) return undefined
-
-  switch (action) {
-    case "CreateFile":
-    case "UpdateFile":
-    case "WriteFile":
-      return content !== undefined ? { path, content } : undefined
-
-    case "DeleteFile":
-    case "RenameFile":
-    case "Commit":
-    case "SyncMeta":
-      return undefined
-
-    default:
-      return exhaustive(action)
-  }
-}
-
+// Returns the path to persist back, which is one the migration rewrote on the way in.
 const applyCommandInner = (command: Command): string | undefined => {
-  const { action, path, newPath } = command
+  const { action, path, newPath, content } = command
   if (!path) return undefined
 
-  const resolved = resolveContent(command)
-  if (resolved) {
-    const migrated = migrateFile(resolved.content, migrations)
-    updateFileRaw(resolved.path, migrated.markdown)
-    return migrated.changed ? resolved.path : undefined
-  }
-
   switch (action) {
+    case "WriteFile": {
+      if (content === undefined) return undefined
+      const migrated = migrateFile(content, migrations)
+      updateFileRaw(path, migrated.markdown)
+      return migrated.changed ? path : undefined
+    }
+
     case "DeleteFile":
       deleteFile(path)
       return undefined
 
     case "RenameFile":
-      if (!newPath) return undefined
-      renameFile(path, newPath)
+      if (newPath) renameFile(path, newPath)
       return undefined
 
-    case "Commit":
+    // Sent once as the file count ahead of the initial sync, and carries no path.
     case "SyncMeta":
-      return undefined
-
-    case "CreateFile":
-    case "UpdateFile":
-    case "WriteFile":
       return undefined
 
     default:

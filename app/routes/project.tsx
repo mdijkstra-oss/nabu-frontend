@@ -126,8 +126,7 @@ const saveDebugOptions = (options: DebugOptions): void => {
 const isSyncMetaCommand = (command: Command): command is Command & { fileCount: number } =>
   command.action === "SyncMeta" && typeof command.fileCount === "number"
 
-const isFileReceivedCommand = (command: Command): boolean =>
-  command.action === "CreateFile" || command.action === "WriteFile"
+const isFileReceivedCommand = (command: Command): boolean => command.action === "WriteFile"
 
 const FILE_WEIGHT = 35
 const DB_WEIGHT = 40

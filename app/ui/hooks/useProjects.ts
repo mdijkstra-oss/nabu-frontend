@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react"
-import { getProjects, type ProjectSummary } from "~/lib/server/api/queries"
+import { getProjects, type Project } from "~/lib/server/api/queries"
 
 interface UseProjectsResult {
-  projects: ProjectSummary[]
+  projects: Project[]
   loading: boolean
   error: Error | null
 }
 
 export const useProjects = (): UseProjectsResult => {
-  const [projects, setProjects] = useState<ProjectSummary[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
@@ -18,7 +18,9 @@ export const useProjects = (): UseProjectsResult => {
         const result = await getProjects({ page_size: 100 })
         setProjects(result.items)
       } catch (e) {
-        setError(e instanceof Error ? e : new Error("Failed to load projects"))
+        const failure = e instanceof Error ? e : new Error(String(e))
+        console.error("[projects] failed to load", failure)
+        setError(failure)
       } finally {
         setLoading(false)
       }
@@ -29,28 +31,5 @@ export const useProjects = (): UseProjectsResult => {
   return { projects, loading, error }
 }
 
-export const findProjectById = (
-  projects: ProjectSummary[],
-  id: string | null
-): ProjectSummary | undefined => projects.find((p) => p.id === id)
-
-export const shouldAutoSelect = (
-  projects: ProjectSummary[],
-  currentValue: string | null
-): boolean => projects.length > 0 && !currentValue
-
-export const getFirstProjectId = (projects: ProjectSummary[]): string | null =>
+export const getFirstProjectId = (projects: Project[]): string | null =>
   projects.length > 0 ? projects[0].id : null
-
-type SelectorState = "loading" | "error" | "empty" | "ready"
-
-export const resolveState = (
-  loading: boolean,
-  error: Error | null,
-  projects: ProjectSummary[]
-): SelectorState => {
-  if (loading) return "loading"
-  if (error) return "error"
-  if (projects.length === 0) return "empty"
-  return "ready"
-}

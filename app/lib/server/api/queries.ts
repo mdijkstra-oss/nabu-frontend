@@ -1,12 +1,8 @@
 import { getApiUrl } from "../env"
 
-export interface ProjectSummary {
+export interface Project {
   id: string
-  version: number
-  healthy: boolean
-  name: string
-  description: string
-  pinned: boolean
+  updatedAt: string
 }
 
 interface PaginationQuery {
@@ -21,11 +17,6 @@ interface PaginationResult<T> {
   page_size: number
 }
 
-interface QueryError {
-  status: number
-  statusText: string
-}
-
 const buildQueryString = (params: object): string => {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined)
   if (entries.length === 0) return ""
@@ -37,20 +28,14 @@ const fetchQuery = async <T>(path: string): Promise<T> => {
   const response = await fetch(url)
 
   if (!response.ok) {
-    const error: QueryError = {
-      status: response.status,
-      statusText: response.statusText,
-    }
-    throw error
+    const body = await response.text().catch(() => "")
+    throw new Error(`GET ${path} failed: ${response.status} ${response.statusText}${suffix(body)}`)
   }
 
   return response.json()
 }
 
-export const getProjects = async (
-  query: PaginationQuery = {}
-): Promise<PaginationResult<ProjectSummary>> => {
-  const path = `/queries/projects${buildQueryString(query)}`
-  const results = await fetchQuery<PaginationResult<ProjectSummary>[]>(path)
-  return results[0]
-}
+const suffix = (body: string): string => (body ? ` — ${body.slice(0, 500)}` : "")
+
+export const getProjects = (query: PaginationQuery = {}): Promise<PaginationResult<Project>> =>
+  fetchQuery(`/queries/projects${buildQueryString(query)}`)

@@ -29,6 +29,27 @@ const isSignal = (s: AbortSignal | null | undefined): s is AbortSignal => s != n
 const combineSignals = (...signals: (AbortSignal | null | undefined)[]): AbortSignal =>
   AbortSignal.any(signals.filter(isSignal))
 
+const MAX_ERROR_BODY_CHARS = 1000
+
+interface GatewayError {
+  error?: { message?: string; type?: string }
+}
+
+// A failed call carries its diagnosis in the body: the gateway answers with an error
+// object naming the service and what it lacked, or with plain text where the status is
+// all it has. The status alone names neither.
+const describeFailure = async (response: Response): Promise<string> => {
+  const body = await response.text().catch(() => "")
+  if (!body) return ""
+  try {
+    const { error } = JSON.parse(body) as GatewayError
+    if (error?.message) return error.type ? `${error.type}: ${error.message}` : error.message
+  } catch {
+    void 0
+  }
+  return body.slice(0, MAX_ERROR_BODY_CHARS)
+}
+
 const fetchOnce = async ({ url, body, signal }: FetchOptions): Promise<Response> => {
   const response = await fetch(url, {
     method: "POST",
@@ -36,7 +57,12 @@ const fetchOnce = async ({ url, body, signal }: FetchOptions): Promise<Response>
     body,
     signal: combineSignals(signal, getActiveSignal()),
   })
-  if (!response.ok) throw new Error(`LLM request failed: ${response.status}`)
+  if (!response.ok) {
+    const detail = await describeFailure(response)
+    const message = `LLM request failed: ${response.status}${detail ? ` — ${detail}` : ""}`
+    console.error(`[LLM ${url}]`, message)
+    throw new Error(message)
+  }
   return response
 }
 
