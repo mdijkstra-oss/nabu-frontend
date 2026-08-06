@@ -1,6 +1,6 @@
 # Grounded answers
 
-Every name and every quotation in an answer the model writes is a link. Click a code and its definition opens; click a quoted sentence and its document opens, scrolled to that sentence and underlined.
+Every identifiable entity and every quotation the llm writes in an answer renders as a pill shaped link clickable link which navigates to the source in the corpus.
 
 Two passes over the model's text produce that, run after it is written rather than through any citation format the model has to get right: identifiers are resolved to the things they name, and quotes are matched back to the passage they came from. It is the property [search results](02-querying.md) already have, carried into prose.
 
@@ -14,7 +14,7 @@ Colour comes from the entity itself. A code's pill carries the code's own colour
 
 Two details matter more than they look. An id that resolves to nothing is left exactly as written rather than linked to a dead target, so a hallucinated reference stays visible as one. And where the model writes the name and the id together — the redundancy it tends toward — the duplicate is absorbed into the link instead of being rendered twice.
 
-Tags resolve on the same principle by slug, as `#covid-19`.
+Tags resolve on the same principle using their slug.
 
 ## Quotes become passages
 
@@ -23,7 +23,7 @@ Anything in curly quotes is a candidate. Filenames, single words and text alread
 A quote that matches nothing is left as plain quoted text. The absence of a link is the signal that the passage could not be found.
 
 > [!NOTE]
-> As of now: Quote matching runs against the document currently open, so a quotation from elsewhere in the corpus stays plain text. What makes it work in practice is that search results carry their source file, so the document the answer is about is usually the document in front of you.
+> As of now: Quote matching runs against the document currently open, so a quotation from elsewhere in the corpus stays plain text.
 
 ## How close a match has to be
 
@@ -39,17 +39,8 @@ The matched range is then underlined in place. The reader lands on the sentence 
 
 ## Asking for quotable answers
 
-Resolution can only work on text that quotes in the first place, so the analysis pass says so directly:
-
-```text
-Ground every observation in source text. 1-2 quotes per pattern — the quote
-must directly demonstrate the pattern; if you need to explain relevance, pick
-a better one. Scale claims to evidence: one quote → "in at least one instance";
-multiple passages → "recurrently."
-```
-
-Requiring the quote to carry the point on its own is what makes it checkable: a quote chosen to demonstrate a pattern resolves to the passage that demonstrates it, and a quote chosen to decorate a claim resolves to a sentence that does not support it — visibly, to the reader who clicks.
+Specific instructions are given to the model to quote the source text and identifiers each time it outputs content to the user.
 
 ## Next: consensus
 
-Grounding makes one answer checkable. [Consensus](04-consensus.md) is the same problem at volume: where a judgement is subjective and has to be made thousands of times, one model's answer is an opinion, so two make it independently and the cases they split on come back as questions about the definition rather than about the text.
+Grounding makes one answer checkable. [Consensus](04-consensus.md) is where multi-model voting exists for questions that are hard or are nuanced.

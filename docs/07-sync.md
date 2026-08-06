@@ -2,8 +2,6 @@
 
 Every file is already in the browser. Edits apply as you type, and search, SQL and analysis all run against that local copy without asking the server anything.
 
-Writing to disk happens after the fact and never in the way. A dropped connection stops writes reaching disk; it does not stop the app.
-
 ## Four commands
 
 The store emits four actions: write a file, delete one, rename one, and a `SyncMeta` carrying a file count for progress.
@@ -38,7 +36,7 @@ The connection reconnects with exponential backoff capped at thirty seconds, and
 
 ## Loading
 
-A project starts empty and fills as commands arrive. Settings and preferences must exist before the app is usable, so boot waits up to thirty seconds for them rather than rendering against a half-loaded store.
+A project starts empty and fills as commands arrive. Settings and preferences must exist before the app is usable, so boot waits up to thirty seconds for them rather than continouing with them.
 
 Arriving files are normalized exactly as locally written ones are, so a file the server sent cannot carry a shape local code would not have produced. Structural validation runs on every write, and one that would corrupt a file throws rather than landing.
 

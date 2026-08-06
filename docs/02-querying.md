@@ -8,7 +8,7 @@ How many, how often, which ones: answered by counting, over the tables. What was
 
 The tables come from the block declarations, so anything written as a block is queryable the moment it lands: annotations, codes, tags, dates, document types. That covers every question turning on counting — how many documents carry a code, which carry none, how the balance shifted month by month.
 
-The generated DDL travels with each request, so the model writes SQL against a schema it can see rather than one it remembers.
+The generated DDL travels with each request, so the model writes SQL against a schema it can see.
 
 An answer can be written back as a chart block, which stores the query beside the spec for drawing it — the analysis note in [documents](01-documents.md) carries an example. Holding the query rather than a table of numbers, the figure describes the corpus as it stands rather than as it stood the day the chart was made.
 
@@ -16,15 +16,15 @@ An answer can be written back as a chart block, which stores the query beside th
 
 The chunk is the unit of identity for the whole system: search results, embedding cache entries and analysis candidates all address content by chunk hash. That works only because exactly one function produces them, always from the file's prose with its JSON blocks stripped.
 
-Chunks are 250 tokens with 20% overlap, and their boundaries are adjusted twice: back to the nearest whitespace so words stay whole, then out to the nearest sentence boundary when one lies within 300 characters. Each chunk is identified by a content hash of its final text.
+Chunks are 250 tokens with 20% overlap, and their boundaries are adjusted twice when querying: back to the nearest whitespace so words stay whole, then out to the nearest sentence boundary when one lies within 300 characters. Each chunk is identified by a content hash of its final text.
 
 Because identity is content-derived, editing one paragraph invalidates the two or three chunks overlapping it and leaves the document's other vectors untouched.
 
 ## Keeping vectors current
 
-The embedding pass diffs hashes rather than content: chunks whose hash already appears in the companion are reused, and only genuinely new text is sent to the embedding endpoint. Requests are batched against both a count limit and a token budget, and the pass is debounced by five seconds, so a burst of typing produces one sync rather than one per keystroke.
+Vector synchronization is done by hashing each chunk and finding if a vector result already exists in the companion file. If not they are requested (debounced, so not every keystroke triggers new requests) from the embeddings endpoint and written into the companion file. The companion file then uses the same sync mechanism to sync itself to DuckDB as regular files.
 
-## Query expansion
+## Query expansion for semantic search
 
 A natural-language intent is turned into hypothetical passages — HyDE: text that would plausibly appear in a document answering the query — and each is embedded and searched independently. The reason is register: a single embedding of the question matches the question's phrasing, not the corpus's. A query asking whether restrictions were framed as proportionate will not sit near a transcript sentence about proportionality unless something bridges the gap.
 
@@ -97,6 +97,8 @@ Every stage after `probe` can be disabled individually at runtime. Turning off f
 
 The two kinds of question meet in one statement. Search is expressed as SQL over `files`, the chunk table described in [documents](01-documents.md), extended by two functions:
 
+### SEMANTIC()
+
 ```sql
 SELECT file, text FROM files
 WHERE SEMANTIC('framing restrictions as proportionate')
@@ -104,7 +106,9 @@ ORDER BY _semantic_score DESC
 LIMIT 30
 ```
 
-Before execution, a resolver extracts the tokens, generates and embeds the hypothetical passages, runs fusion, and rewrites the query against the resulting chunk set — neither function reaches DuckDB as written.
+Before execution, a resolver extracts the tokens, generates and embeds the hypothetical passages, runs fusion, and rewrites the query against the resulting chunk set for standard DuckDB compatbility.
+
+### EMBEDDINGS_FROM_FILE()
 
 `EMBEDDINGS_FROM_FILE('code.md')` makes a document the query instead: the named file is embedded and searched against the corpus, which is how a corpus is compared against itself — what echoes a note, what covers the same ground. Point it at a codebook entry and the spans that entry might apply to come back, which is what the [analysis pass](04-consensus.md) runs once per code.
 
@@ -116,4 +120,4 @@ Meaning and structure therefore compose: proportionality framing, in press confe
 
 ## Next: grounded answers
 
-A search result knows where it came from; an answer written in prose does not. [Grounded answers](03-grounded-answers.md) is how that is closed — identifiers resolved to the things they name, and quoted prose matched back to the passage it was taken from, so a claim in a chat message costs one click to check.
+When the LLM answers the user, its answers should be easily recognizable as being grouned in the corpus and navigatable to its source. [Grounded answers](03-grounded-answers.md) is where that proces is described.

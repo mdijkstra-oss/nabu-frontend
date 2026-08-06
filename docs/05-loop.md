@@ -82,8 +82,10 @@ The loop then continues so the model can answer again, capped at three consecuti
 
 ## Compaction
 
-Not implemented. Every turn sends the whole conversation, so a long one grows until it hits the model's context limit.
+> [!WARNING]
+>
+> Not implemented yet. Silent failure.
 
 ## Next: tools
 
-The loop decides what may be called; [tools](06-tools.md) is what there is to call — block edits generated from the same declarations that produce the tables, and a shell for everything read-only.
+Within the loop tools [tools](06-tools.md) can be called to perform a multitude of actions.

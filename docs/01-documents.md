@@ -4,7 +4,7 @@ A project is a list of Markdown files. That is the whole of it — prose for wha
 
 Both are formats models generate reliably, which is what lets an agent edit a document as readily as a person does.
 
-An analysis note, carrying a chart and the document's attributes:
+## Example document
 
 ````markdown
 # Framing shift, March–June 2020
@@ -43,12 +43,12 @@ As reported cases climbed, the language of the briefings moved with them. Early 
 Each block type is declared once, as a single config object. Writing that config and one Zod schema is all it takes to add a type, and everything else follows from the declaration:
 
 - **Validation** — the Zod schema runs on every write, plus cross-file checks against the corpus
-- **Model-facing schema** — JSON Schema sent to the model each turn
+- **Model-facing schema** — generated JSON Schema sent to the model each turn
 - **Tools** — `patch`, `delete`, `add` and `move`, generated per type
-- **SQL tables** — DuckDB DDL, with child tables for array fields
+- **SQL tables** — generated DuckDB DDL, with child tables for array fields
 - **Normalization** — generated ids, field order etc
 
-The config's twenty-odd fields are listed in the [reference](#config-reference) at the end of this page.
+The block config's other fields are listed in the [reference](#config-reference) at the end of this page.
 
 ### Tools
 
@@ -212,4 +212,4 @@ Every field of the config object introduced under [registering a block](#registe
 
 ## Next: querying
 
-Two projections mean two kinds of question, and [querying](02-querying.md) covers both. SQL over the tables answers anything countable — how often a code appears, which documents carry none, how coding shifted month by month. Semantic search over the vectors answers anything that turns on meaning, where the words a researcher would use are not the words the corpus uses. They compose in a single statement, which is why they share a document.
+Two projections mean two kinds of questions that can be answered, and [querying](02-querying.md) covers both.
