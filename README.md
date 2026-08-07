@@ -116,6 +116,10 @@ docker run -p 8080:8080 nabu-frontend
 
 Caddy answers any path it has no file for with `index.html`, because the client resolves its own routes and a reloaded deep link would otherwise be a 404. `/health` is what the container's `HEALTHCHECK` calls.
 
+> [!NOTE]
+>
+> Normally would static host this, but this makes it a bit easier for development to spin up together with the other related services.
+
 ## Development
 
 ```bash
