@@ -1,11 +1,21 @@
 const isObjectWithProperties = (s: Record<string, unknown>): boolean =>
   s.type === "object" && typeof s.properties === "object" && s.properties !== null
 
+// A record schema: additionalProperties carrying a value schema instead of a
+// boolean. Strict mode cannot express arbitrary keys — OpenAI rejects the
+// form — so any schema containing one must be sent non-strict.
+const isRecordSchema = (s: Record<string, unknown>): boolean =>
+  s.type === "object" &&
+  typeof s.additionalProperties === "object" &&
+  s.additionalProperties !== null
+
 export const isStrictCompatible = (schema: unknown): boolean => {
   if (typeof schema !== "object" || schema === null) return true
   const s = schema as Record<string, unknown>
   const keys = Object.keys(s).filter((k) => k !== "$schema")
   if (keys.length === 0 || (keys.length === 1 && keys[0] === "description")) return false
+
+  if (isRecordSchema(s)) return false
 
   if (s.type === "array" && s.items) return isStrictCompatible(s.items)
 

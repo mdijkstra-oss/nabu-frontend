@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { toStrictSchema, stripUnsupportedKeywords } from "./tool"
+import { toStrictSchema, isStrictCompatible, stripUnsupportedKeywords } from "./tool"
 
 describe("toStrictSchema", () => {
   const cases = [
@@ -133,6 +133,46 @@ describe("toStrictSchema", () => {
 
   it.each(cases)("$name", ({ input, expected }) => {
     expect(toStrictSchema(input)).toEqual(expected)
+  })
+})
+
+describe("isStrictCompatible", () => {
+  const cases = [
+    {
+      name: "accepts a plain object schema",
+      input: {
+        type: "object",
+        properties: { a: { type: "string" } },
+        required: ["a"],
+      },
+      expected: true,
+    },
+    {
+      name: "rejects a record schema",
+      input: {
+        type: "object",
+        additionalProperties: { type: "array", items: { type: "string" } },
+      },
+      expected: false,
+    },
+    {
+      name: "rejects a record schema nested in a property",
+      input: {
+        type: "object",
+        properties: {
+          inclusions: {
+            type: "object",
+            additionalProperties: { type: "array", items: { type: "string" } },
+          },
+        },
+        required: ["inclusions"],
+      },
+      expected: false,
+    },
+  ]
+
+  it.each(cases)("$name", ({ input, expected }) => {
+    expect(isStrictCompatible(input)).toBe(expected)
   })
 })
 
