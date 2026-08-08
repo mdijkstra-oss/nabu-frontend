@@ -33,3 +33,8 @@ export const useProjects = (): UseProjectsResult => {
 
 export const getFirstProjectId = (projects: Project[]): string | null =>
   projects.length > 0 ? projects[0].id : null
+
+export const getFirstProjectRedirect = (projects: Project[], loading: boolean): string | null => {
+  const firstId = getFirstProjectId(projects)
+  return !loading && firstId ? `/project/${firstId}` : null
+}

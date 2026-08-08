@@ -9,7 +9,7 @@ import type { Database } from "~/lib/db/types"
 
 export type SemanticContextBase = Pick<
   SemanticContext,
-  "db" | "baseUrl" | "descriptions" | "descriptionsHash"
+  "db" | "embeddingsUrl" | "descriptions" | "descriptionsHash"
 >
 
 type OnSyncProgress = (processed: number, total: number) => void
@@ -20,13 +20,13 @@ const ensureCorpusFresh = (): Promise<void> => (tick ? tick() : Promise.resolve(
 
 export const buildSemanticContext = async (
   db: Database,
-  baseUrl: string
+  embeddingsUrl: string
 ): Promise<SemanticContextBase> => {
   await ensureCorpusFresh()
   const files = getFiles()
   const descriptions = getCorpusDescriptions(files)
   const descriptionsHash = getDescriptionsHash(descriptions)
-  return { db, baseUrl, descriptions, descriptionsHash }
+  return { db, embeddingsUrl, descriptions, descriptionsHash }
 }
 
 const getSignificantLanguages = async (): Promise<string[]> => {

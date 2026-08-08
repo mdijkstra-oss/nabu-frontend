@@ -30,11 +30,11 @@ const sortByIndex = (data: EmbeddingData[]): number[][] =>
 
 export const fetchEmbeddingBatch = async (
   texts: string[],
-  baseUrl: string
+  url: string
 ): Promise<Result<number[][], EmbeddingError>> => {
   let response: Response
   try {
-    response = await fetch(`${baseUrl}/embeddings`, {
+    response = await fetch(url, {
       method: "POST",
       headers: getLlmHeaders(),
       body: buildRequestBody(texts),

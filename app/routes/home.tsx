@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router"
 import type { Route } from "./+types/home"
-import { useProjects, getFirstProjectId } from "~/ui/hooks/useProjects"
+import { useProjects, getFirstProjectRedirect } from "~/ui/hooks/useProjects"
 
 export function meta(_args: Route.MetaArgs) {
   return [
@@ -15,9 +15,9 @@ export default function Home() {
   const { projects, loading } = useProjects()
 
   useEffect(() => {
-    const firstId = getFirstProjectId(projects)
-    if (!loading && firstId) {
-      navigate(`/project/${firstId}`, { replace: true })
+    const redirect = getFirstProjectRedirect(projects, loading)
+    if (redirect) {
+      navigate(redirect, { replace: true })
     }
   }, [projects, loading, navigate])
 

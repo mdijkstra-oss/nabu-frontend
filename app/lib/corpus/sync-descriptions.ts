@@ -132,7 +132,7 @@ export const writeDescriptions = (descriptions: CorpusDescription[]): void => {
 
 const clusterAxes = async (
   files: FileStore,
-  baseUrl: string,
+  embeddingsUrl: string,
   threshold: number
 ): Promise<LabelRemaps> => {
   const typeCounts = collectTypeCounts(files)
@@ -141,8 +141,8 @@ const clusterAxes = async (
   const subjects = filterExcludedLabels([...subjectCounts.keys()])
 
   const [typeClusters, subjectClusters] = await Promise.all([
-    groupNearbyLabels(types, baseUrl, threshold, typeCounts),
-    groupNearbyLabels(subjects, baseUrl, threshold, subjectCounts),
+    groupNearbyLabels(types, embeddingsUrl, threshold, typeCounts),
+    groupNearbyLabels(subjects, embeddingsUrl, threshold, subjectCounts),
   ])
 
   return buildRemaps(typeClusters, subjectClusters)
@@ -151,12 +151,12 @@ const clusterAxes = async (
 export const processDescriptionSync = async (
   getFiles: () => FileStore,
   significantLanguages: string[],
-  baseUrl: string,
+  embeddingsUrl: string,
   threshold = DEFAULT_CLUSTER_THRESHOLD
 ): Promise<void> => {
   const files = getFiles()
 
-  const remaps = await clusterAxes(files, baseUrl, threshold)
+  const remaps = await clusterAxes(files, embeddingsUrl, threshold)
   const corpusCounts = countCorpusFiles(files, remaps)
   const significant = new Set(selectSignificantCorpora(corpusCounts))
   const allPairs = collectCorpusLanguagePairs(files, remaps)

@@ -2,7 +2,7 @@ import type { ToolResult } from "../../types"
 import { QueryArgs } from "./def"
 import { registerSpecialHandler } from "../../executors/delegation"
 import { getDatabase } from "~/domain/db/database"
-import { getEmbeddingsHost } from "~/lib/embeddings/env"
+import { getEmbeddingsUrl } from "~/lib/embeddings/env"
 import { executeHybridLocal } from "~/lib/search/execute"
 import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
 import {
@@ -67,7 +67,7 @@ const executeQuery = async (call: { args: unknown }): Promise<ToolResult<unknown
   const db = getDatabase()
   if (!db) return { status: "error", output: "Database not ready. Try again shortly." }
 
-  const ctx = await buildSemanticContext(db, getEmbeddingsHost())
+  const ctx = await buildSemanticContext(db, getEmbeddingsUrl())
 
   const resolved = await resolveSemanticSql(parsed.data.sql, ctx)
   if (!resolved.ok) return { status: "error", output: resolved.error.message }

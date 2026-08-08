@@ -26,7 +26,7 @@ import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
 import { think, STARTING, READING_FRAMEWORK, WRITING } from "./thoughts"
 import { getDatabase } from "~/domain/db/database"
-import { getEmbeddingsHost } from "~/lib/embeddings/env"
+import { getEmbeddingsUrl } from "~/lib/embeddings/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import { executeSearchById } from "~/domain/search/execute"
 import type { SearchHit } from "~/domain/search/types"
@@ -367,7 +367,7 @@ registerTool(
       const db = getDatabase()
       if (!db)
         return { status: "error", output: "Database not ready. Try again shortly.", mutations: [] }
-      const semCtx = await buildSemanticContext(db, getEmbeddingsHost())
+      const semCtx = await buildSemanticContext(db, getEmbeddingsUrl())
       const frameworkText = scoped.framework
         .map((p) => getFileView(p))
         .filter((s): s is string => typeof s === "string" && s.length > 0)

@@ -25,7 +25,7 @@ import {
   writeDescriptions,
   processDescriptionSync,
 } from "~/lib/corpus/sync-descriptions"
-import { getEmbeddingsHost } from "~/lib/embeddings/env"
+import { getEmbeddingsUrl } from "~/lib/embeddings/env"
 import type { CorpusDescription } from "~/domain/corpus/types"
 import type { GroupedClassification, FileClassification } from "~/lib/corpus/tree"
 import type { LabelRemaps } from "~/lib/corpus/cluster"
@@ -172,11 +172,11 @@ const useCorpora = (): CorporaResult & { remapped: { key: string; count: number 
     const subjects = filterExcludedLabels([...subjectCounts.keys()])
     const classifications = collectClassifications(files)
 
-    const baseUrl = getEmbeddingsHost()
+    const embeddingsUrl = getEmbeddingsUrl()
 
     Promise.all([
-      groupNearbyLabels(types, baseUrl, DEFAULT_CLUSTER_THRESHOLD, typeCounts),
-      groupNearbyLabels(subjects, baseUrl, DEFAULT_CLUSTER_THRESHOLD, subjectCounts),
+      groupNearbyLabels(types, embeddingsUrl, DEFAULT_CLUSTER_THRESHOLD, typeCounts),
+      groupNearbyLabels(subjects, embeddingsUrl, DEFAULT_CLUSTER_THRESHOLD, subjectCounts),
     ]).then(([typeClusters, subjectClusters]) => {
       if (cancelled) return
       const remaps = buildRemaps(typeClusters, subjectClusters)
@@ -203,7 +203,7 @@ const regenerateDescriptions = async (): Promise<void> => {
   const rows = await fetchLanguageStats(db)
   const languages = filterSignificantLanguages(rows)
   writeDescriptions([])
-  await processDescriptionSync(() => getFiles(), languages, getEmbeddingsHost())
+  await processDescriptionSync(() => getFiles(), languages, getEmbeddingsUrl())
 }
 
 export const DebugStatsTab = () => {

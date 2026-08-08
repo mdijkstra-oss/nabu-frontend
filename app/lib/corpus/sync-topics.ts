@@ -10,7 +10,7 @@ import { classifyDocument, type Classification, type ExistingClassifications } f
 import { collectTypeCounts, collectSubjectCounts } from "./tree"
 import { processDescriptionSync } from "./sync-descriptions"
 import { processPool } from "~/lib/utils/pool"
-import { getEmbeddingsHost } from "~/lib/embeddings/env"
+import { getEmbeddingsUrl } from "~/lib/embeddings/env"
 
 const CORPUS_SYNC_DEBOUNCE = 30_000
 
@@ -127,7 +127,7 @@ export const startCorpusSync = (deps: CorpusSyncDeps): CorpusSyncHandle => {
       await processTopics(changed, deps)
 
       const significantLanguages = await deps.getSignificantLanguages()
-      await processDescriptionSync(deps.getFiles, significantLanguages, getEmbeddingsHost())
+      await processDescriptionSync(deps.getFiles, significantLanguages, getEmbeddingsUrl())
     } catch (e) {
       console.error("[corpus-sync] error:", e)
     }

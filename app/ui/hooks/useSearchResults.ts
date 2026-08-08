@@ -8,7 +8,7 @@ import {
   selectionHits,
 } from "~/domain/search/selection-search"
 import { getDatabase } from "~/domain/db/database"
-import { getEmbeddingsHost } from "~/lib/embeddings/env"
+import { getEmbeddingsUrl } from "~/lib/embeddings/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import { updateSearchCache } from "~/lib/agent/tools/search/settings"
 import { resolveSemanticSql } from "~/lib/search/resolve-semantic"
@@ -132,7 +132,7 @@ export const useSearchResults = (
         hasMore: false,
       })
 
-      const ctx = await buildSemanticContext(db, getEmbeddingsHost())
+      const ctx = await buildSemanticContext(db, getEmbeddingsUrl())
       if (cancelled) return
 
       const resolved = await resolveSemanticSql(freshSearch.sql, {

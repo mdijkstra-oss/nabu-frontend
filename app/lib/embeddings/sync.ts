@@ -17,7 +17,7 @@ interface EmbeddingSyncDeps {
   updateFile: (f: string, content: string) => void
   deleteFile: (f: string) => void
   subscribe: (listener: () => void) => () => void
-  baseUrl: string
+  embeddingsUrl: string
   onProgress?: (processed: number, total: number) => void
 }
 
@@ -141,7 +141,7 @@ const processSync = async (
 
   const embedBatch = async (batch: TaggedChunk[]): Promise<number[]> => {
     const texts = batch.map((t) => t.chunk.text)
-    const result = await fetchEmbeddingBatch(texts, deps.baseUrl)
+    const result = await fetchEmbeddingBatch(texts, deps.embeddingsUrl)
 
     if (!result.ok) {
       console.error("[embeddings] fetch failed:", result.error)

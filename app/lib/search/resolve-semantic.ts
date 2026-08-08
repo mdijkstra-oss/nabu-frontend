@@ -33,7 +33,7 @@ export type ResolveError =
 
 export interface SemanticContext {
   db: Database
-  baseUrl: string
+  embeddingsUrl: string
   descriptions: CorpusDescription[]
   descriptionsHash: string
   cachedEmbeddings?: EmbeddingsCache
@@ -247,7 +247,7 @@ const extractKeywords = (inclusions: Inclusions): KeywordsQuery[] => {
 
 const embedAndFlattenAll = async (
   inclusions: Inclusions,
-  baseUrl: string
+  embeddingsUrl: string
 ): Promise<Result<HydeQuery[], { message: string }>> => {
   const entries = Object.entries(inclusions)
     .map(([language, angles]) => [language, angles.filter(isEmbeddable)] as const)
@@ -259,7 +259,7 @@ const embedAndFlattenAll = async (
     async ([language, angles]) => {
       const result = await fetchEmbeddingBatch(
         angles.map((a) => a.text),
-        baseUrl
+        embeddingsUrl
       )
       if (!result.ok) throw new Error(result.error.message)
       return toHydeQueries(language, angles, result.value)
@@ -298,7 +298,7 @@ const resolveCorpusSql = async (
   )
   if (!inclusionsResult.ok) return invalid(inclusionsResult.error.message)
 
-  const embedded = await embedAndFlattenAll(inclusionsResult.value, ctx.baseUrl)
+  const embedded = await embedAndFlattenAll(inclusionsResult.value, ctx.embeddingsUrl)
   if (!embedded.ok) return invalid(embedded.error.message)
 
   const keywords = extractKeywords(inclusionsResult.value)
@@ -349,7 +349,7 @@ const resolveFileSql = async (
     const fileResult = await resolveFileInclusions(filename, languages, fileHash, fileContent, ctx)
     if (!fileResult.ok) return invalid(fileResult.error.message)
 
-    const embedded = await embedAndFlattenAll(fileResult.value.inclusions, ctx.baseUrl)
+    const embedded = await embedAndFlattenAll(fileResult.value.inclusions, ctx.embeddingsUrl)
     if (!embedded.ok) return invalid(embedded.error.message)
 
     const keywords = extractKeywords(fileResult.value.inclusions)

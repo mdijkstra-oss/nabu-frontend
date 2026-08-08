@@ -60,14 +60,14 @@ export const buildRemaps = (
 
 export const groupNearbyLabels = async (
   labels: string[],
-  baseUrl: string,
+  embeddingsUrl: string,
   threshold: number,
   counts: Map<string, number> = new Map()
 ): Promise<LabelCluster[]> => {
   if (labels.length === 0) return []
   if (labels.length === 1) return [{ representative: labels[0], members: [labels[0]] }]
 
-  const result = await fetchEmbeddingBatch(labels, baseUrl)
+  const result = await fetchEmbeddingBatch(labels, embeddingsUrl)
   if (!result.ok) {
     console.warn(`[cluster] embedding failed: ${result.error.message}`)
     return labels.map((l) => ({ representative: l, members: [l] }))

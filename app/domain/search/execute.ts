@@ -3,7 +3,7 @@ import type { SearchHit } from "~/domain/search/types"
 import { ok, err } from "~/lib/fp/result"
 import { getFiles } from "~/lib/files/store"
 import { getDatabase } from "~/domain/db/database"
-import { getEmbeddingsHost } from "~/lib/embeddings/env"
+import { getEmbeddingsUrl } from "~/lib/embeddings/env"
 import { buildSemanticContext } from "~/domain/corpus/init"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import { updateSearchCache } from "~/lib/agent/tools/search/settings"
@@ -21,7 +21,7 @@ export const executeSearchById = async (
   const db = getDatabase()
   if (!db) return err(`No database available to execute search: ${searchId}`)
 
-  const ctx = await buildSemanticContext(db, getEmbeddingsHost())
+  const ctx = await buildSemanticContext(db, getEmbeddingsUrl())
 
   const resolved = await resolveSemanticSql(entry.sql, {
     ...ctx,
