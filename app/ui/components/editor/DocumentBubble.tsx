@@ -4,6 +4,7 @@ import { useCallback, useRef, type ReactNode } from "react"
 import { useEditorSelection } from "~/ui/hooks/useEditorSelection"
 import { useScrollToEntity } from "~/ui/hooks/useScrollToEntity"
 import { toDisplayName } from "~/lib/files/filename"
+import { consumeTitleEdit, useTitleEditRequested } from "~/lib/ui/title-edit"
 import { MilkdownEditor } from "./MilkdownEditor"
 import { ScrollGutter } from "./ScrollGutter"
 import { ScrollShadow } from "~/ui/components/ScrollShadow"
@@ -76,6 +77,11 @@ export const DocumentBubble = ({
   const editorSelection = useEditorSelection()
   useScrollToEntity(editorContainerRef, readOnly ? null : filename)
 
+  const renameRequested = useTitleEditRequested(filename)
+  const settleRenameRequest = useCallback(() => {
+    consumeTitleEdit(filename)
+  }, [filename])
+
   const handleScrollTo = useCallback((percent: number) => {
     const container = scrollContainerRef.current
     if (!container) return
@@ -104,6 +110,8 @@ export const DocumentBubble = ({
         menuItems={menuItems}
         onAddTag={onAddTag}
         onRename={readOnly || headerOnly ? undefined : onRenameTitle}
+        renameRequested={renameRequested}
+        onRenameSettled={settleRenameRequest}
         className={headerClassName}
       />
       {headerOnly ? (

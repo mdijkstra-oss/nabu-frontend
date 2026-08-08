@@ -99,6 +99,7 @@ import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 import { ActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
 import { pointAt, clearPointing } from "~/lib/ui/pointing"
 import { getSelectedCodes, getSelectedDocs } from "~/domain/data-blocks/ux/selectors"
+import { requestTitleEdit } from "~/lib/ui/title-edit"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
 import { getAllCodes, findCodeById } from "~/domain/data-blocks/callout/codes/selectors"
 
@@ -405,7 +406,8 @@ export default function ProjectLayout() {
     // getFiles() over the hook snapshot: the store notifies debounced, so the
     // snapshot can lag and hand out an already-taken name.
     const filename = nextUntitledFilename(Object.keys(getFiles()))
-    updateFileRaw(filename, "# Untitled\n")
+    updateFileRaw(filename, "")
+    requestTitleEdit(filename)
     handleDocumentSelect(filename)
   }
 

@@ -27,6 +27,8 @@ interface FileHeaderProps {
   menuItems?: MenuItem[]
   onTitleClick?: () => void
   onRename?: (title: string) => void
+  renameRequested?: boolean
+  onRenameSettled?: () => void
   trailing?: ReactNode
   className?: string
 }
@@ -56,13 +58,17 @@ const titleStyle = "min-w-0 grow text-body-bold font-body-bold text-default-font
 const EditableTitle = ({
   title,
   onRename,
+  renameRequested = false,
+  onRenameSettled,
 }: {
   title: string
   onRename: (title: string) => void
+  renameRequested?: boolean
+  onRenameSettled?: () => void
 }) => {
   const [draft, setDraft] = useState<string | null>(null)
 
-  if (draft === null) {
+  if (draft === null && !renameRequested) {
     return (
       <button
         type="button"
@@ -74,9 +80,16 @@ const EditableTitle = ({
     )
   }
 
-  const commit = () => {
-    const next = draft.trim()
+  const value = draft ?? ""
+
+  const close = () => {
     setDraft(null)
+    onRenameSettled?.()
+  }
+
+  const commit = () => {
+    const next = value.trim()
+    close()
     if (next !== "" && next !== title) onRename(next)
   }
 
@@ -84,15 +97,16 @@ const EditableTitle = ({
     <input
       autoFocus
       aria-label="Document title"
-      value={draft}
+      placeholder="Name this document"
+      value={value}
       onChange={(e) => setDraft(e.target.value)}
       onFocus={(e) => e.currentTarget.select()}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") commit()
-        if (e.key === "Escape") setDraft(null)
+        if (e.key === "Escape") close()
       }}
-      className={cn(titleStyle, "bg-transparent outline-none")}
+      className={cn(titleStyle, "bg-transparent outline-none placeholder:text-neutral-400")}
     />
   )
 }
@@ -106,6 +120,8 @@ export const FileHeader = ({
   menuItems = [],
   onTitleClick,
   onRename,
+  renameRequested,
+  onRenameSettled,
   trailing,
   className,
 }: FileHeaderProps) => (
@@ -124,7 +140,12 @@ export const FileHeader = ({
       </span>
     )}
     {onRename ? (
-      <EditableTitle title={title} onRename={onRename} />
+      <EditableTitle
+        title={title}
+        onRename={onRename}
+        renameRequested={renameRequested}
+        onRenameSettled={onRenameSettled}
+      />
     ) : onTitleClick ? (
       <button
         type="button"

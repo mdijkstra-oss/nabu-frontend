@@ -17,6 +17,7 @@ import { createAnnotationsPlugin, annotationsMeta } from "~/lib/editor/annotatio
 import { createSpotlightPlugin, spotlightMeta } from "~/lib/editor/spotlight/plugin"
 import { createSelectionPlugin } from "~/lib/editor/selection/plugin"
 import { createHiddenBlocksPlugin } from "~/lib/editor/hidden-blocks/plugin"
+import { createPlaceholderPlugin } from "~/lib/editor/placeholder/plugin"
 import { createCalloutBlocksPlugin } from "~/lib/editor/callout-blocks/plugin"
 import { AnnotationHover } from "./AnnotationHover"
 import { FloatingToolbar } from "./FloatingToolbar"
@@ -68,6 +69,7 @@ const MilkdownEditorCore = ({
   const spotlightPlugin = $prose(() => createSpotlightPlugin())
   const selectionPlugin = $prose(() => createSelectionPlugin(filePath ?? null))
   const hiddenBlocksPlugin = $prose(() => createHiddenBlocksPlugin())
+  const placeholderPlugin = $prose(() => createPlaceholderPlugin())
   const gapCursorPlugin = $prose(gapCursor)
   const calloutBlocksPlugin = createCalloutBlocksPlugin(nodeViewFactory)
   const prevContentRef = useRef(defaultValue)
@@ -122,6 +124,7 @@ const MilkdownEditorCore = ({
           .use(history)
           .use(clipboard)
           .use(gapCursorPlugin)
+          .use(placeholderPlugin)
       }
 
       if (debugMode) return editor
