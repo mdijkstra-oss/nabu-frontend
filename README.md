@@ -70,7 +70,7 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 
 - [nabu-storage](https://github.com/mdijkstra-oss/nabu-storage) — file storage and sync, the Go service behind `VITE_API_HOST`
 - [nabu-prompts](https://github.com/mdijkstra-oss/nabu-prompts) — the model gateway behind `VITE_LLM_HOST`: one Markdown file per agent, served by chancery over dragoman
-- [nabu-embeddings](https://github.com/mdijkstra-oss/nabu-embeddings) — the `/embeddings` route behind `VITE_EMBEDDINGS_HOST`, holding the provider key a browser cannot
+- [nabu-embeddings](https://github.com/mdijkstra-oss/nabu-embeddings) — the `/embeddings` route behind `VITE_EMBEDDINGS_URL`, holding the provider key a browser cannot
 
 ## Known gaps
 
@@ -89,13 +89,13 @@ The app expects three services, each of which comes up with `docker compose up` 
 
 ### Environment variables
 
-| Env var                      | Default                  | Points at                                                                                                                                                                              |
-| ---------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_API_HOST`              | `localhost:8080`         | [nabu-storage](https://github.com/mdijkstra-oss/nabu-storage), persistence and sync. Host and port only — the scheme follows the page's own, so an HTTPS page reaches it over `wss://` |
-| `VITE_LLM_HOST`              | `http://localhost:8081`  | [nabu-prompts](https://github.com/mdijkstra-oss/nabu-prompts), the model gateway                                                                                                       |
-| `VITE_EMBEDDINGS_HOST`       | `http://localhost:8082`  | [nabu-embeddings](https://github.com/mdijkstra-oss/nabu-embeddings), the `/embeddings` route                                                                                           |
-| `VITE_EMBEDDINGS_MODEL`      | `text-embedding-3-large` | the model every stored vector was written with                                                                                                                                         |
-| `VITE_EMBEDDINGS_DIMENSIONS` | `1024`                   | the width every stored vector was written at                                                                                                                                           |
+| Env var                      | Default                            | Points at                                                                                                                                                                                                                                                                           |
+| ---------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_HOST`              | `localhost:8080`                   | [nabu-storage](https://github.com/mdijkstra-oss/nabu-storage), persistence and sync. A bare `host[:port]` — the scheme follows the page's own, so an HTTPS page reaches it over `wss://` — or a `/`-prefixed path such as `/api`, resolved against the page's own origin at runtime |
+| `VITE_LLM_HOST`              | `http://localhost:8081`            | [nabu-prompts](https://github.com/mdijkstra-oss/nabu-prompts), the model gateway. A full URL, or a `/`-prefixed path such as `/llm`                                                                                                                                                 |
+| `VITE_EMBEDDINGS_URL`        | `http://localhost:8082/embeddings` | [nabu-embeddings](https://github.com/mdijkstra-oss/nabu-embeddings), the embeddings endpoint itself. A full URL, or a root-relative one such as `/embeddings`                                                                                                                       |
+| `VITE_EMBEDDINGS_MODEL`      | `text-embedding-3-large`           | the model every stored vector was written with                                                                                                                                                                                                                                      |
+| `VITE_EMBEDDINGS_DIMENSIONS` | `1024`                             | the width every stored vector was written at                                                                                                                                                                                                                                        |
 
 Vite reads these when it builds, so they end up compiled into the bundle rather than read from the environment the app runs in. `npm run dev` picks them up from `.env`; a built app carries whatever was set at build time, and pointing it somewhere else is a rebuild.
 
@@ -106,11 +106,13 @@ Vite reads these when it builds, so they end up compiled into the bundle rather 
 
 The image builds the app and serves the result from Caddy. Each variable above is a build arg, and one left out falls through to its default.
 
+With every service behind one reverse-proxy origin, the `/`-prefixed values (`/api`, `/llm`, `/embeddings`) bake a bundle that reaches its backends on whatever host the browser opened — localhost and a LAN address alike.
+
 ```bash
 docker build -t nabu-frontend \
   --build-arg VITE_API_HOST=nabu.example.com \
   --build-arg VITE_LLM_HOST=https://prompts.example.com \
-  --build-arg VITE_EMBEDDINGS_HOST=https://embeddings.example.com .
+  --build-arg VITE_EMBEDDINGS_URL=https://embeddings.example.com/embeddings .
 docker run -p 8080:8080 nabu-frontend
 ```
 
