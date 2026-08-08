@@ -25,7 +25,13 @@ import {
   type IdResolver,
 } from "~/lib/data-blocks/normalize"
 import { findAnnotationById } from "~/domain/data-blocks/attributes/annotations/selectors"
-import { SETTINGS_FILE, PREFERENCES_FILE, isMarkdownFile, isCompanionFile } from "./filename"
+import {
+  SETTINGS_FILE,
+  PREFERENCES_FILE,
+  isMarkdownFile,
+  isCompanionFile,
+  companionFilename,
+} from "./filename"
 import { validateStructural } from "~/lib/data-blocks/validate"
 import { FileCorruptionError } from "./errors"
 
@@ -148,6 +154,13 @@ export const setCurrentFile = (filename: string | null): void => {
   notify()
 }
 
+// The editor emits this form so updateFileRaw's own normalization is a no-op on it
+// and the store's echo compares equal to what the editor remembered — anything else
+// fires replaceAll and resets the cursor mid-typing. Rests on normalizeFile being
+// idempotent (pinned in store.test.ts).
+export const normalizeAsStored = (raw: string): string =>
+  normalizeFile(raw, (id) => findAnnotationById(files, id)?.text)
+
 export interface UpdateFileOptions {
   immediate?: boolean
   skipPendingRefs?: boolean
@@ -229,6 +242,13 @@ export const renameFile = (oldName: string, newName: string): void => {
     currentFile = newName
   }
   persistRenameCommand(oldName, newName)
+
+  // The companion's vectors are keyed by chunk hash, so they stay valid under the
+  // new name; carrying it along saves the embedding sync's delete-and-re-embed
+  // round trip. Recurses at most once: hidden files never have companions.
+  const companion = companionFilename(oldName)
+  if (files[companion] !== undefined) renameFile(companion, companionFilename(newName))
+
   notify()
 }
 

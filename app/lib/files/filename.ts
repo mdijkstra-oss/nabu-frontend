@@ -9,6 +9,8 @@ export const isHiddenFile = (path: string): boolean => path.includes(".hidden.")
 
 export const COMPANION_SUFFIX = ".embeddings.hidden.md"
 export const isCompanionFile = (path: string): boolean => path.endsWith(COMPANION_SUFFIX)
+export const companionFilename = (source: string): string =>
+  source.replace(/\.md$/, COMPANION_SUFFIX)
 
 export const isMarkdownFile = (path: string): boolean => path.endsWith(".md")
 
@@ -63,10 +65,34 @@ export const boldMissingFile = (id: string): string | null =>
 
 const UNTITLED_BASE = "untitled"
 
-export const nextUntitledFilename = (existingNames: Iterable<string>): string => {
+export const nextAvailableFilename = (desired: string, existingNames: Iterable<string>): string => {
   const names = new Set(existingNames)
-  if (!names.has(`${UNTITLED_BASE}.md`)) return `${UNTITLED_BASE}.md`
+  if (!names.has(desired)) return desired
+  const base = desired.replace(/\.md$/, "")
   let counter = 2
-  while (names.has(`${UNTITLED_BASE}-${counter}.md`)) counter++
-  return `${UNTITLED_BASE}-${counter}.md`
+  while (names.has(`${base}-${counter}.md`)) counter++
+  return `${base}-${counter}.md`
+}
+
+export const nextUntitledFilename = (existingNames: Iterable<string>): string =>
+  nextAvailableFilename(`${UNTITLED_BASE}.md`, existingNames)
+
+// Inverse of toDisplayName up to case: spaces become the underscores toDisplayName
+// shows as spaces, so a committed title re-displays as it was typed.
+export const displayNameToFilename = (display: string): string => {
+  const flat = display.trim().replace(/\s+/g, " ").replace(/\.md$/i, "")
+  return flat === "" ? `${UNTITLED_BASE}.md` : normalizeFilename(`${flat}.md`)
+}
+
+// null: nothing to rename — the title already names this file, or the only free
+// variant of the desired name is the current name itself.
+export const renameTargetFor = (
+  current: string,
+  display: string,
+  existingNames: Iterable<string>
+): string | null => {
+  const others = new Set(existingNames)
+  others.delete(current)
+  const target = nextAvailableFilename(displayNameToFilename(display), others)
+  return target === current ? null : target
 }

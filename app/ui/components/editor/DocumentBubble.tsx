@@ -48,6 +48,7 @@ interface DocumentBubbleProps {
   onRemoveTag?: (tagId: string) => void
   onClick?: () => void
   onChange?: (markdown: string) => void
+  onRenameTitle?: (title: string) => void
   className?: string
 }
 
@@ -67,6 +68,7 @@ export const DocumentBubble = ({
   onRemoveTag,
   onClick,
   onChange,
+  onRenameTitle,
   className,
 }: DocumentBubbleProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -101,6 +103,7 @@ export const DocumentBubble = ({
         onRemoveTag={onRemoveTag}
         menuItems={menuItems}
         onAddTag={onAddTag}
+        onRename={readOnly || headerOnly ? undefined : onRenameTitle}
         className={headerClassName}
       />
       {headerOnly ? (

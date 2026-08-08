@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { MoreHorizontal, Plus } from "lucide-react"
 import * as SubframeCore from "@subframe/core"
 import { DropdownMenu } from "~/ui/components/DropdownMenu"
@@ -26,6 +26,7 @@ interface FileHeaderProps {
   onAddTag?: () => void
   menuItems?: MenuItem[]
   onTitleClick?: () => void
+  onRename?: (title: string) => void
   trailing?: ReactNode
   className?: string
 }
@@ -50,6 +51,52 @@ const TagDot = ({ tag, onRemove }: { tag: TagDefinition; onRemove?: () => void }
   )
 }
 
+const titleStyle = "min-w-0 grow text-body-bold font-body-bold text-default-font"
+
+const EditableTitle = ({
+  title,
+  onRename,
+}: {
+  title: string
+  onRename: (title: string) => void
+}) => {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  if (draft === null) {
+    return (
+      <button
+        type="button"
+        onClick={() => setDraft(title)}
+        className={cn(titleStyle, "truncate text-left")}
+      >
+        {title}
+      </button>
+    )
+  }
+
+  const commit = () => {
+    const next = draft.trim()
+    setDraft(null)
+    if (next !== "" && next !== title) onRename(next)
+  }
+
+  return (
+    <input
+      autoFocus
+      aria-label="Document title"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={(e) => e.currentTarget.select()}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit()
+        if (e.key === "Escape") setDraft(null)
+      }}
+      className={cn(titleStyle, "bg-transparent outline-none")}
+    />
+  )
+}
+
 export const FileHeader = ({
   title,
   date,
@@ -58,6 +105,7 @@ export const FileHeader = ({
   onAddTag,
   menuItems = [],
   onTitleClick,
+  onRename,
   trailing,
   className,
 }: FileHeaderProps) => (
@@ -75,18 +123,18 @@ export const FileHeader = ({
         ))}
       </span>
     )}
-    {onTitleClick ? (
+    {onRename ? (
+      <EditableTitle title={title} onRename={onRename} />
+    ) : onTitleClick ? (
       <button
         type="button"
         onClick={onTitleClick}
-        className="min-w-0 grow truncate text-left text-body-bold font-body-bold text-default-font transition-colors hover:text-brand-600"
+        className={cn(titleStyle, "truncate text-left transition-colors hover:text-brand-600")}
       >
         {title}
       </button>
     ) : (
-      <span className="min-w-0 grow truncate text-body-bold font-body-bold text-default-font">
-        {title}
-      </span>
+      <span className={cn(titleStyle, "truncate")}>{title}</span>
     )}
     <div className="flex flex-none items-center gap-2.5">
       {trailing}

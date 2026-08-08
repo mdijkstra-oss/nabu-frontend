@@ -8,7 +8,8 @@ import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
 import { selectedFiles } from "~/domain/data-blocks/ux/selectors"
 import { buildSelectionEntry } from "~/domain/search/selection-search"
 import { saveNewSearch } from "~/lib/agent/tools/search/settings"
-import { updateFileRaw } from "~/lib/files/store"
+import { updateFileRaw, renameFile, schedulePersist, getFiles } from "~/lib/files/store"
+import { isProtectedFile, isHiddenFile, renameTargetFor } from "~/lib/files/filename"
 import { FileCorruptionError } from "~/lib/files/errors"
 import { useProject } from "./project"
 import { DocumentBubble } from "~/ui/components/editor/DocumentBubble"
@@ -79,6 +80,22 @@ export default function ProjectFile() {
     [currentFile]
   )
 
+  const handleRenameTitle = useCallback(
+    (title: string) => {
+      if (!currentFile) return
+      // getFiles() over the hook snapshot: the store notifies debounced, so the
+      // snapshot can lag and hand out an already-taken name.
+      const target = renameTargetFor(currentFile, title, Object.keys(getFiles()))
+      if (!target) return
+      renameFile(currentFile, target)
+      // renameFile cancels the pending debounced write of the old name; a write
+      // under the new name keeps keystrokes typed just before the rename.
+      schedulePersist(target)
+      navigate(`/project/${params.projectId}/file/${encodeURIComponent(target)}`)
+    },
+    [currentFile, params.projectId, navigate]
+  )
+
   const handleRemoveTag = useCallback(
     (tagId: string) => {
       if (!currentFile) return
@@ -122,6 +139,15 @@ export default function ProjectFile() {
             onAddTag={() => undefined}
             onRemoveTag={handleRemoveTag}
             onChange={handleEditorChange}
+            // preferences.md is hardcoded (REQUIRED_FILES, agent memory): renaming
+            // it strands the next boot in waitForRequiredFiles. Hidden files open
+            // editable in debug expanded mode, but their title strips ".hidden",
+            // so a rename through it would silently un-hide them.
+            onRenameTitle={
+              isProtectedFile(currentFile) || isHiddenFile(currentFile)
+                ? undefined
+                : handleRenameTitle
+            }
           />
         }
       />

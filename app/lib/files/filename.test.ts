@@ -6,6 +6,9 @@ import {
   isProtectedFile,
   isHiddenFile,
   nextUntitledFilename,
+  nextAvailableFilename,
+  displayNameToFilename,
+  renameTargetFor,
   PREFERENCES_FILE,
   SETTINGS_FILE,
 } from "./filename"
@@ -108,6 +111,95 @@ describe("nextUntitledFilename", () => {
   ]
   it.each(cases)("$existing → $expected", ({ existing, expected }) => {
     expect(nextUntitledFilename(existing)).toBe(expected)
+  })
+})
+
+describe("nextAvailableFilename", () => {
+  const cases = [
+    { desired: "notes.md", existing: [], expected: "notes.md" },
+    { desired: "notes.md", existing: ["other.md"], expected: "notes.md" },
+    { desired: "notes.md", existing: ["notes.md"], expected: "notes-2.md" },
+    { desired: "notes.md", existing: ["notes.md", "notes-2.md"], expected: "notes-3.md" },
+    { desired: "notes.md", existing: ["notes-2.md"], expected: "notes.md" },
+    // A gap is filled rather than counting past the highest taken number.
+    { desired: "notes.md", existing: ["notes.md", "notes-3.md"], expected: "notes-2.md" },
+  ]
+  it.each(cases)('"$desired" among $existing → "$expected"', ({ desired, existing, expected }) => {
+    expect(nextAvailableFilename(desired, existing)).toBe(expected)
+  })
+})
+
+describe("displayNameToFilename", () => {
+  const cases = [
+    { input: "My Document", expected: "my_document.md" },
+    { input: "Preferences", expected: "preferences.md" },
+    { input: "  padded  ", expected: "padded.md" },
+    { input: "Repeated   Spaces", expected: "repeated_spaces.md" },
+    { input: "Hyphen-ated", expected: "hyphen-ated.md" },
+    { input: "Café Señor", expected: "cafe_senor.md" },
+    { input: "Straße Øst", expected: "strasse_ost.md" },
+    { input: "v1.2 Notes", expected: "v1.2_notes.md" },
+    { input: "Q&A: Session #3", expected: "q_a__session__3.md" },
+    { input: "Notes.md", expected: "notes.md" },
+    { input: "Trailing...", expected: "trailing.md" },
+    { input: "名前", expected: "__.md" },
+    { input: "", expected: "untitled.md" },
+    { input: "   ", expected: "untitled.md" },
+    { input: ".md", expected: "untitled.md" },
+  ]
+  it.each(cases)('"$input" → "$expected"', ({ input, expected }) => {
+    expect(displayNameToFilename(input)).toBe(expected)
+  })
+
+  // The header re-derives its title from the committed filename; for plain titles
+  // the user must see exactly what they typed.
+  it("round-trips plain titles through toDisplayName", () => {
+    for (const title of ["My Document", "Meeting Notes", "Preferences"]) {
+      expect(toDisplayName(displayNameToFilename(title))).toBe(title)
+    }
+  })
+})
+
+describe("renameTargetFor", () => {
+  const cases = [
+    {
+      name: "renames to the typed title",
+      current: "notes.md",
+      display: "Meeting Notes",
+      existing: ["notes.md"],
+      expected: "meeting_notes.md",
+    },
+    {
+      name: "no-op when the title already names this file",
+      current: "notes.md",
+      display: "Notes",
+      existing: ["notes.md"],
+      expected: null,
+    },
+    {
+      name: "no-op on a case-only edit",
+      current: "my_doc.md",
+      display: "MY DOC",
+      existing: ["my_doc.md"],
+      expected: null,
+    },
+    {
+      name: "suffixes when the name is taken by another file",
+      current: "notes.md",
+      display: "Draft",
+      existing: ["notes.md", "draft.md"],
+      expected: "draft-2.md",
+    },
+    {
+      name: "no-op when the free suffix is the current name",
+      current: "notes-2.md",
+      display: "Notes",
+      existing: ["notes.md", "notes-2.md"],
+      expected: null,
+    },
+  ]
+  it.each(cases)("$name", ({ current, display, existing, expected }) => {
+    expect(renameTargetFor(current, display, existing)).toBe(expected)
   })
 })
 

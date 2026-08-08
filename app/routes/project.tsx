@@ -359,6 +359,15 @@ export default function ProjectLayout() {
         if (decoded !== currentFile) setCurrentFile(decoded)
         return
       }
+      // A rename drops the URL's file from the store before the navigation to
+      // the new name lands; renameFile has already moved currentFile there, so
+      // follow it instead of bouncing to the first file.
+      if (currentFile && currentFile in files) {
+        navigate(`/project/${params.projectId}/file/${encodeURIComponent(currentFile)}`, {
+          replace: true,
+        })
+        return
+      }
     }
 
     navigateToFirstFile()
@@ -366,9 +375,11 @@ export default function ProjectLayout() {
     loading,
     params.fileId,
     params.searchId,
+    params.projectId,
     files,
     currentFile,
     setCurrentFile,
+    navigate,
     navigateToFirstFile,
   ])
 

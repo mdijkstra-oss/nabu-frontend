@@ -25,6 +25,7 @@ import { FilePathProvider } from "./FilePathContext"
 import { DebugOptionsProvider } from "./DebugOptionsContext"
 import type { DebugOptions } from "./debug-config"
 import { useFiles } from "~/ui/hooks/useFiles"
+import { normalizeAsStored } from "~/lib/files/store"
 import {
   getAnnotations,
   selectVisibleAnnotations,
@@ -106,12 +107,15 @@ const MilkdownEditorCore = ({
         editor
           .config((ctx) => {
             ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
-              if (markdown === prevContentRef.current) return
-              // Set before notifying: when the store echoes this markdown back as
-              // defaultValue, the contentChanged check stays false and replaceAll
-              // (which would reset the cursor) does not fire.
-              prevContentRef.current = markdown
-              onChangeRef.current?.(markdown)
+              // Emit the store's canonical form (serialization differs: remark
+              // space-indents nested lists, the store tabifies), set before
+              // notifying: when the store echoes it back as defaultValue, the
+              // contentChanged check stays false and replaceAll (which would
+              // reset the cursor) does not fire.
+              const canonical = normalizeAsStored(markdown)
+              if (canonical === prevContentRef.current) return
+              prevContentRef.current = canonical
+              onChangeRef.current?.(canonical)
             })
           })
           .use(listener)

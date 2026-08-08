@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest"
-import { setFiles, updateFileRaw, getFileRaw } from "./store"
+import { setFiles, updateFileRaw, getFileRaw, renameFile, normalizeAsStored } from "./store"
 import { FileCorruptionError } from "./errors"
 
 const reset = () => setFiles({})
@@ -69,5 +69,53 @@ describe("updateFileRaw structural floor", () => {
       updateFileRaw("doc.md", validMd)
       expect(() => updateFileRaw("doc.md", validMd)).not.toThrow()
     })
+  })
+})
+
+// The editor emits normalizeAsStored(markdown) and remembers it as the expected
+// echo; the scheme only holds if the store's write path cannot change it further.
+describe("normalizeAsStored", () => {
+  afterEach(reset)
+
+  const serialized = "* parent\n    * child\n- dash item\n"
+
+  it("matches what updateFileRaw stores", () => {
+    updateFileRaw("doc.md", serialized)
+    expect(normalizeAsStored(serialized)).toBe(getFileRaw("doc.md"))
+  })
+
+  it("tabifies remark's space-indented nesting", () => {
+    expect(normalizeAsStored(serialized)).toBe("* parent\n\t\t* child\n* dash item\n")
+  })
+
+  it("is idempotent", () => {
+    const once = normalizeAsStored(serialized)
+    expect(normalizeAsStored(once)).toBe(once)
+  })
+})
+
+describe("renameFile", () => {
+  afterEach(reset)
+
+  const companionMd = '```json-embeddings\n{"hash":"h","text":"t","embedding":[0.1]}\n```\n'
+
+  it("carries the embeddings companion along", () => {
+    setFiles({
+      "doc.md": "# Doc\n",
+      "doc.embeddings.hidden.md": companionMd,
+      "other.md": "# Other\n",
+    })
+    renameFile("doc.md", "note.md")
+    expect(getFileRaw("doc.md")).toBe("")
+    expect(getFileRaw("note.md")).toContain("# Doc")
+    expect(getFileRaw("doc.embeddings.hidden.md")).toBe("")
+    expect(getFileRaw("note.embeddings.hidden.md")).toContain("json-embeddings")
+  })
+
+  it("renames plainly when no companion exists", () => {
+    setFiles({ "doc.md": "# Doc\n" })
+    renameFile("doc.md", "note.md")
+    expect(getFileRaw("note.md")).toContain("# Doc")
+    expect(getFileRaw("note.embeddings.hidden.md")).toBe("")
   })
 })
