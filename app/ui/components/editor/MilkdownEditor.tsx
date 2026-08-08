@@ -6,6 +6,7 @@ import { commonmark } from "@milkdown/kit/preset/commonmark"
 import { gfm } from "@milkdown/kit/preset/gfm"
 import { history } from "@milkdown/kit/plugin/history"
 import { clipboard } from "@milkdown/kit/plugin/clipboard"
+import { listener, listenerCtx } from "@milkdown/kit/plugin/listener"
 import { gapCursor } from "@milkdown/kit/prose/gapcursor"
 import "@milkdown/kit/prose/gapcursor/style/gapcursor.css"
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from "@milkdown/react"
@@ -49,6 +50,7 @@ interface MilkdownEditorCoreProps {
   readOnly: boolean
   spotlight: Spotlight | Spotlight[] | null
   filePath?: string
+  onChange?: (markdown: string) => void
 }
 
 const MilkdownEditorCore = ({
@@ -57,6 +59,7 @@ const MilkdownEditorCore = ({
   readOnly,
   spotlight,
   filePath,
+  onChange,
 }: MilkdownEditorCoreProps) => {
   const { files } = useFiles()
   const nodeViewFactory = useNodeViewFactory()
@@ -67,6 +70,12 @@ const MilkdownEditorCore = ({
   const gapCursorPlugin = $prose(gapCursor)
   const calloutBlocksPlugin = createCalloutBlocksPlugin(nodeViewFactory)
   const prevContentRef = useRef(defaultValue)
+  // The editor is only rebuilt on debugMode/readOnly changes; a ref keeps the
+  // listener pointed at the latest callback without a rebuild.
+  const onChangeRef = useRef(onChange)
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
   const [loading, getEditor] = useInstance()
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
   const rawAnnotations = useMemo(
@@ -94,7 +103,21 @@ const MilkdownEditorCore = ({
       if (readOnly) {
         editor.use(readOnlyPlugin)
       } else {
-        editor.use(history).use(clipboard).use(gapCursorPlugin)
+        editor
+          .config((ctx) => {
+            ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
+              if (markdown === prevContentRef.current) return
+              // Set before notifying: when the store echoes this markdown back as
+              // defaultValue, the contentChanged check stays false and replaceAll
+              // (which would reset the cursor) does not fire.
+              prevContentRef.current = markdown
+              onChangeRef.current?.(markdown)
+            })
+          })
+          .use(listener)
+          .use(history)
+          .use(clipboard)
+          .use(gapCursorPlugin)
       }
 
       if (debugMode) return editor
@@ -140,6 +163,7 @@ interface MilkdownEditorProps {
   readOnly?: boolean
   spotlight?: Spotlight | Spotlight[] | null
   filePath?: string
+  onChange?: (markdown: string) => void
 }
 
 export const MilkdownEditor = ({
@@ -149,6 +173,7 @@ export const MilkdownEditor = ({
   readOnly = false,
   spotlight = null,
   filePath,
+  onChange,
 }: MilkdownEditorProps) => {
   const containerClass = readOnly
     ? "w-full text-default-font"
@@ -163,6 +188,7 @@ export const MilkdownEditor = ({
             readOnly={readOnly}
             spotlight={spotlight}
             filePath={filePath}
+            onChange={onChange}
           />
         </ProsemirrorAdapterProvider>
       </MilkdownProvider>

@@ -60,3 +60,13 @@ export const toDisplayName = (filename: string): string =>
 
 export const boldMissingFile = (id: string): string | null =>
   id.endsWith(".md") ? `**${toDisplayName(id)}**` : null
+
+const UNTITLED_BASE = "untitled"
+
+export const nextUntitledFilename = (existingNames: Iterable<string>): string => {
+  const names = new Set(existingNames)
+  if (!names.has(`${UNTITLED_BASE}.md`)) return `${UNTITLED_BASE}.md`
+  let counter = 2
+  while (names.has(`${UNTITLED_BASE}-${counter}.md`)) counter++
+  return `${UNTITLED_BASE}-${counter}.md`
+}

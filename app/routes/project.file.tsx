@@ -8,6 +8,8 @@ import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
 import { selectedFiles } from "~/domain/data-blocks/ux/selectors"
 import { buildSelectionEntry } from "~/domain/search/selection-search"
 import { saveNewSearch } from "~/lib/agent/tools/search/settings"
+import { updateFileRaw } from "~/lib/files/store"
+import { FileCorruptionError } from "~/lib/files/errors"
 import { useProject } from "./project"
 import { DocumentBubble } from "~/ui/components/editor/DocumentBubble"
 import { DocumentStack } from "~/ui/components/editor/DocumentStack"
@@ -62,6 +64,21 @@ export default function ProjectFile() {
     [currentFile, getFileDateFn]
   )
 
+  const handleEditorChange = useCallback(
+    (markdown: string) => {
+      if (!currentFile) return
+      try {
+        updateFileRaw(currentFile, markdown)
+      } catch (e) {
+        // Mid-typing content can be transiently invalid (e.g. a half-typed JSON
+        // block); the store refuses and already logged it. The next keystroke
+        // that yields valid content saves.
+        if (!(e instanceof FileCorruptionError)) console.error("[editor]", e)
+      }
+    },
+    [currentFile]
+  )
+
   const handleRemoveTag = useCallback(
     (tagId: string) => {
       if (!currentFile) return
@@ -104,6 +121,7 @@ export default function ProjectFile() {
             ]}
             onAddTag={() => undefined}
             onRemoveTag={handleRemoveTag}
+            onChange={handleEditorChange}
           />
         }
       />

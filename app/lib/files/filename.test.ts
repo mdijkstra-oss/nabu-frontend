@@ -5,6 +5,7 @@ import {
   boldMissingFile,
   isProtectedFile,
   isHiddenFile,
+  nextUntitledFilename,
   PREFERENCES_FILE,
   SETTINGS_FILE,
 } from "./filename"
@@ -91,6 +92,22 @@ describe("isProtectedFile", () => {
   ]
   it.each(cases)('"$input" → $expected', ({ input, expected }) => {
     expect(isProtectedFile(input)).toBe(expected)
+  })
+})
+
+describe("nextUntitledFilename", () => {
+  const cases = [
+    { existing: [], expected: "untitled.md" },
+    { existing: ["notes.md"], expected: "untitled.md" },
+    { existing: ["untitled.md"], expected: "untitled-2.md" },
+    { existing: ["untitled.md", "untitled-2.md"], expected: "untitled-3.md" },
+    // A gap is filled rather than counting past the highest taken number.
+    { existing: ["untitled.md", "untitled-3.md"], expected: "untitled-2.md" },
+    { existing: ["untitled-2.md"], expected: "untitled.md" },
+    { existing: ["UNTITLED.md"], expected: "untitled.md" },
+  ]
+  it.each(cases)("$existing → $expected", ({ existing, expected }) => {
+    expect(nextUntitledFilename(existing)).toBe(expected)
   })
 })
 

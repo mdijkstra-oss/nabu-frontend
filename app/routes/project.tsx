@@ -46,6 +46,8 @@ import {
   resolvePendingRefsInBulk,
   auditPendingRefsAtBoot,
   waitForRequiredFiles,
+  getFiles,
+  updateFileRaw,
 } from "~/lib/files/store"
 import {
   startDatabase,
@@ -66,7 +68,7 @@ import {
   getStoredAnnotations,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { findDocumentForCallout } from "~/domain/data-blocks/callout/selectors"
-import { isHiddenFile } from "~/lib/files/filename"
+import { isHiddenFile, nextUntitledFilename } from "~/lib/files/filename"
 import { HIDDEN_TAG } from "~/domain/data-blocks/settings/tags/hidden"
 import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors"
 import {
@@ -388,6 +390,14 @@ export default function ProjectLayout() {
     navigate(`/project/${params.projectId}/file/${encodeURIComponent(filename)}`)
   }
 
+  const handleNewDocument = () => {
+    // getFiles() over the hook snapshot: the store notifies debounced, so the
+    // snapshot can lag and hand out an already-taken name.
+    const filename = nextUntitledFilename(Object.keys(getFiles()))
+    updateFileRaw(filename, "# Untitled\n")
+    handleDocumentSelect(filename)
+  }
+
   const latestSearch = useMemo(() => getLatestSearch(files), [files])
 
   const handleNavChange = useCallback(
@@ -704,7 +714,7 @@ export default function ProjectLayout() {
         onSearchChange={setSearchValue}
         onSortChange={handleDocSortChange}
         onDocumentSelect={handleDocumentSelect}
-        onNewDocument={() => undefined}
+        onNewDocument={handleNewDocument}
       />
     ),
     exhibits: (

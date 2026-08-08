@@ -47,6 +47,7 @@ interface DocumentBubbleProps {
   onAddTag?: () => void
   onRemoveTag?: (tagId: string) => void
   onClick?: () => void
+  onChange?: (markdown: string) => void
   className?: string
 }
 
@@ -65,6 +66,7 @@ export const DocumentBubble = ({
   onAddTag,
   onRemoveTag,
   onClick,
+  onChange,
   className,
 }: DocumentBubbleProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -132,6 +134,9 @@ export const DocumentBubble = ({
                 debugOptions={debugOptions}
                 spotlight={spotlight}
                 filePath={filename}
+                // JSON files are shown wrapped in a code fence (formatContent), so
+                // their serialized markdown is not the raw file — never write it back.
+                onChange={isJsonFile(filename) ? undefined : onChange}
               />
             </div>
           </ScrollShadow>
