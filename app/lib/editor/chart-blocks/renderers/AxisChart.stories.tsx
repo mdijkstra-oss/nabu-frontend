@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor } from "storybook/test"
-import { chartFixture, sampleTooltipContext } from "~/lib/chart/test-helpers"
-import type { AxisRenderable, ChartType } from "~/lib/chart/types"
+import { renderableOfKind, sampleTooltipContext } from "~/lib/chart/test-helpers"
 import { withSize } from "../../../../../.storybook/decorators"
 import { AxisChart } from "./AxisChart"
+import { CHART_HEIGHT } from "./shared"
 
 const meta: Meta<typeof AxisChart> = {
   title: "Custom/Charts/AxisChart",
@@ -14,15 +14,7 @@ const meta: Meta<typeof AxisChart> = {
 export default meta
 type Story = StoryObj<typeof AxisChart>
 
-const axisRenderable = (type: ChartType): AxisRenderable => {
-  const renderable = chartFixture(type).renderable
-  if (renderable.kind !== "axis") {
-    throw new Error(`${type} fixture resolved to a non-axis renderable`)
-  }
-  return renderable
-}
-
-const bar = axisRenderable("bar")
+const bar = renderableOfKind("bar", "axis")
 
 const getBarRects = (canvasElement: HTMLElement): Element[] => [
   ...canvasElement.querySelectorAll("svg .recharts-bar-rectangle"),
@@ -54,13 +46,13 @@ export const Bar: Story = {
   play: async ({ canvasElement }) => {
     const path = await findRenderedBarPath(canvasElement)
     expect(getComputedStyle(path).cursor).not.toBe("pointer")
-    expect(getLaidOutChartHeight(canvasElement)).toBe(300)
+    expect(getLaidOutChartHeight(canvasElement)).toBe(CHART_HEIGHT)
   },
 }
 
 export const StackedBar: Story = {
   args: {
-    renderable: axisRenderable("stacked-bar"),
+    renderable: renderableOfKind("stacked-bar", "axis"),
     tooltipContext: sampleTooltipContext(),
   },
   play: async ({ canvasElement }) => {
@@ -73,7 +65,7 @@ export const StackedBar: Story = {
 
 export const GroupedBar: Story = {
   args: {
-    renderable: axisRenderable("grouped-bar"),
+    renderable: renderableOfKind("grouped-bar", "axis"),
     tooltipContext: sampleTooltipContext(),
   },
   play: async ({ canvasElement }) => {
@@ -101,7 +93,7 @@ export const VerticalBar: Story = {
 
 export const Line: Story = {
   args: {
-    renderable: axisRenderable("line"),
+    renderable: renderableOfKind("line", "axis"),
     tooltipContext: sampleTooltipContext(),
   },
   play: async ({ canvasElement }) => {
@@ -113,7 +105,7 @@ export const Line: Story = {
 
 export const Area: Story = {
   args: {
-    renderable: axisRenderable("area"),
+    renderable: renderableOfKind("area", "axis"),
     tooltipContext: sampleTooltipContext(),
   },
   play: async ({ canvasElement }) => {
@@ -125,7 +117,7 @@ export const Area: Story = {
 
 export const Scatter: Story = {
   args: {
-    renderable: axisRenderable("scatter"),
+    renderable: renderableOfKind("scatter", "axis"),
     tooltipContext: sampleTooltipContext(),
   },
   play: async ({ canvasElement }) => {

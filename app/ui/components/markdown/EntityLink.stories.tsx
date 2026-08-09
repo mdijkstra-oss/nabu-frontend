@@ -30,9 +30,9 @@ const grassColors: ResolvedColors = {
   backgroundHover: hoveredElementBackground("grass"),
 }
 
-const resolveBackgroundColor = (host: HTMLElement, value: string): string => {
+const resolveBackgroundColor = (host: HTMLElement, background: string): string => {
   const probe = document.createElement("div")
-  probe.style.background = value
+  probe.style.background = background
   host.appendChild(probe)
   const color = getComputedStyle(probe).backgroundColor
   probe.remove()

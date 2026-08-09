@@ -1,15 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, waitFor, within } from "storybook/test"
-import { ChatSendButton, type ChatButtonMode } from "./ChatSendButton"
+import { ChatSendButton, CONFIGS, type ChatButtonMode } from "./ChatSendButton"
 
 const modes: ChatButtonMode[] = ["send", "skip-ask", "cancel", "cancel-plan"]
-
-const modeTooltip: Record<ChatButtonMode, string> = {
-  send: "Send",
-  "skip-ask": "Skip question",
-  cancel: "Cancel",
-  "cancel-plan": "Cancel plan",
-}
 
 const meta: Meta<typeof ChatSendButton> = {
   title: "Custom/Chat/ChatSendButton",
@@ -35,7 +28,7 @@ const singleModePlay =
     const button = canvas.getByRole("button")
     await userEvent.hover(button)
     await waitFor(() =>
-      expect(within(document.body).getAllByText(modeTooltip[mode]).length).toBeGreaterThan(0)
+      expect(within(document.body).getAllByText(CONFIGS[mode].tooltip).length).toBeGreaterThan(0)
     )
     await userEvent.click(button)
     for (const callback of ["onSend", "onSkipAsk", "onCancel", "onCancelPlan"] as const) {

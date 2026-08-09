@@ -1,18 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent } from "storybook/test"
+import { withSize } from "../../../../.storybook/decorators"
 import { SearchRow } from "./SearchBarView"
 import { recentSearches, savedSearches } from "./fixtures"
 
 const meta: Meta<typeof SearchRow> = {
   title: "Custom/Search/SearchRow",
   component: SearchRow,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 480 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "480px" })],
   args: {
     onSelect: fn(),
     onToggleSave: fn(),

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { ArrowRight, Link as LinkIcon } from "lucide-react"
+import { renderVariantMatrix } from "../../../.storybook/matrix"
 import { LinkButton } from "./LinkButton"
 
 const variants = ["brand", "neutral", "inverse"] as const
@@ -14,25 +15,13 @@ export default meta
 type Story = StoryObj<typeof LinkButton>
 
 export const Matrix: Story = {
-  render: () => (
-    <div
-      className="grid w-fit items-center gap-2"
-      style={{ gridTemplateColumns: `repeat(${sizes.length}, auto)` }}
-    >
-      {variants.flatMap((variant) =>
-        sizes.map((size) => (
-          <div
-            key={`${variant}-${size}`}
-            className={variant === "inverse" ? "rounded-md bg-slate-950 p-1" : "p-1"}
-          >
-            <LinkButton variant={variant} size={size}>
-              {variant}
-            </LinkButton>
-          </div>
-        ))
-      )}
-    </div>
-  ),
+  render: () =>
+    renderVariantMatrix(LinkButton, {
+      variants,
+      sizes,
+      propsFor: (variant, size) => ({ variant, size, children: variant }),
+      cellClassName: (variant) => (variant === "inverse" ? "rounded-md bg-slate-950 p-1" : "p-1"),
+    }),
 }
 
 export const Disabled: Story = {

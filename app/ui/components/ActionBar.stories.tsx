@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn } from "storybook/test"
 import { Pencil, Sparkles, Trash2 } from "lucide-react"
+import { withSize } from "../../../.storybook/decorators"
 import { ActionBar, type ActionBarAction } from "./FloatingActionBar"
 
 const actions: ActionBarAction[] = [
@@ -21,13 +22,7 @@ const detail = (
 const meta: Meta<typeof ActionBar> = {
   title: "Custom/Primitives/ActionBar",
   component: ActionBar,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 560, paddingTop: 160 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "560px", className: "pt-[160px]" })],
 }
 
 export default meta

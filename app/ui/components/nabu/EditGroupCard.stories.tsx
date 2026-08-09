@@ -2,12 +2,12 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, waitFor } from "storybook/test"
 import { withSize } from "../../../../.storybook/decorators"
 import { EditGroupCard } from "./EditGroupCard"
-import { editGroupSingle, editGroupMulti } from "./fixtures"
+import { editGroupSingle, editGroupMulti, CHAT_SIDEBAR_WIDTH } from "./fixtures"
 
 const meta: Meta<typeof EditGroupCard> = {
   title: "Custom/Chat/EditGroupCard",
   component: EditGroupCard,
-  decorators: [withSize({ width: "380px" })],
+  decorators: [withSize({ width: CHAT_SIDEBAR_WIDTH })],
   args: {
     onSelectFile: fn(),
   },

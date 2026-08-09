@@ -3,6 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 import { Download, Trash2 } from "lucide-react"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { formatShortDate } from "~/lib/format/date"
+import { withSize } from "../../../../.storybook/decorators"
 import { FileHeader } from "./FileHeader"
 
 const tags: TagDefinition[] = [
@@ -13,13 +14,7 @@ const tags: TagDefinition[] = [
 const meta: Meta<typeof FileHeader> = {
   title: "Custom/Editor/FileHeader",
   component: FileHeader,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 480 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "480px" })],
 }
 
 export default meta

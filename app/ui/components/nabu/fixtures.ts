@@ -11,6 +11,8 @@ import type { FinalSegment, KeyedSegment, StepStackSegment } from "./collapse"
 
 export const EPOCH = 1717000000000
 
+export const CHAT_SIDEBAR_WIDTH = "380px"
+
 export const userLeaf: LeafMessage = {
   type: "text",
   role: "user",

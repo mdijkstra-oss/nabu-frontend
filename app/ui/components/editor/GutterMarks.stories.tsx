@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent } from "storybook/test"
 import type { GutterMark } from "~/lib/editor/gutter/types"
+import { withSize } from "../../../../.storybook/decorators"
 import { GutterMarks } from "./ScrollGutter"
 
 const marks: GutterMark[] = [
@@ -11,23 +12,22 @@ const marks: GutterMark[] = [
 const meta: Meta<typeof GutterMarks> = {
   title: "Custom/Editor/GutterMarks",
   component: GutterMarks,
-  decorators: [
-    (Story) => (
-      <div style={{ height: 200 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ height: "200px" })],
 }
 
 export default meta
 type Story = StoryObj<typeof GutterMarks>
 
+const getTrack = (canvasElement: HTMLElement): HTMLElement => {
+  const track = canvasElement.querySelector<HTMLElement>(".cursor-pointer")
+  if (!track) throw new Error("track not rendered")
+  return track
+}
+
 export const Marks: Story = {
   args: { marks, onScrollTo: fn() },
   play: async ({ canvasElement }) => {
-    const track = canvasElement.querySelector<HTMLElement>(".cursor-pointer")
-    if (!track) throw new Error("track not rendered")
+    const track = getTrack(canvasElement)
     const rendered = [...track.children] as HTMLElement[]
     expect(rendered).toHaveLength(2)
 
@@ -44,8 +44,7 @@ export const Marks: Story = {
 export const ClickToScroll: Story = {
   args: { marks, onScrollTo: fn() },
   play: async ({ canvasElement, args }) => {
-    const track = canvasElement.querySelector<HTMLElement>(".cursor-pointer")
-    if (!track) throw new Error("track not rendered")
+    const track = getTrack(canvasElement)
 
     const rect = track.getBoundingClientRect()
     await userEvent.pointer({

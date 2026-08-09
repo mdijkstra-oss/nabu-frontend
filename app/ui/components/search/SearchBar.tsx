@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import type { SearchEntry } from "~/domain/search/types"
 import { searchBm25Live } from "~/lib/search/bm25/live"
-import { SearchBarView } from "./SearchBarView"
+import { queryTyping, SearchBarView } from "./SearchBarView"
 
 interface SearchBarProps {
   recentSearches: SearchEntry[]
@@ -23,8 +23,7 @@ const CORPUS_LIMIT = 16
 export const SearchBar = ({ scopeFiles, ...viewProps }: SearchBarProps) => {
   const [query, setQuery] = useState("")
 
-  const q = query.trim()
-  const typing = q.length > 0
+  const { q, typing } = queryTyping(query)
 
   const stackHits = useMemo(
     () => (typing ? searchBm25Live(q, IN_STACK_LIMIT, scopeFiles) : []),

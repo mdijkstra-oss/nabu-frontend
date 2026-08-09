@@ -6,12 +6,13 @@ import { getFiles, setFiles, withoutPersist, type FileStore } from "~/lib/files/
 interface SizeParams {
   width?: string
   height?: string
+  className?: string
 }
 
 export const withSize =
-  ({ width, height }: SizeParams): Decorator =>
+  ({ width, height, className }: SizeParams): Decorator =>
   (Story) => (
-    <div style={{ width, height }}>
+    <div className={className} style={{ width, height }}>
       <Story />
     </div>
   )

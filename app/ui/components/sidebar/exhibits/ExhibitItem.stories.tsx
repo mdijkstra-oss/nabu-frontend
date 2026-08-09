@@ -2,8 +2,15 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, within } from "storybook/test"
 import type { ChartSubtype } from "~/domain/exhibits/types"
 import { withSize } from "../../../../../.storybook/decorators"
+import { sampleDocuments } from "../documents/fixtures"
 import { CHART_SUBTYPES } from "./registry"
 import { ExhibitItem } from "./ExhibitItem"
+
+const docTitle = (id: string): string => {
+  const doc = sampleDocuments.find((d) => d.id === id)
+  if (!doc) throw new Error(`fixture document not found: ${id}`)
+  return doc.title
+}
 
 const meta: Meta<typeof ExhibitItem> = {
   title: "Custom/Sidebar/Exhibits/ExhibitItem",
@@ -46,7 +53,7 @@ export const Subtypes: Story = {
 export const Selected: Story = {
   args: {
     title: "Deforestation by Region",
-    documentTitle: "Habitat Destruction Framework",
+    documentTitle: docTitle("1"),
     icon: CHART_SUBTYPES.bar.icon,
     color: CHART_SUBTYPES.bar.color,
     selected: true,

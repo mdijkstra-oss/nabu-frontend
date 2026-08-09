@@ -2,7 +2,14 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 import type { ExhibitItem } from "~/domain/exhibits/types"
 import { withSize } from "../../../../../.storybook/decorators"
+import { sampleDocuments } from "../documents/fixtures"
 import { ExhibitsSidebar } from "./ExhibitsSidebar"
+
+const docTitle = (id: string): string => {
+  const doc = sampleDocuments.find((d) => d.id === id)
+  if (!doc) throw new Error(`fixture document not found: ${id}`)
+  return doc.title
+}
 
 const sampleExhibits: ExhibitItem[] = [
   {
@@ -11,7 +18,7 @@ const sampleExhibits: ExhibitItem[] = [
     kind: "chart",
     subtype: "bar",
     documentId: "1",
-    documentTitle: "Habitat Destruction Framework",
+    documentTitle: docTitle("1"),
   },
   {
     id: "e2",
@@ -19,7 +26,7 @@ const sampleExhibits: ExhibitItem[] = [
     kind: "chart",
     subtype: "line",
     documentId: "3",
-    documentTitle: "Amazon Rainforest Case Study",
+    documentTitle: docTitle("3"),
   },
   {
     id: "e3",
@@ -27,7 +34,7 @@ const sampleExhibits: ExhibitItem[] = [
     kind: "chart",
     subtype: "pie",
     documentId: "5",
-    documentTitle: "Species Survey Data",
+    documentTitle: docTitle("5"),
   },
   {
     id: "e4",
@@ -35,7 +42,7 @@ const sampleExhibits: ExhibitItem[] = [
     kind: "chart",
     subtype: "scatter",
     documentId: "3",
-    documentTitle: "Amazon Rainforest Case Study",
+    documentTitle: docTitle("3"),
   },
 ]
 

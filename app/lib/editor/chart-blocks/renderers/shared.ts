@@ -1,5 +1,6 @@
+export { FALLBACK_COLOR } from "~/lib/chart/color"
+
 export const CHART_HEIGHT = 300
-export const FALLBACK_COLOR = "#888888"
 
 interface PayloadWithEntityUrl {
   _entityUrl?: string

@@ -1,19 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, userEvent, waitFor } from "storybook/test"
+import { withSize } from "../../../.storybook/decorators"
 import { TextFieldUnstyled } from "./TextFieldUnstyled"
 
 const meta: Meta<typeof TextFieldUnstyled> = {
   title: "Custom/Primitives/TextFieldUnstyled",
   component: TextFieldUnstyled,
   decorators: [
-    (Story) => (
-      <div
-        style={{ width: 320 }}
-        className="rounded-md border border-solid border-neutral-border px-2"
-      >
-        <Story />
-      </div>
-    ),
+    withSize({
+      width: "320px",
+      className: "rounded-md border border-solid border-neutral-border px-2",
+    }),
   ],
 }
 

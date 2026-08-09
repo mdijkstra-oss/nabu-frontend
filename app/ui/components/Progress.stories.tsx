@@ -1,16 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
+import { withSize } from "../../../.storybook/decorators"
 import { Progress } from "./Progress"
 
 const meta: Meta<typeof Progress> = {
   title: "Custom/Primitives/Progress",
   component: Progress,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 240 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "240px" })],
 }
 
 export default meta

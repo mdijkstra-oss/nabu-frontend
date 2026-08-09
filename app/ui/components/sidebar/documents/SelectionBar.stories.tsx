@@ -1,16 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, waitFor } from "storybook/test"
+import { withSize } from "../../../../../.storybook/decorators"
 import { SelectionBar } from "./SelectionBar"
 
 const meta: Meta<typeof SelectionBar> = {
   title: "Custom/Sidebar/Documents/SelectionBar",
   component: SelectionBar,
   decorators: [
-    (Story) => (
-      <div className="group relative" style={{ width: 240, height: 40, background: "#f5f5f4" }}>
-        <Story />
-      </div>
-    ),
+    withSize({ width: "240px", height: "40px", className: "group relative bg-neutral-100" }),
   ],
 }
 

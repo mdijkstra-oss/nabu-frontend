@@ -1,8 +1,10 @@
 import type { ChartTooltipContext } from "~/lib/editor/chart-blocks/renderers/ChartTooltip"
-import type { ColorContext } from "./color"
+import { CHART_COLOR_SHADE, FALLBACK_COLOR, type ColorContext } from "./color"
 import { resolveChartData } from "./resolve"
 import type { ChartSpec, ChartType, RenderableChart, TemplateNode } from "./types"
 import type { ChartEntityMap } from "./types"
+
+const SAMPLE_SERIES_COLOR = "#4f46e5"
 
 export const entity = (id: string, label: string, color: string): ChartEntityMap[string] => ({
   id,
@@ -16,12 +18,12 @@ export const stubResolveRadix = (token: string, shade: number): string => `radix
 export const buildColorContext = (entityMap: ChartEntityMap = {}): ColorContext => ({
   entityMap,
   resolveRadix: stubResolveRadix,
-  shade: 9,
-  fallback: "#888888",
+  shade: CHART_COLOR_SHADE,
+  fallback: FALLBACK_COLOR,
 })
 
 const regionEntities: ChartEntityMap = {
-  north: entity("north", "North", "#4f46e5"),
+  north: entity("north", "North", SAMPLE_SERIES_COLOR),
   south: entity("south", "South", "#0d9488"),
 }
 
@@ -46,7 +48,7 @@ interface ChartFixtureSource {
 
 const fixtureSources: Record<ChartType, ChartFixtureSource> = {
   bar: {
-    spec: { type: "bar", x: "month", y: "count", color: "#4f46e5" },
+    spec: { type: "bar", x: "month", y: "count", color: SAMPLE_SERIES_COLOR },
     rows: monthlyRows,
   },
   "stacked-bar": {
@@ -78,7 +80,7 @@ const fixtureSources: Record<ChartType, ChartFixtureSource> = {
     rows: monthlyRows,
   },
   scatter: {
-    spec: { type: "scatter", x: "month", y: "count", color: "#4f46e5" },
+    spec: { type: "scatter", x: "month", y: "count", color: SAMPLE_SERIES_COLOR },
     rows: monthlyRows,
   },
   pie: {
@@ -90,7 +92,7 @@ const fixtureSources: Record<ChartType, ChartFixtureSource> = {
     rows: shareRows,
   },
   heatmap: {
-    spec: { type: "heatmap", x: "month", y: "region", value: "count", color: "#4f46e5" },
+    spec: { type: "heatmap", x: "month", y: "region", value: "count", color: SAMPLE_SERIES_COLOR },
     rows: monthlyRows,
   },
 }
@@ -117,6 +119,17 @@ export const chartFixture = (type: ChartType): ChartFixture => {
   }
 }
 
+export const renderableOfKind = <K extends RenderableChart["kind"]>(
+  type: ChartType,
+  kind: K
+): Extract<RenderableChart, { kind: K }> => {
+  const { renderable } = chartFixture(type)
+  if (renderable.kind !== kind) {
+    throw new Error(`${type} fixture resolved to a non-${kind} renderable`)
+  }
+  return renderable as Extract<RenderableChart, { kind: K }>
+}
+
 export const sampleTooltipContext = (entityMap: ChartEntityMap = {}): ChartTooltipContext => ({
   files: {},
   projectId: null,
@@ -139,7 +152,7 @@ export const sampleTooltipPayload = (
   {
     name: "count",
     value: 12,
-    color: "#4f46e5",
+    color: SAMPLE_SERIES_COLOR,
     payload: { _raw: { month: "Jan", count: 12 } },
     ...overrides,
   },

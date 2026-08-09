@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor } from "storybook/test"
-import { withRouter, withSeededFiles } from "../../../../.storybook/decorators"
+import { withRouter, withSeededFiles, withSize } from "../../../../.storybook/decorators"
 import { RunGroupCard } from "./cards"
 import { detailHits, tagDefinitions } from "./fixtures"
 
@@ -10,11 +10,7 @@ const meta: Meta<typeof RunGroupCard> = {
   decorators: [
     withSeededFiles({ "field_notes.md": "# Field notes\n\nThe river rose overnight." }),
     withRouter(),
-    (Story) => (
-      <div style={{ width: 640 }}>
-        <Story />
-      </div>
-    ),
+    withSize({ width: "640px" }),
   ],
   args: {
     title: "Field Notes",

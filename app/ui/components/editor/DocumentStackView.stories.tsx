@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, within } from "storybook/test"
+import { withSize } from "../../../../.storybook/decorators"
 import { DocumentStackView } from "./DocumentStack"
 
 const front = (
@@ -14,15 +15,7 @@ const front = (
 const meta: Meta<typeof DocumentStackView> = {
   title: "Custom/Editor/DocumentStackView",
   component: DocumentStackView,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 320, height: 200, padding: 24 }}>
-        <div style={{ width: "100%", height: "100%" }}>
-          <Story />
-        </div>
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "320px", height: "200px", className: "p-6" })],
   args: { front, className: "h-full w-full" },
 }
 

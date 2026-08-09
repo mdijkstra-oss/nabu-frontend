@@ -1,34 +1,24 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn } from "storybook/test"
 import type { ImportFile } from "~/lib/import/types"
+import { withSize } from "../../../../.storybook/decorators"
+import { importFile } from "./fixtures"
 import { FileImportList } from "./FileImportList"
 
-const file = (
-  id: string,
-  status: ImportFile["status"],
-  extra?: Partial<ImportFile>
-): ImportFile => ({
-  id,
-  name: `${id}.md`,
-  size: 24576,
-  status,
-  ...extra,
-})
-
 const midFiles: ImportFile[] = [
-  file("interview-1", "completed"),
-  file("interview-2", "completed"),
-  file("interview-3", "processing"),
-  file("interview-4", "pending"),
-  file("interview-5", "pending"),
+  importFile("interview-1", "completed"),
+  importFile("interview-2", "completed"),
+  importFile("interview-3", "processing"),
+  importFile("interview-4", "pending"),
+  importFile("interview-5", "pending"),
 ]
 
 const completeFiles: ImportFile[] = [
-  file("interview-1", "completed"),
-  file("interview-2", "completed"),
-  file("interview-3", "completed"),
-  file("scan", "unsupported"),
-  file("broken", "error", { error: "Could not parse file" }),
+  importFile("interview-1", "completed"),
+  importFile("interview-2", "completed"),
+  importFile("interview-3", "completed"),
+  importFile("scan", "unsupported"),
+  importFile("broken", "error", { error: "Could not parse file" }),
 ]
 
 const progressBar = (canvasElement: HTMLElement): HTMLElement =>
@@ -37,13 +27,7 @@ const progressBar = (canvasElement: HTMLElement): HTMLElement =>
 const meta: Meta<typeof FileImportList> = {
   title: "Custom/Import/FileImportList",
   component: FileImportList,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 560 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "560px" })],
 }
 
 export default meta

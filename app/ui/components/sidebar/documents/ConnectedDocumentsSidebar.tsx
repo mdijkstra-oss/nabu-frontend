@@ -1,7 +1,6 @@
 "use client"
 
-import { useMemo, useSyncExternalStore } from "react"
-import { getFiles, subscribe } from "~/lib/files/store"
+import { useFiles } from "~/ui/hooks/useFiles"
 import {
   getSelectedDocs,
   toggleSelectedDoc,
@@ -10,6 +9,7 @@ import {
   removeIds,
 } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedDocs } from "~/domain/actions/select-docs/apply"
+import { useSelection } from "../useSelection"
 import { DocumentsSidebar, type DocumentsSidebarProps } from "./DocumentsSidebar"
 
 type ConnectedDocumentsSidebarProps = Omit<
@@ -18,10 +18,13 @@ type ConnectedDocumentsSidebarProps = Omit<
 >
 
 export function ConnectedDocumentsSidebar(props: ConnectedDocumentsSidebarProps) {
-  const files = useSyncExternalStore(subscribe, getFiles)
-  const selectedDocs = useMemo(() => getSelectedDocs(files), [files])
-
-  const toggleDoc = (id: string) => writeSelectedDocs(toggleSelectedDoc([...selectedDocs], id))
+  const { files } = useFiles()
+  const { selected: selectedDocs, toggleSelection: toggleDoc } = useSelection(
+    files,
+    getSelectedDocs,
+    toggleSelectedDoc,
+    writeSelectedDocs
+  )
 
   const toggleTag = (ids: string[]) => {
     const current = [...selectedDocs]

@@ -30,6 +30,11 @@ export interface SearchBarViewProps {
   onRunAi: (query: string) => void
 }
 
+export const queryTyping = (query: string) => {
+  const q = query.trim()
+  return { q, typing: q.length > 0 }
+}
+
 export const HitRow = ({
   hit,
   query,
@@ -100,8 +105,7 @@ export const SearchBarView = ({
   const [open, setOpen] = useState(false)
   const [showCorpus, setShowCorpus] = useState(false)
 
-  const q = query.trim()
-  const typing = q.length > 0
+  const { q, typing } = queryTyping(query)
 
   const close = () => setOpen(false)
   const pickInStack = (file: string) => {

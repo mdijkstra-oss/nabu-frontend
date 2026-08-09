@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, waitFor } from "storybook/test"
-import { withRouter, withSeededFiles } from "../../../../.storybook/decorators"
+import { withRouter, withSeededFiles, withSize } from "../../../../.storybook/decorators"
 import { SearchSlicePreview } from "./cards"
+import { detailHits } from "./fixtures"
 
 const meta: Meta<typeof SearchSlicePreview> = {
   title: "Custom/Search/SearchSlicePreview",
@@ -9,15 +10,11 @@ const meta: Meta<typeof SearchSlicePreview> = {
   decorators: [
     withSeededFiles({ "field_notes.md": "# Field notes\n\nThe river rose overnight." }),
     withRouter(),
-    (Story) => (
-      <div style={{ width: 560 }}>
-        <Story />
-      </div>
-    ),
+    withSize({ width: "560px" }),
   ],
   args: {
-    text: "The river rose overnight. The crossing at the ford was impassable until noon.",
-    filePath: "field_notes.md",
+    text: detailHits[0].text,
+    filePath: detailHits[0].file,
     spotlights: null,
     onNavigate: fn(),
   },
@@ -29,7 +26,7 @@ type Story = StoryObj<typeof SearchSlicePreview>
 export const WithDebugChrome: Story = {
   args: {
     debug: {
-      score: 0.8123,
+      score: detailHits[0].score,
       matchRanges: [
         { confidence: "clear", reasonToKeep: "direct mention of the flood" },
         { confidence: "borderline" },

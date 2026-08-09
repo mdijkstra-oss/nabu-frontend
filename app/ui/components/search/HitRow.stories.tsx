@@ -1,18 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent } from "storybook/test"
+import { withSize } from "../../../../.storybook/decorators"
 import { HitRow } from "./SearchBarView"
 import { stackHits, corpusHits } from "./fixtures"
 
 const meta: Meta<typeof HitRow> = {
   title: "Custom/Search/HitRow",
   component: HitRow,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 480 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "480px" })],
   args: {
     query: "river",
     onPick: fn(),

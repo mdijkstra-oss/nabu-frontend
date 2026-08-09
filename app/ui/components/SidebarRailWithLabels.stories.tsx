@@ -1,18 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect } from "storybook/test"
 import { Bot, FileText, MessageSquare, Search, Settings } from "lucide-react"
+import { withSize } from "../../../.storybook/decorators"
 import { SidebarRailWithLabels } from "./SidebarRailWithLabels"
 
 const meta: Meta<typeof SidebarRailWithLabels> = {
   title: "Custom/Primitives/SidebarRailWithLabels",
   component: SidebarRailWithLabels,
-  decorators: [
-    (Story) => (
-      <div style={{ height: 480 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ height: "480px" })],
 }
 
 export default meta
@@ -35,11 +30,7 @@ export const Rail: Story = {
   ),
 }
 
-const navItemFrame = (Story: React.ComponentType) => (
-  <div style={{ width: 96 }}>
-    <Story />
-  </div>
-)
+const navItemFrame = withSize({ width: "96px" })
 
 export const NavItemDefault: Story = {
   decorators: [navItemFrame],

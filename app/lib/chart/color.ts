@@ -3,6 +3,9 @@ import type { ChartEntityMap, TemplateNode } from "./types"
 
 export type ResolveRadix = (token: string, shade: number) => string
 
+export const FALLBACK_COLOR = "#888888"
+export const CHART_COLOR_SHADE = 9
+
 export interface ColorContext {
   entityMap: ChartEntityMap
   resolveRadix: ResolveRadix

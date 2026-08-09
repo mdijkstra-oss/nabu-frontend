@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, waitFor } from "storybook/test"
-import { chartFixture, sampleTooltipContext } from "~/lib/chart/test-helpers"
-import type { ChartType, PartRenderable } from "~/lib/chart/types"
+import { renderableOfKind, sampleTooltipContext } from "~/lib/chart/test-helpers"
 import { withSize } from "../../../../../.storybook/decorators"
 import { PartChart } from "./PartChart"
 
@@ -14,17 +13,9 @@ const meta: Meta<typeof PartChart> = {
 export default meta
 type Story = StoryObj<typeof PartChart>
 
-const partRenderable = (type: ChartType): PartRenderable => {
-  const renderable = chartFixture(type).renderable
-  if (renderable.kind !== "part") {
-    throw new Error(`${type} fixture resolved to a non-part renderable`)
-  }
-  return renderable
-}
-
 export const Pie: Story = {
   args: {
-    renderable: partRenderable("pie"),
+    renderable: renderableOfKind("pie", "part"),
     tooltipContext: sampleTooltipContext(),
   },
   play: async ({ canvasElement }) => {
@@ -36,7 +27,7 @@ export const Pie: Story = {
 
 export const TreemapChart: Story = {
   args: {
-    renderable: partRenderable("treemap"),
+    renderable: renderableOfKind("treemap", "part"),
     tooltipContext: sampleTooltipContext(),
   },
   play: async ({ canvasElement }) => {

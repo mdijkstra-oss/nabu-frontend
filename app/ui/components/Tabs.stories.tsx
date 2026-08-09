@@ -1,17 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { FileText, MessageSquare, Search } from "lucide-react"
+import { withSize } from "../../../.storybook/decorators"
 import { Tabs } from "./Tabs"
 
 const meta: Meta<typeof Tabs> = {
   title: "Custom/Primitives/Tabs",
   component: Tabs,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 420 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "420px" })],
 }
 
 export default meta

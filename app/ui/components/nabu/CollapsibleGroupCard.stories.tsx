@@ -2,11 +2,12 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, waitFor } from "storybook/test"
 import { withSize } from "../../../../.storybook/decorators"
 import { CollapsibleGroupCard, successTone, slateTone } from "./CollapsibleGroupCard"
+import { CHAT_SIDEBAR_WIDTH } from "./fixtures"
 
 const meta: Meta<typeof CollapsibleGroupCard> = {
   title: "Custom/Chat/CollapsibleGroupCard",
   component: CollapsibleGroupCard,
-  decorators: [withSize({ width: "380px" })],
+  decorators: [withSize({ width: CHAT_SIDEBAR_WIDTH })],
 }
 
 export default meta

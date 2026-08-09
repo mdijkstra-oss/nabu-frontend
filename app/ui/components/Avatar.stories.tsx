@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
+import { renderVariantMatrix } from "../../../.storybook/matrix"
 import { Avatar } from "./Avatar"
 
-const variants = ["brand", "neutral", "error", "success", "warning"] as const
-const sizes = ["x-large", "large", "medium", "small", "x-small"] as const
+export const avatarVariants = ["brand", "neutral", "error", "success", "warning"] as const
+export const avatarSizes = ["x-large", "large", "medium", "small", "x-small"] as const
 
 const pixelImage =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
@@ -16,20 +17,13 @@ export default meta
 type Story = StoryObj<typeof Avatar>
 
 export const Matrix: Story = {
-  render: () => (
-    <div
-      className="grid w-fit items-center justify-items-center gap-2"
-      style={{ gridTemplateColumns: `repeat(${sizes.length}, auto)` }}
-    >
-      {variants.flatMap((variant) =>
-        sizes.map((size) => (
-          <Avatar key={`${variant}-${size}`} variant={variant} size={size}>
-            MD
-          </Avatar>
-        ))
-      )}
-    </div>
-  ),
+  render: () =>
+    renderVariantMatrix(Avatar, {
+      variants: avatarVariants,
+      sizes: avatarSizes,
+      propsFor: (variant, size) => ({ variant, size, children: "MD" }),
+      gridClassName: "grid w-fit items-center justify-items-center gap-2",
+    }),
 }
 
 export const WithImage: Story = {

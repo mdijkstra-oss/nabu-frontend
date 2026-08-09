@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
+import { withSize } from "../../../.storybook/decorators"
 import { AnimatedListItem } from "./AnimatedListItem"
 
 const meta: Meta<typeof AnimatedListItem> = {
@@ -11,13 +12,7 @@ const meta: Meta<typeof AnimatedListItem> = {
       </div>
     ),
   },
-  decorators: [
-    (Story) => (
-      <div style={{ width: 280 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "280px" })],
 }
 
 export default meta

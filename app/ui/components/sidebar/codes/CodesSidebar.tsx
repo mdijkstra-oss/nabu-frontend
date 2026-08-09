@@ -13,6 +13,7 @@ import type {
   GlobalAnnotationCount,
   ReviewStat,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
+import { EMPTY_SELECTION } from "../useSelection"
 import type { Codebook, Code, CodeCategory } from "./types"
 import { CodeItem } from "./CodeItem"
 import { CodeDetail } from "./CodeDetail"
@@ -54,8 +55,6 @@ const filterCategories = (categories: CodeCategory[], query: string): CodeCatego
 }
 
 const EMPTY_COUNT: GlobalAnnotationCount = { count: 0, fileCount: 0 }
-
-const EMPTY_SELECTION: ReadonlySet<string> = new Set()
 
 const readRowPositions = (container: HTMLElement): Position[] =>
   Array.from(container.querySelectorAll<HTMLElement>("[data-code-id]")).map((node) => ({

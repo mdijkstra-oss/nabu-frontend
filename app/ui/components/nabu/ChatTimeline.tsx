@@ -301,7 +301,7 @@ const stepIconComponent: Record<StepStatus, React.ComponentType<{ className?: st
   cancelled: X,
 }
 
-const stepIconColor: Record<StepStatus, string> = {
+export const stepIconColor: Record<StepStatus, string> = {
   completed: "text-success-600",
   active: "text-brand-600",
   pending: "text-neutral-400",
@@ -315,7 +315,7 @@ const stepKindClass: Record<StepStatus, string> = {
   cancelled: "text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-400",
 }
 
-const stepMarker: Record<StepStatus, TimelineMarker> = {
+export const stepMarker: Record<StepStatus, TimelineMarker> = {
   completed: "step-done",
   active: "step-active",
   pending: "step-pending",

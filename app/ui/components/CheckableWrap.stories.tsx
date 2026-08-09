@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor } from "storybook/test"
+import { withSize } from "../../../.storybook/decorators"
 import { CheckableWrap } from "./CheckableWrap"
 
 const rowBody = (
@@ -12,13 +13,7 @@ const meta: Meta<typeof CheckableWrap> = {
   title: "Custom/Primitives/CheckableWrap",
   component: CheckableWrap,
   args: { color: "grass", checked: false, onToggle: fn(), children: rowBody },
-  decorators: [
-    (Story) => (
-      <div style={{ width: 280 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "280px" })],
 }
 
 export default meta

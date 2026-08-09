@@ -21,7 +21,7 @@ interface ButtonConfig {
   variant: "brand-primary" | "neutral-secondary"
 }
 
-const CONFIGS: Record<ChatButtonMode, ButtonConfig> = {
+export const CONFIGS: Record<ChatButtonMode, ButtonConfig> = {
   send: { icon: <Send />, tooltip: "Send", variant: "brand-primary" },
   "skip-ask": { icon: <SkipForward />, tooltip: "Skip question", variant: "neutral-secondary" },
   cancel: { icon: <StopCircle />, tooltip: "Cancel", variant: "neutral-secondary" },

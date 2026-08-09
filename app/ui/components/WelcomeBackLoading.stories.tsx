@@ -1,16 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
+import { withSize } from "../../../.storybook/decorators"
 import { WelcomeBackLoading } from "./WelcomeBackLoading"
 
 const meta: Meta<typeof WelcomeBackLoading> = {
   title: "Custom/Primitives/WelcomeBackLoading",
   component: WelcomeBackLoading,
-  decorators: [
-    (Story) => (
-      <div style={{ height: 480 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ height: "480px" })],
 }
 
 export default meta

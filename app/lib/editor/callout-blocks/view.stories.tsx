@@ -1,27 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, within } from "storybook/test"
-import type { CalloutBlock } from "~/domain/data-blocks/callout/schema"
+import { withSize } from "../../../../.storybook/decorators"
+import { callout } from "./fixtures"
 import { CalloutBlockView } from "./view"
 
-const data: CalloutBlock = {
-  id: "code-trust",
-  type: "codebook-code",
-  title: "Trust",
-  content: "Signals of **mutual reliance** between participants.",
-  color: "blue",
-  collapsed: false,
-}
+const data = callout("blue")
 
 const meta: Meta<typeof CalloutBlockView> = {
   title: "Custom/Editor/CalloutBlockView",
   component: CalloutBlockView,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 520 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "520px" })],
 }
 
 export default meta

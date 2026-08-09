@@ -1,17 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
+import { withSize } from "../../../../.storybook/decorators"
 import { EditableTitle } from "./FileHeader"
 
 const meta: Meta<typeof EditableTitle> = {
   title: "Custom/Editor/EditableTitle",
   component: EditableTitle,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 320 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "320px" })],
 }
 
 export default meta

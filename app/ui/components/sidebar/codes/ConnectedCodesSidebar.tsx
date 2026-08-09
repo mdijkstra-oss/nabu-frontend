@@ -1,9 +1,10 @@
 "use client"
 
-import { useMemo, useState, useSyncExternalStore } from "react"
-import { getFiles, subscribe } from "~/lib/files/store"
+import { useState } from "react"
+import { useFiles } from "~/ui/hooks/useFiles"
 import { getSelectedCodes, toggleSelectedCode } from "~/domain/data-blocks/ux/selectors"
 import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
+import { useSelection } from "../useSelection"
 import { CodesSidebar, type CodesSidebarProps } from "./CodesSidebar"
 
 type ConnectedCodesSidebarProps = Omit<
@@ -13,10 +14,13 @@ type ConnectedCodesSidebarProps = Omit<
 
 export const ConnectedCodesSidebar = (props: ConnectedCodesSidebarProps) => {
   const [searchValue, setSearchValue] = useState("")
-  const files = useSyncExternalStore(subscribe, getFiles)
-  const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
-
-  const toggleCode = (id: string) => writeSelectedCodes(toggleSelectedCode([...selectedCodes], id))
+  const { files } = useFiles()
+  const { selected: selectedCodes, toggleSelection: toggleCode } = useSelection(
+    files,
+    getSelectedCodes,
+    toggleSelectedCode,
+    writeSelectedCodes
+  )
 
   return (
     <CodesSidebar

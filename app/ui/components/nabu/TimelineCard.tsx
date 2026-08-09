@@ -22,7 +22,7 @@ interface TimelineCardProps {
   kindClassName?: string
 }
 
-const railClass: Record<TimelineMarker, string> = {
+export const railClass: Record<TimelineMarker, string> = {
   ask: "bg-brand-700",
   respond: "bg-brand-400",
   plan: "bg-brand-600",

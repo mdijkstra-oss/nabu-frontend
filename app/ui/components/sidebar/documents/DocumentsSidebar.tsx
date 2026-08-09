@@ -25,6 +25,7 @@ import { resolveIcon } from "~/ui/theme/icon-map"
 import { humanize } from "~/lib/text/humanize"
 import { ToggleGroup } from "~/ui/components/ToggleGroup"
 import { selectionState } from "~/domain/data-blocks/ux/selectors"
+import { EMPTY_SELECTION } from "../useSelection"
 import { DocumentItem } from "./DocumentItem"
 import { SelectionBar } from "./SelectionBar"
 
@@ -44,8 +45,6 @@ export interface DocumentsSidebarProps {
   onDocumentSelect?: (id: string) => void
   onNewDocument?: () => void
 }
-
-const EMPTY_SELECTION: ReadonlySet<string> = new Set()
 
 const DEFAULT_TAG_COLOR: RadixColor = "lime"
 const UNGROUPED = "general"

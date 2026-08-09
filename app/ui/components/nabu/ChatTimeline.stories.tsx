@@ -2,7 +2,8 @@ import { Component, type ReactNode } from "react"
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, waitFor } from "storybook/test"
 import { withSize } from "../../../../.storybook/decorators"
-import { ChatTimeline, SegmentRenderer } from "./ChatTimeline"
+import { ChatTimeline, SegmentRenderer, stepIconColor, stepMarker } from "./ChatTimeline"
+import { railClass } from "./TimelineCard"
 import type { ChatEntityContext } from "./MessageContent"
 import type { FinalSegment } from "./collapse"
 import {
@@ -16,6 +17,7 @@ import {
   typedAnswerAsk,
   planStepMatrix,
   stepStackFive,
+  CHAT_SIDEBAR_WIDTH,
 } from "./fixtures"
 
 const context: ChatEntityContext = {
@@ -37,7 +39,7 @@ const segmentProps = {
 const meta: Meta<typeof ChatTimeline> = {
   title: "Custom/Chat/ChatTimeline",
   component: ChatTimeline,
-  decorators: [withSize({ width: "380px" })],
+  decorators: [withSize({ width: CHAT_SIDEBAR_WIDTH })],
   args: {
     segments: [],
     context,
@@ -162,20 +164,6 @@ export const TypedAnswerAsk: Story = {
   },
 }
 
-const statusRail: Record<string, string> = {
-  completed: "bg-success-600",
-  active: "bg-brand-600",
-  pending: "bg-neutral-300",
-  cancelled: "bg-neutral-400",
-}
-
-const statusIconColor: Record<string, string> = {
-  completed: "text-success-600",
-  active: "text-brand-600",
-  pending: "text-neutral-400",
-  cancelled: "text-neutral-400",
-}
-
 export const PlanStepMatrix: Story = {
   render: () => (
     <>
@@ -190,7 +178,7 @@ export const PlanStepMatrix: Story = {
     for (const step of planStepMatrix) {
       const card = canvas.getByTestId(step.description)
       const rail = card.querySelector('span[class*="w-[3px]"]')
-      const expectedRail = step.checkpoint ? "bg-brand-700" : statusRail[step.status]
+      const expectedRail = step.checkpoint ? "bg-brand-700" : railClass[stepMarker[step.status]]
       expect(rail?.className).toContain(expectedRail)
 
       const bubble = card.querySelector("svg.lucide-message-square")
@@ -198,7 +186,7 @@ export const PlanStepMatrix: Story = {
       else expect(bubble).toBeNull()
 
       const icon = card.querySelector("svg")
-      expect(icon?.getAttribute("class")).toContain(statusIconColor[step.status])
+      expect(icon?.getAttribute("class")).toContain(stepIconColor[step.status])
 
       const indented = card.querySelector(".pl-4")
       if (step.nested) expect(indented).not.toBeNull()

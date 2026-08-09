@@ -1,18 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, type within } from "storybook/test"
+import { withSize } from "../../../../.storybook/decorators"
 import { SearchBarView } from "./SearchBarView"
 import { stackHits, corpusHits, recentSearches, savedSearches } from "./fixtures"
 
 const meta: Meta<typeof SearchBarView> = {
   title: "Custom/Search/SearchBarView",
   component: SearchBarView,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 560, minHeight: 480 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "560px", height: "480px" })],
   args: {
     query: "",
     onQueryChange: fn(),

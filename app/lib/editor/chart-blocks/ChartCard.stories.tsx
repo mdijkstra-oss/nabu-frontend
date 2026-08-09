@@ -3,6 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 import { chartFixture, sampleTooltipContext } from "~/lib/chart/test-helpers"
 import { withSize } from "../../../../.storybook/decorators"
 import { ChartCard, type ChartCardState } from "./ChartCard"
+import { CHART_HEIGHT } from "./renderers/shared"
 
 const meta: Meta<typeof ChartCard> = {
   title: "Custom/Charts/ChartCard",
@@ -27,7 +28,7 @@ export const Loading: Story = {
   args: { state: { status: "loading" } },
   play: async ({ canvasElement }) => {
     const placeholder = within(canvasElement).getByText("Loading...")
-    expect(placeholder.getBoundingClientRect().height).toBe(300)
+    expect(placeholder.getBoundingClientRect().height).toBe(CHART_HEIGHT)
   },
 }
 
@@ -35,7 +36,7 @@ export const Empty: Story = {
   args: { state: { status: "empty" } },
   play: async ({ canvasElement }) => {
     const placeholder = within(canvasElement).getByText("No data")
-    expect(placeholder.getBoundingClientRect().height).toBe(300)
+    expect(placeholder.getBoundingClientRect().height).toBe(CHART_HEIGHT)
   },
 }
 
@@ -45,7 +46,7 @@ export const ErrorState: Story = {
     const placeholder = within(canvasElement).getByText(
       "Catalog Error: Table 'visits' does not exist"
     )
-    expect(placeholder.getBoundingClientRect().height).toBe(300)
+    expect(placeholder.getBoundingClientRect().height).toBe(CHART_HEIGHT)
     expect(placeholder.classList.contains("text-error-700")).toBe(true)
   },
 }

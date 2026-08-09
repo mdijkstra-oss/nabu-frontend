@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent } from "storybook/test"
+import { withSize } from "../../../.storybook/decorators"
 import { AlertDialog } from "./AlertDialog"
 
 const entries = [
@@ -18,13 +19,7 @@ const meta: Meta<typeof AlertDialog> = {
     onDestructive: fn(),
     onCancel: fn(),
   },
-  decorators: [
-    (Story) => (
-      <div className="relative" style={{ height: 480 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ height: "480px", className: "relative" })],
 }
 
 export default meta

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, userEvent, waitFor } from "storybook/test"
+import { withSize } from "../../../.storybook/decorators"
 import { AutoScroll } from "./AutoScroll"
 
 const distanceFromBottom = (el: HTMLElement): number =>
@@ -9,7 +10,7 @@ const distanceFromBottom = (el: HTMLElement): number =>
 const AppendHarness = () => {
   const [count, setCount] = useState(20)
   return (
-    <div style={{ width: 260 }}>
+    <>
       <AutoScroll className="h-48 overflow-y-auto rounded-md border border-solid border-neutral-border">
         {Array.from({ length: count }, (_, i) => (
           <div key={i} className="px-2 py-1 text-body font-body">
@@ -20,13 +21,14 @@ const AppendHarness = () => {
       <button type="button" onClick={() => setCount((current) => current + 5)}>
         append
       </button>
-    </div>
+    </>
   )
 }
 
 const meta: Meta<typeof AutoScroll> = {
   title: "Custom/Primitives/AutoScroll",
   component: AutoScroll,
+  decorators: [withSize({ width: "260px" })],
   render: () => <AppendHarness />,
 }
 

@@ -6,7 +6,7 @@ import { FileText, MapPin } from "lucide-react"
 import { executeQuery } from "~/lib/db/query"
 import { extractEntityIdsFromRows } from "~/lib/chart/entities"
 import { resolveChartData } from "~/lib/chart/resolve"
-import type { ColorContext } from "~/lib/chart/color"
+import { CHART_COLOR_SHADE, type ColorContext } from "~/lib/chart/color"
 import type { ChartEntityMap } from "~/lib/chart/types"
 import { getDatabase, getSyncRevision, subscribeSyncRevision } from "~/domain/db/database"
 import { getEntityPrefixes } from "~/lib/data-blocks/registry"
@@ -32,8 +32,6 @@ type QueryState =
   | { status: "empty" }
   | { status: "error"; message: string }
   | { status: "ready"; rows: Record<string, unknown>[] }
-
-const CHART_COLOR_SHADE = 9
 
 const ENTITY_ICONS: EntityIcons = { file: FileText, spotlight: MapPin }
 

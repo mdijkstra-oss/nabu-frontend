@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { ArrowRight, Plus } from "lucide-react"
+import { renderVariantMatrix } from "../../../.storybook/matrix"
 import { Button } from "./Button"
 
-const variants = [
+export const buttonVariants = [
   "brand-primary",
   "brand-secondary",
   "brand-tertiary",
@@ -15,7 +16,7 @@ const variants = [
   "inverse",
 ] as const
 
-const sizes = ["large", "medium", "small"] as const
+export const buttonSizes = ["large", "medium", "small"] as const
 
 const meta: Meta<typeof Button> = {
   title: "Custom/Primitives/Button",
@@ -26,25 +27,13 @@ export default meta
 type Story = StoryObj<typeof Button>
 
 export const Matrix: Story = {
-  render: () => (
-    <div
-      className="grid w-fit items-center gap-2"
-      style={{ gridTemplateColumns: `repeat(${sizes.length}, auto)` }}
-    >
-      {variants.flatMap((variant) =>
-        sizes.map((size) => (
-          <div
-            key={`${variant}-${size}`}
-            className={variant === "inverse" ? "rounded-md bg-slate-950 p-1" : "p-1"}
-          >
-            <Button variant={variant} size={size}>
-              {variant}
-            </Button>
-          </div>
-        ))
-      )}
-    </div>
-  ),
+  render: () =>
+    renderVariantMatrix(Button, {
+      variants: buttonVariants,
+      sizes: buttonSizes,
+      propsFor: (variant, size) => ({ variant, size, children: variant }),
+      cellClassName: (variant) => (variant === "inverse" ? "rounded-md bg-slate-950 p-1" : "p-1"),
+    }),
 }
 
 export const Loading: Story = {

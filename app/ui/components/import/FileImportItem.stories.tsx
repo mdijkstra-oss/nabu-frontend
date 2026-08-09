@@ -1,15 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect } from "storybook/test"
 import type { ImportFile, ImportStatus } from "~/lib/import/types"
+import { withSize } from "../../../../.storybook/decorators"
+import { importFile } from "./fixtures"
 import { FileImportItem, statusConfigs } from "./FileImportItem"
 
-const fileWith = (status: ImportStatus, extra?: Partial<ImportFile>): ImportFile => ({
-  id: status,
-  name: `${status}-document.md`,
-  size: 24576,
-  status,
-  ...extra,
-})
+const fileWith = (status: ImportStatus, extra?: Partial<ImportFile>): ImportFile =>
+  importFile(status, status, { name: `${status}-document.md`, ...extra })
 
 const statusFiles: Record<ImportStatus, ImportFile> = {
   pending: fileWith("pending"),
@@ -50,13 +47,7 @@ const storyFor = (status: ImportStatus): Story => ({
 const meta: Meta<typeof FileImportItem> = {
   title: "Custom/Import/FileImportItem",
   component: FileImportItem,
-  decorators: [
-    (Story) => (
-      <div style={{ width: 480 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [withSize({ width: "480px" })],
 }
 
 export default meta

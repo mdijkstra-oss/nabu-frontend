@@ -1,13 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
-import { expect, fireEvent, fn } from "storybook/test"
+import { expect, fireEvent } from "storybook/test"
+import { withSize } from "../../../../.storybook/decorators"
+import { dragHandlers } from "./fixtures"
 import { DropZone } from "./DropZone"
-
-const spiedDragHandlers = () => ({
-  onDragEnter: fn(),
-  onDragLeave: fn(),
-  onDragOver: fn(),
-  onDrop: fn(),
-})
 
 const zoneElement = (canvasElement: HTMLElement): HTMLElement =>
   canvasElement.querySelector(".border-dashed") as HTMLElement
@@ -20,14 +15,8 @@ const expectHighlighted = (zone: HTMLElement) => {
 const meta: Meta<typeof DropZone> = {
   title: "Custom/Import/DropZone",
   component: DropZone,
-  args: { dragHandlers: spiedDragHandlers() },
-  decorators: [
-    (Story) => (
-      <div style={{ width: 560 }}>
-        <Story />
-      </div>
-    ),
-  ],
+  args: { dragHandlers: dragHandlers() },
+  decorators: [withSize({ width: "560px" })],
 }
 
 export default meta
@@ -56,7 +45,7 @@ export const CompactDragging: Story = {
 }
 
 export const DragEventsReachHandlers: Story = {
-  args: { variant: "full", isDragging: false, dragHandlers: spiedDragHandlers() },
+  args: { variant: "full", isDragging: false, dragHandlers: dragHandlers() },
   play: async ({ args, canvasElement }) => {
     const zone = zoneElement(canvasElement)
 

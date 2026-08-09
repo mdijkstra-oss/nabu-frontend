@@ -2,11 +2,12 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, waitFor } from "storybook/test"
 import { withSize } from "../../../../.storybook/decorators"
 import { ChatComposer } from "./ChatComposer"
+import { CHAT_SIDEBAR_WIDTH } from "./fixtures"
 
 const meta: Meta<typeof ChatComposer> = {
   title: "Custom/Chat/ChatComposer",
   component: ChatComposer,
-  decorators: [withSize({ width: "380px" })],
+  decorators: [withSize({ width: CHAT_SIDEBAR_WIDTH })],
   args: {
     mode: "send",
     awaitingAnswer: false,
