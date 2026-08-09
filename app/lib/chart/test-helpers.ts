@@ -1,7 +1,10 @@
-import type { ChartTooltipContext } from "~/lib/editor/chart-blocks/renderers/ChartTooltip"
+import type {
+  ChartTooltipContext,
+  RechartsPayloadItem,
+} from "~/lib/editor/chart-blocks/renderers/ChartTooltip"
 import { CHART_COLOR_SHADE, FALLBACK_COLOR, type ColorContext } from "./color"
 import { resolveChartData } from "./resolve"
-import type { ChartSpec, ChartType, RenderableChart, TemplateNode } from "./types"
+import type { ChartSpec, ChartType, RenderableChart } from "./types"
 import type { ChartEntityMap } from "./types"
 
 const SAMPLE_SERIES_COLOR = "#4f46e5"
@@ -136,19 +139,9 @@ export const sampleTooltipContext = (entityMap: ChartEntityMap = {}): ChartToolt
   entityMap,
 })
 
-export interface SampleTooltipPayloadItem {
-  name?: string
-  value?: number | string
-  color?: string
-  payload?: {
-    _raw: Record<string, unknown>
-    _tooltipNodes?: TemplateNode[]
-  }
-}
-
 export const sampleTooltipPayload = (
-  overrides: Partial<SampleTooltipPayloadItem> = {}
-): SampleTooltipPayloadItem[] => [
+  overrides: Partial<RechartsPayloadItem> = {}
+): RechartsPayloadItem[] => [
   {
     name: "count",
     value: 12,

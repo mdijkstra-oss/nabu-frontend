@@ -20,7 +20,7 @@ interface TooltipDatum {
   _tooltipNodes?: TemplateNode[]
 }
 
-interface RechartsPayloadItem {
+export interface RechartsPayloadItem {
   payload?: TooltipDatum
   name?: string
   value?: number | string

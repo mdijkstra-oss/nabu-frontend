@@ -38,3 +38,19 @@ export const ThreeHits: Story = {
     expect(args.onOpenFile).toHaveBeenCalledOnce()
   },
 }
+
+// The group-level debug object carries no score; each line proves the card
+// merged the hit's own score fields before forwarding to the slice.
+export const DebugScoresPerSlice: Story = {
+  args: {
+    debug: { showRawText: false },
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await waitFor(() => {
+      expect(canvas.getByText(/score: 0\.8123/)).toBeInTheDocument()
+      expect(canvas.getByText(/score: 0\.6521/)).toBeInTheDocument()
+      expect(canvas.getByText(/score: 0\.6017/)).toBeInTheDocument()
+    })
+    expect(canvasElement.querySelector("pre")).toBeNull()
+  },
+}

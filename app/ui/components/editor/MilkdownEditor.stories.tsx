@@ -2,16 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 import { withRouter, withSeededFiles } from "../../../../.storybook/decorators"
 import { normalizeAsStored } from "~/lib/files/store"
+import { callout } from "~/lib/editor/callout-blocks/fixtures"
 import { MilkdownEditor } from "./MilkdownEditor"
 
-const calloutJson = JSON.stringify({
-  id: "code-trust",
-  type: "codebook-code",
-  title: "Trust",
-  content: "Signals of **mutual reliance** between participants.",
-  color: "blue",
-  collapsed: false,
-})
+const calloutData = callout("blue")
+const calloutJson = JSON.stringify(calloutData)
 
 const chartJson = JSON.stringify({
   id: "chart-codes",
@@ -68,7 +63,7 @@ export const KitchenSink: Story = {
     expect(editor).toHaveTextContent("Some prose about the interview.")
 
     await waitFor(() => {
-      const calloutHost = canvasElement.querySelector('[data-id="code-trust"]')
+      const calloutHost = canvasElement.querySelector(`[data-id="${calloutData.id}"]`)
       expect(calloutHost).not.toBeNull()
       expect(calloutHost?.querySelector('[class*="group/callout"]')).not.toBeNull()
       expect(calloutHost?.textContent).toContain("Trust")

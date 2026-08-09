@@ -1,5 +1,11 @@
 import type { DocumentEntry } from "~/domain/documents/selectors"
 
+export const docTitle = (id: string): string => {
+  const doc = sampleDocuments.find((d) => d.id === id)
+  if (!doc) throw new Error(`fixture document not found: ${id}`)
+  return doc.title
+}
+
 export const sampleDocuments: DocumentEntry[] = [
   {
     id: "1",
