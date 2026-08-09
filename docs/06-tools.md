@@ -31,6 +31,9 @@ flowchart LR
 
 Mutating tools return the unified diff of what actually landed rather than an echo of what was asked for. Where normalization rewrote a field or generated an id, the model sees the real result and can correct against it.
 
+> [!WARNING]
+> Partly built. Results currently summarize what changed (block, file, generated ids); the applied-diff UX is pending design.
+
 ## A shell instead of file tools
 
 Reading is one tool. `run_local_shell` implements a subset of POSIX over the in-memory file store:
