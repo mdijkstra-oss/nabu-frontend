@@ -61,6 +61,17 @@ export const Processing: Story = {
   },
 }
 
+export const StalledIncomplete: Story = {
+  args: {
+    files: [file("interview-1", "completed"), file("interview-2", "error")],
+    progress: { total: 3, completed: 1, failed: 1, unsupported: 0, processed: 2 },
+    isProcessing: false,
+  },
+  play: async ({ canvas }) => {
+    expect(canvas.queryByText("Close")).toBeNull()
+  },
+}
+
 export const Complete: Story = {
   args: {
     files: [file("interview-1", "completed"), file("interview-2", "completed")],

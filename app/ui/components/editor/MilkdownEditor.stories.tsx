@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 import { withRouter, withSeededFiles } from "../../../../.storybook/decorators"
+import { normalizeAsStored } from "~/lib/files/store"
 import { MilkdownEditor } from "./MilkdownEditor"
 
 const calloutJson = JSON.stringify({
@@ -23,6 +24,10 @@ const kitchenSinkContent = [
   "# Interview Notes",
   "",
   "Some prose about the interview.",
+  "",
+  "- Themes",
+  "\t- Trust building",
+  "\t- Reciprocity",
   "",
   "```json-callout",
   calloutJson,
@@ -84,6 +89,10 @@ export const KitchenSink: Story = {
       const onChange = args.onChange as ReturnType<typeof fn>
       const lastMarkdown = onChange.mock.calls.at(-1)?.[0] as string
       expect(lastMarkdown).toContain("typedbyplay")
+      // Canonical markdown is the fixed point of normalizeAsStored; the nested
+      // list above serializes differently raw, so skipping canonicalization
+      // breaks this equality.
+      expect(normalizeAsStored(lastMarkdown)).toBe(lastMarkdown)
     })
   },
 }

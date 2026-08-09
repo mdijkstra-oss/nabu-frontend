@@ -1,12 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, waitFor } from "storybook/test"
-import { withRouter } from "../../../../.storybook/decorators"
+import { withRouter, withSeededFiles } from "../../../../.storybook/decorators"
 import { SearchSlicePreview } from "./cards"
 
 const meta: Meta<typeof SearchSlicePreview> = {
   title: "Custom/Search/SearchSlicePreview",
   component: SearchSlicePreview,
   decorators: [
+    withSeededFiles({ "field_notes.md": "# Field notes\n\nThe river rose overnight." }),
     withRouter(),
     (Story) => (
       <div style={{ width: 560 }}>

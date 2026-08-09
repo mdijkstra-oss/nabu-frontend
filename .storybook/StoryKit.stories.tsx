@@ -80,6 +80,17 @@ export const SeededFilesWriteDuringPlay: Story = {
   },
 }
 
+export const StoreRestoredAfterSeededStories: Story = {
+  render: () => <FileNamesReporter />,
+  play: async () => {
+    const files = getFiles()
+    expect(files["first.md"]).toBeUndefined()
+    expect(files["second.md"]).toBeUndefined()
+    expect(files["seeded.md"]).toBeUndefined()
+    expect(files["written-during-play.md"]).toBeUndefined()
+  },
+}
+
 const RadixColorSwatch = () => (
   <div data-testid="radix-swatch" style={{ background: "var(--blue-9)", width: 40, height: 40 }} />
 )
