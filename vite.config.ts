@@ -4,11 +4,12 @@ import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 const isStorybook = process.argv[1]?.includes("storybook");
+const isVitest = Boolean(process.env.VITEST);
 
 export default defineConfig({
   plugins: [
     tailwindcss(),
-    !isStorybook && reactRouter(),
+    !isStorybook && !isVitest && reactRouter(),
     tsconfigPaths(),
   ].filter(Boolean),
 });
