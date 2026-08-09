@@ -43,6 +43,33 @@ const GutterMarkElement = ({ mark }: { mark: GutterMark }) => (
   />
 )
 
+export const GutterMarks = ({
+  marks,
+  onScrollTo,
+}: {
+  marks: GutterMark[]
+  onScrollTo: (percent: number) => void
+}) => {
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = e.clientY - rect.top
+    const percent = (y / rect.height) * 100
+    onScrollTo(percent)
+  }
+
+  return (
+    <div
+      className="w-5 flex-none bg-white cursor-pointer"
+      style={{ position: "relative", height: "100%" }}
+      onClick={handleClick}
+    >
+      {marks.map((mark, idx) => (
+        <GutterMarkElement key={idx} mark={mark} />
+      ))}
+    </div>
+  )
+}
+
 export const ScrollGutter = memo(
   ({ contentRef, scrollContainerRef, onScrollTo }: ScrollGutterProps) => {
     const [marks, setMarks] = useState<GutterMark[]>([])
@@ -63,23 +90,6 @@ export const ScrollGutter = memo(
       return () => observer.disconnect()
     }, [contentRef, scrollContainerRef])
 
-    const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect()
-      const y = e.clientY - rect.top
-      const percent = (y / rect.height) * 100
-      onScrollTo(percent)
-    }
-
-    return (
-      <div
-        className="w-5 flex-none bg-white cursor-pointer"
-        style={{ position: "relative", height: "100%" }}
-        onClick={handleClick}
-      >
-        {marks.map((mark, idx) => (
-          <GutterMarkElement key={idx} mark={mark} />
-        ))}
-      </div>
-    )
+    return <GutterMarks marks={marks} onScrollTo={onScrollTo} />
   }
 )

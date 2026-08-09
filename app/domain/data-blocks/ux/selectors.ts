@@ -29,7 +29,7 @@ export const toggleSelectedDoc = (docs: string[], id: string): string[] => toggl
 
 export type SelectionState = "none" | "partial" | "all"
 
-export const selectionState = (selected: Set<string>, ids: string[]): SelectionState => {
+export const selectionState = (selected: ReadonlySet<string>, ids: string[]): SelectionState => {
   if (ids.length === 0) return "none"
   const count = ids.reduce((n, id) => (selected.has(id) ? n + 1 : n), 0)
   if (count === 0) return "none"

@@ -137,7 +137,7 @@ export const CalloutNodeView = () => {
     <>
       {!isReadOnly && <BlockSpacer onClick={handleInsertBefore} />}
       <div ref={containerRef} contentEditable={false} data-id={data.id}>
-        <CalloutBlockView data={data} onDelete={handleDelete} />
+        <CalloutBlockView data={data} onDelete={handleDelete} readOnly={isReadOnly} />
       </div>
     </>
   )

@@ -84,7 +84,7 @@ Already props-only; no change. `content: string`, `className?`. It mounts a real
 
 Already takes plain data; no change. `entries: HighlightEntry[]` (id, color, optional title/description/review/reviewCount/isLocked, all callbacks optional — absent callbacks render the read-only variants), `onEntryHover?`, `onEntryLeave?`.
 
-Export the private adapter `annotationToEntry` from `AnnotationHover.tsx` as the fixture factory: called with `filePath` undefined it produces entries whose mutation callbacks are all absent, so fixtures never touch the store. `AnnotationHover` itself is infra (portal, hover state machine, editor dispatches) and gets no story.
+Export the private adapter `annotationToEntry` from `AnnotationHover.tsx` as the fixture factory: called with `filePath` undefined it produces entries whose mutation callbacks are all absent, so fixtures never touch the store. `onCopy` is not a mutation and stays present — a read-only entry still offers its clipboard-only copy button. `AnnotationHover` itself is infra (portal, hover state machine, editor dispatches) and gets no story.
 
 ### MilkdownEditor
 

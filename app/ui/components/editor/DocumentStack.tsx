@@ -27,18 +27,19 @@ const BubbleShell = ({ className }: { className?: string }) => (
   />
 )
 
-export const DocumentStack = ({
-  files,
-  activeId,
+interface DocumentStackViewProps {
+  underlyingCount: number
+  front: ReactNode
+  onUnderlyingClick: () => void
+  className?: string
+}
+
+export const DocumentStackView = ({
+  underlyingCount,
   front,
   onUnderlyingClick,
   className,
-}: DocumentStackProps) => {
-  const underlyingCount = useMemo(() => {
-    const selected = getSelectedDocs(files)
-    return [...selected].filter((id) => id !== activeId).length
-  }, [files, activeId])
-
+}: DocumentStackViewProps) => {
   const peekCount = Math.min(CLOSED_PEEK, underlyingCount)
   const shells = Array.from({ length: peekCount }, (_, k) => peekCount - k)
 
@@ -67,5 +68,27 @@ export const DocumentStack = ({
         {front}
       </div>
     </div>
+  )
+}
+
+export const DocumentStack = ({
+  files,
+  activeId,
+  front,
+  onUnderlyingClick,
+  className,
+}: DocumentStackProps) => {
+  const underlyingCount = useMemo(() => {
+    const selected = getSelectedDocs(files)
+    return [...selected].filter((id) => id !== activeId).length
+  }, [files, activeId])
+
+  return (
+    <DocumentStackView
+      underlyingCount={underlyingCount}
+      front={front}
+      onUnderlyingClick={onUnderlyingClick}
+      className={className}
+    />
   )
 }

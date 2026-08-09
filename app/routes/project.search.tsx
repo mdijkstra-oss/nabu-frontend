@@ -10,7 +10,12 @@ import { StatusCountLine } from "~/ui/components/search/StatusCountLine"
 import { LayoutToggle } from "~/ui/components/search/LayoutToggle"
 import { ResultRail } from "~/ui/components/search/ResultRail"
 import { CardLayoutEngine, type CardLayoutHandle } from "~/ui/components/search/CardLayoutEngine"
-import { RunGroupCard, groupByRun, buildFileUrl } from "~/ui/components/search/cards"
+import {
+  ConnectedRunGroupCard,
+  groupByRun,
+  buildFileUrl,
+  type SliceDebug,
+} from "~/ui/components/search/cards"
 import { TagBadge } from "~/ui/components/TagBadge"
 import { DebugOptionsProvider } from "~/ui/components/editor/DebugOptionsContext"
 import type { SearchHit } from "~/domain/search/types"
@@ -180,6 +185,14 @@ export default function ProjectSearch() {
 
   const showDebugSql = !!debugOptions.renderAsJson
 
+  const sliceDebug = useMemo<SliceDebug | undefined>(
+    () =>
+      debugOptions.showHitScore || debugOptions.renderAsJson
+        ? { showRawText: !!debugOptions.renderAsJson }
+        : undefined,
+    [debugOptions]
+  )
+
   if (!params.projectId || !params.searchId) {
     return (
       <div className="flex h-full w-full items-center justify-center">
@@ -261,14 +274,16 @@ export default function ProjectSearch() {
                 ref={engineRef}
                 groups={groups}
                 mode={mode}
+                keyboardNav
                 onBandChange={setBand}
                 onNearEnd={hasMore ? loadMore : undefined}
                 className="flex-1"
                 renderCard={(group) => (
-                  <RunGroupCard
+                  <ConnectedRunGroupCard
                     group={group}
                     files={files}
                     projectId={projectId}
+                    debug={sliceDebug}
                     onNavigate={navigate}
                   />
                 )}

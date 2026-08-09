@@ -37,7 +37,7 @@ const VIEWPORT_MARGIN = 12
 const MIN_TOP_SPACE = 80
 const ANNOTATIONS_LANGUAGE = "json-annotations"
 
-interface SelectionState {
+export interface SelectionState {
   top: number
   centerX: number
   hasRange: boolean
@@ -124,7 +124,7 @@ const CodeEntry = ({ name, color, onClick }: Code & { onClick: () => void }) => 
   </div>
 )
 
-const AnnotationPill = ({
+export const AnnotationPill = ({
   codes,
   onCodeClick,
 }: {
@@ -175,6 +175,30 @@ const AnnotationPill = ({
     </div>
   )
 }
+
+export const SelectionToolbarOverlay = ({
+  selection,
+  codes,
+  onCodeClick,
+}: {
+  selection: SelectionState
+  codes: readonly Code[]
+  onCodeClick: (codeId: string) => void
+}) => (
+  <div
+    className="flex items-center gap-2"
+    style={{
+      position: "absolute",
+      left: `${selection.centerX}px`,
+      top: `${selection.top}px`,
+      transform: selection.showAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)",
+      zIndex: 9999,
+    }}
+  >
+    <EditorToolbar groups={TOOLBAR_GROUPS} />
+    {selection.hasRange && <AnnotationPill codes={codes} onCodeClick={onCodeClick} />}
+  </div>
+)
 
 const generateAnnotationId = (): string => `annotation-${generateShortId()}`
 
@@ -286,7 +310,6 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   }, [scheduleHide])
 
   const visible = selection && hovered
-  const transform = selection?.showAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)"
 
   return (
     <div
@@ -302,19 +325,12 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
           onMouseDown={(e) => e.preventDefault()}
           onMouseEnter={cancelHide}
           onMouseLeave={scheduleHide}
-          className="flex items-center gap-2"
-          style={{
-            position: "absolute",
-            left: `${selection.centerX}px`,
-            top: `${selection.top}px`,
-            transform,
-            zIndex: 9999,
-          }}
         >
-          <EditorToolbar groups={TOOLBAR_GROUPS} />
-          {selection.hasRange && (
-            <AnnotationPill codes={selectedCodes} onCodeClick={handleCodeClick} />
-          )}
+          <SelectionToolbarOverlay
+            selection={selection}
+            codes={selectedCodes}
+            onCodeClick={handleCodeClick}
+          />
         </div>
       )}
     </div>

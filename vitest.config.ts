@@ -19,6 +19,17 @@ export default defineConfig({
       {
         extends: true,
         plugins: [tailwindcss(), storybookTest({ configDir: ".storybook" })],
+        optimizeDeps: {
+          include: [
+            "@milkdown/kit/core",
+            "@milkdown/kit/preset/commonmark",
+            "@milkdown/kit/preset/gfm",
+            "@milkdown/react",
+            "prosemirror-model",
+            "prosemirror-state",
+            "prosemirror-view",
+          ],
+        },
         test: {
           name: "storybook",
           browser: {

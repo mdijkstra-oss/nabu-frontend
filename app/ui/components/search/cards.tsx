@@ -1,4 +1,4 @@
-import { memo, Fragment } from "react"
+import { memo, Fragment, useCallback, useMemo } from "react"
 import { LocateFixed } from "lucide-react"
 import { IconButton } from "~/ui/components/IconButton"
 import { TooltipWrap } from "~/ui/components/TooltipWrap"
@@ -6,6 +6,7 @@ import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 import { FileHeader } from "~/ui/components/editor/FileHeader"
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
+import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
 import { getFileDate } from "~/domain/data-blocks/attributes/date/selectors"
@@ -17,13 +18,24 @@ import {
 } from "~/lib/editor/spotlight/serialize"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
 import { splitSentences } from "~/lib/text/split"
-import { useDebugOptions } from "~/ui/components/editor/DebugOptionsContext"
-
-const normalizeMatchWhitespace = (match: string): string => match.replace(/\n\n+/g, " ")
 
 export interface RunGroup {
   file: string
   hits: SearchHit[]
+}
+
+export interface MatchRangeMeta {
+  confidence?: "clear" | "borderline"
+  reasonToKeep?: string
+}
+
+export interface SliceDebug {
+  score?: number
+  constituentScores?: number[]
+  splitIndex?: number
+  splitTotal?: number
+  matchRanges?: MatchRangeMeta[]
+  showRawText?: boolean
 }
 
 export const groupByRun = (hits: SearchHit[]): RunGroup[] => {
@@ -34,16 +46,6 @@ export const groupByRun = (hits: SearchHit[]): RunGroup[] => {
     else groups.push({ file: hit.file, hits: [hit] })
   }
   return groups
-}
-
-const hitHasId = (hit: SearchHit): hit is SearchHit & { id: string } => hit.id !== undefined
-const hitHasText = (hit: SearchHit): hit is SearchHit & { text: string } => hit.text !== undefined
-const hitIsFileOnly = (hit: SearchHit): boolean => !hitHasId(hit) && !hitHasText(hit)
-
-const hitKey = (hit: SearchHit, index: number): string => {
-  if (hit.text) return `text:${hit.text.slice(0, 80)}`
-  if (hit.id) return hit.id
-  return `file:${hit.file}:${index}`
 }
 
 export const groupKey = (group: RunGroup): string => {
@@ -57,6 +59,180 @@ export const groupKey = (group: RunGroup): string => {
 export const buildFileUrl = (projectId: string, file: string): string =>
   `/project/${projectId}/file/${encodeURIComponent(file)}`
 
+export const SearchSlicePreview = ({
+  text,
+  filePath,
+  spotlights,
+  debug,
+  onNavigate,
+}: {
+  text: string
+  filePath: string
+  spotlights: Spotlight[] | null
+  debug?: SliceDebug
+  onNavigate?: () => void
+}) => (
+  <div className="group/hit relative w-full pr-9">
+    <div className="flex min-w-0 flex-col gap-2">
+      <MilkdownEditor content={text} readOnly filePath={filePath} spotlight={spotlights} />
+      {debug && debug.score !== undefined && (
+        <div className="px-1 text-[12px] font-mono font-bold text-neutral-700">
+          score: {debug.score.toFixed(4)}
+          {debug.splitTotal !== undefined &&
+            debug.splitTotal > 1 &&
+            debug.splitIndex !== undefined && (
+              <span className="ml-2 text-neutral-500">
+                {splitLabel(debug.splitIndex, debug.splitTotal)}
+              </span>
+            )}
+          {debug.constituentScores && debug.constituentScores.length > 1 && (
+            <span className="ml-2 text-neutral-500">
+              [{debug.constituentScores.map((s) => s.toFixed(4)).join(", ")}]
+            </span>
+          )}
+          {debug.matchRanges?.map((mr, i) =>
+            mr.confidence || mr.reasonToKeep ? (
+              <div key={i} className="mt-1 font-normal text-neutral-500">
+                {mr.confidence && (
+                  <span
+                    className={
+                      mr.confidence === "borderline" ? "text-amber-700" : "text-emerald-700"
+                    }
+                  >
+                    {mr.confidence}
+                  </span>
+                )}
+                {mr.reasonToKeep && <span className="ml-2">{mr.reasonToKeep}</span>}
+              </div>
+            ) : null
+          )}
+        </div>
+      )}
+      {debug?.showRawText && (
+        <pre className="overflow-x-auto rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2 text-[12px] leading-snug font-mono text-neutral-700 whitespace-pre-wrap">
+          {text}
+        </pre>
+      )}
+    </div>
+    {onNavigate && (
+      <div className="absolute top-0 right-0 bottom-0 my-auto flex h-7 items-center">
+        <TooltipWrap text="Show in file">
+          <IconButton
+            size="small"
+            variant="neutral-secondary"
+            icon={<LocateFixed />}
+            onClick={onNavigate}
+            className="text-brand-600 opacity-0 transition-opacity hover:!border-brand-200 hover:!bg-brand-50 group-hover/hit:opacity-100"
+          />
+        </TooltipWrap>
+      </div>
+    )}
+  </div>
+)
+
+export interface RunGroupCardProps {
+  title: string
+  date?: string
+  tags: TagDefinition[]
+  hits: SearchHit[]
+  hitCount: number
+  debug?: SliceDebug
+  onOpenFile: () => void
+  onNavigateHit: (hit: SearchHit) => void
+}
+
+export const RunGroupCard = memo(
+  ({ title, date, tags, hits, hitCount, debug, onOpenFile, onNavigateHit }: RunGroupCardProps) => (
+    <div className="flex w-full flex-col items-start rounded-[14px] border border-solid border-neutral-border bg-default-background">
+      <FileHeader
+        className="px-6 py-4"
+        title={title}
+        date={date}
+        tags={tags}
+        onTitleClick={onOpenFile}
+        trailing={
+          hitCount > 0 ? (
+            <span className="text-caption font-caption text-subtext-color">
+              {hitCount} {hitCount === 1 ? "hit" : "hits"}
+            </span>
+          ) : undefined
+        }
+      />
+      <div className="flex w-full flex-col items-start px-6 py-4">
+        {hits.map((hit, i) =>
+          hit.text ? (
+            <Fragment key={hitKey(hit, i)}>
+              {i > 0 && (
+                <hr className="my-4 w-full border-0 border-t border-solid border-neutral-200" />
+              )}
+              <SearchSlicePreview
+                text={hit.text}
+                filePath={hit.file}
+                spotlights={hit.matches ? matchesToSpotlights(hit.matches) : null}
+                debug={debug && sliceDebugFor(debug, hit)}
+                onNavigate={() => onNavigateHit(hit)}
+              />
+            </Fragment>
+          ) : null
+        )}
+      </div>
+    </div>
+  )
+)
+
+RunGroupCard.displayName = "RunGroupCard"
+
+export interface ConnectedRunGroupCardProps {
+  group: RunGroup
+  files: FileStore
+  projectId: string
+  debug?: SliceDebug
+  onNavigate?: (url: string) => void
+}
+
+export const ConnectedRunGroupCard = ({
+  group,
+  files,
+  projectId,
+  debug,
+  onNavigate,
+}: ConnectedRunGroupCardProps) => {
+  const content = files[group.file] ?? ""
+  const tags = useMemo(() => resolveFileTags(files, content), [files, content])
+  const detailHits = useMemo(() => group.hits.filter((h) => !hitIsFileOnly(h)), [group.hits])
+  const onOpenFile = useCallback(
+    () => onNavigate?.(buildFileUrl(projectId, group.file)),
+    [onNavigate, projectId, group.file]
+  )
+  const onNavigateHit = useCallback(
+    (hit: SearchHit) => onNavigate?.(buildHitUrl(projectId, hit)),
+    [onNavigate, projectId]
+  )
+
+  return (
+    <RunGroupCard
+      title={toDisplayName(group.file)}
+      date={getFileDate(content)}
+      tags={tags}
+      hits={detailHits}
+      hitCount={detailHits.length}
+      debug={debug}
+      onOpenFile={onOpenFile}
+      onNavigateHit={onNavigateHit}
+    />
+  )
+}
+
+const hitHasId = (hit: SearchHit): hit is SearchHit & { id: string } => hit.id !== undefined
+const hitHasText = (hit: SearchHit): hit is SearchHit & { text: string } => hit.text !== undefined
+const hitIsFileOnly = (hit: SearchHit): boolean => !hitHasId(hit) && !hitHasText(hit)
+
+const hitKey = (hit: SearchHit, index: number): string => {
+  if (hit.text) return `text:${hit.text.slice(0, 80)}`
+  if (hit.id) return hit.id
+  return `file:${hit.file}:${index}`
+}
+
 const buildHitUrl = (projectId: string, hit: SearchHit): string => {
   const base = buildFileUrl(projectId, hit.file)
   if (hit.id) return `${base}?entity=${encodeURIComponent(hit.id)}`
@@ -69,6 +245,8 @@ const buildHitUrl = (projectId: string, hit: SearchHit): string => {
   return base
 }
 
+const normalizeMatchWhitespace = (match: string): string => match.replace(/\n\n+/g, " ")
+
 const matchToSpotlights = (text: string): Spotlight[] => {
   const normalized = normalizeMatchWhitespace(text)
   const sentences = splitSentences(normalized)
@@ -80,163 +258,16 @@ const matchesToSpotlights = (matches: string[]): Spotlight[] => matches.flatMap(
 
 const splitLabel = (index: number, total: number): string => `part ${index + 1}/${total}`
 
-interface MatchRangeMeta {
-  confidence?: "clear" | "borderline"
-  reasonToKeep?: string
-}
+const sliceDebugFor = (debug: SliceDebug, hit: SearchHit): SliceDebug => ({
+  ...debug,
+  score: hit.score ?? debug.score,
+  constituentScores: hit.constituentScores ?? debug.constituentScores,
+  splitIndex: hit.splitIndex ?? debug.splitIndex,
+  splitTotal: hit.splitTotal ?? debug.splitTotal,
+  matchRanges: hit.matchRanges ?? debug.matchRanges,
+})
 
-const SearchSlicePreview = ({
-  text,
-  filePath,
-  matches,
-  matchRanges,
-  score,
-  constituentScores,
-  splitIndex,
-  splitTotal,
-  onNavigate,
-}: {
-  text: string
-  filePath: string
-  matches?: string[]
-  matchRanges?: MatchRangeMeta[]
-  score?: number
-  constituentScores?: number[]
-  splitIndex?: number
-  splitTotal?: number
-  onNavigate?: () => void
-}) => {
-  const debugOptions = useDebugOptions()
-  return (
-    <div className="group/hit relative w-full pr-9">
-      <div className="flex min-w-0 flex-col gap-2">
-        <MilkdownEditor
-          content={text}
-          readOnly
-          filePath={filePath}
-          spotlight={matches ? matchesToSpotlights(matches) : null}
-        />
-        {debugOptions.showHitScore && score !== undefined && (
-          <div className="px-1 text-[12px] font-mono font-bold text-neutral-700">
-            score: {score.toFixed(4)}
-            {splitTotal !== undefined && splitTotal > 1 && splitIndex !== undefined && (
-              <span className="ml-2 text-neutral-500">{splitLabel(splitIndex, splitTotal)}</span>
-            )}
-            {constituentScores && constituentScores.length > 1 && (
-              <span className="ml-2 text-neutral-500">
-                [{constituentScores.map((s) => s.toFixed(4)).join(", ")}]
-              </span>
-            )}
-            {matchRanges?.map((mr, i) =>
-              mr.confidence || mr.reasonToKeep ? (
-                <div key={i} className="mt-1 font-normal text-neutral-500">
-                  {mr.confidence && (
-                    <span
-                      className={
-                        mr.confidence === "borderline" ? "text-amber-700" : "text-emerald-700"
-                      }
-                    >
-                      {mr.confidence}
-                    </span>
-                  )}
-                  {mr.reasonToKeep && <span className="ml-2">{mr.reasonToKeep}</span>}
-                </div>
-              ) : null
-            )}
-          </div>
-        )}
-        {debugOptions.renderAsJson && (
-          <pre className="overflow-x-auto rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2 text-[12px] leading-snug font-mono text-neutral-700 whitespace-pre-wrap">
-            {text}
-          </pre>
-        )}
-      </div>
-      {onNavigate && (
-        <div className="absolute top-0 right-0 bottom-0 my-auto flex h-7 items-center">
-          <TooltipWrap text="Show in file">
-            <IconButton
-              size="small"
-              variant="neutral-secondary"
-              icon={<LocateFixed />}
-              onClick={onNavigate}
-              className="text-brand-600 opacity-0 transition-opacity hover:!border-brand-200 hover:!bg-brand-50 group-hover/hit:opacity-100"
-            />
-          </TooltipWrap>
-        </div>
-      )}
-    </div>
-  )
-}
-
-export interface RunGroupCardProps {
-  group: RunGroup
-  files: FileStore
-  projectId: string
-  onNavigate?: (url: string) => void
-}
-
-const areGroupPropsEqual = (prev: RunGroupCardProps, next: RunGroupCardProps): boolean =>
-  prev.group.file === next.group.file &&
-  prev.group.hits === next.group.hits &&
-  prev.files === next.files &&
-  prev.projectId === next.projectId &&
-  prev.onNavigate === next.onNavigate
-
-export const RunGroupCard = memo(({ group, files, projectId, onNavigate }: RunGroupCardProps) => {
-  const fileUrl = buildFileUrl(projectId, group.file)
-  const content = files[group.file] ?? ""
-  const tagIds = getTags(content)
-  const tags = tagIds
+const resolveFileTags = (files: FileStore, content: string): TagDefinition[] =>
+  getTags(content)
     .map((id) => findTagDefinitionById(files, id))
-    .filter((t): t is NonNullable<typeof t> => t != null)
-  const date = getFileDate(content)
-
-  const isFileOnlyGroup = group.hits.every(hitIsFileOnly)
-  const detailHits = group.hits.filter((h) => !hitIsFileOnly(h))
-
-  const handleOpenFile = () => onNavigate?.(fileUrl)
-
-  const hitsToRender = isFileOnlyGroup ? [{ file: group.file }] : detailHits
-  const hitCount = isFileOnlyGroup ? 0 : detailHits.length
-
-  return (
-    <div className="flex w-full flex-col items-start rounded-[14px] border border-solid border-neutral-border bg-default-background">
-      <FileHeader
-        className="px-6 py-4"
-        title={toDisplayName(group.file)}
-        date={date}
-        tags={tags}
-        onTitleClick={handleOpenFile}
-        trailing={
-          hitCount > 0 ? (
-            <span className="text-caption font-caption text-subtext-color">
-              {hitCount} {hitCount === 1 ? "hit" : "hits"}
-            </span>
-          ) : undefined
-        }
-      />
-      <div className="flex w-full flex-col items-start px-6 py-4">
-        {hitsToRender.map((hit, i) =>
-          hit.text ? (
-            <Fragment key={hitKey(hit, i)}>
-              {i > 0 && (
-                <hr className="my-4 w-full border-0 border-t border-solid border-neutral-200" />
-              )}
-              <SearchSlicePreview
-                text={hit.text}
-                filePath={hit.file}
-                matches={hit.matches}
-                matchRanges={hit.matchRanges}
-                score={hit.score}
-                constituentScores={hit.constituentScores}
-                splitIndex={hit.splitIndex}
-                splitTotal={hit.splitTotal}
-                onNavigate={() => onNavigate?.(buildHitUrl(projectId, hit))}
-              />
-            </Fragment>
-          ) : null
-        )}
-      </div>
-    </div>
-  )
-}, areGroupPropsEqual)
+    .filter((t): t is TagDefinition => t != null)

@@ -1,13 +1,6 @@
 "use client"
 
-import {
-  useState,
-  useMemo,
-  useCallback,
-  useSyncExternalStore,
-  useLayoutEffect,
-  useRef,
-} from "react"
+import { useState, useMemo, useLayoutEffect, useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { CheckSquare, ExternalLink, FileSearch, Search } from "lucide-react"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
@@ -20,14 +13,11 @@ import type {
   GlobalAnnotationCount,
   ReviewStat,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
-import { getSelectedCodes, toggleSelectedCode } from "~/domain/data-blocks/ux/selectors"
-import { writeSelectedCodes } from "~/domain/actions/select-codes/apply"
-import { getFiles, subscribe } from "~/lib/files/store"
 import type { Codebook, Code, CodeCategory } from "./types"
 import { CodeItem } from "./CodeItem"
 import { CodeDetail } from "./CodeDetail"
 
-interface CodesSidebarProps {
+export interface CodesSidebarProps {
   codebook: Codebook
   annotationCounts?: Record<string, number>
   globalAnnotationCounts?: Record<string, GlobalAnnotationCount>
@@ -35,6 +25,10 @@ interface CodesSidebarProps {
   debugReview?: boolean
   busy?: boolean
   allSelected?: boolean
+  selectedCodeIds?: ReadonlySet<string>
+  onToggleCode?: (id: string) => void
+  searchValue?: string
+  onSearchChange?: (value: string) => void
   onSelectAll?: () => void
   onDeselectAll?: () => void
   onEditCode?: (code: Code) => void
@@ -61,6 +55,8 @@ const filterCategories = (categories: CodeCategory[], query: string): CodeCatego
 
 const EMPTY_COUNT: GlobalAnnotationCount = { count: 0, fileCount: 0 }
 
+const EMPTY_SELECTION: ReadonlySet<string> = new Set()
+
 const readRowPositions = (container: HTMLElement): Position[] =>
   Array.from(container.querySelectorAll<HTMLElement>("[data-code-id]")).map((node) => ({
     id: node.dataset.codeId ?? "",
@@ -68,7 +64,7 @@ const readRowPositions = (container: HTMLElement): Position[] =>
     height: node.offsetHeight,
   }))
 
-const SearchCodeButton = ({
+export const SearchCodeButton = ({
   code,
   globalCount,
   onClick,
@@ -111,6 +107,10 @@ export const CodesSidebar = ({
   reviewStats,
   debugReview = false,
   allSelected = false,
+  selectedCodeIds = EMPTY_SELECTION,
+  onToggleCode,
+  searchValue = "",
+  onSearchChange,
   onSelectAll,
   onDeselectAll,
   onEditCode,
@@ -121,13 +121,9 @@ export const CodesSidebar = ({
   onFindCandidates,
   onFindFileCandidates,
 }: CodesSidebarProps) => {
-  const [searchValue, setSearchValue] = useState("")
   const [hoveredCode, setHoveredCode] = useState<Code | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const hasAutoScrolled = useRef(false)
-
-  const files = useSyncExternalStore(subscribe, getFiles)
-  const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
 
   useLayoutEffect(() => {
     if (hasAutoScrolled.current) return
@@ -137,21 +133,13 @@ export const CodesSidebar = ({
     if (positions.length === 0) return
     const target = computeBestWindowScrollTop(
       positions,
-      selectedCodes,
+      selectedCodeIds,
       el.clientHeight,
       el.scrollHeight
     )
     if (target !== null) el.scrollTop = target
     hasAutoScrolled.current = true
   })
-
-  const toggleCode = useCallback(
-    (id: string) => {
-      const current = [...selectedCodes]
-      writeSelectedCodes(toggleSelectedCode(current, id))
-    },
-    [selectedCodes]
-  )
 
   const filteredCategories = useMemo(
     () => filterCategories(codebook.categories, searchValue),
@@ -165,7 +153,7 @@ export const CodesSidebar = ({
           title="Codes"
           filterPlaceholder="Filter codes..."
           filterValue={searchValue}
-          onFilterChange={setSearchValue}
+          onFilterChange={(v) => onSearchChange?.(v)}
           onNew={() => undefined}
         />
       </div>
@@ -186,8 +174,8 @@ export const CodesSidebar = ({
               <div key={code.id} data-code-id={code.id} className="w-full">
                 <CheckableWrap
                   color={code.color}
-                  checked={selectedCodes.has(code.id)}
-                  onToggle={() => toggleCode(code.id)}
+                  checked={selectedCodeIds.has(code.id)}
+                  onToggle={() => onToggleCode?.(code.id)}
                 >
                   <CodeItem
                     code={code}
@@ -196,7 +184,7 @@ export const CodesSidebar = ({
                     debugReview={debugReview}
                     highlighted={code.id === hoveredCode?.id}
                     onMouseEnter={() => setHoveredCode(code)}
-                    onClick={() => toggleCode(code.id)}
+                    onClick={() => onToggleCode?.(code.id)}
                     onCountClick={() => onSearchCodeInFile?.(code)}
                     onSearchUnsure={() => onSearchUnsure?.(code)}
                   />

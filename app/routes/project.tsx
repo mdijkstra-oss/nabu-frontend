@@ -15,13 +15,13 @@ import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayou
 import { useFiles } from "~/ui/hooks/useFiles"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { useFileImport } from "~/ui/hooks/useFileImport"
-import { DocumentsSidebar } from "~/ui/components/sidebar/documents/DocumentsSidebar"
+import { ConnectedDocumentsSidebar } from "~/ui/components/sidebar/documents/ConnectedDocumentsSidebar"
 import {
   buildDocumentEntries,
   type DocumentEntry,
   type DocSortMode,
 } from "~/domain/documents/selectors"
-import { CodesSidebar } from "~/ui/components/sidebar/codes/CodesSidebar"
+import { ConnectedCodesSidebar } from "~/ui/components/sidebar/codes/ConnectedCodesSidebar"
 import type { Code } from "~/ui/components/sidebar/codes/types"
 import { ExhibitsSidebar } from "~/ui/components/sidebar/exhibits/ExhibitsSidebar"
 import { getLatestSearch } from "~/domain/data-blocks/settings/searches/selectors"
@@ -720,7 +720,7 @@ export default function ProjectLayout() {
 
   const sidebarPanels = {
     documents: (
-      <DocumentsSidebar
+      <ConnectedDocumentsSidebar
         documents={documents}
         selectedId={currentFile ?? undefined}
         searchValue={searchValue}
@@ -744,7 +744,7 @@ export default function ProjectLayout() {
     ...(codebook
       ? {
           codes: (
-            <CodesSidebar
+            <ConnectedCodesSidebar
               codebook={codebook}
               annotationCounts={annotationCounts}
               globalAnnotationCounts={globalAnnotationCounts}

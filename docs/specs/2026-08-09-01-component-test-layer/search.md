@@ -33,13 +33,13 @@ Props — each field named for its consumer:
 - `tags: TagDefinition[]` — passed to `FileHeader`, already resolved; the caller keeps the `getTags` + `findTagDefinitionById` lookup.
 - `hits: SearchHit[]` — the detail hits rendered as `SearchSlicePreview` slices; the caller has already filtered out file-only hits.
 - `hitCount: number` — the "N hits" badge in the header trailing slot.
-- `debug?` — the resolved debug object forwarded to each slice (shape below); the route resolves it from its own `debugOptions`.
+- `debug?` — the resolved debug object forwarded to each slice (shape below); the route resolves it from its own `debugOptions`. `RunGroupCard` merges each hit's own score fields into the group-level object before forwarding, so a slice shows its own score rather than the group's. The chrome is all-or-nothing per slice: `renderAsJson` alone now also shows the score line where a hit carries one (previously the score line and raw text were gated by separate options).
 - `onOpenFile: () => void` — title click; the caller closes over `buildFileUrl(projectId, file)`.
 - `onNavigateHit: (hit: SearchHit) => void` — the per-slice locate button; the caller closes over `buildHitUrl`.
 
 With every prop a value or a stable callback, React's default shallow `memo` compare suffices, so the hand-written `areGroupPropsEqual` comparator is deleted.
 
-`groupByRun`, `groupKey`, `buildFileUrl`, and the hit/spotlight helpers stay in `cards.tsx` as exported pure functions; the URL builders are only ever called by the connected caller.
+`groupByRun`, `groupKey`, `buildFileUrl`, and the hit/spotlight helpers stay in `cards.tsx` as exported pure functions; the URL builders are only ever called by the connected caller, which is a named component (`ConnectedRunGroupCard`) rendered by the route.
 
 ### SearchSlicePreview (pure, exported)
 

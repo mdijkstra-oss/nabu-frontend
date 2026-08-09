@@ -36,6 +36,7 @@ interface CardLayoutEngineProps {
   groups: RunGroup[]
   mode: LayoutMode
   renderCard: (group: RunGroup) => ReactNode
+  keyboardNav?: boolean
   onBandChange?: (band: VisibleBand) => void
   onNearEnd?: () => void
   className?: string
@@ -66,7 +67,7 @@ const FlatCard = ({
 }
 
 export const CardLayoutEngine = forwardRef<CardLayoutHandle, CardLayoutEngineProps>(
-  ({ groups, mode, renderCard, onBandChange, onNearEnd, className }, ref) => {
+  ({ groups, mode, renderCard, keyboardNav = false, onBandChange, onNearEnd, className }, ref) => {
     const scrollRef = useRef<HTMLDivElement | null>(null)
     const [stageH, setStageH] = useState(0)
     const [scrollTop, setScrollTop] = useState(0)
@@ -165,6 +166,7 @@ export const CardLayoutEngine = forwardRef<CardLayoutHandle, CardLayoutEnginePro
     }, [mode])
 
     useEffect(() => {
+      if (!keyboardNav) return
       const onKey = (e: KeyboardEvent) => {
         if (e.key === "ArrowDown" || e.key === "ArrowRight")
           scrollToIndex(bandRef.current.current + 1)
@@ -172,7 +174,7 @@ export const CardLayoutEngine = forwardRef<CardLayoutHandle, CardLayoutEnginePro
       }
       window.addEventListener("keydown", onKey)
       return () => window.removeEventListener("keydown", onKey)
-    }, [scrollToIndex])
+    }, [keyboardNav, scrollToIndex])
 
     if (mode === "flat") {
       return (

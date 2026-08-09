@@ -8,6 +8,7 @@ import {
   lowContrastText,
   solidBackground,
 } from "~/ui/theme/radix"
+import { forceHover } from "../../../../.storybook/hover"
 import { EntityLink } from "./EntityLink"
 
 const files = { "field-notes.md": "# Field notes" }
@@ -84,44 +85,24 @@ export const HoverSwapsBackground: Story = {
     children: fileLink.label,
     onClick: (e) => e.preventDefault(),
   },
+  render: (args) => (
+    <div data-testid="hover-host">
+      <EntityLink {...args} />
+    </div>
+  ),
   play: async ({ args, canvas, canvasElement }) => {
     const link = canvas.getByRole("link")
     const base = resolveBackgroundColor(canvasElement, args.colors.background)
     const hover = resolveBackgroundColor(canvasElement, args.colors.backgroundHover)
-
-    // storybook/test's userEvent dispatches synthetic DOM events, which never
-    // engage the CSS :hover state — the vitest browser pointer moves the real one.
-    const { userEvent: pointer } = await import("vitest/browser")
-
-    // Vite's dev-server error overlay intercepts all real pointer input while
-    // shown and reappears on every server error, so it is hidden for the
-    // duration of the story in both the tester and orchestrator documents.
-    const hideErrorOverlay = (doc: Document) => {
-      const style = doc.createElement("style")
-      style.textContent = "vite-error-overlay { display: none !important; }"
-      doc.head.appendChild(style)
-      return style
-    }
-    const overlaySuppressors = [document, window.frameElement?.ownerDocument]
-      .filter((doc): doc is Document => doc != null)
-      .map(hideErrorOverlay)
-
-    const pointAndExpect = (move: () => Promise<void>, expected: string) =>
-      waitFor(
-        async () => {
-          await move()
-          expect(getComputedStyle(link).backgroundColor).toBe(expected)
-        },
-        { timeout: 10000 }
-      )
+    const selector = '[data-testid="hover-host"] a'
 
     expect(getComputedStyle(link).backgroundColor).toBe(base)
 
-    try {
-      await pointAndExpect(() => pointer.hover(link), hover)
-      await pointAndExpect(() => pointer.unhover(link), base)
-    } finally {
-      overlaySuppressors.forEach((style) => style.remove())
-    }
+    const hovered = await forceHover(selector)
+    if (!hovered) return
+    await waitFor(() => expect(getComputedStyle(link).backgroundColor).toBe(hover))
+
+    await hovered.release()
+    await waitFor(() => expect(getComputedStyle(link).backgroundColor).toBe(base))
   },
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import type { ComponentType } from "react"
-import { useState, useMemo, useSyncExternalStore } from "react"
+import { useState, useMemo } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { ArrowDownAZ, Calendar, Hash, Folder } from "lucide-react"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
@@ -24,31 +24,28 @@ import {
 import { resolveIcon } from "~/ui/theme/icon-map"
 import { humanize } from "~/lib/text/humanize"
 import { ToggleGroup } from "~/ui/components/ToggleGroup"
-import { getFiles, subscribe } from "~/lib/files/store"
-import {
-  getSelectedDocs,
-  toggleSelectedDoc,
-  selectionState,
-  addIds,
-  removeIds,
-} from "~/domain/data-blocks/ux/selectors"
-import { writeSelectedDocs } from "~/domain/actions/select-docs/apply"
+import { selectionState } from "~/domain/data-blocks/ux/selectors"
 import { DocumentItem } from "./DocumentItem"
 import { SelectionBar } from "./SelectionBar"
 
 export type { DocSortMode } from "~/domain/documents/selectors"
 
-interface DocumentsSidebarProps {
+export interface DocumentsSidebarProps {
   documents: ListItem[]
   selectedId?: string
   searchValue?: string
   sortMode?: DocSortMode
   tagDefinitions?: TagDefinition[]
+  selectedDocIds?: ReadonlySet<string>
+  onToggleDoc?: (id: string) => void
+  onToggleTag?: (ids: string[]) => void
   onSearchChange?: (value: string) => void
   onSortChange?: (mode: DocSortMode) => void
   onDocumentSelect?: (id: string) => void
   onNewDocument?: () => void
 }
+
+const EMPTY_SELECTION: ReadonlySet<string> = new Set()
 
 const DEFAULT_TAG_COLOR: RadixColor = "lime"
 const UNGROUPED = "general"
@@ -143,7 +140,7 @@ const resolveTag = (lookup: Map<string, ResolvedTag>, tag: string): ResolvedTag 
 const firstTagColor = (doc: ListItem, lookup: Map<string, ResolvedTag>): RadixColor =>
   doc.tags.length > 0 ? resolveTag(lookup, doc.tags[0]).color : DEFAULT_TAG_COLOR
 
-const SelectableDocument = ({
+export const SelectableDocument = ({
   doc,
   color,
   isCurrent,
@@ -179,6 +176,9 @@ export function DocumentsSidebar({
   searchValue = "",
   sortMode = "name",
   tagDefinitions,
+  selectedDocIds = EMPTY_SELECTION,
+  onToggleDoc,
+  onToggleTag,
   onSearchChange,
   onSortChange,
   onDocumentSelect,
@@ -187,19 +187,6 @@ export function DocumentsSidebar({
   const [hoveredTag, setHoveredTag] = useState<string | null>(null)
   const isFiltering = searchValue.trim().length > 0
   const tagLookup = useMemo(() => buildTagLookup(tagDefinitions ?? []), [tagDefinitions])
-
-  const files = useSyncExternalStore(subscribe, getFiles)
-  const selectedDocs = useMemo(() => getSelectedDocs(files), [files])
-
-  const toggleDoc = (id: string) => writeSelectedDocs(toggleSelectedDoc([...selectedDocs], id))
-
-  const toggleTag = (docs: ListItem[]) => {
-    const ids = docs.map((d) => d.id)
-    const current = [...selectedDocs]
-    writeSelectedDocs(
-      selectionState(selectedDocs, ids) === "all" ? removeIds(current, ids) : addIds(current, ids)
-    )
-  }
 
   const unsortedGroups = useMemo(() => groupByTag(documents), [documents])
   const activeTags = useMemo(
@@ -270,8 +257,8 @@ export function DocumentsSidebar({
                 doc={doc}
                 color={firstTagColor(doc, tagLookup)}
                 isCurrent={doc.id === selectedId}
-                isChecked={selectedDocs.has(doc.id)}
-                onToggle={() => toggleDoc(doc.id)}
+                isChecked={selectedDocIds.has(doc.id)}
+                onToggle={() => onToggleDoc?.(doc.id)}
                 onSelect={() => onDocumentSelect?.(doc.id)}
               />
             ))
@@ -287,7 +274,7 @@ export function DocumentsSidebar({
                 i === activeGroupCount - 1 &&
                 i < groups.length - 1
               const tagState = selectionState(
-                selectedDocs,
+                selectedDocIds,
                 docs.map((d) => d.id)
               )
               const row = (
@@ -298,7 +285,7 @@ export function DocumentsSidebar({
                   partial={tagState === "partial"}
                   muted
                   bodyTogglesSelection
-                  onToggle={() => toggleTag(docs)}
+                  onToggle={() => onToggleTag?.(docs.map((d) => d.id))}
                 >
                   <div
                     className="group relative flex w-full items-center gap-2 pl-2 pr-4 py-2.5 hover:bg-neutral-50"
@@ -377,8 +364,8 @@ export function DocumentsSidebar({
                   doc={doc}
                   color={hoveredResolved?.color ?? DEFAULT_TAG_COLOR}
                   isCurrent={doc.id === selectedId}
-                  isChecked={selectedDocs.has(doc.id)}
-                  onToggle={() => toggleDoc(doc.id)}
+                  isChecked={selectedDocIds.has(doc.id)}
+                  onToggle={() => onToggleDoc?.(doc.id)}
                   onSelect={() => {
                     onDocumentSelect?.(doc.id)
                     setHoveredTag(null)

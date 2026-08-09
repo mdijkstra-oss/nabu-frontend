@@ -33,7 +33,7 @@ interface FileHeaderProps {
   className?: string
 }
 
-const TagDot = ({ tag, onRemove }: { tag: TagDefinition; onRemove?: () => void }) => {
+export const TagDot = ({ tag, onRemove }: { tag: TagDefinition; onRemove?: () => void }) => {
   const dot = "h-2.5 w-2.5 flex-none rounded-full"
   const style = { backgroundColor: solidBackground(tag.color) }
   return (
@@ -55,7 +55,7 @@ const TagDot = ({ tag, onRemove }: { tag: TagDefinition; onRemove?: () => void }
 
 const titleStyle = "min-w-0 grow text-body-bold font-body-bold text-default-font"
 
-const EditableTitle = ({
+export const EditableTitle = ({
   title,
   onRename,
   renameRequested = false,

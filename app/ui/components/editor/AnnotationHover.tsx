@@ -142,7 +142,7 @@ const unsetLockedOp = (id: string) => [
   { op: "remove" as const, path: `/annotations[id=${id}]/locked` },
 ]
 
-const annotationToEntry =
+export const annotationToEntry =
   (
     files: Record<string, string>,
     reviewCounts: Record<string, number>,

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, waitFor, within } from "storybook/test"
-import { cdp } from "vitest/browser"
 import { withSize } from "../../../../.storybook/decorators"
+import { forceHover } from "../../../../.storybook/hover"
 import { TimelineCard, type TimelineMarker } from "./TimelineCard"
 import { EPOCH } from "./fixtures"
 
@@ -30,31 +30,6 @@ type Story = StoryObj<typeof TimelineCard>
 
 const railOf = (container: HTMLElement): Element | null =>
   container.querySelector('span[class*="w-[3px]"]')
-
-// storybook/test's userEvent is synthetic and cannot trigger CSS :hover, and
-// pointer input does not reach vitest's scaled tester iframe, so the hover
-// state is forced through CDP's CSS.forcePseudoState — the engine then applies
-// the real :hover rules. Outside the vitest runner the context module resolves
-// to a stub whose exports are null, so the Storybook viewer skips the check.
-const forceHover = async (selector: string): Promise<boolean> => {
-  if (!cdp) return false
-  const session = cdp()
-  await session.send("DOM.enable")
-  await session.send("CSS.enable")
-  await session.send("DOM.getDocument", { depth: -1, pierce: true })
-  const { searchId, resultCount } = await session.send("DOM.performSearch", { query: selector })
-  expect(resultCount).toBeGreaterThan(0)
-  const { nodeIds } = await session.send("DOM.getSearchResults", {
-    searchId,
-    fromIndex: 0,
-    toIndex: 1,
-  })
-  await session.send("CSS.forcePseudoState", {
-    nodeId: nodeIds[0],
-    forcedPseudoClasses: ["hover"],
-  })
-  return true
-}
 
 const timestampOf = (container: HTMLElement): Element | null =>
   container.querySelector('span[class*="group-hover"]')

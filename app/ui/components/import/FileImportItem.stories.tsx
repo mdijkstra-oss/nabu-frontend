@@ -29,7 +29,7 @@ const assertMatchesStatusConfig = (canvasElement: HTMLElement, status: ImportSta
   const label = [...canvasElement.querySelectorAll("span")].find(
     (span) => span.textContent === config.label
   )
-  if (!label) throw new Error(`no span renders the label "${config.label}"`)
+  if (!label) throw new globalThis.Error(`no span renders the label "${config.label}"`)
   expect(label.className).toContain(config.labelClass)
 
   expect(canvasElement.querySelector(`.bg-${config.iconVariant}-100`)).not.toBeNull()
