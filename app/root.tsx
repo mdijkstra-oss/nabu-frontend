@@ -3,6 +3,13 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 import type { Route } from "./+types/root"
 import "./styles/index.css"
 
+// The literal env read keeps the branch statically dead without VITE_E2E, so
+// the hook chunk never enters production bundles. The window guard keeps the
+// import out of the build-time prerender pass.
+if (import.meta.env.VITE_E2E && typeof window !== "undefined") {
+  void import("~/domain/db/e2e-hook").then((m) => m.installTestHook(import.meta.env.VITE_E2E))
+}
+
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
