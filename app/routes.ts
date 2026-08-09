@@ -7,8 +7,4 @@ export default [
     route("file/:fileId", "routes/project.file.tsx"),
     route("search/:searchId", "routes/project.search.tsx"),
   ]),
-  route("designs", "routes/designs.tsx", [
-    index("routes/designs._index.tsx"),
-    route(":page", "routes/designs.page.tsx"),
-  ]),
 ] satisfies RouteConfig
