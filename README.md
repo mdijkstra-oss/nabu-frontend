@@ -64,18 +64,19 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 - **Data** — DuckDB-WASM, MiniSearch for BM25
 - **Editor** — Milkdown on ProseMirror
 - **Schemas** — Zod, on both the validation and the tool-definition side
-- **Tests** — Vitest for unit suites, Storybook for component work
+- **Tests** — Vitest for unit suites, Storybook for component work, [nabu-e2e](https://github.com/mdijkstra-oss/nabu-e2e) for browser end-to-end runs
 
 ## Related repositories
 
 - [nabu-storage](https://github.com/mdijkstra-oss/nabu-storage) — file storage and sync, the Go service behind `VITE_API_HOST`
 - [nabu-prompts](https://github.com/mdijkstra-oss/nabu-prompts) — the model gateway behind `VITE_LLM_HOST`: one Markdown file per agent, served by chancery over dragoman
 - [nabu-embeddings](https://github.com/mdijkstra-oss/nabu-embeddings) — the `/embeddings` route behind `VITE_EMBEDDINGS_URL`, holding the provider key a browser cannot
+- [nabu-e2e](https://github.com/mdijkstra-oss/nabu-e2e) — the end-to-end suite: every behavior claim in these docs, run against the self-hosted stack in Chromium
 
 ## Known gaps
 
 - **No authentication** — local-first and single-user for now
-- **Unit tests only** — Vitest suites cover the agent, block parsing, search and text handling well, and the projection and file-store layers thinly. There are no component, integration or end-to-end tests, and nothing runs automated in a browser.
+- **No component tests** — Vitest unit suites cover the agent, block parsing, search and text handling well, and the projection and file-store layers thinly; nabu-e2e covers the documented behavior end-to-end in a browser. Component-level suites remain absent.
 - **Features missing** --- Some more basic features have not been implemented yet, eg no project management etc.
 
 ## Running it
