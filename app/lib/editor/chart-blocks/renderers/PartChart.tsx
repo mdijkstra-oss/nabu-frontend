@@ -22,6 +22,7 @@ interface PartChartProps {
   renderable: PartRenderable
   tooltipContext: ChartTooltipContext
   onDatumClick?: (url: string) => void
+  height?: number
 }
 
 interface InnerProps {
@@ -81,12 +82,17 @@ const renderByType = (inner: InnerProps): ReactElement => {
   }
 }
 
-export const PartChart = ({ renderable, tooltipContext, onDatumClick }: PartChartProps) => {
+export const PartChart = ({
+  renderable,
+  tooltipContext,
+  onDatumClick,
+  height = CHART_HEIGHT,
+}: PartChartProps) => {
   const tooltipContent = buildChartTooltipContent(tooltipContext)
   const inner: InnerProps = { renderable, tooltipContent, onDatumClick }
 
   return (
-    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+    <ResponsiveContainer width="100%" height={height}>
       {renderByType(inner)}
     </ResponsiveContainer>
   )

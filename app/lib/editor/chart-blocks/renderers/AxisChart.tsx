@@ -32,6 +32,7 @@ interface AxisChartProps {
   renderable: AxisRenderable
   tooltipContext: ChartTooltipContext
   onDatumClick?: (url: string) => void
+  height?: number
 }
 
 interface InnerProps {
@@ -51,20 +52,23 @@ const renderBar = ({ renderable, tooltipContent, onDatumClick }: InnerProps): Re
   const isVertical = renderable.orientation === "vertical"
   const stackId = isStacked ? "stack" : undefined
   const onClick = buildDatumClickHandler(onDatumClick)
+  const categoryTick = tickFormatterFor(renderable.xFormat)
+  const valueTick = tickFormatterFor(renderable.yFormat)
 
+  // Recharts scans direct chart children for axes; a fragment hides them, because
+  // its bundled react-is 18 does not recognize React 19 fragment elements.
   return (
     <BarChart data={renderable.rows} layout={isVertical ? "vertical" : "horizontal"}>
       <CartesianGrid strokeDasharray="3 3" />
       {isVertical ? (
-        <>
-          <XAxis type="number" tickFormatter={tickFormatterFor(renderable.yFormat)} />
-          <YAxis dataKey="x" type="category" tickFormatter={tickFormatterFor(renderable.xFormat)} />
-        </>
+        <XAxis type="number" tickFormatter={valueTick} />
       ) : (
-        <>
-          <XAxis dataKey="x" tickFormatter={tickFormatterFor(renderable.xFormat)} />
-          <YAxis tickFormatter={tickFormatterFor(renderable.yFormat)} />
-        </>
+        <XAxis dataKey="x" tickFormatter={categoryTick} />
+      )}
+      {isVertical ? (
+        <YAxis dataKey="x" type="category" tickFormatter={categoryTick} />
+      ) : (
+        <YAxis tickFormatter={valueTick} />
       )}
       <RechartsTooltip content={tooltipContent} />
       {renderable.seriesNames.length > 1 && <Legend />}
@@ -160,12 +164,17 @@ const renderByType = (type: AxisChartType, inner: InnerProps): ReactElement => {
   }
 }
 
-export const AxisChart = ({ renderable, tooltipContext, onDatumClick }: AxisChartProps) => {
+export const AxisChart = ({
+  renderable,
+  tooltipContext,
+  onDatumClick,
+  height = CHART_HEIGHT,
+}: AxisChartProps) => {
   const tooltipContent = buildChartTooltipContent(tooltipContext)
   const inner: InnerProps = { renderable, tooltipContent, onDatumClick }
 
   return (
-    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+    <ResponsiveContainer width="100%" height={height}>
       {renderByType(renderable.type, inner)}
     </ResponsiveContainer>
   )

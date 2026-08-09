@@ -35,6 +35,10 @@ export interface RechartsTooltipContentProps {
 
 export type RechartsTooltipContent = (props: RechartsTooltipContentProps) => ReactElement | null
 
+export interface ChartTooltipProps extends RechartsTooltipContentProps {
+  context: ChartTooltipContext
+}
+
 const remarkPlugins = [remarkGfm]
 
 const extractDatum = (payload: RechartsPayloadItem[] | undefined): TooltipDatum | undefined =>
@@ -69,26 +73,27 @@ const buildTooltipMarkdown = (
   })
 }
 
-export const buildChartTooltipContent = (context: ChartTooltipContext): RechartsTooltipContent => {
+export const ChartTooltip = ({ context, active, payload, label }: ChartTooltipProps) => {
+  if (!active || !payload || payload.length === 0) return null
+  const datum = extractDatum(payload)
+  if (!datum) return null
+
   const components = createEntityLinkComponents({
     files: context.files,
     projectId: context.projectId,
     navigate: context.navigate,
   })
+  const markdown = buildTooltipMarkdown(payload, label, datum, context.entityMap)
 
-  return ({ active, payload, label }) => {
-    if (!active || !payload || payload.length === 0) return null
-    const datum = extractDatum(payload)
-    if (!datum) return null
-
-    const markdown = buildTooltipMarkdown(payload, label, datum, context.entityMap)
-
-    return (
-      <div className="rounded border border-solid border-neutral-border bg-default-background px-3 py-2 text-xs shadow-md">
-        <Markdown remarkPlugins={remarkPlugins} components={components}>
-          {markdown}
-        </Markdown>
-      </div>
-    )
-  }
+  return (
+    <div className="rounded border border-solid border-neutral-border bg-default-background px-3 py-2 text-xs shadow-md">
+      <Markdown remarkPlugins={remarkPlugins} components={components}>
+        {markdown}
+      </Markdown>
+    </div>
+  )
 }
+
+export const buildChartTooltipContent =
+  (context: ChartTooltipContext): RechartsTooltipContent =>
+  (props) => <ChartTooltip context={context} {...props} />

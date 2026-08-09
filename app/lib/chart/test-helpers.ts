@@ -95,6 +95,8 @@ const fixtureSources: Record<ChartType, ChartFixtureSource> = {
   },
 }
 
+export const allChartTypes = Object.keys(fixtureSources) as ChartType[]
+
 export interface ChartFixture {
   spec: ChartSpec
   rows: Record<string, unknown>[]

@@ -104,6 +104,8 @@ Storying `ChartBlockView` directly behind a mocked DuckDB was rejected: the quer
 
 Hand-writing `RenderableChart` fixtures was rejected in favor of building them through `resolveChartData`: spec-plus-rows is the vocabulary a chart author actually writes, and it keeps resolve covered by the same stories.
 
+One deliberate exception to "no split changes what the app renders": axis charts previously rendered with hidden default axes because `renderBar` wrapped `XAxis`/`YAxis` in a React fragment, and Recharts 2.15's bundled `react-is` (18.3.1) does not recognize React 19 fragment elements when scanning chart children. The fragment is unwrapped into direct conditional children in `renderers/AxisChart.tsx`, so bar charts now show their axis ticks — required for the vertical-bar contract case ("category axis becomes Y") to be satisfiable at all.
+
 ## Tests
 
 All chart stories run as Vitest browser tests through the `storybook` project described in [harness.md](harness.md); decorators referenced below come from [story-kit.md](story-kit.md).

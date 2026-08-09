@@ -43,7 +43,7 @@ Pure component in `app/ui/components/nabu/ChatTimeline.tsx`; owns the `AutoScrol
 - `onContinue: () => void` — `PlanContinuePrompt`; shell wires to `respond("Continue to next step")`
 - `spinnerLabels: string[] | null` — non-null renders `TickLabel` after the last segment; shell derives via `getSpinnerLabels` while loading and not streaming text, suppressed while waiting for an ask
 - `showAbortBox: boolean` — renders `AbortBox` after the last segment; shell derives from the last plan's `aborted` flag
-- `showPlaceholder: boolean` — empty-state line when there are no segments; a prop because the "not loading" half of the condition is store state
+- `showPlaceholder: boolean` — empty-state line when there are no segments; a prop because the "not loading" half of the condition is store state. "No segments" is the whole condition: edit-group segments count, so a chat whose only content is mutation-history cards no longer shows the placeholder beside them (the pre-split shell keyed on zero chat messages and did)
 
 ### ChatComposer
 

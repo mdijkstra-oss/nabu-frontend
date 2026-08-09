@@ -11,9 +11,15 @@ export interface ChartRendererProps {
   renderable: RenderableChart
   tooltipContext: ChartTooltipContext
   onDatumClick?: (url: string) => void
+  height?: number
 }
 
-export const ChartRenderer = ({ renderable, tooltipContext, onDatumClick }: ChartRendererProps) => {
+export const ChartRenderer = ({
+  renderable,
+  tooltipContext,
+  onDatumClick,
+  height,
+}: ChartRendererProps) => {
   switch (renderable.kind) {
     case "axis":
       return (
@@ -21,6 +27,7 @@ export const ChartRenderer = ({ renderable, tooltipContext, onDatumClick }: Char
           renderable={renderable}
           tooltipContext={tooltipContext}
           onDatumClick={onDatumClick}
+          height={height}
         />
       )
     case "part":
@@ -29,10 +36,11 @@ export const ChartRenderer = ({ renderable, tooltipContext, onDatumClick }: Char
           renderable={renderable}
           tooltipContext={tooltipContext}
           onDatumClick={onDatumClick}
+          height={height}
         />
       )
     case "matrix":
-      return <HeatmapPlaceholder />
+      return <HeatmapPlaceholder height={height} />
     default:
       return exhaustive(renderable)
   }

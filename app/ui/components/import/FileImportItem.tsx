@@ -12,7 +12,7 @@ interface StatusConfig {
   showSpinner?: boolean
 }
 
-const statusConfigs: Record<ImportStatus, StatusConfig> = {
+export const statusConfigs: Record<ImportStatus, StatusConfig> = {
   pending: {
     iconVariant: "neutral",
     label: "Queued",

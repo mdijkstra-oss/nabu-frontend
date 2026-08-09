@@ -1,9 +1,8 @@
 "use client"
 
-import { Children, useRef, useState, type ReactNode } from "react"
+import { Children, Fragment, useRef, useState, type ReactNode } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { cn } from "~/ui/utils"
-import { NabuGate } from "~/ui/components/nabu/NabuGate"
 import { ConfirmButton } from "~/ui/components/ConfirmButton"
 
 export interface ActionBarAction {
@@ -20,6 +19,7 @@ export interface ActionBarProps {
   titleAction?: { label: string; onClick: () => void }
   actions: readonly ActionBarAction[]
   onTitleHover?: (hovering: boolean) => void
+  gateAction?: (button: ReactNode) => ReactNode
 }
 
 const springTransition = { type: "spring" as const, stiffness: 500, damping: 28 }
@@ -74,7 +74,14 @@ export function ActionBarButton({
   )
 }
 
-export function ActionBar({ title, detail, titleAction, actions, onTitleHover }: ActionBarProps) {
+export function ActionBar({
+  title,
+  detail,
+  titleAction,
+  actions,
+  onTitleHover,
+  gateAction = (button) => button,
+}: ActionBarProps) {
   const [showDetail, setShowDetail] = useState(false)
   const [detailHovered, setDetailHovered] = useState(false)
   const [frozenGrid, setFrozenGrid] = useState<{
@@ -180,7 +187,7 @@ export function ActionBar({ title, detail, titleAction, actions, onTitleHover }:
               )
             const button = <ActionBarButton {...action} />
             return action.variant === "ai" ? (
-              <NabuGate key={i}>{button}</NabuGate>
+              <Fragment key={i}>{gateAction(button)}</Fragment>
             ) : (
               <ActionBarButton key={i} {...action} />
             )

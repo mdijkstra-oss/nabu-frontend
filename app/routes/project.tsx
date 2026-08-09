@@ -5,6 +5,7 @@ import {
   useRef,
   useMemo,
   useSyncExternalStore,
+  type ReactElement,
   type ReactNode,
 } from "react"
 import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
@@ -97,6 +98,7 @@ import { executeUxAction } from "~/lib/data-blocks/file-action"
 import { countAnnotationsInRange, buildClearSelectionOps } from "~/lib/editor/annotations/merge"
 import { getLoading, subscribeLoading } from "~/lib/agent/client/store"
 import { ActionBar, type ActionBarAction } from "~/ui/components/FloatingActionBar"
+import { NabuGate } from "~/ui/components/nabu/NabuGate"
 import { pointAt, clearPointing } from "~/lib/ui/pointing"
 import { getSelectedCodes, getSelectedDocs } from "~/domain/data-blocks/ux/selectors"
 import { requestTitleEdit } from "~/lib/ui/title-edit"
@@ -829,6 +831,9 @@ export default function ProjectLayout() {
                             : undefined
                         )}
                         actions={codeSelectionActions}
+                        gateAction={(button) => (
+                          <NabuGate>{button as ReactElement<{ disabled?: boolean }>}</NabuGate>
+                        )}
                         onTitleHover={(h) => (h ? pointAt(["nav:codes"]) : clearPointing())}
                       />
                     ) : null,
