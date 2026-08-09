@@ -47,11 +47,11 @@ Being pure functions of history, they are tested as such: recorded conversations
 
 There are three, and each is a row in a table declaring the tools it exposes, the tool results that switch into it, the route it calls, and the nudges it composes.
 
-| Mode   | Can do                                                     | Entered by        | Route                   |
-| ------ | ---------------------------------------------------------- | ----------------- | ----------------------- |
-| `chat` | read, search, query, edit blocks and files, start planning | default; `cancel` | `/qual-coder`           |
-| `plan` | read, search, query, ask, submit a plan                    | `start_planning`  | `/qual-coder.planning`  |
-| `exec` | everything in chat, plus completing plan steps             | `submit_plan`     | `/qual-coder.execution` |
+| Mode   | Can do                                                                | Entered by        | Route                   |
+| ------ | --------------------------------------------------------------------- | ----------------- | ----------------------- |
+| `chat` | read, search, query, edit blocks and files, start planning            | default; `cancel` | `/qual-coder`           |
+| `plan` | read, search, query, ask, submit a plan                               | `start_planning`  | `/qual-coder.planning`  |
+| `exec` | everything in chat except starting a plan, plus completing plan steps | `submit_plan`     | `/qual-coder.execution` |
 
 Planning has no mutating tools at all. The restriction is structural rather than instructed — they are absent from the request, so a plan cannot half-execute itself while it is being written.
 

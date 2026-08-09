@@ -99,6 +99,7 @@ const raw: Record<ModeName, ModeConfig> = {
       cancel,
       completeStep,
       applyDeepAnalysisTool,
+      refineCodeTool,
       askTool,
     ],
     triggers: ["submit_plan"],

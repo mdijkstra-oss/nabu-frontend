@@ -138,34 +138,61 @@ export const isRejectionBlock = (block: Block): boolean =>
 
 export const hasRejection = (blocks: Block[]): boolean => blocks.some(isRejectionBlock)
 
-const rejectDanglingEntityIds = (blocks: Block[]): Block[] =>
-  hasToolCalls(blocks) ? blocks : blocks.map(rejectDanglingBlock)
+// Error blocks render in chat but are never sent back to the model, so the
+// note flags the answer for the user without polluting the transcript.
+const flagDanglingBlock = (block: Block): Block[] => {
+  if (block.type !== "text" || isDraft(block)) return [block]
+  const dangling = findDanglingIds(block.content)
+  if (dangling.length === 0) return [block]
+  return [
+    block,
+    {
+      type: "error",
+      content: `This answer references entities that do not exist: ${dangling.join(", ")}. It could not be corrected — judge it accordingly.`,
+    },
+  ]
+}
 
 const MAX_REJECTIONS = 3
 
-const buildRejectionGuard = (): ((newBlocks: Block[]) => boolean) => {
-  let consecutive = 0
-  return (newBlocks) => {
-    if (shouldContinue(newBlocks)) {
-      consecutive = 0
-      return true
-    }
-    if (hasRejection(newBlocks) && consecutive < MAX_REJECTIONS) {
-      consecutive++
-      return true
-    }
-    consecutive = 0
-    return false
-  }
+interface RejectionState {
+  consecutive: number
 }
 
-export const agentLoop = async (config: AgentLoopConfig): Promise<void> =>
-  runAgentLoop({
+// After MAX_REJECTIONS consecutive rejections the answer is let through,
+// flagged for the user, instead of being swallowed as a hidden rejection.
+const buildDanglingIdTransform =
+  (state: RejectionState) =>
+  (blocks: Block[]): Block[] => {
+    if (hasToolCalls(blocks)) return blocks
+    if (state.consecutive >= MAX_REJECTIONS) return blocks.flatMap(flagDanglingBlock)
+    return blocks.map(rejectDanglingBlock)
+  }
+
+const buildRejectionGuard =
+  (state: RejectionState) =>
+  (newBlocks: Block[]): boolean => {
+    if (shouldContinue(newBlocks)) {
+      state.consecutive = 0
+      return true
+    }
+    if (hasRejection(newBlocks) && state.consecutive < MAX_REJECTIONS) {
+      state.consecutive++
+      return true
+    }
+    state.consecutive = 0
+    return false
+  }
+
+export const agentLoop = async (config: AgentLoopConfig): Promise<void> => {
+  const rejections: RejectionState = { consecutive: 0 }
+  const transformResponse = buildDanglingIdTransform(rejections)
+  return runAgentLoop({
     source: "base",
     executor: config.executor,
     callbacks: config.callbacks,
     signal: config.signal,
-    shouldContinue: buildRejectionGuard(),
+    shouldContinue: buildRejectionGuard(rejections),
     resolve: (blocks) => {
       const mode = deriveMode(blocks)
       const modeConfig = modes[mode]
@@ -173,7 +200,7 @@ export const agentLoop = async (config: AgentLoopConfig): Promise<void> =>
         endpoint: modeConfig.endpoint,
         tools: modeConfig.tools,
         nudges: modeConfig.nudges,
-        transformResponse: rejectDanglingEntityIds,
+        transformResponse,
         blockSchemas: getBlockSchemaDefinitions(),
         databaseSchema: getDatabaseSchema(),
       }
@@ -185,3 +212,4 @@ export const agentLoop = async (config: AgentLoopConfig): Promise<void> =>
       }
     },
   })
+}

@@ -84,10 +84,10 @@ const runAgent = async (deps: RunnerDeps): Promise<void> => {
       })
     } catch (e) {
       if (!isAbortError(e)) throw e
+      // Abort discards the in-flight draft and returns to waiting for user
+      // input; re-entering the loop here would re-request the same transcript.
       controller = new AbortController()
       setActiveSignal(controller.signal)
-      clearStreaming()
-      continue
     }
     stop()
     await waitForUser(controller.signal)
