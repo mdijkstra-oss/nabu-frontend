@@ -78,6 +78,13 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     defaultValue: false,
   },
   {
+    key: "skipCap",
+    label: "Step 2 — Skip per-file cap (all chunks per file)",
+    description: "Skip the per-file hit cap after probe. Keep every fused chunk of a file.",
+    icon: <Filter />,
+    defaultValue: false,
+  },
+  {
     key: "skipMerge",
     label: "Step 3 — Skip merge (capped chunks, no fuse)",
     description: "Skip merging byte-overlapping chunks into regions. Cap-by-file still runs.",

@@ -1,7 +1,7 @@
 // Search pipeline — linear chain.
 //
 //   probe                → SearchHit[]   (Stage 1)                            raw chunk hits from vector + bm25
-//   capStage             → SearchHit[]   (Stage 2)                            cap per file (always; limiting, not merging)
+//   capStage             → SearchHit[]   (Stage 2)  [skipCap]                 cap per file (limiting, not merging)
 //   mergeStage           → SearchHit[]   (Stage 3)  [skipMerge]               seed-and-grow (score-ratio gate) + reslice from source
 //   verdict              → SearchHit[]   (Stage 4)  [skipFilter]              per-batch: scout[skipScoutFilter] → semantic-filter
 //   trim                 → SearchHit[]   (Stage 5)  [skipTrim]                trim within hit.text using matchRanges
@@ -63,7 +63,8 @@ export const mergeByScore = (sorted: SearchHit[], incoming: SearchHit[]): Search
   return merged
 }
 
-const applyCap = (hits: SearchHit[], files: FileStore): SearchHit[] => capStage(hits, files)
+const applyCap = (hits: SearchHit[], files: FileStore): SearchHit[] =>
+  isDebugOn("skipCap") ? hits : capStage(hits, files)
 
 const applyMerge = (hits: SearchHit[], files: FileStore): SearchHit[] =>
   isDebugOn("skipMerge") ? hits : mergeStage(hits, files)
