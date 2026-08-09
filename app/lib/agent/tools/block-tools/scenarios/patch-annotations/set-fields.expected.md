@@ -8,17 +8,17 @@ More text.
 {
 	"annotations": [
 		{
-			"id": "ann_1",
 			"text": "Some text",
 			"reason": "new",
 			"color": "red",
+			"id": "ann_1",
 			"actor": "ai"
 		},
 		{
-			"id": "ann_2",
 			"text": "More text",
 			"reason": "keep",
-			"color": "blue"
+			"color": "blue",
+			"id": "ann_2"
 		}
 	]
 }

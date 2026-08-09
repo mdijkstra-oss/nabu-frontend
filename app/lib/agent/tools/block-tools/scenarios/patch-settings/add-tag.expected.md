@@ -10,16 +10,16 @@ More text.
 		{
 			"id": "tag_1",
 			"label": "old",
-			"display": "Old",
 			"color": "blue",
-			"icon": "hash"
+			"icon": "hash",
+			"display": "Old"
 		},
 		{
 			"id": "tag-XXXXXXXX",
 			"label": "new",
-			"display": "New",
 			"color": "red",
-			"icon": "hash"
+			"icon": "hash",
+			"display": "New"
 		}
 	]
 }

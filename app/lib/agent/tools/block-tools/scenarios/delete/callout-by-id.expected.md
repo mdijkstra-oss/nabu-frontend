@@ -2,12 +2,12 @@
 
 ```json-callout
 {
-	"type": "codebook-code",
-	"color": "blue",
-	"collapsed": false,
 	"id": "callout_a",
+	"type": "codebook-code",
 	"title": "Alpha",
-	"content": "first"
+	"content": "first",
+	"color": "blue",
+	"collapsed": false
 }
 ```
 

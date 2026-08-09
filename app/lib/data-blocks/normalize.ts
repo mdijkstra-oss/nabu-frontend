@@ -1,3 +1,4 @@
+import { z } from "zod"
 import {
   parseCodeBlocks,
   findBlocksByLanguage,
@@ -12,6 +13,8 @@ import {
   getNormalizeAsFileFields,
   getExpandIdRefs,
   findBlockConfigByPrefix,
+  getBlockConfig,
+  getIdPaths,
 } from "./registry"
 import { normalizeContent } from "~/lib/patch/diff/normalize"
 import { tryParseJson, parsePath, isObject } from "./json"
@@ -89,6 +92,81 @@ export const normalizeBlockFields = (markdown: string): string => {
     if (!normalized) continue
 
     const newContent = JSON.stringify(normalized, null, "\t")
+    const header = `\`\`\`${block.language}\n`
+    const footer = `\n\`\`\``
+    const oldSection = result.slice(block.start + offset, block.end + offset)
+    const newSection = header + newContent + footer
+    result = result.slice(0, block.start + offset) + newSection + result.slice(block.end + offset)
+    offset += newSection.length - oldSection.length
+  }
+
+  return result
+}
+
+type JsonSchemaNode = Record<string, unknown>
+
+const asSchemaNode = (value: unknown): JsonSchemaNode | undefined =>
+  isObject(value) ? value : undefined
+
+const keyOrderSchemas = new Map<string, JsonSchemaNode | null>()
+
+// Only record-bearing block types (those declaring idPaths) are ordered; this
+// keeps programmatic bulk blocks like json-embeddings out of the parse/walk.
+const getKeyOrderSchema = (language: string): JsonSchemaNode | null => {
+  const cached = keyOrderSchemas.get(language)
+  if (cached !== undefined) return cached
+
+  const config = getBlockConfig(language)
+  const schema =
+    config && getIdPaths(language).length > 0
+      ? (z.toJSONSchema(config.schema(), { io: "input" }) as JsonSchemaNode)
+      : null
+
+  keyOrderSchemas.set(language, schema)
+  return schema
+}
+
+const orderBySchema = (value: unknown, schema: JsonSchemaNode | undefined): unknown => {
+  if (!schema) return value
+
+  if (Array.isArray(value)) {
+    const items = asSchemaNode(schema.items)
+    return value.map((item) => orderBySchema(item, items))
+  }
+
+  if (!isObject(value)) return value
+
+  const props = asSchemaNode(schema.properties)
+  if (!props) return value
+
+  const declared = Object.keys(props).filter((key) => key in value)
+  const extras = Object.keys(value).filter((key) => !(key in props))
+
+  const ordered: Record<string, unknown> = {}
+  for (const key of [...declared, ...extras]) {
+    ordered[key] = orderBySchema(value[key], asSchemaNode(props[key]))
+  }
+  return ordered
+}
+
+export const normalizeBlockKeyOrder = (markdown: string): string => {
+  const blocks = parseCodeBlocks(markdown)
+  let result = markdown
+  let offset = 0
+
+  for (const block of blocks) {
+    const schema = getKeyOrderSchema(block.language)
+    if (!schema) continue
+
+    const parsed = tryParseJson(block.content)
+    if (!parsed) continue
+
+    const ordered = orderBySchema(parsed, schema)
+    // Already-ordered blocks keep their exact bytes — reformatting them would
+    // perturb content hashes (topic reclassification) for no semantic change.
+    if (JSON.stringify(ordered) === JSON.stringify(parsed)) continue
+
+    const newContent = JSON.stringify(ordered, null, "\t")
     const header = `\`\`\`${block.language}\n`
     const footer = `\n\`\`\``
     const oldSection = result.slice(block.start + offset, block.end + offset)

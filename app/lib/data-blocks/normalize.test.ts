@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { block } from "./test-helpers"
-import { normalizeSingletonOrder, normalizeBlockFields, expandBlockIdRefs } from "./normalize"
+import {
+  normalizeSingletonOrder,
+  normalizeBlockFields,
+  normalizeBlockKeyOrder,
+  expandBlockIdRefs,
+} from "./normalize"
 
 const calloutJson = (content: string): string =>
   JSON.stringify({
@@ -294,5 +299,85 @@ describe("expandBlockIdRefs", () => {
     const result = expandBlockIdRefs(input, resolveId)
     expect(result).toContain("local text")
     expect(result).not.toContain("remote text")
+  })
+})
+
+describe("normalizeBlockKeyOrder", () => {
+  const orderedAnnotation = JSON.stringify(
+    {
+      annotations: [
+        { text: "the text", reason: "why", color: "amber", id: "annotation-1abc23d4", actor: "ai" },
+      ],
+    },
+    null,
+    "\t"
+  )
+
+  it("reorders record fields to schema declaration order", () => {
+    const permuted = JSON.stringify(
+      {
+        annotations: [
+          {
+            color: "amber",
+            reason: "why",
+            text: "the text",
+            actor: "ai",
+            id: "annotation-1abc23d4",
+          },
+        ],
+      },
+      null,
+      "\t"
+    )
+    expect(normalizeBlockKeyOrder(block("json-annotations", permuted))).toBe(
+      block("json-annotations", orderedAnnotation)
+    )
+  })
+
+  it("permutations of the same record converge to one key order", () => {
+    const a = { text: "t", reason: "r", color: "amber", id: "annotation-1abc23d4", actor: "ai" }
+    const b = { color: "amber", reason: "r", text: "t", actor: "ai", id: "annotation-1abc23d4" }
+    const keysAfter = (item: object): string[] => {
+      const input = block("json-annotations", JSON.stringify({ annotations: [item] }))
+      const body = normalizeBlockKeyOrder(input).split("\n").slice(1, -1).join("\n")
+      const parsed = JSON.parse(body) as { annotations: Record<string, unknown>[] }
+      return Object.keys(parsed.annotations[0])
+    }
+    expect(keysAfter(a)).toEqual(keysAfter(b))
+    expect(keysAfter(b)).toEqual(["text", "reason", "color", "id", "actor"])
+  })
+
+  it("leaves an already-ordered block's bytes untouched", () => {
+    const compact = block(
+      "json-annotations",
+      '{"annotations":[{"text":"t","reason":"r","color":"amber"}]}'
+    )
+    expect(normalizeBlockKeyOrder(compact)).toBe(compact)
+  })
+
+  it("keeps unknown fields after declared ones", () => {
+    const input = block(
+      "json-annotations",
+      '{"annotations":[{"mystery":1,"text":"t","reason":"r","color":"amber"}]}'
+    )
+    const result = normalizeBlockKeyOrder(input)
+    const parsed = JSON.parse(result.split("\n").slice(1, -1).join("\n")) as {
+      annotations: Record<string, unknown>[]
+    }
+    expect(Object.keys(parsed.annotations[0])).toEqual(["text", "reason", "color", "mystery"])
+  })
+
+  it("ignores block types without record ids", () => {
+    const input = block("json-attributes", '{"subject":"AI","type":"research"}')
+    expect(normalizeBlockKeyOrder(input)).toBe(input)
+  })
+
+  it("is idempotent", () => {
+    const input = block(
+      "json-annotations",
+      '{"annotations":[{"color":"amber","text":"t","reason":"r"}]}'
+    )
+    const once = normalizeBlockKeyOrder(input)
+    expect(normalizeBlockKeyOrder(once)).toBe(once)
   })
 })

@@ -21,6 +21,7 @@ import { normalizeContent as normalize } from "~/lib/patch/diff/normalize"
 import {
   normalizeSingletonOrder,
   normalizeBlockFields,
+  normalizeBlockKeyOrder,
   expandBlockIdRefs,
   type IdResolver,
 } from "~/lib/data-blocks/normalize"
@@ -38,8 +39,9 @@ import { FileCorruptionError } from "./errors"
 export const REQUIRED_FILES = [SETTINGS_FILE, PREFERENCES_FILE] as const
 
 const normalizeFile = (text: string, resolveId?: IdResolver): string =>
-  normalizeSingletonOrder(expandBlockIdRefs(normalizeBlockFields(normalize(text)), resolveId)) +
-  "\n"
+  normalizeSingletonOrder(
+    expandBlockIdRefs(normalizeBlockKeyOrder(normalizeBlockFields(normalize(text))), resolveId)
+  ) + "\n"
 import { memoByRef } from "~/lib/utils/memo"
 
 export type FileStore = Record<string, string>

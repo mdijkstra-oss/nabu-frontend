@@ -6,23 +6,23 @@
 		{
 			"id": "tag-5p9cz6tg",
 			"label": "codebook",
-			"display": "Codebook",
 			"color": "indigo",
-			"icon": "book-open"
+			"icon": "book-open",
+			"display": "Codebook"
 		},
 		{
 			"id": "tag-8qu5a1xb",
 			"label": "fiscal",
-			"display": "Fiscal",
 			"color": "sky",
-			"icon": "calendar-days"
+			"icon": "calendar-days",
+			"display": "Fiscal"
 		},
 		{
 			"id": "tag-9a8b7c6d",
 			"label": "analysis",
-			"display": "Analysis",
 			"color": "violet",
-			"icon": "chart-line"
+			"icon": "chart-line",
+			"display": "Analysis"
 		}
 	],
 	"searches": [
