@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getFirstProjectId, getFirstProjectRedirect } from "./useProjects"
+import { getFirstProjectId, getFirstProjectRedirect, shouldOfferFirstProject } from "./useProjects"
 import type { Project } from "~/lib/server/api/queries"
 
 const createProject = (id: string): Project => ({ id, updatedAt: "2026-08-06T12:00:00Z" })
@@ -47,5 +47,32 @@ describe("getFirstProjectRedirect", () => {
 
   it.each(cases)("$name", ({ projects, loading, expected }) => {
     expect(getFirstProjectRedirect(projects, loading)).toBe(expected)
+  })
+})
+
+describe("shouldOfferFirstProject", () => {
+  const cases = [
+    {
+      name: "offers a first project once an empty list has loaded",
+      projects: [],
+      loading: false,
+      expected: true,
+    },
+    {
+      name: "does not offer while loading",
+      projects: [],
+      loading: true,
+      expected: false,
+    },
+    {
+      name: "does not offer when a project exists",
+      projects: [createProject("1")],
+      loading: false,
+      expected: false,
+    },
+  ]
+
+  it.each(cases)("$name", ({ projects, loading, expected }) => {
+    expect(shouldOfferFirstProject(projects, loading)).toBe(expected)
   })
 })

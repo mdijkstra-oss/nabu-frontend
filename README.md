@@ -77,7 +77,7 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 
 - **No authentication** — local-first and single-user for now
 - **No component tests** — Vitest unit suites cover the agent, block parsing, search and text handling well, and the projection and file-store layers thinly; nabu-e2e covers the documented behavior end-to-end in a browser. Component-level suites remain absent.
-- **Features missing** --- Some more basic features have not been implemented yet, eg no project management etc.
+- **Barely any project management** — an empty install offers to create a first project, and that is the whole of it: no renaming, no deleting, no switching between projects from inside the app.
 
 ## Running it
 

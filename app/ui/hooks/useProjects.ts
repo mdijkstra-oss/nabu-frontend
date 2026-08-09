@@ -38,3 +38,6 @@ export const getFirstProjectRedirect = (projects: Project[], loading: boolean): 
   const firstId = getFirstProjectId(projects)
   return !loading && firstId ? `/project/${firstId}` : null
 }
+
+export const shouldOfferFirstProject = (projects: Project[], loading: boolean): boolean =>
+  !loading && projects.length === 0
