@@ -12,7 +12,7 @@ An id that resolves is replaced by its name, linked to its definition, and rende
 
 Colour comes from the entity itself. A code's pill carries the code's own colour and a tag's carries the tag's, so a reference in a sentence is recognisable as the thing it names before it is read. Files take one fixed colour, since a filename is a filename.
 
-Two details matter more than they look. An id that resolves to nothing is left exactly as written rather than linked to a dead target, so a hallucinated reference stays visible as one. And where the model writes the name and the id together — the redundancy it tends toward — the duplicate is absorbed into the link instead of being rendered twice.
+Two details matter more than they look. A reference that resolves to nothing is never linked to a dead target: an id is left exactly as written, and a filename keeps its text as written but is styled as missing, so a hallucinated reference stays visible as one. And where the model writes the name and the id together — the redundancy it tends toward — the duplicate is absorbed into the link instead of being rendered twice.
 
 Tags resolve on the same principle using their slug.
 

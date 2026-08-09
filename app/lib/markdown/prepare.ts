@@ -5,7 +5,7 @@ import { normalizeEntityIdSeparators } from "~/lib/markdown/sanitize/normalize-e
 import { stripHiddenSuffix, stripEntityQuotes } from "~/lib/markdown/sanitize/strip-hidden"
 import { stripEntityLinks } from "~/lib/markdown/sanitize/strip-entity-links"
 import { unwrapBacktickEntities } from "~/lib/markdown/sanitize/unwrap-backtick-entities"
-import { boldMissingFile } from "~/lib/files/filename"
+import { markMissingFile } from "~/lib/files/filename"
 
 type NameResolver = (id: string) => string | null
 
@@ -22,7 +22,7 @@ export const prepareEntityMarkdown = (
           stripEntityLinks(stripEntityQuotes(stripHiddenSuffix(normalizeEntityIdSeparators(text))))
         ),
         resolveName,
-        boldMissingFile
+        markMissingFile
       )
     ),
     currentFile,

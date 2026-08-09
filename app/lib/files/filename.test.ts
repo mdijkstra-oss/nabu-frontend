@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import {
   normalizeFilename,
   toDisplayName,
-  boldMissingFile,
+  markMissingFile,
   isProtectedFile,
   isHiddenFile,
   nextUntitledFilename,
@@ -73,16 +73,16 @@ describe("toDisplayName", () => {
   })
 })
 
-describe("boldMissingFile", () => {
+describe("markMissingFile", () => {
   const cases = [
-    { input: "codebook_general.md", expected: "**Codebook General**" },
-    { input: "interview-notes.md", expected: "**Interview-Notes**" },
+    { input: "ghost-diary.md", expected: "[ghost-diary.md](file://ghost-diary.md)" },
+    { input: "codebook_general.md", expected: "[codebook_general.md](file://codebook_general.md)" },
     { input: "annotation-1a2b3c4d", expected: null },
     { input: "callout-7xk2m9p1", expected: null },
     { input: "not_a_file", expected: null },
   ]
   it.each(cases)('"$input" → $expected', ({ input, expected }) => {
-    expect(boldMissingFile(input)).toBe(expected)
+    expect(markMissingFile(input)).toBe(expected)
   })
 })
 

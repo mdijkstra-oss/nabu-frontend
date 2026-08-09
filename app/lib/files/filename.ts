@@ -60,8 +60,11 @@ export const toDisplayName = (filename: string): string =>
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
 
-export const boldMissingFile = (id: string): string | null =>
-  id.endsWith(".md") ? `**${toDisplayName(id)}**` : null
+// Verbatim, not display-cased: an unresolvable filename is a visible
+// hallucination and must stay recognizable as what the model wrote. The
+// file:// link marks it so the renderer can style it as missing, unlinked.
+export const markMissingFile = (id: string): string | null =>
+  id.endsWith(".md") ? `[${id}](file://${id})` : null
 
 const UNTITLED_BASE = "untitled"
 

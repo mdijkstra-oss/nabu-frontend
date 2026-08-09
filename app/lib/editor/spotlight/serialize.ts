@@ -19,7 +19,9 @@ const serializeSpotlight = (spotlight: Spotlight): string => {
   }
 }
 
-const toUrlParam = (text: string): string => text.replace(/ /g, "+")
+// Newlines included: a raw newline in a markdown link destination breaks the
+// link parse, and the decode side turns every "+" back into a single space.
+const toUrlParam = (text: string): string => text.replace(/\s+/g, "+")
 
 export const serializeSpotlightParam = (spotlight: Spotlight): string =>
   toUrlParam(serializeSpotlight(spotlight))

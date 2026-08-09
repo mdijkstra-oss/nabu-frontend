@@ -21,6 +21,10 @@ const entityIcons: EntityIcons = {
   search: Search,
 }
 
+const FILE_PROTOCOL = "file://"
+
+const MISSING_REF_CLASS = "text-subtext-color underline decoration-dashed underline-offset-2"
+
 let cachedFiles: FileStore | null = null
 let linkCache = new Map<string, ResolvedLink | null>()
 
@@ -66,6 +70,15 @@ const createAnchorComponent =
         children: label,
       })
     }
+
+    // A file:// ref that resolves to nothing points at a hallucinated or
+    // deleted target: keep its text but never hand out a dead anchor.
+    if (projectId && href.startsWith(FILE_PROTOCOL))
+      return createElement(
+        "span",
+        { className: MISSING_REF_CLASS, "data-missing-ref": true },
+        props.children
+      )
 
     const isExternal = href.startsWith("http://") || href.startsWith("https://")
     return createElement("a", {

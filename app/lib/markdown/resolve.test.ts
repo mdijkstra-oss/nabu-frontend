@@ -117,7 +117,7 @@ describe("resolveEntityLink", () => {
     {
       name: "resolves text ref without spotlight",
       href: "file://my-doc",
-      files: {},
+      files: { "my-doc": "# Doc" },
       expected: {
         kind: "text",
         colors: {
@@ -131,9 +131,15 @@ describe("resolveEntityLink", () => {
       },
     },
     {
+      name: "returns null for text ref to a missing document",
+      href: "file://ghost-diary.md",
+      files: {},
+      expected: null,
+    },
+    {
       name: "resolves text ref with spotlight",
       href: "file://my-doc/hello%20world",
-      files: {},
+      files: { "my-doc": "# Doc\n\nhello world" },
       expected: {
         kind: "text",
         colors: {

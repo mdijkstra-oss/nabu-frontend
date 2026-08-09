@@ -141,6 +141,7 @@ const resolveTagRef = (
     colors: radixColors(tag.color),
     color: tag.color,
     icon: resolveIcon(tag.icon),
+    // Tag definitions live in the hidden settings file, which is not user-navigable.
     url: "",
     label: getTagDisplay(tag),
   }
@@ -244,12 +245,18 @@ const resolveSpotlightColors = (annotationColors: string[]): ResolvedColors => {
 
 const normalizeSpotlightLabel = (text: string): string => `"${text.toLowerCase().trim()}"`
 
+// Lowercased fallback mirrors resolveEntityName: linkify keeps the filename's
+// original casing while the store keys are normalized lowercase.
+const documentExists = (files: FileStore, documentId: string): boolean =>
+  documentId in files || documentId.toLowerCase() in files
+
 const resolveTextRef = (
   ref: Extract<EntityRef, { kind: "text" }>,
   files: FileStore,
   projectId: string,
   icons: EntityIcons
-): ResolvedLink => {
+): ResolvedLink | null => {
+  if (!documentExists(files, ref.documentId)) return null
   const text = spotlightText(ref)
   const annotationColors = text ? findContainingAnnotationColors(files, ref.documentId, text) : []
   return {

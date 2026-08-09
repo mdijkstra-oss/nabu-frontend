@@ -84,6 +84,11 @@ describe("serializeSpotlightParam", () => {
       input: { type: "range", from: "start text", to: "end text" },
       expected: "start+text...end+text",
     },
+    {
+      name: "newlines and whitespace runs collapse to a single plus",
+      input: { type: "single", text: "discipline\nand   trust" },
+      expected: "discipline+and+trust",
+    },
   ]
 
   it.each(cases)("$name", ({ input, expected }) => {
