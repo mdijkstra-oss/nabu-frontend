@@ -23,6 +23,12 @@ export interface FieldBindingObject {
 
 export type FieldBinding = string | FieldBindingObject
 
+export interface ChartBand {
+  from: string | number
+  to: string | number
+  label?: string
+}
+
 export interface AxisChartSpec {
   type: AxisChartType
   x: FieldBinding
@@ -31,6 +37,7 @@ export interface AxisChartSpec {
   orientation?: Orientation
   color: string
   tooltip?: string
+  bands?: ChartBand[]
 }
 
 export interface PartChartSpec {
@@ -109,6 +116,7 @@ export interface AxisRenderable {
   seriesNames: string[]
   seriesColors: Record<string, string>
   rows: AxisRow[]
+  bands: ChartBand[]
 }
 
 export interface PartRenderable {

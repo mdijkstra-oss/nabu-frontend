@@ -141,6 +141,7 @@ const resolveAxis = (
     seriesNames: [...seriesNameSet],
     seriesColors,
     rows: axisRows,
+    bands: spec.bands ?? [],
   }
 }
 

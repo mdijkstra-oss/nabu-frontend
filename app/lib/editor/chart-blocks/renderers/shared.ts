@@ -2,6 +2,20 @@ export { FALLBACK_COLOR } from "~/lib/chart/color"
 
 export const CHART_HEIGHT = 300
 
+export const CHART_LINE_WIDTH = 2
+
+export const CHART_DOT_RADIUS = 4
+
+export const CHART_BAR_RADIUS = 4
+
+export const CHART_AREA_FILL_OPACITY = 0.9
+
+export const CHART_STACK_ID = "stack"
+
+export const STACKED_BAR_CLASS = "nabu-chart-stacked"
+
+export const CHART_MARGIN = { top: 20, right: 12, bottom: 4, left: 4 }
+
 interface PayloadWithEntityUrl {
   _entityUrl?: string
 }

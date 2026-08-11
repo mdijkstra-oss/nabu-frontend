@@ -102,25 +102,38 @@ const fixtureSources: Record<ChartType, ChartFixtureSource> = {
 
 export const allChartTypes = Object.keys(fixtureSources) as ChartType[]
 
+const bandedSource: ChartFixtureSource = {
+  spec: {
+    type: "stacked-bar",
+    x: "month",
+    y: "count",
+    series: "region",
+    color: "{region:color}",
+    bands: [{ from: "Feb", to: "Mar", label: "Polar night" }],
+  },
+  rows: monthlyRows,
+}
+
 export interface ChartFixture {
   spec: ChartSpec
   rows: Record<string, unknown>[]
   renderable: RenderableChart
 }
 
-export const chartFixture = (type: ChartType): ChartFixture => {
-  const { spec, rows } = fixtureSources[type]
-  return {
+export const bandedChartFixture = (): ChartFixture => buildFixture(bandedSource)
+
+export const chartFixture = (type: ChartType): ChartFixture => buildFixture(fixtureSources[type])
+
+const buildFixture = ({ spec, rows }: ChartFixtureSource): ChartFixture => ({
+  spec,
+  rows,
+  renderable: resolveChartData({
     spec,
     rows,
-    renderable: resolveChartData({
-      spec,
-      rows,
-      entityMap: regionEntities,
-      colorContext: buildColorContext(regionEntities),
-    }),
-  }
-}
+    entityMap: regionEntities,
+    colorContext: buildColorContext(regionEntities),
+  }),
+})
 
 export const renderableOfKind = <K extends RenderableChart["kind"]>(
   type: ChartType,

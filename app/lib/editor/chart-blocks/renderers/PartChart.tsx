@@ -43,6 +43,8 @@ const renderPie = ({ renderable, tooltipContent, onDatumClick }: InnerProps): Re
         cx="50%"
         cy="50%"
         outerRadius="80%"
+        paddingAngle={1}
+        className="nabu-chart-stacked"
         onClick={onClick}
         cursor={onDatumClick ? "pointer" : undefined}
         label
@@ -62,7 +64,7 @@ const renderTreemap = ({ renderable, tooltipContent, onDatumClick }: InnerProps)
       data={renderable.rows}
       dataKey="value"
       nameKey="name"
-      stroke="#fff"
+      className="nabu-chart-stacked"
       fill={FALLBACK_COLOR}
       onClick={onClick}
     >
@@ -92,7 +94,7 @@ export const PartChart = ({
   const inner: InnerProps = { renderable, tooltipContent, onDatumClick }
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <ResponsiveContainer className="nabu-chart" width="100%" height={height}>
       {renderByType(inner)}
     </ResponsiveContainer>
   )

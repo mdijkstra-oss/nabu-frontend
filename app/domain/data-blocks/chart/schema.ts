@@ -57,6 +57,23 @@ const TooltipSchema = z
     "Tooltip template with {column} / {column:format} / {column:property} placeholders. Entity IDs render as pills."
   )
 
+const BandSchema = z.object({
+  from: z
+    .union([z.string(), z.number()])
+    .describe("First x-axis value the band covers, exactly as the query returns it"),
+  to: z
+    .union([z.string(), z.number()])
+    .describe("Last x-axis value the band covers, exactly as the query returns it"),
+  label: z.string().optional().describe("Caption drawn inside the band, e.g. 'Polar night'"),
+})
+
+const BandsSchema = z
+  .array(BandSchema)
+  .optional()
+  .describe(
+    "Shaded x-axis regions marking context the data does not carry. Edges snap to whole categories on a category axis."
+  )
+
 const AxisChartSpecSchema = z.object({
   type: z.enum(["bar", "stacked-bar", "grouped-bar", "line", "area", "scatter"]),
   x: FieldBindingSchema,
@@ -67,6 +84,7 @@ const AxisChartSpecSchema = z.object({
   orientation: OrientationSchema.optional(),
   color: ColorSchema,
   tooltip: TooltipSchema,
+  bands: BandsSchema,
 })
 
 const PartChartSpecSchema = z.object({

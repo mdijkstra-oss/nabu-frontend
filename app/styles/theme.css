@@ -71,6 +71,14 @@
   --color-sidebar: #efedea;
   --color-sidebar-nested: #f8f7f6;
   --color-sidebar-deep: #f8f7f6;
+
+  /* Charts */
+  --color-chart-grid: var(--color-neutral-200);
+  --color-chart-baseline: var(--color-neutral-300);
+  --color-chart-tick: var(--color-neutral-500);
+  --color-chart-surface: var(--color-white);
+  --color-chart-band: rgba(42, 38, 33, 0.05);
+  --color-chart-band-edge: rgba(42, 38, 33, 0.14);
   /* Fonts */
   --text-caption: 12px;
   --text-caption--font-weight: 400;

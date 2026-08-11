@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor } from "storybook/test"
-import { renderableOfKind, sampleTooltipContext } from "~/lib/chart/test-helpers"
+import {
+  bandedChartFixture,
+  renderableOfKind,
+  sampleTooltipContext,
+} from "~/lib/chart/test-helpers"
 import { withSize } from "../../../../../.storybook/decorators"
 import { AxisChart } from "./AxisChart"
 import { CHART_HEIGHT } from "./shared"
@@ -15,6 +19,18 @@ export default meta
 type Story = StoryObj<typeof AxisChart>
 
 const bar = renderableOfKind("bar", "axis")
+
+const bandedRenderable = () => {
+  const { renderable } = bandedChartFixture()
+  if (renderable.kind !== "axis")
+    throw new Error("banded fixture resolved to a non-axis renderable")
+  return renderable
+}
+
+const getYAxisTickValues = (canvasElement: HTMLElement): number[] =>
+  [...canvasElement.querySelectorAll(".recharts-yAxis .recharts-cartesian-axis-tick-value")]
+    .map((tick) => Number(tick.textContent))
+    .filter((value) => !Number.isNaN(value))
 
 const getBarRects = (canvasElement: HTMLElement): Element[] => [
   ...canvasElement.querySelectorAll("svg .recharts-bar-rectangle"),
@@ -111,6 +127,21 @@ export const Area: Story = {
   play: async ({ canvasElement }) => {
     await waitFor(() => {
       expect(canvasElement.querySelectorAll("svg .recharts-area-area")).toHaveLength(2)
+      // Series peak at 14 apart and 23 summed, so a domain past 14 can only come from stacking.
+      expect(Math.max(...getYAxisTickValues(canvasElement))).toBeGreaterThan(14)
+    })
+  },
+}
+
+export const Banded: Story = {
+  args: {
+    renderable: bandedRenderable(),
+    tooltipContext: sampleTooltipContext(),
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      expect(canvasElement.querySelectorAll("svg .recharts-reference-area")).toHaveLength(1)
+      expect(canvasElement.textContent).toContain("Polar night")
     })
   },
 }
