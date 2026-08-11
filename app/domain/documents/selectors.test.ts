@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildDocumentEntries, sortDocuments, type DocumentEntry } from "./selectors"
+import { buildDocumentEntries, landingFile, sortDocuments, type DocumentEntry } from "./selectors"
 
 const entry = (over: Partial<DocumentEntry>): DocumentEntry => ({
   id: "f.md",
@@ -72,5 +72,33 @@ describe("sortDocuments", () => {
     const input = [b, a]
     sortDocuments(input, "name")
     expect(input.map((d) => d.id)).toEqual(["b", "a"])
+  })
+})
+
+describe("landingFile", () => {
+  const cases = [
+    {
+      name: "skips preferences when another document exists",
+      files: ["preferences.md", "welcome.md"],
+      expected: "welcome.md",
+    },
+    {
+      name: "lands on preferences when it is all there is",
+      files: ["settings.hidden.md", "preferences.md"],
+      expected: "preferences.md",
+    },
+    {
+      name: "skips hidden and companion files",
+      files: ["settings.hidden.md", "notes.embeddings.hidden.md", "notes.md"],
+      expected: "notes.md",
+    },
+    { name: "keeps document order", files: ["b.md", "a.md"], expected: "b.md" },
+    { name: "no visible file", files: ["settings.hidden.md"], expected: undefined },
+  ]
+
+  cases.forEach(({ name, files, expected }) => {
+    it(name, () => {
+      expect(landingFile(files)).toBe(expected)
+    })
   })
 })

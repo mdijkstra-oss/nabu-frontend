@@ -3,6 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 import { withRouter, withSeededFiles } from "../../../../.storybook/decorators"
 import { normalizeAsStored } from "~/lib/files/store"
 import { callout } from "~/lib/editor/callout-blocks/fixtures"
+import { welcomeContent, welcomePath } from "~/domain/projects/create"
 import { MilkdownEditor } from "./MilkdownEditor"
 
 const calloutData = callout("blue")
@@ -37,16 +38,16 @@ const kitchenSinkContent = [
 const meta: Meta<typeof MilkdownEditor> = {
   title: "Custom/Editor/MilkdownEditor",
   component: MilkdownEditor,
-  decorators: [
-    withSeededFiles({ "notes.md": kitchenSinkContent }),
-    withRouter("/project/demo-project/file/notes.md"),
-  ],
 }
 
 export default meta
 type Story = StoryObj<typeof MilkdownEditor>
 
 export const KitchenSink: Story = {
+  decorators: [
+    withSeededFiles({ "notes.md": kitchenSinkContent }),
+    withRouter("/project/demo-project/file/notes.md"),
+  ],
   args: {
     content: kitchenSinkContent,
     filePath: "notes.md",
@@ -88,6 +89,28 @@ export const KitchenSink: Story = {
       // list above serializes differently raw, so skipping canonicalization
       // breaks this equality.
       expect(normalizeAsStored(lastMarkdown)).toBe(lastMarkdown)
+    })
+  },
+}
+
+// The seeded welcome document tells the reader some of its text is highlighted, so a
+// fuzzy match that stops resolving makes the document itself wrong.
+export const SeededWelcome: Story = {
+  args: {
+    content: welcomeContent,
+    filePath: welcomePath,
+    onChange: fn(),
+  },
+  decorators: [
+    withSeededFiles({ [welcomePath]: welcomeContent }),
+    withRouter(`/project/demo-project/file/${welcomePath}`),
+  ],
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      const highlighted = canvasElement.querySelectorAll("[data-annotation-colors]")
+      expect(highlighted).toHaveLength(2)
+      expect(highlighted[0].textContent).toContain("quotes the passage it answered from")
+      expect(highlighted[1].textContent).toContain("it keeps the query rather than the numbers")
     })
   },
 }

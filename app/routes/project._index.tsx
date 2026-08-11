@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react"
 import { useNavigate, useParams } from "react-router"
 import { useProject } from "./project"
-import { isHiddenFile } from "~/lib/files/filename"
+import { landingFile } from "~/domain/documents/selectors"
 import { FilePlus } from "lucide-react"
 
 export default function ProjectIndex() {
@@ -9,10 +9,7 @@ export default function ProjectIndex() {
   const navigate = useNavigate()
   const { files } = useProject()
 
-  const firstAvailableFile = useMemo(
-    () => Object.keys(files).find((f) => !isHiddenFile(f)),
-    [files]
-  )
+  const firstAvailableFile = useMemo(() => landingFile(Object.keys(files)), [files])
 
   useEffect(() => {
     if (firstAvailableFile && projectId) {

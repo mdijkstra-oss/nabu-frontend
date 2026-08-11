@@ -1,4 +1,4 @@
-import { toDisplayName, isHiddenFile } from "~/lib/files/filename"
+import { toDisplayName, isHiddenFile, PREFERENCES_FILE } from "~/lib/files/filename"
 import { formatShortDate } from "~/lib/format/date"
 import { HIDDEN_TAG_ID } from "~/domain/data-blocks/settings/tags/hidden"
 import { getAnnotationCount } from "~/domain/data-blocks/attributes/annotations/selectors"
@@ -36,6 +36,13 @@ export const buildDocumentEntries = (
         annotationCount: getAnnotationCount(files[filename] ?? ""),
       }
     })
+
+// Preferences is the agent's memory rather than reading material, so it is the landing
+// file only when the project has nothing else to show.
+export const landingFile = (filenames: string[]): string | undefined => {
+  const visible = filenames.filter((f) => !isHiddenFile(f))
+  return visible.find((f) => f !== PREFERENCES_FILE) ?? visible[0]
+}
 
 export const sortDocuments = (entries: DocumentEntry[], mode: DocSortMode): DocumentEntry[] =>
   [...entries].sort(docComparators[mode])
