@@ -32,6 +32,10 @@ export default defineConfig({
         },
         test: {
           name: "storybook",
+          // Stories driving CDP (CSS.forcePseudoState) wait on CSS.enable, which reparses
+          // every stylesheet in the page. Run alongside the unit project that turns a
+          // sub-second story into a 17s one, past vitest's 15s default.
+          testTimeout: 60_000,
           browser: {
             enabled: true,
             headless: true,
