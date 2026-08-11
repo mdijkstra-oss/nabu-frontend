@@ -31,7 +31,7 @@ const STRING_FUNCTION_RE = new RegExp(`\\b(${STRING_FUNCTIONS.join("|")})\\s*\\(
 export const rejectCase = (sql: string): string[] => {
   if (!CASE_RE.test(sql)) return []
   return [
-    "CASE expressions are not allowed in data queries. Output real columns instead — for colors add a 'color' column to the underlying data; do not use CASE to rename, group, or colorize.",
+    "CASE expressions are not allowed in data queries. Output real columns instead — for colors, join a VALUES list mapping each category to a Radix token and select its column; do not use CASE to rename, group, or colorize.",
   ]
 }
 

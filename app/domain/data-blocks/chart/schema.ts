@@ -26,7 +26,7 @@ const ColorSchema = z
   .string()
   .min(1)
   .describe(
-    "Color source: a Radix token literal (e.g. 'blue'), a column template ('{column}'), or an entity property template ('{code:color}'). For external data without a color column, write the color into the SQL with a CASE expression and reference the column."
+    "Color source: an entity property template ('{code:color}'), a column template ('{column}') where the column holds Radix tokens or hex, or a Radix token literal (e.g. 'blue') for a single-color chart. For categories that carry no color of their own, join a VALUES list mapping category to Radix token and reference its column — CASE and string expressions are rejected."
   )
   .refine(isValidChartColor, {
     message:
