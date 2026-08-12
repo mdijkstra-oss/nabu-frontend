@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest"
-import type { Hit, SentenceWindow } from "./types"
-import { MARK_WINDOW_CHARS, computeWindows, sliceWindow } from "./window"
-import { renderNumberedSentences } from "./payload"
+import type { Hit, MarkWork, SentenceWindow } from "./types"
+import {
+  MARK_WINDOW_CHARS,
+  MAX_STRETCH_OCCURRENCES,
+  coalesceStretches,
+  computeWindows,
+  sliceWindow,
+} from "./window"
 
 const shortDocument = (count: number): string[] =>
   Array.from({ length: count }, (_, i) => `Sentence number ${i}.`)
@@ -116,7 +121,6 @@ describe("the character clamp", () => {
     const slice = sliceWindow(sentences, window)
 
     expect(slice.join(" ").length).toBeLessThanOrEqual(MARK_WINDOW_CHARS)
-    expect(renderNumberedSentences(slice, window.start).split("\n")).toHaveLength(slice.length)
   })
 
   it("lets the neighbour bound win where it is the tighter of the two", () => {
@@ -142,5 +146,106 @@ describe("a unit with no hits", () => {
 describe("sliceWindow", () => {
   it("takes the window's sentences inclusive of both bounds", () => {
     expect(sliceWindow(["a", "b", "c", "d"], { start: 1, end: 2 })).toEqual(["b", "c"])
+  })
+})
+
+describe("coalescing windows into stretches", () => {
+  const sentences = shortDocument(60)
+
+  const work = (
+    hitSentence: number,
+    window: SentenceWindow,
+    over: Partial<Pick<MarkWork, "file">> & { kind?: string; value?: string } = {}
+  ): MarkWork => ({
+    file: over.file ?? "talk.md",
+    sentences,
+    hit: hit(hitSentence, over.kind ?? "speaker", over.value ?? "rutte"),
+    window,
+  })
+
+  const windowsOf = (stretches: ReturnType<typeof coalesceStretches>): SentenceWindow[] =>
+    stretches.map((stretch) => stretch.window)
+
+  const cases: { name: string; works: MarkWork[]; expected: SentenceWindow[] }[] = [
+    {
+      name: "overlapping windows merge into one stretch",
+      works: [work(5, { start: 0, end: 10 }), work(8, { start: 5, end: 15 })],
+      expected: [{ start: 0, end: 15 }],
+    },
+    {
+      name: "touching windows merge",
+      works: [work(2, { start: 0, end: 5 }), work(8, { start: 6, end: 10 })],
+      expected: [{ start: 0, end: 10 }],
+    },
+    {
+      name: "a gap of one sentence keeps two stretches",
+      works: [work(2, { start: 0, end: 4 }), work(8, { start: 6, end: 10 })],
+      expected: [
+        { start: 0, end: 4 },
+        { start: 6, end: 10 },
+      ],
+    },
+    {
+      name: "a contained window never widens the stretch",
+      works: [work(3, { start: 0, end: 20 }), work(9, { start: 5, end: 12 })],
+      expected: [{ start: 0, end: 20 }],
+    },
+    {
+      name: "works arriving out of document order coalesce sorted",
+      works: [work(8, { start: 5, end: 15 }), work(5, { start: 0, end: 10 })],
+      expected: [{ start: 0, end: 15 }],
+    },
+  ]
+
+  it.each(cases)("$name", ({ works, expected }) => {
+    expect(windowsOf(coalesceStretches(works))).toEqual(expected)
+  })
+
+  it("keeps a stretch's works in document order", () => {
+    const stretches = coalesceStretches([
+      work(8, { start: 5, end: 15 }),
+      work(5, { start: 0, end: 10 }),
+    ])
+    expect(stretches[0].works.map((w) => w.hit.hitSentence)).toEqual([5, 8])
+  })
+
+  it("never merges across files", () => {
+    const stretches = coalesceStretches([
+      work(5, { start: 0, end: 10 }, { file: "a.md" }),
+      work(6, { start: 0, end: 10 }, { file: "b.md" }),
+    ])
+    expect(stretches).toHaveLength(2)
+    expect(stretches.map((s) => s.file).sort()).toEqual(["a.md", "b.md"])
+  })
+
+  it("never merges across kinds", () => {
+    const stretches = coalesceStretches([
+      work(5, { start: 0, end: 10 }, { kind: "speaker" }),
+      work(6, { start: 0, end: 10 }, { kind: "date" }),
+    ])
+    expect(stretches).toHaveLength(2)
+  })
+
+  it("closes a stretch at the occurrence cap and opens the next at the following hit's window", () => {
+    const works = Array.from({ length: 12 }, (_, i) =>
+      work(i * 2, { start: Math.max(0, i * 2 - 2), end: i * 2 + 2 })
+    )
+    const stretches = coalesceStretches(works)
+
+    expect(stretches.map((s) => s.works.length)).toEqual([MAX_STRETCH_OCCURRENCES, 2])
+    expect(stretches[1].window.start).toBe(works[10].window.start)
+  })
+
+  it("puts two hits three sentences apart in one stretch covering the text between them", () => {
+    const hits = [hit(10), hit(13)]
+    const works = computeWindows(hits, sentences).map(({ hit: h, window }) =>
+      work(h.hitSentence, window)
+    )
+    const stretches = coalesceStretches(works)
+
+    expect(stretches).toHaveLength(1)
+    expect(stretches[0].works).toHaveLength(2)
+    expect(stretches[0].window.start).toBeLessThanOrEqual(10)
+    expect(stretches[0].window.end).toBeGreaterThanOrEqual(13)
   })
 })

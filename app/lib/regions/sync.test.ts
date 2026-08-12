@@ -6,7 +6,7 @@ import { stripMarkdown } from "~/lib/text/strip"
 import { isResolved, type RegionRow, type RegionsBlock } from "~/domain/data-blocks/regions/schema"
 import { sweepUnregisteredKinds } from "./boot-sweep"
 import { hashSentences } from "./detect/units"
-import type { FindInput, FindOutcome, Hit, MarkInput, MarkOutcome } from "./detect/types"
+import type { FindCall, FindWork, Hit, MarkCall, MarkWork } from "./detect/types"
 import type { KindDescriptor } from "./kinds/registry"
 import { readStoredRegions } from "./stored"
 import { startRegionSync, REGION_SYNC_DEBOUNCE, REGION_SYNC_MAX_WAIT } from "./sync"
@@ -45,7 +45,7 @@ interface Range {
 
 interface DetectConfig {
   patterns?: Pattern[]
-  markRange?: (input: MarkInput) => Range | null
+  markRange?: (work: MarkWork) => Range | null
 }
 
 const settleMicrotasks = async (): Promise<void> => {
@@ -54,92 +54,106 @@ const settleMicrotasks = async (): Promise<void> => {
   await Promise.resolve()
 }
 
-const ownSentence = (input: MarkInput): Range => ({
-  start: input.hitSentence,
-  end: Math.min(input.hitSentence + 1, input.windowEnd),
+const ownSentence = (work: MarkWork): Range => ({
+  start: work.hit.hitSentence,
+  end: Math.min(work.hit.hitSentence + 1, work.window.end),
 })
+
+interface OfferedUnit {
+  kind: string
+  file: string
+  firstSentence: number
+  sentences: string[]
+}
+
+interface RecordedFindCall {
+  kind: string
+  knownValues: string[]
+  files: string[]
+}
 
 const createDetect = (config: DetectConfig = {}) => {
   const patterns = config.patterns ?? SPEAKERS
   const rangeOf = config.markRange ?? ownSentence
 
-  const finds: FindInput[] = []
-  const marks: MarkInput[] = []
-  const active = new Map<string, number>()
-  const peak = new Map<string, number>()
+  const finds: OfferedUnit[] = []
+  const findCalls: RecordedFindCall[] = []
+  const marks: MarkWork[] = []
 
   let coined = 0
   let gate: Promise<void> | null = null
   let open: (() => void) | null = null
-  let failFind: ((input: FindInput) => string | null) | null = null
+  let failFind: ((item: FindWork) => string | null) | null = null
 
-  const enter = (kind: string): void => {
-    const now = (active.get(kind) ?? 0) + 1
-    active.set(kind, now)
-    peak.set(kind, Math.max(peak.get(kind) ?? 0, now))
-  }
-
-  const leave = (kind: string): void => {
-    active.set(kind, (active.get(kind) ?? 1) - 1)
-  }
-
-  const valueFor = (quote: string, knownValues: string[]): string => {
+  const valueFor = (quote: string, known: Set<string>): string => {
     const slug = quote.toLowerCase()
-    return knownValues.find((v) => v === slug || v.startsWith(`${slug}-`)) ?? `${slug}-${++coined}`
+    return [...known].find((v) => v === slug || v.startsWith(`${slug}-`)) ?? `${slug}-${++coined}`
   }
 
-  const hitsIn = (input: FindInput): Hit[] => {
-    const known = [...input.knownValues]
-    return input.sentences.flatMap((text, i) =>
+  const hitsIn = (item: FindWork, kind: string, known: Set<string>): Hit[] =>
+    item.sentences.flatMap((text, i) =>
       patterns
-        .filter((p) => p.kind === input.kind && text.includes(p.quote))
+        .filter((p) => p.kind === kind && text.includes(p.quote))
         .map((p) => {
           const value = valueFor(p.quote, known)
-          if (!known.includes(value)) known.push(value)
-          return { kind: input.kind, quote: p.quote, hitSentence: input.firstSentence + i, value }
+          known.add(value)
+          return { kind, quote: p.quote, hitSentence: item.unit.firstSentence + i, value }
         })
     )
-  }
 
-  const find = async (input: FindInput): Promise<FindOutcome> => {
-    finds.push({ ...input, knownValues: [...input.knownValues] })
-    enter(input.kind)
+  const find: FindCall = async (items, job) => {
+    findCalls.push({
+      kind: job.kind.id,
+      knownValues: [...job.knownValues].sort(),
+      files: [...new Set(items.map((item) => item.file))],
+    })
+    finds.push(
+      ...items.map((item) => ({
+        kind: job.kind.id,
+        file: item.file,
+        firstSentence: item.unit.firstSentence,
+        sentences: item.sentences,
+      }))
+    )
+
     const held = gate
     await settleMicrotasks()
     if (held) await held
-    leave(input.kind)
 
-    const error = failFind?.(input)
-    if (error) return { hits: [], errors: [error], dropped: 0 }
-    return { hits: hitsIn(input), errors: [], dropped: 0 }
+    const unrecorded: FindWork[] = []
+    for (const item of items) {
+      if (failFind?.(item)) {
+        unrecorded.push(item)
+        continue
+      }
+      job.onAnswered(item, hitsIn(item, job.kind.id, job.knownValues))
+    }
+    return { unrecorded }
   }
 
-  const mark = async (input: MarkInput): Promise<MarkOutcome> => {
-    marks.push(input)
+  const mark: MarkCall = async (items, job) => {
+    marks.push(...items)
+
     const held = gate
     await settleMicrotasks()
     if (held) await held
 
-    const range = rangeOf(input)
-    if (!range) return { mark: null, error: `no range for "${input.quote}"` }
-    return {
-      mark: {
-        kind: input.kind,
-        quote: input.quote,
-        value: input.value,
-        hitSentence: input.hitSentence,
-        startSentence: range.start,
-        endSentence: range.end,
-      },
+    for (const item of items) {
+      const range = rangeOf(item)
+      if (!range) {
+        job.onFailed(item)
+        continue
+      }
+      job.onAnswered(item, { ...item.hit, startSentence: range.start, endSentence: range.end })
     }
   }
 
   return {
     calls: { find, mark },
     finds,
+    findCalls,
     marks,
-    peakConcurrency: (kind: string) => peak.get(kind) ?? 0,
-    failFindWhen: (fn: (input: FindInput) => string | null) => {
+    failFindWhen: (fn: (item: FindWork) => string | null) => {
       failFind = fn
     },
     hold: () => {
@@ -322,10 +336,13 @@ afterEach(() => {
 describe("relocation across an edit", () => {
   it("shifts every mark below an insertion and issues no mark call for them", async () => {
     const project = createProject({ "talk.md": transcript(30) })
-    const trailing = (input: MarkInput): Range =>
-      input.hitSentence === 0
+    const trailing = (work: MarkWork): Range =>
+      work.hit.hitSentence === 0
         ? { start: 1, end: 1 }
-        : { start: input.hitSentence, end: Math.min(input.hitSentence + 1, input.windowEnd) }
+        : {
+            start: work.hit.hitSentence,
+            end: Math.min(work.hit.hitSentence + 1, work.window.end),
+          }
     const detect = createDetect({ markRange: trailing })
 
     const sync = startSync(project, detect)
@@ -365,7 +382,9 @@ describe("relocation across an edit", () => {
 
     expect(project.regionsIn("notes.md")).toEqual(first)
     expect(detect.finds).toHaveLength(findsAfterFirst)
-    expect(detect.marks.every((m) => m.sentences.length > 0)).toBe(true)
+    expect(
+      detect.marks.every((m) => m.window.start >= 0 && m.window.end < m.sentences.length)
+    ).toBe(true)
   })
 
   it("deletes only the mark whose range content changed and re-marks its hit", async () => {
@@ -388,13 +407,13 @@ describe("relocation across an edit", () => {
     await sync.tick()
 
     const after = project.regionsIn("talk.md")
-    expect(detect.marks.slice(marksBefore).map((m) => m.hitSentence)).toEqual([secondHit])
+    expect(detect.marks.slice(marksBefore).map((m) => m.hit.hitSentence)).toEqual([secondHit])
     expect(rangesOf(after)).toEqual(rangesOf(before))
   })
 })
 
 describe("the units a document becomes", () => {
-  it("cuts one short paragraph into one unit and one find call", async () => {
+  it("cuts one short paragraph into one unit and one offered find entry", async () => {
     const project = createProject({ "short.md": ONE_PARAGRAPH })
     const detect = createDetect()
 
@@ -407,7 +426,7 @@ describe("the units a document becomes", () => {
   })
 })
 
-describe("a unit whose find call failed", () => {
+describe("a unit whose answer was lost", () => {
   it("stays out of the scanned record and is retried on the next tick", async () => {
     const project = createProject({ "talk.md": transcript(40) })
     const detect = createDetect()
@@ -431,6 +450,30 @@ describe("a unit whose find call failed", () => {
     expect(detect.finds.slice(findsBefore).map((f) => f.firstSentence)).toContain(firstUnit)
     const retried = project.regionsIn("talk.md").scanned.speaker
     expect(retried.some((unit) => unit.firstSentence === firstUnit)).toBe(true)
+  })
+
+  it("records none of the units when the whole pass answers nothing, then re-offers all", async () => {
+    const project = createProject({ "talk.md": transcript(40) })
+    const detect = createDetect()
+    let firstPass = true
+    detect.failFindWhen(() => (firstPass ? "boom" : null))
+
+    const sync = startSync(project, detect)
+    await sync.ready
+
+    expect(project.regionsIn("talk.md").scanned.speaker).toEqual([])
+    expect(project.regionsIn("talk.md").regions).toEqual([])
+
+    const offeredFirstPass = detect.finds.length
+    expect(offeredFirstPass).toBeGreaterThan(3)
+
+    firstPass = false
+    await sync.tick()
+
+    expect(detect.finds.slice(offeredFirstPass).map((f) => f.firstSentence)).toEqual(
+      detect.finds.slice(0, offeredFirstPass).map((f) => f.firstSentence)
+    )
+    expect(project.regionsIn("talk.md").scanned.speaker).toHaveLength(offeredFirstPass)
   })
 })
 
@@ -479,7 +522,9 @@ describe("hit and unit invalidation", () => {
     expect(
       detect.marks
         .slice(marksBefore)
-        .every((m) => m.hitSentence >= changedUnit.first && m.hitSentence <= changedUnit.last)
+        .every(
+          (m) => m.hit.hitSentence >= changedUnit.first && m.hit.hitSentence <= changedUnit.last
+        )
     ).toBe(true)
   })
 
@@ -525,7 +570,9 @@ describe("hit and unit invalidation", () => {
       ])
     )
     expect(valuesFrom(after, firstSurvivor)).toEqual(valuesFrom(before, firstSurvivor - inserted))
-    expect(detect.marks.slice(marksBefore).every((m) => m.hitSentence < firstSurvivor)).toBe(true)
+    expect(detect.marks.slice(marksBefore).every((m) => m.hit.hitSentence < firstSurvivor)).toBe(
+      true
+    )
   })
 
   it("re-finds every unit and re-marks every hit when the stored block came from the previous recipe", async () => {
@@ -580,11 +627,39 @@ describe("hit and unit invalidation", () => {
     expect(project.regionsIn("code.md")).toEqual(before)
   })
 
+  it("packs only unscanned units when one document among several changed", async () => {
+    const project = createProject({ "a.md": transcript(20), "b.md": transcript(20) })
+    const detect = createDetect()
+
+    const sync = startSync(project, detect)
+    await sync.ready
+
+    const scannedA = project.regionsIn("a.md").scanned.speaker
+    const scannedB = project.regionsIn("b.md").scanned.speaker
+    expect(scannedA.length).toBeGreaterThan(1)
+
+    const findsBefore = detect.finds.length
+    const sentences = sentencesOf(project.files["a.md"])
+    const inFirstUnit = sentences[scannedA[0].firstSentence]
+    project.files["a.md"] = project.files["a.md"].replace(
+      inFirstUnit,
+      inFirstUnit.replace("spoke about", "spoke firmly about")
+    )
+
+    await sync.tick()
+
+    const offered = detect.finds.slice(findsBefore)
+    expect(offered.length).toBeGreaterThan(0)
+    expect(offered.every((f) => f.file === "a.md")).toBe(true)
+    expect(offered.length).toBeLessThan(scannedA.length)
+    expect(project.regionsIn("b.md").scanned.speaker).toEqual(scannedB)
+  })
+
   it("hands overlap resolution the kept marks as well as the fresh ones", async () => {
     const project = createProject({ "talk.md": transcript(6) })
-    const wide = (input: MarkInput): Range => ({
-      start: input.hitSentence,
-      end: Math.min(input.hitSentence + 3, input.windowEnd),
+    const wide = (work: MarkWork): Range => ({
+      start: work.hit.hitSentence,
+      end: Math.min(work.hit.hitSentence + 3, work.window.end),
     })
     const detect = createDetect({ markRange: wide })
 
@@ -605,7 +680,7 @@ describe("hit and unit invalidation", () => {
   })
 })
 
-describe("ordering and the shared vocabulary", () => {
+describe("the seam and the shared vocabulary", () => {
   const twoKinds = [speakerKind, dateKind]
 
   const twoKindPatterns: Pattern[] = [
@@ -614,7 +689,7 @@ describe("ordering and the shared vocabulary", () => {
     { kind: "date", quote: "considered" },
   ]
 
-  it("runs a list-backed kind serially and a self-contained kind concurrently", async () => {
+  it("hands each kind one flat find list spanning every document", async () => {
     const project = createProject({
       "a.md": transcript(20),
       "b.md": transcript(20),
@@ -624,19 +699,11 @@ describe("ordering and the shared vocabulary", () => {
     const sync = startSync(project, detect, twoKinds)
     await sync.ready
 
-    expect(detect.peakConcurrency("speaker")).toBe(1)
-    expect(detect.peakConcurrency("date")).toBeGreaterThan(1)
-
-    const speakerFinds = detect.finds.filter((f) => f.kind === "speaker")
-    const dateFinds = detect.finds.filter((f) => f.kind === "date")
-
-    expect(speakerFinds.slice(1).every((f) => f.knownValues.length > 0)).toBe(true)
-    expect(dateFinds.every((f) => f.knownValues.length === 0)).toBe(true)
-    expect(
-      speakerFinds
-        .flatMap((f) => f.knownValues)
-        .every((v) => v.startsWith("rutte") || v.startsWith("kaag"))
-    ).toBe(true)
+    expect(detect.findCalls.map((c) => c.kind).sort()).toEqual(["date", "speaker"])
+    for (const call of detect.findCalls) {
+      expect(call.files.sort()).toEqual(["a.md", "b.md"])
+      expect(call.knownValues).toEqual([])
+    }
   })
 
   it("creates one value per name across every unit of every document", async () => {
@@ -655,6 +722,27 @@ describe("ordering and the shared vocabulary", () => {
       )
     )
     expect([...values].sort()).toEqual(["kaag-2", "rutte-1"])
+  })
+
+  it("seeds a later pass's vocabulary from every stored value corpus-wide", async () => {
+    const project = createProject({
+      "a.md": transcript(10),
+      "b.md": transcript(10),
+    })
+    const detect = createDetect()
+
+    const sync = startSync(project, detect)
+    await sync.ready
+
+    const callsBefore = detect.findCalls.length
+    project.files["a.md"] =
+      `${project.files["a.md"]}\n\nRutte added a closing remark. The room emptied slowly after that.`
+
+    await sync.tick()
+
+    const later = detect.findCalls.slice(callsBefore)
+    expect(later.map((c) => c.kind)).toEqual(["speaker"])
+    expect(later[0].knownValues).toEqual(["kaag-2", "rutte-1"])
   })
 })
 

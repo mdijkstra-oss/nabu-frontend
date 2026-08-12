@@ -1,12 +1,17 @@
 import { describe, it, expect } from "vitest"
-import { readCorpusDocument } from "~/lib/text/fixtures/corpus"
-import { cutUnits } from "~/lib/cutting/units"
-import { indexProseSentences, proseOf } from "~/lib/text/halo"
-import type { ParseCall } from "./seam"
 import type { KindDescriptor } from "~/lib/regions/kinds/registry"
-import type { ScanUnit } from "./types"
-import { FIND_ENDPOINT, runFind, toFindInput } from "./find"
-import { answering, failing, hasBreakpoint, textOf, throwing } from "./parse-call.fixture"
+import type { FindJob, FindWork, Hit } from "./types"
+import type { ParseCall } from "./seam"
+import { FIND_ENDPOINT, FIND_MAX_ITEMS, runFind } from "./find"
+import {
+  answering,
+  answeringEach,
+  answeringWhenReleased,
+  failing,
+  hasBreakpoint,
+  textOf,
+  throwing,
+} from "./parse-call.fixture"
 
 const speaker: KindDescriptor = {
   id: "speaker",
@@ -16,102 +21,233 @@ const speaker: KindDescriptor = {
   valueType: "string",
 }
 
-const UNIT_TEXTS = [
-  "Rutte opened the meeting.",
-  "The room went quiet.",
-  "Kaag answered him directly.",
-]
+const date: KindDescriptor = { ...speaker, id: "date", color: "amber", valueType: "datetime" }
 
-const sentences = Array.from({ length: 23 }, (_, i) => `Filler sentence ${i}.`)
-sentences.splice(12, UNIT_TEXTS.length, ...UNIT_TEXTS)
-sentences.splice(20, UNIT_TEXTS.length, ...UNIT_TEXTS)
-
-const unit: ScanUnit = {
-  firstSentence: 12,
-  lastSentence: 14,
-  charStart: 0,
-  charEnd: 0,
-  hash: "irrelevant",
-}
-
-const input = toFindInput(speaker, unit, sentences, ["rutte"])
-
-describe("toFindInput", () => {
-  it("carries the kind's id, rules and value type beside the unit", () => {
-    expect(input).toEqual({
-      kind: "speaker",
-      rules: speaker.rules,
-      knownValues: ["rutte"],
-      valueType: "string",
-      firstSentence: 12,
-      sentences: UNIT_TEXTS,
-    })
-  })
-
-  it("slices the document's own sentences for every unit the cutter produced", () => {
-    const prose = proseOf(readCorpusDocument("links-and-code.md"))
-    const rows = indexProseSentences(prose)
-    const texts = rows.map((row) => row.text)
-    const units = cutUnits(prose, rows)
-
-    expect(units.length).toBeGreaterThan(1)
-    for (const unit of units) {
-      const built = toFindInput(speaker, unit, texts, [])
-      expect(built.firstSentence).toBe(unit.firstSentence)
-      expect(built.sentences).toEqual(texts.slice(unit.firstSentence, unit.lastSentence + 1))
-    }
-  })
+const unitAt = (firstSentence: number, sentences: string[], file = "a.md"): FindWork => ({
+  file,
+  unit: {
+    firstSentence,
+    lastSentence: firstSentence + sentences.length - 1,
+    charStart: 0,
+    charEnd: 0,
+    hash: `${file}#${firstSentence}`,
+  },
+  sentences,
 })
 
-describe("runFind", () => {
-  it("converts a response numbered from 1 into array positions", async () => {
-    const { parse } = answering({
-      results: [{ quote: "Rutte opened", sentence: 13, value: "Rutte" }],
-    })
-    const outcome = await runFind(input, parse)
+interface RecordedJob {
+  job: FindJob
+  answered: { work: FindWork; hits: Hit[] }[]
+  abandoned: FindWork[]
+  knownValues: Set<string>
+}
 
-    expect(outcome.hits).toEqual([
-      { kind: "speaker", quote: "Rutte opened", hitSentence: 12, value: "rutte" },
-    ])
-    expect(outcome.errors).toEqual([])
-  })
+const jobFor = (kind: KindDescriptor, known: string[] = []): RecordedJob => {
+  const knownValues = new Set(known)
+  const answered: { work: FindWork; hits: Hit[] }[] = []
+  const abandoned: FindWork[] = []
+  return {
+    job: {
+      kind,
+      knownValues,
+      onAnswered: (work, hits) => answered.push({ work, hits }),
+      onAbandoned: (work) => abandoned.push(work),
+    },
+    answered,
+    abandoned,
+    knownValues,
+  }
+}
 
-  it("calls the region finder with the rules, the known values and the numbered unit", async () => {
-    const { parse, calls } = answering({ results: [] })
-    await runFind(input, parse)
+const acknowledgedEmpty = (ids: number[]) =>
+  ids.map((entry) => ({ entry, occurrences: [] as never[] }))
 
+const flushMicrotasks = async (): Promise<void> => {
+  for (let i = 0; i < 20; i++) await Promise.resolve()
+}
+
+describe("the find payload", () => {
+  const items = [
+    unitAt(12, ["Rutte opened the meeting.", "The room went quiet."], "a.md"),
+    unitAt(0, ["Kaag answered him directly."], "b.md"),
+  ]
+
+  it("packs units from two documents into one call of numbered entries", async () => {
+    const { parse, calls } = answering({ results: acknowledgedEmpty([1, 2]) })
+    await runFind(items, jobFor(speaker, ["rutte"]).job, parse)
+
+    expect(calls).toHaveLength(1)
     expect(calls[0].endpoint).toBe(FIND_ENDPOINT)
-    expect(calls[0].messages.map((m) => m.role)).toEqual(["system", "system", "system", "user"])
+    expect(calls[0].messages.map((m) => m.role)).toEqual([
+      "system",
+      "system",
+      "system",
+      "system",
+      "user",
+    ])
 
     const text = calls[0].messages.map(textOf)
     expect(text[0]).toBe(speaker.rules)
     expect(text[1]).toContain("rutte")
-    expect(text[2]).toBe(
-      "[13] Rutte opened the meeting.\n[14] The room went quiet.\n[15] Kaag answered him directly."
-    )
+    expect(text[2]).toContain('<entry id="1" file="a.md">')
+    expect(text[2]).toContain("[1.1] Rutte opened the meeting.")
+    expect(text[2]).toContain("[1.2] The room went quiet.")
+    expect(text[3]).toContain('<entry id="2" file="b.md">')
+    expect(text[3]).toContain("[2.1] Kaag answered him directly.")
+    expect(text[4]).toMatch(/every entry/i)
   })
 
   it("puts the prompt cache breakpoint on the rules message and nowhere else", async () => {
-    const { parse, calls } = answering({ results: [] })
-    await runFind(input, parse)
+    const { parse, calls } = answering({ results: acknowledgedEmpty([1, 2]) })
+    await runFind(items, jobFor(speaker, ["rutte"]).job, parse)
 
-    expect(calls[0].messages.map(hasBreakpoint)).toEqual([true, false, false, false])
+    expect(calls[0].messages.map(hasBreakpoint)).toEqual([true, false, false, false, false])
   })
 
-  it("sorts the known-value list so the cached prefix does not shift", async () => {
-    const { parse, calls } = answering({ results: [] })
-    await runFind(toFindInput(speaker, unit, sentences, ["timmermans", "kaag", "rutte"]), parse)
+  it("sorts the known-value list so the rendered preamble does not shift", async () => {
+    const { parse, calls } = answering({ results: acknowledgedEmpty([1, 2]) })
+    await runFind(items, jobFor(speaker, ["timmermans", "kaag", "rutte"]).job, parse)
 
     const listed = textOf(calls[0].messages[1])
     expect(listed.indexOf("kaag")).toBeLessThan(listed.indexOf("rutte"))
     expect(listed.indexOf("rutte")).toBeLessThan(listed.indexOf("timmermans"))
   })
 
-  it("tells a self-contained kind there is no list to reuse from", async () => {
-    const { parse, calls } = answering({ results: [] })
-    await runFind(toFindInput(speaker, unit, sentences, []), parse)
+  it("tells a vocabulary kind with no known values to infer from the text alone", async () => {
+    const { parse, calls } = answering({ results: acknowledgedEmpty([1, 2]) })
+    await runFind(items, jobFor(speaker).job, parse)
 
     expect(textOf(calls[0].messages[1])).toMatch(/infer/i)
+  })
+
+  it("sends no known-values message for a self-contained kind", async () => {
+    const { parse, calls } = answering({ results: acknowledgedEmpty([1, 2]) })
+    await runFind(items, jobFor(date).job, parse)
+
+    expect(calls[0].messages.map((m) => m.role)).toEqual(["system", "system", "system", "user"])
+    expect(textOf(calls[0].messages[1])).toContain('<entry id="1"')
+  })
+})
+
+describe("routing occurrences back", () => {
+  it("lands each occurrence in its own entry's document, offset by that unit", async () => {
+    const items = [
+      unitAt(12, ["Rutte opened the meeting.", "The room went quiet."], "a.md"),
+      unitAt(0, ["Kaag answered him directly."], "b.md"),
+    ]
+    const { parse } = answering({
+      results: [
+        { entry: 1, occurrences: [{ quote: "Rutte opened", ref: "1.1", value: "Rutte" }] },
+        { entry: 2, occurrences: [{ quote: "Kaag answered", ref: "2.1", value: "Kaag" }] },
+      ],
+    })
+    const { job, answered } = jobFor(speaker)
+    await runFind(items, job, parse)
+
+    expect(answered).toHaveLength(2)
+    const byFile = new Map(answered.map(({ work, hits }) => [work.file, hits]))
+    expect(byFile.get("a.md")).toEqual([
+      { kind: "speaker", quote: "Rutte opened", hitSentence: 12, value: "rutte" },
+    ])
+    expect(byFile.get("b.md")).toEqual([
+      { kind: "speaker", quote: "Kaag answered", hitSentence: 0, value: "kaag" },
+    ])
+  })
+
+  it("drops an occurrence whose ref runs past its entry and keeps the acknowledgment", async () => {
+    const items = [unitAt(4, ["Rutte opened the meeting.", "The room went quiet."])]
+    const { parse } = answering({
+      results: [{ entry: 1, occurrences: [{ quote: "Rutte opened", ref: "1.9", value: "Rutte" }] }],
+    })
+    const { job, answered, abandoned } = jobFor(speaker)
+    const result = await runFind(items, job, parse)
+
+    expect(answered).toEqual([{ work: items[0], hits: [] }])
+    expect(abandoned).toEqual([])
+    expect(result.unrecorded).toEqual([])
+  })
+
+  it("drops an occurrence whose ref reaches into an entry the answer left silent", async () => {
+    const items = [
+      unitAt(0, ["Rutte opened the meeting."], "a.md"),
+      unitAt(9, ["Kaag answered him directly."], "b.md"),
+    ]
+    const raws = [
+      {
+        results: [
+          { entry: 1, occurrences: [{ quote: "Kaag answered", ref: "2.1", value: "Kaag" }] },
+        ],
+      },
+      { results: [] },
+      { results: [] },
+    ]
+    const { parse } = answeringEach(raws)
+    const { job, answered, abandoned } = jobFor(speaker)
+    await runFind(items, job, parse)
+
+    expect(answered.map(({ work, hits }) => [work.file, hits])).toEqual([["a.md", []]])
+    expect(abandoned).toEqual([items[1]])
+  })
+
+  it("ignores an entry id in the answer that names no entry in the call", async () => {
+    const items = [unitAt(0, ["Rutte opened the meeting."])]
+    const { parse } = answering({
+      results: [
+        { entry: 7, occurrences: [{ quote: "Rutte opened", ref: "7.1", value: "Rutte" }] },
+        { entry: 1, occurrences: [] },
+      ],
+    })
+    const { job, answered } = jobFor(speaker)
+    await runFind(items, job, parse)
+
+    expect(answered).toEqual([{ work: items[0], hits: [] }])
+  })
+
+  it("collapses duplicate occurrences of one entry across answer rows", async () => {
+    const items = [unitAt(0, ["Rutte opened the meeting at nine."])]
+    const { parse } = answering({
+      results: [
+        { entry: 1, occurrences: [{ quote: "Rutte opened", ref: "1.1", value: "Rutte" }] },
+        { entry: 1, occurrences: [{ quote: "at nine", ref: "1.1", value: "rutte" }] },
+      ],
+    })
+    const { job, answered } = jobFor(speaker)
+    await runFind(items, job, parse)
+
+    expect(answered).toHaveLength(1)
+    expect(answered[0].hits).toHaveLength(1)
+  })
+})
+
+describe("acknowledgment and rounds", () => {
+  const units = (count: number, file = "a.md"): FindWork[] =>
+    Array.from({ length: count }, (_, i) => unitAt(i, [`Filler sentence ${i}.`], file))
+
+  it("scans acknowledged entries, empty or not, and abandons a persistently silent one", async () => {
+    const items = units(5)
+    const { parse, calls } = answeringEach([
+      {
+        results: [
+          { entry: 1, occurrences: [{ quote: "Filler sentence 0", ref: "1.1", value: "Rutte" }] },
+          ...acknowledgedEmpty([2, 3, 4]),
+        ],
+      },
+      { results: [] },
+      { results: [] },
+    ])
+    const { job, answered, abandoned } = jobFor(speaker)
+    const result = await runFind(items, job, parse)
+
+    expect(answered.map(({ work }) => work)).toEqual(items.slice(0, 4))
+    expect(answered[0].hits).toHaveLength(1)
+    expect(answered.slice(1).every(({ hits }) => hits.length === 0)).toBe(true)
+    expect(abandoned).toEqual([items[4]])
+    expect(result.unrecorded).toEqual([])
+
+    expect(calls).toHaveLength(3)
+    const retriedPayload = calls[1].messages.map(textOf).join("\n")
+    expect(retriedPayload).toContain("Filler sentence 4.")
+    expect(retriedPayload).not.toContain("Filler sentence 3.")
   })
 
   const failures: { name: string; parse: ParseCall }[] = [
@@ -123,51 +259,110 @@ describe("runFind", () => {
     { name: "a transport failure", parse: throwing("LLM request failed: 502") },
   ]
 
-  it.each(failures)("returns $name as an error rather than throwing", async ({ parse }) => {
-    const outcome = await runFind(input, parse)
+  it.each(failures)(
+    "records none of ten units when their one call fails with $name",
+    async ({ parse }) => {
+      const items = units(10)
+      const { job, answered, abandoned } = jobFor(speaker)
+      const result = await runFind(items, job, parse)
 
-    expect(outcome.hits).toEqual([])
-    expect(outcome.errors).toHaveLength(1)
-    expect(outcome.dropped).toBe(0)
-  })
+      expect(answered).toEqual([])
+      expect(abandoned).toEqual([])
+      expect(result.unrecorded).toEqual(items)
+    }
+  )
 
-  it("leaves a sibling unit's hits untouched when one unit fails", async () => {
-    const sibling: ScanUnit = { ...unit, firstSentence: 20, lastSentence: 22 }
-    const { parse } = answering({
-      results: [{ quote: "Kaag answered him", sentence: 23, value: "Kaag" }],
-    })
-    const [failed, survived] = await Promise.all([
-      runFind(input, failing("LLM returned invalid JSON")),
-      runFind(toFindInput(speaker, sibling, sentences, ["rutte"]), parse),
-    ])
-
-    expect(failed.hits).toEqual([])
-    expect(survived.hits).toEqual([
-      { kind: "speaker", quote: "Kaag answered him", hitSentence: 22, value: "kaag" },
-    ])
-  })
-
-  it("counts the results a gate refused", async () => {
+  it("classifies a datetime answer failing the ISO shape as unanswered", async () => {
+    const items = units(1)
     const { parse } = answering({
       results: [
-        { quote: "Rutte opened", sentence: 13, value: "Rutte" },
-        { quote: "Rutte opened", sentence: 99, value: "Rutte" },
+        {
+          entry: 1,
+          occurrences: [{ quote: "Filler sentence 0", ref: "1.1", value: "last spring" }],
+        },
       ],
     })
-    const outcome = await runFind(input, parse)
+    const { job, answered } = jobFor(date)
+    const result = await runFind(items, job, parse)
 
-    expect(outcome.hits).toHaveLength(1)
-    expect(outcome.dropped).toBe(1)
+    expect(answered).toEqual([])
+    expect(result.unrecorded).toEqual(items)
   })
 
-  it("constrains a datetime kind's value to an ISO-8601 shape at the schema", async () => {
-    const date: KindDescriptor = { ...speaker, id: "date", color: "amber", valueType: "datetime" }
-    const { parse } = answering({
-      results: [{ quote: "Rutte opened", sentence: 13, value: "last spring" }],
-    })
-    const outcome = await runFind(toFindInput(date, unit, sentences, []), parse)
+  it("repacks entries a failed call left pending with whatever else is pending", async () => {
+    const items = units(FIND_MAX_ITEMS + 1)
+    const { parse, calls } = answeringEach([
+      "unparseable",
+      { results: acknowledgedEmpty([1]) },
+      { results: acknowledgedEmpty(items.slice(0, FIND_MAX_ITEMS).map((_, i) => i + 1)) },
+    ])
+    const { job, answered } = jobFor(speaker)
+    const result = await runFind(items, job, parse)
 
-    expect(outcome.hits).toEqual([])
-    expect(outcome.errors).toHaveLength(1)
+    expect(calls).toHaveLength(3)
+    expect(answered).toHaveLength(items.length)
+    expect(result.unrecorded).toEqual([])
+  })
+})
+
+describe("the speaker vocabulary", () => {
+  it("renders the value found by one call into the next call's preamble", async () => {
+    const count = FIND_MAX_ITEMS + 1
+    const items = Array.from({ length: count }, (_, i) =>
+      unitAt(i, [i === 0 ? "Kaag answered him directly." : `Filler sentence ${i}.`])
+    )
+    const { parse, calls } = answeringEach([
+      {
+        results: [
+          { entry: 1, occurrences: [{ quote: "Kaag", ref: "1.1", value: "Kaag" }] },
+          ...acknowledgedEmpty(Array.from({ length: FIND_MAX_ITEMS - 1 }, (_, i) => i + 2)),
+        ],
+      },
+      { results: acknowledgedEmpty([1]) },
+    ])
+    const { job, knownValues } = jobFor(speaker)
+    await runFind(items, job, parse)
+
+    expect(calls).toHaveLength(2)
+    expect(textOf(calls[0].messages[1])).toMatch(/infer/i)
+    expect(textOf(calls[1].messages[1])).toContain("kaag")
+    expect(knownValues.has("kaag")).toBe(true)
+  })
+
+  it("dispatches speaker calls one at a time", async () => {
+    const items = Array.from({ length: FIND_MAX_ITEMS + 1 }, (_, i) =>
+      unitAt(i, [`Filler sentence ${i}.`])
+    )
+    const { parse, calls, held } = answeringWhenReleased()
+    const run = runFind(items, jobFor(speaker).job, parse)
+
+    await flushMicrotasks()
+    expect(calls).toHaveLength(1)
+
+    held[0].release({
+      results: acknowledgedEmpty(Array.from({ length: FIND_MAX_ITEMS }, (_, i) => i + 1)),
+    })
+    await flushMicrotasks()
+    expect(calls).toHaveLength(2)
+
+    held[1].release({ results: acknowledgedEmpty([1]) })
+    await run
+  })
+
+  it("dispatches a self-contained kind's calls concurrently", async () => {
+    const items = Array.from({ length: FIND_MAX_ITEMS + 1 }, (_, i) =>
+      unitAt(i, [`Filler sentence ${i}.`])
+    )
+    const { parse, calls, held } = answeringWhenReleased()
+    const run = runFind(items, jobFor(date).job, parse)
+
+    await flushMicrotasks()
+    expect(calls).toHaveLength(2)
+
+    held[0].release({
+      results: acknowledgedEmpty(Array.from({ length: FIND_MAX_ITEMS }, (_, i) => i + 1)),
+    })
+    held[1].release({ results: acknowledgedEmpty([1]) })
+    await run
   })
 })

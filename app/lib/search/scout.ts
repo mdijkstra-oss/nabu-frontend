@@ -1,50 +1,69 @@
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
 import type { Chunk } from "~/lib/embeddings/chunk"
-import type { NumberedEntry } from "~/lib/agent/tools/scout-filter/messages"
 import { chunkFileForEmbedding } from "~/lib/embeddings/chunk"
+import { callAndParse } from "~/lib/agent/client/call-parse"
+import { assignIds, entrySize, type EntryInput } from "~/lib/calls/entry"
+import { pack } from "~/lib/calls/pack"
 import { getEmbeddableSource } from "./source"
 import { filterEntries } from "~/lib/agent/tools/scout-filter/api"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 
-const SCOUT_CONCURRENCY = 10
-
 export interface ChunkBlock {
-  id: number
   chunkStart: number
   text: string
 }
 
-const trimEnd = (chunks: Chunk[], i: number, contentLen: number): number =>
-  i < chunks.length - 1 ? chunks[i + 1].chunkStart : Math.max(chunks[i].chunkEnd, contentLen)
-
 export const buildChunkBlocks = (content: string, chunks: Chunk[]): ChunkBlock[] =>
   chunks.map((c, i) => ({
-    id: i + 1,
     chunkStart: c.chunkStart,
     text: content.slice(c.chunkStart, trimEnd(chunks, i, content.length)),
   }))
 
-const toEntries = (blocks: ChunkBlock[]): NumberedEntry[] =>
-  blocks.map((b) => ({ index: b.id, text: b.text }))
+export const scoutFilterBatch = async (
+  batch: SearchHit[],
+  framework: string,
+  files: FileStore,
+  parse: typeof callAndParse = callAndParse
+): Promise<SearchHit[]> => {
+  if (framework.length === 0 || batch.length === 0) return batch
 
-const excludedChunkStarts = (blocks: ChunkBlock[], excludedIds: Set<number>): Set<number> => {
-  const out = new Set<number>()
-  for (const b of blocks) if (excludedIds.has(b.id)) out.add(b.chunkStart)
-  return out
+  const excludes = await buildExcludeMap(files, framework, uniqueFiles(batch), parse)
+  return batch.filter((h) => !isExcluded(h, excludes))
+}
+
+const SCOUT_CONCURRENCY = 5
+const SCOUT_MAX_CHARS = 100_000
+
+const trimEnd = (chunks: Chunk[], i: number, contentLen: number): number =>
+  i < chunks.length - 1 ? chunks[i + 1].chunkStart : Math.max(chunks[i].chunkEnd, contentLen)
+
+const toEntryInput = (file: string, block: ChunkBlock): EntryInput<ChunkBlock> => ({
+  item: block,
+  file,
+  content: { plain: [block.text] },
+})
+
+const excludedInCall = async (
+  framework: string,
+  inputs: EntryInput<ChunkBlock>[],
+  parse: typeof callAndParse
+): Promise<number[]> => {
+  const entries = assignIds(inputs)
+  const excludedIds = await filterEntries(framework, entries, parse)
+  return entries.filter((entry) => excludedIds.has(entry.id)).map((entry) => entry.item.chunkStart)
 }
 
 const scoutFileExcludes = async (
   file: string,
   framework: string,
-  files: FileStore
+  files: FileStore,
+  parse: typeof callAndParse
 ): Promise<Set<number>> => {
   const content = files[file]
   if (content === undefined) return new Set()
 
-  // A hit's chunkStart is an offset into the embeddable source, so an exclude can only
-  // match when the blocks are cut out of that same string.
   const source = getEmbeddableSource(file, files)
   if (source === null) return new Set()
 
@@ -52,8 +71,18 @@ const scoutFileExcludes = async (
   if (chunks.length === 0) return new Set()
 
   const blocks = buildChunkBlocks(source, chunks)
-  const excludedIds = await filterEntries(framework, toEntries(blocks))
-  return excludedChunkStarts(blocks, excludedIds)
+  const calls = pack(
+    blocks.map((block) => toEntryInput(file, block)),
+    { sizeOf: entrySize, maxChars: SCOUT_MAX_CHARS }
+  )
+
+  const excluded = new Set<number>()
+  for (const inputs of calls) {
+    for (const chunkStart of await excludedInCall(framework, inputs, parse)) {
+      excluded.add(chunkStart)
+    }
+  }
+  return excluded
 }
 
 const uniqueFiles = (batch: SearchHit[]): string[] => [...new Set(batch.map((h) => h.file))]
@@ -61,19 +90,21 @@ const uniqueFiles = (batch: SearchHit[]): string[] => [...new Set(batch.map((h) 
 const buildExcludeMap = async (
   files: FileStore,
   framework: string,
-  filesInBatch: string[]
+  filesInBatch: string[],
+  parse: typeof callAndParse
 ): Promise<Map<string, Set<number>>> => {
   const map = new Map<string, Set<number>>()
-  await processPool(
+  const pool = await processPool(
     filesInBatch,
     async (file) => {
-      const excludes = await scoutFileExcludes(file, framework, files)
-      map.set(file, excludes)
+      map.set(file, await scoutFileExcludes(file, framework, files, parse))
       return []
     },
     noop,
     { concurrency: SCOUT_CONCURRENCY }
   )
+  const failure = pool.failures[0]
+  if (failure) throw failure.error
   return map
 }
 
@@ -82,15 +113,4 @@ const isExcluded = (hit: SearchHit, excludes: Map<string, Set<number>>): boolean
   const fileExcludes = excludes.get(hit.file)
   if (!fileExcludes) return false
   return fileExcludes.has(hit.chunkStart)
-}
-
-export const scoutFilterBatch = async (
-  batch: SearchHit[],
-  framework: string,
-  files: FileStore
-): Promise<SearchHit[]> => {
-  if (framework.length === 0 || batch.length === 0) return batch
-
-  const excludes = await buildExcludeMap(files, framework, uniqueFiles(batch))
-  return batch.filter((h) => !isExcluded(h, excludes))
 }

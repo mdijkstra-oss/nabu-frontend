@@ -6,7 +6,7 @@ import { getBlock } from "~/lib/data-blocks/query"
 import { RegionsBlockSchema } from "~/domain/data-blocks/regions/schema"
 import { startRegionSync } from "~/lib/regions/sync"
 import { regionKinds } from "~/lib/regions/kinds/registry"
-import type { FindCall, MarkCall } from "~/lib/regions/detect/types"
+import type { FindCall, Hit, MarkCall } from "~/lib/regions/detect/types"
 import { writeRegionsBlock } from "./init"
 
 const PATH = "diary.md"
@@ -20,24 +20,28 @@ const TRANSCRIPT = [
 
 const DOCUMENT = `${TRANSCRIPT}\n`
 
-const find: FindCall = async (scan) => ({
-  hits:
-    scan.kind === "speaker"
-      ? [
-          { kind: "speaker", quote: "Rutte", hitSentence: 0, value: "rutte" },
-          { kind: "speaker", quote: "Kaag", hitSentence: 2, value: "kaag" },
-        ]
-      : [
-          {
-            kind: "date",
-            quote: "3 March 2026",
-            hitSentence: 0,
-            value: "2026-03-03T00:00:00.000Z",
-          },
-        ],
-  errors: [],
-  dropped: 0,
-})
+const HITS: Record<string, Hit[]> = {
+  speaker: [
+    { kind: "speaker", quote: "Rutte", hitSentence: 0, value: "rutte" },
+    { kind: "speaker", quote: "Kaag", hitSentence: 2, value: "kaag" },
+  ],
+  date: [
+    { kind: "date", quote: "3 March 2026", hitSentence: 0, value: "2026-03-03T00:00:00.000Z" },
+  ],
+}
+
+const find: FindCall = async (items, job) => {
+  for (const item of items) {
+    job.onAnswered(
+      item,
+      HITS[job.kind.id].filter(
+        (hit) =>
+          hit.hitSentence >= item.unit.firstSentence && hit.hitSentence <= item.unit.lastSentence
+      )
+    )
+  }
+  return { unrecorded: [] }
+}
 
 const RANGES: Record<string, [number, number]> = {
   "speaker:0": [0, 1],
@@ -45,17 +49,10 @@ const RANGES: Record<string, [number, number]> = {
   "date:0": [0, 3],
 }
 
-const mark: MarkCall = async (target) => {
-  const [startSentence, endSentence] = RANGES[`${target.kind}:${target.hitSentence}`]
-  return {
-    mark: {
-      kind: target.kind,
-      quote: target.quote,
-      hitSentence: target.hitSentence,
-      value: target.value,
-      startSentence,
-      endSentence,
-    },
+const mark: MarkCall = async (items, job) => {
+  for (const item of items) {
+    const [startSentence, endSentence] = RANGES[`${item.hit.kind}:${item.hit.hitSentence}`]
+    job.onAnswered(item, { ...item.hit, startSentence, endSentence })
   }
 }
 
@@ -66,13 +63,13 @@ const runOnePass = async (calls: string[]): Promise<void> => {
     subscribe: () => () => undefined,
     getKinds: regionKinds,
     detect: {
-      find: async (scan) => {
-        calls.push(`find:${scan.kind}`)
-        return find(scan)
+      find: async (items, job) => {
+        for (const item of items) calls.push(`find:${job.kind.id}:${item.unit.firstSentence}`)
+        return find(items, job)
       },
-      mark: async (target) => {
-        calls.push(`mark:${target.kind}:${target.quote}`)
-        return mark(target)
+      mark: async (items, job) => {
+        for (const item of items) calls.push(`mark:${item.hit.kind}:${item.hit.quote}`)
+        return mark(items, job)
       },
     },
     writeRegions: writeRegionsBlock,

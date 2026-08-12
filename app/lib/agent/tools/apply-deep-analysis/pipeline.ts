@@ -8,7 +8,7 @@ import { filterEnvelopes, type FilterStats } from "./step-filter"
 import { adjudicateEnvelopes, type AdjudStats } from "./step-adjudicate"
 import { POST_FIND_CONCURRENCY } from "./def"
 import type { Tracer } from "./trace"
-import { planBatches } from "./batching"
+import { packEnvelopes } from "./triplet"
 
 export interface PipelineResult {
   envelopes: Envelope[]
@@ -105,7 +105,7 @@ export const runAnalysisPipeline = async (
     return { envelopes: [], errors: [] }
   }
 
-  const batches = planBatches(incoming)
+  const batches = packEnvelopes(incoming)
 
   think(REVISITING)
   const { results: batchResults, failures } = await processPool(

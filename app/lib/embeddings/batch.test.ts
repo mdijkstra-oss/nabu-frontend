@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { batchBySize } from "./batch"
+import { legacyBatchBySize, varyingSizes } from "~/lib/calls/pack.fixture"
 import { MAX_BATCH_CHARS, PROVIDER_BATCH_LIMIT } from "./constants"
 
 const SMALL_CHARS = 300
@@ -10,9 +11,6 @@ const charsIn = (batch: number[]): number => batch.reduce((total, size) => total
 const sizeOf = (size: number): number => size
 
 const batch = (sizes: number[]): number[][] => batchBySize(sizes, sizeOf)
-
-const varyingSizes = (count: number): number[] =>
-  Array.from({ length: count }, (_, i) => SMALL_CHARS + ((i * 137) % (LARGE_CHARS - SMALL_CHARS)))
 
 const smallSizes = (count: number): number[] => Array.from({ length: count }, () => SMALL_CHARS)
 
@@ -66,6 +64,21 @@ describe("batchBySize", () => {
 
   it("makes no batch out of no chunks", () => {
     expect(batch([])).toEqual([])
+  })
+})
+
+describe("batchBySize equivalence with the batcher it replaced", () => {
+  const oversized = Math.floor(MAX_BATCH_CHARS / PROVIDER_BATCH_LIMIT) + 1
+  const lists = [
+    ...withinBounds,
+    {
+      name: "sizes past the character bound",
+      sizes: Array.from({ length: PROVIDER_BATCH_LIMIT * 2 }, () => oversized),
+    },
+  ]
+
+  it.each(lists)("$name: byte-identical batches", ({ sizes }) => {
+    expect(batch(sizes)).toEqual(legacyBatchBySize(sizes, sizeOf))
   })
 })
 

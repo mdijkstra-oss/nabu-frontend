@@ -2,9 +2,6 @@ import { isEmbeddableFile } from "~/lib/embeddings/filter"
 import type { FileStore } from "~/lib/files/store"
 import { indexFileSentences, indexProseSentences, proseOf } from "~/lib/text/halo"
 import { debounce } from "~/lib/utils/debounce"
-import { createKeyedQueue } from "~/lib/utils/keyed-queue"
-import { noop } from "~/lib/utils/noop"
-import { processPool } from "~/lib/utils/pool"
 import { canonicalizeRegionsBlock } from "~/domain/data-blocks/regions/canonical"
 import {
   isResolved,
@@ -12,13 +9,13 @@ import {
   type RegionsBlock,
   type ScannedUnit,
 } from "~/domain/data-blocks/regions/schema"
-import type { KindDescriptor, RegionValueType } from "./kinds/registry"
-import { toFindInput } from "./detect/find"
-import { toMarkInput } from "./detect/mark"
+import type { KindDescriptor } from "./kinds/registry"
+import { needsSharedVocabulary } from "./detect/find"
+import { occurrenceOf } from "./detect/hits"
 import { cutUnits } from "~/lib/cutting/units"
 import { computeWindows } from "./detect/window"
 import { resolveOverlaps } from "./detect/overlap"
-import type { Hit, Mark, ScanUnit, WindowedHit } from "./detect/types"
+import type { FindWork, Hit, Mark, MarkWork, ScanUnit, WindowedHit } from "./detect/types"
 import { hashSentenceRange, reconcileHits, reconcileMarks, type StoredMark } from "./reconcile"
 import { readStoredRegions } from "./stored"
 import type { RegionSyncDeps, RegionSyncHandle } from "./sync-types"
@@ -26,11 +23,6 @@ import type { RegionSyncDeps, RegionSyncHandle } from "./sync-types"
 export const REGION_SYNC_DEBOUNCE = 5_000
 export const REGION_SYNC_MAX_WAIT = 30_000
 export const MAX_CONSECUTIVE_WRITE_FAILURES = 3
-
-const NEEDS_SHARED_VOCABULARY: Record<RegionValueType, boolean> = {
-  string: true,
-  datetime: false,
-}
 
 interface DocumentPass {
   path: string
@@ -53,16 +45,6 @@ interface KindWork {
   markFailures: Hit[]
   marks: StoredMark[]
   unranged: Hit[]
-}
-
-interface FindItem {
-  work: KindWork
-  unit: ScanUnit
-}
-
-interface MarkItem {
-  work: KindWork
-  windowed: WindowedHit
 }
 
 interface WriteFailure {
@@ -107,7 +89,7 @@ const toUnrangedRow = (kind: KindDescriptor, hit: Hit): RegionRow => ({
 })
 
 const isSameOccurrence = (hit: Hit, other: Hit): boolean =>
-  hit.value === other.value && hit.hitSentence === other.hitSentence
+  occurrenceOf(hit) === occurrenceOf(other)
 
 const withRangeHash = (mark: Mark, sentences: string[]): StoredMark => ({
   ...mark,
@@ -171,22 +153,35 @@ const seedVocabulary = (files: FileStore, kindId: string): Set<string> => {
 const survivingMarksOf = (work: KindWork, everyHit: Hit[]): StoredMark[] =>
   work.relocatedMarks.filter((mark) => everyHit.some((hit) => isSameOccurrence(hit, mark)))
 
-const markItemsNeeding = (work: KindWork, surviving: StoredMark[]): MarkItem[] => {
+const markWindowsNeeding = (work: KindWork, surviving: StoredMark[]): WindowedHit[] => {
   const everyHit = [...work.keptHits, ...work.foundHits, ...work.unresolvedHits]
   const needing = [...work.keptHits, ...work.foundHits].filter(
     (hit) => !surviving.some((mark) => isSameOccurrence(hit, mark))
   )
 
-  return computeWindows(everyHit, work.doc.sentences)
-    .filter((windowed) => needing.some((hit) => isSameOccurrence(hit, windowed.hit)))
-    .map((windowed) => ({ work, windowed }))
+  return computeWindows(everyHit, work.doc.sentences).filter((windowed) =>
+    needing.some((hit) => isSameOccurrence(hit, windowed.hit))
+  )
 }
 
-const planMarkItems = (work: KindWork): MarkItem[] => {
+const planMarkWindows = (work: KindWork): WindowedHit[] => {
   const everyHit = [...work.keptHits, ...work.foundHits, ...work.unresolvedHits]
   work.survivingMarks = survivingMarksOf(work, everyHit)
-  return markItemsNeeding(work, work.survivingMarks)
+  return markWindowsNeeding(work, work.survivingMarks)
 }
+
+const toFindWork = (work: KindWork, unit: ScanUnit): FindWork => ({
+  file: work.doc.path,
+  unit,
+  sentences: work.doc.sentences.slice(unit.firstSentence, unit.lastSentence + 1),
+})
+
+const toMarkWork = (work: KindWork, { hit, window }: WindowedHit): MarkWork => ({
+  file: work.doc.path,
+  sentences: work.doc.sentences,
+  hit,
+  window,
+})
 
 const resolveWork = (work: KindWork): void => {
   const resolution = resolveOverlaps([...work.survivingMarks, ...work.freshMarks])
@@ -237,94 +232,65 @@ export const startRegionSync = (deps: RegionSyncDeps): RegionSyncHandle => {
 
   const reportProgress = (): void => deps.onProgress?.(processed, total)
 
-  // A unit enters the scanned record only when its call came back clean, so a transient
-  // failure is retried next tick rather than marked scanned forever.
-  const recordFound = (
-    work: KindWork,
-    unit: ScanUnit,
-    hits: Hit[],
-    known: Set<string> | null
-  ): void => {
+  const recordFound = (work: KindWork, unit: ScanUnit, hits: Hit[]): void => {
     work.scanned.push({ hash: unit.hash, firstSentence: unit.firstSentence })
     work.foundHits.push(...hits)
-    for (const hit of hits) known?.add(hit.value)
   }
 
-  const runFindItem = async (
-    { work, unit }: FindItem,
-    known: Set<string> | null
-  ): Promise<void> => {
-    if (aborted) return
-
-    const outcome = await deps.detect.find(
-      toFindInput(work.kind, unit, work.doc.sentences, known ? [...known].sort() : [])
-    )
-
-    if (aborted) return
-
+  const settleUnit = (): void => {
     processed++
     reportProgress()
-
-    for (const error of outcome.errors) {
-      console.error(`[region-sync] find failed for ${work.doc.path} (${work.kind.id}):`, error)
-    }
-    if (outcome.errors.length > 0) return
-
-    recordFound(work, unit, outcome.hits, known)
-  }
-
-  const runMarkItem = async ({ work, windowed }: MarkItem): Promise<void> => {
-    if (aborted) return
-
-    const outcome = await deps.detect.mark(
-      toMarkInput(windowed, work.kind.rules, work.doc.sentences)
-    )
-
-    if (aborted) return
-
-    if (outcome.error) {
-      console.error(
-        `[region-sync] mark failed for ${work.doc.path} (${work.kind.id}):`,
-        outcome.error
-      )
-    }
-    if (outcome.mark) work.freshMarks.push(outcome.mark)
-    else work.markFailures.push(windowed.hit)
   }
 
   const runKind = async (
     kind: KindDescriptor,
     works: KindWork[],
-    files: FileStore,
-    enqueue: <T>(key: string, fn: () => Promise<T>) => Promise<T>
+    files: FileStore
   ): Promise<void> => {
-    const serial = NEEDS_SHARED_VOCABULARY[kind.valueType]
-    const known = serial ? seedVocabulary(files, kind.id) : null
+    const known = needsSharedVocabulary(kind.valueType)
+      ? seedVocabulary(files, kind.id)
+      : new Set<string>()
 
-    const run = async <T>(items: T[], each: (item: T) => Promise<void>): Promise<void> => {
-      const guarded = async (item: T): Promise<never[]> => {
-        try {
-          await each(item)
-        } catch (e) {
-          console.error(`[region-sync] ${kind.id} work item failed:`, e)
-        }
-        return []
-      }
-
-      if (serial) {
-        await Promise.all(items.map((item) => enqueue(kind.id, () => guarded(item))))
-        return
-      }
-      await processPool(items, guarded, noop, {})
+    const findWorks = new Map<FindWork, KindWork>()
+    for (const work of works) {
+      for (const unit of work.unitsToFind) findWorks.set(toFindWork(work, unit), work)
     }
 
-    const findItems = works.flatMap((work) =>
-      work.unitsToFind.map((unit): FindItem => ({ work, unit }))
-    )
-    await run(findItems, (item) => runFindItem(item, known))
+    const found = await deps.detect.find([...findWorks.keys()], {
+      kind,
+      knownValues: known,
+      onAnswered: (item, hits) => {
+        if (aborted) return
+        settleUnit()
+        const work = findWorks.get(item)
+        if (work) recordFound(work, item.unit, hits)
+      },
+      onAbandoned: () => {
+        if (aborted) return
+        settleUnit()
+      },
+    })
     if (aborted) return
 
-    await run(works.flatMap(planMarkItems), runMarkItem)
+    processed += found.unrecorded.length
+    reportProgress()
+
+    const markWorks = new Map<MarkWork, KindWork>()
+    for (const work of works) {
+      for (const windowed of planMarkWindows(work)) markWorks.set(toMarkWork(work, windowed), work)
+    }
+
+    await deps.detect.mark([...markWorks.keys()], {
+      kind,
+      onAnswered: (item, mark) => {
+        if (aborted) return
+        markWorks.get(item)?.freshMarks.push(mark)
+      },
+      onFailed: (item) => {
+        if (aborted) return
+        markWorks.get(item)?.markFailures.push(item.hit)
+      },
+    })
     if (aborted) return
 
     works.forEach(resolveWork)
@@ -384,14 +350,12 @@ export const startRegionSync = (deps: RegionSyncDeps): RegionSyncHandle => {
       total = works.reduce((count, work) => count + work.unitsToFind.length, 0)
       reportProgress()
 
-      const enqueue = createKeyedQueue()
       await Promise.all(
         kinds.map((kind) =>
           runKind(
             kind,
             works.filter((work) => work.kind === kind),
-            files,
-            enqueue
+            files
           )
         )
       )

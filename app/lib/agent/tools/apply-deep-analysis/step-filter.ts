@@ -1,10 +1,11 @@
 import type { Envelope } from "./envelope"
-import type { ScopedSources, ContentResolver, Message } from "./messages"
+import type { ScopedSources, ContentResolver, ParseCall } from "./messages"
 import { callAndParse } from "../../client/call-parse"
-import { buildFilterMessages, FILTER_CTA, buildFilterSchema } from "./messages"
-import { renderEnvelopeBlocks } from "./triplet"
+import { buildAnalysisCallShape, FILTER_CTA, buildFilterSchema } from "./messages"
+import { buildEntryMessages } from "~/lib/calls/entry"
+import { envelopeEntries, findEnvelope } from "./triplet"
 import { collectCodeIds } from "./envelope"
-import { FILTER_ENDPOINT, FILTER_RUNS, FILTER_VOTERS, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
+import { FILTER_ENDPOINT, FILTER_RUNS, FILTER_VOTERS } from "./def"
 import { shouldShowModelIndex } from "./debug-flags"
 import type { Tracer, FilterEntry, FilterOutcome, FilterVote } from "./trace"
 
@@ -61,9 +62,23 @@ const mergeVotes = (votes: IndexedJudgment[]): MergedJudgment => {
   return { outcome: "contested", reason: keepReason, review: removeReason }
 }
 
-const callFilterModel = async (voter: string, messages: Message[], validCodes: string[]) => {
-  const schema = buildFilterSchema(validCodes)
-  return callAndParse(`${FILTER_ENDPOINT}.${voter}`, messages, schema)
+// Counted from the deduped judgment maps and bucketed by the envelope's own
+// code, so a voter repeating an id or echoing a batch-mate's code cannot skew
+// the table.
+const keepStats = (
+  envelopes: readonly Envelope[],
+  perModelJudgments: readonly Map<string, Judgment>[]
+): FilterStats => {
+  const stats: FilterStats = new Map()
+  for (const env of envelopes) {
+    for (let idx = 0; idx < perModelJudgments.length; idx++) {
+      if (perModelJudgments[idx].get(env.id)?.judgment !== "keep") continue
+      const tally = stats.get(env.code) ?? [0, 0]
+      tally[idx] += 1
+      stats.set(env.code, tally)
+    }
+  }
+  return stats
 }
 
 const buildVoteList = (
@@ -87,42 +102,41 @@ export const filterEnvelopes = async (
   envelopes: Envelope[],
   sources: ScopedSources,
   resolve: ContentResolver,
-  tracer?: Tracer
+  tracer?: Tracer,
+  parse: ParseCall = callAndParse
 ): Promise<FilterStepResult> => {
   if (envelopes.length === 0) return { surviving: [], removed: [], errors: [], stats: new Map() }
   tracer?.setVoterCount(FILTER_RUNS)
 
   const codeIds = collectCodeIds(envelopes)
-  const { blocks, mapping } = renderEnvelopeBlocks(envelopes, SPAN_STEP_CONTEXT_SENTENCES)
-  const messages = buildFilterMessages(blocks, codeIds, sources, resolve, FILTER_CTA)
+  const entries = envelopeEntries(envelopes)
+  const shape = buildAnalysisCallShape(codeIds, sources, resolve, FILTER_CTA)
+  const messages = buildEntryMessages(shape, entries)
 
   const validCodes = [...codeIds]
-  const modelCalls = FILTER_VOTERS.map((voter) => callFilterModel(voter, messages, validCodes))
+  const modelCalls = FILTER_VOTERS.map((voter) =>
+    parse(`${FILTER_ENDPOINT}.${voter}`, messages, buildFilterSchema(validCodes))
+  )
   const results = await Promise.all(modelCalls)
 
   const errors: string[] = []
   const perModelJudgments: Map<string, Judgment>[] = []
-  const stats: FilterStats = new Map()
 
-  for (let idx = 0; idx < results.length; idx++) {
-    const result = results[idx]
+  for (const result of results) {
     const judgments = new Map<string, Judgment>()
     if (!result.ok) {
       errors.push(result.error)
     } else {
       for (const r of result.data.results) {
-        const m = mapping.find((entry) => entry.index === r.id)
-        if (!m) continue
-        judgments.set(m.envelopeId, { judgment: r.judgment, reason: r.reason })
-        if (r.judgment === "keep") {
-          const entry = stats.get(r.code) ?? [0, 0]
-          entry[idx] += 1
-          stats.set(r.code, entry)
-        }
+        const envelope = findEnvelope(entries, r.id)
+        if (!envelope) continue
+        judgments.set(envelope.id, { judgment: r.judgment, reason: r.reason })
       }
     }
     perModelJudgments.push(judgments)
   }
+
+  const stats = keepStats(envelopes, perModelJudgments)
 
   const surviving: Envelope[] = []
   const removed: Envelope[] = []

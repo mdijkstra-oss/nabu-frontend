@@ -23,13 +23,13 @@ import { sqlQueriesFilesTable } from "./semantic"
 import { probe } from "./probe"
 import { capStage } from "./cap"
 import { mergeStage } from "./merge"
-import { verdict, FILTER_BATCH_SIZE } from "./verdict"
+import { verdict, FILTER_ITEM_CAP } from "./verdict"
 import { trim } from "./trim"
 import { extendRegionsForAnnotations } from "./extend-annotations"
 import { isDebugOn } from "~/lib/debug/options"
 import { yieldToBrowser } from "~/lib/utils/async"
 
-const computeMaxBarren = (target: number): number => Math.ceil(target / FILTER_BATCH_SIZE)
+const computeMaxBarren = (target: number): number => Math.ceil(target / FILTER_ITEM_CAP)
 
 export interface PipelineResult {
   hits: SearchHit[]
@@ -63,11 +63,16 @@ export const mergeByScore = (sorted: SearchHit[], incoming: SearchHit[]): Search
   return merged
 }
 
-const applyCap = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  isDebugOn("skipCap") ? hits : capStage(hits, files)
+type Stage = (hits: SearchHit[], files: FileStore) => SearchHit[]
 
-const applyMerge = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  isDebugOn("skipMerge") ? hits : mergeStage(hits, files)
+const unlessDebug =
+  (flag: Parameters<typeof isDebugOn>[0], stage: Stage): Stage =>
+  (hits, files) =>
+    isDebugOn(flag) ? hits : stage(hits, files)
+
+const applyCap = unlessDebug("skipCap", capStage)
+
+const applyMerge = unlessDebug("skipMerge", mergeStage)
 
 const logFinalHits = (hits: SearchHit[]): void => {
   console.debug(
@@ -81,11 +86,9 @@ const logFinalHits = (hits: SearchHit[]): void => {
   )
 }
 
-const applyTrim = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  isDebugOn("skipTrim") ? hits : trim(hits, files)
+const applyTrim = unlessDebug("skipTrim", trim)
 
-const applyExtend = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  isDebugOn("skipAnnotationExtend") ? hits : extendRegionsForAnnotations(hits, files)
+const applyExtend = unlessDebug("skipAnnotationExtend", extendRegionsForAnnotations)
 
 const tail = (hits: SearchHit[], files: FileStore): SearchHit[] =>
   applyExtend(applyTrim(hits, files), files)
@@ -105,14 +108,12 @@ const runVerdictWithTail = async (
     onResults?.(out)
   }
 
-  const { consumed, barren } = await verdict(hits, intent, framework, files, onBatch, {
+  const { rawRemaining, stop } = await verdict(hits, intent, framework, files, onBatch, {
     target,
     maxBarren: isDebugOn("skipBarrenCheck") ? undefined : computeMaxBarren(target),
   })
 
-  const rawConsumed = Math.min(consumed * FILTER_BATCH_SIZE, hits.length)
-  const rawRemaining = hits.slice(rawConsumed)
-  const exhausted = rawRemaining.length === 0 || barren
+  const exhausted = stop === "barren" || (stop === undefined && rawRemaining.length === 0)
 
   return { hits: sortByScore(collected), rawRemaining, exhausted }
 }

@@ -30,32 +30,34 @@ const ANNOTATION = {
 const DOCUMENT = `${TRANSCRIPT}\n\n\`\`\`json-annotations\n${JSON.stringify({ annotations: [ANNOTATION] })}\n\`\`\`\n`
 
 // Two speakers, each owning two sentences: what a real find/mark pair returns for this
-// transcript, with the gateway replaced at the call boundary and nothing below it faked.
-const find: FindCall = async (scan) => ({
-  hits:
-    scan.kind === "speaker"
-      ? [
-          { kind: "speaker", quote: "Rutte", hitSentence: 0, value: "rutte" },
-          { kind: "speaker", quote: "Kaag", hitSentence: 2, value: "kaag" },
-        ]
-      : [],
-  errors: [],
-  dropped: 0,
-})
+// transcript, with the detectors faked at the DetectCalls seam and nothing below it.
+const HITS = [
+  { kind: "speaker", quote: "Rutte", hitSentence: 0, value: "rutte" },
+  { kind: "speaker", quote: "Kaag", hitSentence: 2, value: "kaag" },
+]
+
+const find: FindCall = async (items, job) => {
+  for (const item of items) {
+    job.onAnswered(
+      item,
+      job.kind.id === "speaker"
+        ? HITS.filter(
+            (hit) =>
+              hit.hitSentence >= item.unit.firstSentence &&
+              hit.hitSentence <= item.unit.lastSentence
+          )
+        : []
+    )
+  }
+  return { unrecorded: [] }
+}
 
 const RANGES: Record<number, [number, number]> = { 0: [0, 1], 2: [2, 3] }
 
-const mark: MarkCall = async (target) => {
-  const [startSentence, endSentence] = RANGES[target.hitSentence]
-  return {
-    mark: {
-      kind: target.kind,
-      quote: target.quote,
-      hitSentence: target.hitSentence,
-      value: target.value,
-      startSentence,
-      endSentence,
-    },
+const mark: MarkCall = async (items, job) => {
+  for (const item of items) {
+    const [startSentence, endSentence] = RANGES[item.hit.hitSentence]
+    job.onAnswered(item, { ...item.hit, startSentence, endSentence })
   }
 }
 
@@ -142,13 +144,13 @@ describe("the walking skeleton", () => {
       subscribe: () => () => undefined,
       getKinds: speakerOnly,
       detect: {
-        find: async (scan) => {
-          calls.push(`find:${scan.kind}`)
-          return find(scan)
+        find: async (items, job) => {
+          for (const item of items) calls.push(`find:${job.kind.id}:${item.unit.firstSentence}`)
+          return find(items, job)
         },
-        mark: async (target) => {
-          calls.push(`mark:${target.quote}`)
-          return mark(target)
+        mark: async (items, job) => {
+          for (const item of items) calls.push(`mark:${item.hit.quote}`)
+          return mark(items, job)
         },
       },
       writeRegions: writeRegionsBlock,

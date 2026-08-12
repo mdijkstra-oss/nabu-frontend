@@ -1,10 +1,14 @@
 import type { Envelope } from "./envelope"
-import type { ScopedSources, ContentResolver } from "./messages"
+import type { ScopedSources, ContentResolver, ParseCall } from "./messages"
 import { callAndParse } from "../../client/call-parse"
-import { buildAdjudicateMessages, ADJUDICATE_CTA, buildAdjudicateSchema } from "./messages"
-import { renderEnvelopeBlocks } from "./triplet"
+import { buildAnalysisCallShape, ADJUDICATE_CTA, buildAdjudicateSchema } from "./messages"
+import { buildEntryMessages } from "~/lib/calls/entry"
+import { envelopeEntries, findEnvelope, packEnvelopes } from "./triplet"
 import { collectCodeIds, isContestedEnvelope } from "./envelope"
-import { ADJUDICATE_ENDPOINT, SPAN_STEP_CONTEXT_SENTENCES } from "./def"
+import { ADJUDICATE_ENDPOINT, POST_FIND_CONCURRENCY } from "./def"
+import { processPool } from "~/lib/utils/pool"
+import { noop } from "~/lib/utils/noop"
+import { errorMessage } from "~/lib/utils/error"
 import type { Tracer, AdjudEntry } from "./trace"
 
 export interface AdjudCounts {
@@ -39,45 +43,28 @@ export const applyVerdict = (e: Envelope, v: Verdict): Envelope | null => {
   }
 }
 
-const adjudEntry = (e: Envelope, verdict: Verdict): AdjudEntry => ({
-  code: e.code,
-  start: e.markedStart,
-  end: e.markedEnd,
-  text: e.markedText,
-  verdict: verdict.judgment,
-  reason: verdict.reason,
-})
-
-const ambigVerdict = (e: Envelope): Verdict => ({
-  judgment: "inconsistent",
-  reason: e.review ?? "no verdict returned",
-})
-
 export const adjudicateEnvelopes = async (
   allSurvivors: Envelope[],
   sources: ScopedSources,
   resolve: ContentResolver,
-  tracer?: Tracer
+  tracer?: Tracer,
+  parse: ParseCall = callAndParse
 ): Promise<AdjudicateStepResult> => {
   const contested = allSurvivors.filter(isContestedEnvelope)
   if (contested.length === 0) return { envelopes: allSurvivors, errors: [], stats: new Map() }
 
-  const codeIds = collectCodeIds(allSurvivors)
-  const { blocks, mapping } = renderEnvelopeBlocks(contested, SPAN_STEP_CONTEXT_SENTENCES)
-
-  const messages = buildAdjudicateMessages(blocks, codeIds, sources, resolve, ADJUDICATE_CTA)
-
-  const validCodes = [...codeIds]
-  const schema = buildAdjudicateSchema(validCodes)
-  const result = await callAndParse(ADJUDICATE_ENDPOINT, messages, schema)
-
-  if (!result.ok) return { envelopes: allSurvivors, errors: [result.error], stats: new Map() }
+  const { results } = await processPool(
+    packEnvelopes(contested),
+    async (batch) => [await adjudicateBatch(batch, sources, resolve, parse)],
+    noop,
+    { concurrency: POST_FIND_CONCURRENCY }
+  )
 
   const verdicts = new Map<string, Verdict>()
-  for (const r of result.data.results) {
-    const m = mapping.find((entry) => entry.index === r.id)
-    if (!m) continue
-    verdicts.set(m.envelopeId, { judgment: r.judgment, reason: r.reason })
+  const errors: string[] = []
+  for (const batch of results) {
+    for (const [envelopeId, verdict] of batch.verdicts) verdicts.set(envelopeId, verdict)
+    errors.push(...batch.errors)
   }
 
   const stats: AdjudStats = new Map()
@@ -108,5 +95,51 @@ export const adjudicateEnvelopes = async (
     tracer?.pushAdjud(env.code, adjudEntry(env, v))
   }
 
-  return { envelopes: final, errors: [], stats }
+  return { envelopes: final, errors, stats }
 }
+
+interface BatchVerdicts {
+  verdicts: Map<string, Verdict>
+  errors: string[]
+}
+
+const adjudicateBatch = async (
+  batch: Envelope[],
+  sources: ScopedSources,
+  resolve: ContentResolver,
+  parse: ParseCall
+): Promise<BatchVerdicts> => {
+  const codeIds = collectCodeIds(batch)
+  const entries = envelopeEntries(batch)
+  const shape = buildAnalysisCallShape(codeIds, sources, resolve, ADJUDICATE_CTA)
+  const messages = buildEntryMessages(shape, entries)
+
+  try {
+    const result = await parse(ADJUDICATE_ENDPOINT, messages, buildAdjudicateSchema([...codeIds]))
+    if (!result.ok) return { verdicts: new Map(), errors: [result.error] }
+
+    const verdicts = new Map<string, Verdict>()
+    for (const r of result.data.results) {
+      const envelope = findEnvelope(entries, r.id)
+      if (!envelope) continue
+      verdicts.set(envelope.id, { judgment: r.judgment, reason: r.reason })
+    }
+    return { verdicts, errors: [] }
+  } catch (e) {
+    return { verdicts: new Map(), errors: [errorMessage(e)] }
+  }
+}
+
+const adjudEntry = (e: Envelope, verdict: Verdict): AdjudEntry => ({
+  code: e.code,
+  start: e.markedStart,
+  end: e.markedEnd,
+  text: e.markedText,
+  verdict: verdict.judgment,
+  reason: verdict.reason,
+})
+
+const ambigVerdict = (e: Envelope): Verdict => ({
+  judgment: "inconsistent",
+  reason: e.review ?? "no verdict returned",
+})

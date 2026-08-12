@@ -9,36 +9,11 @@ import { stripBoundaryComments } from "~/lib/patch/resolve/json-boundary"
 import { calloutToDeepSource } from "~/domain/data-blocks/callout/definition"
 import { getCallouts } from "~/domain/data-blocks/callout/selectors"
 import { GENERATED_SUFFIX } from "~/lib/files/filename"
-import type { MessageContent } from "../../client/convert"
+import { markCacheBreakpoint, type Message } from "~/lib/calls/messages"
+import type { CallShape } from "~/lib/calls/entry"
+export type { ParseCall } from "../../client/call-parse"
 
-export interface Message {
-  type: "message"
-  role: "system" | "user"
-  content: MessageContent
-}
-
-const textOf = (content: MessageContent): string =>
-  typeof content === "string" ? content : content.map((part) => part.text).join("")
-
-// The cached prefix ends at the last message, so the breakpoint rides on its
-// final content part. Nothing preceding means nothing to cache.
-export const markCacheBreakpoint = (messages: Message[]): Message[] => {
-  const last = messages.at(-1)
-  if (!last) return messages
-  return [
-    ...messages.slice(0, -1),
-    {
-      ...last,
-      content: [
-        {
-          type: "input_text",
-          text: textOf(last.content),
-          prompt_cache_breakpoint: { mode: "explicit" },
-        },
-      ],
-    },
-  ]
-}
+export { markCacheBreakpoint, type Message }
 
 export interface ScopedSources {
   framework: string[]
@@ -194,25 +169,17 @@ export const buildAdjudicateSchema = (validCodes: string[]) =>
     ),
   })
 
-const buildTargetMessages = (
-  targetBlocks: string[],
+// The framework prefix carries its own breakpoint so the provider's prompt
+// cache reuses it across differently-grouped batches.
+export const buildAnalysisCallShape = (
   codeIds: ReadonlySet<string>,
   sources: ScopedSources,
   resolve: ContentResolver,
   callToAction: string
-): Message[] => {
-  const messages: Message[] = markCacheBreakpoint(resolvePathMessages(sources.framework, resolve))
-  messages.push(
-    ...markCacheBreakpoint(
-      buildCodeSourceMessages(codeIds, { framework: [], dimension: sources.dimension }, resolve)
-    )
-  )
-  for (const block of targetBlocks) {
-    messages.push({ type: "message", role: "system", content: block })
-  }
-  messages.push({ type: "message", role: "user", content: callToAction })
-  return messages
-}
-
-export const buildFilterMessages = buildTargetMessages
-export const buildAdjudicateMessages = buildTargetMessages
+): CallShape => ({
+  stable: [
+    ...markCacheBreakpoint(resolvePathMessages(sources.framework, resolve)),
+    ...buildCodeSourceMessages(codeIds, { framework: [], dimension: sources.dimension }, resolve),
+  ],
+  callToAction,
+})

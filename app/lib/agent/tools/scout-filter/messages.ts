@@ -1,28 +1,10 @@
-interface Message {
-  type: "message"
-  role: "system" | "user"
-  content: string
-}
+import { toSystem } from "~/lib/agent/client/convert"
+import { buildEntryMessages, type Entry } from "~/lib/calls/entry"
+import type { Message } from "~/lib/calls/messages"
 
-export interface NumberedEntry {
-  index: number
-  text: string
-}
-
-const formatNumberedEntries = (entries: NumberedEntry[]): string =>
-  entries.map((e) => `<entry id="${e.index}">\n${e.text}\n</entry>`).join("\n\n")
-
-const CTA = "Return entry numbers to exclude from analysis."
+const CTA = "Return entry id ranges to exclude from analysis."
 
 export const buildScoutFilterMessages = (
   framework: string,
-  entries: NumberedEntry[]
-): Message[] => {
-  const messages: Message[] = []
-  if (framework.length > 0) {
-    messages.push({ type: "message", role: "system", content: framework })
-  }
-  messages.push({ type: "message", role: "system", content: formatNumberedEntries(entries) })
-  messages.push({ type: "message", role: "user", content: CTA })
-  return messages
-}
+  entries: readonly Entry<unknown>[]
+): Message[] => buildEntryMessages({ stable: [toSystem(framework)], callToAction: CTA }, entries)

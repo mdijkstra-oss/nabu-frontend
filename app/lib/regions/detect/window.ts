@@ -1,11 +1,47 @@
 import { CHUNK_CHARS } from "~/lib/embeddings/constants"
-import type { Hit, SentenceWindow, WindowedHit } from "./types"
+import { groupBy } from "~/lib/utils/group"
+import type { Hit, MarkWork, SentenceWindow, Stretch, WindowedHit } from "./types"
 import { groupByKind } from "./group"
 
 export const MARK_WINDOW_CHARS = 8 * CHUNK_CHARS
 
+export const MAX_STRETCH_OCCURRENCES = 10
+
+// Windows of the same kind in the same document whose ranges overlap or touch merge,
+// greedily in document order; a stretch closes at MAX_STRETCH_OCCURRENCES and the next
+// opens at the following hit's window, so the seam duplicates a little context once.
+export const coalesceStretches = (works: MarkWork[]): Stretch[] =>
+  [...groupBy(works, streamOf).values()].flatMap(coalesceStream)
+
 export const sliceWindow = (sentences: string[], window: SentenceWindow): string[] =>
   sentences.slice(window.start, window.end + 1)
+
+const streamOf = (work: MarkWork): string => `${work.file}\u0000${work.hit.kind}`
+
+const joinsStretch = (stretch: Stretch, work: MarkWork): boolean =>
+  stretch.works.length < MAX_STRETCH_OCCURRENCES && work.window.start <= stretch.window.end + 1
+
+const coalesceStream = (works: MarkWork[]): Stretch[] => {
+  const sorted = [...works].sort((a, b) => a.hit.hitSentence - b.hit.hitSentence)
+  const stretches: Stretch[] = []
+
+  for (const work of sorted) {
+    const open = stretches.at(-1)
+    if (open && joinsStretch(open, work)) {
+      open.works.push(work)
+      open.window = { start: open.window.start, end: Math.max(open.window.end, work.window.end) }
+    } else {
+      stretches.push({
+        file: work.file,
+        sentences: work.sentences,
+        window: { ...work.window },
+        works: [work],
+      })
+    }
+  }
+
+  return stretches
+}
 
 const byHitSentence = (a: Hit, b: Hit): number => a.hitSentence - b.hitSentence
 

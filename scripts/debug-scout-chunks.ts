@@ -2,7 +2,6 @@ import { readFileSync, mkdirSync, writeFileSync } from "node:fs"
 import { chunkLines, CHUNK_TARGET_CHARS } from "~/lib/data-blocks/chunk-lines"
 import { parseCodeBlocks, parseBlockJson, isLineInsideBlock, type CodeBlock } from "~/lib/data-blocks/parse"
 import { splitBySentences } from "~/lib/text/split"
-import { formatNumberedPassage } from "~/lib/text/format"
 
 const SINGLETONS = new Set(["json-attributes", "json-settings"])
 const LABEL_KEYS: Record<string, string> = { "json-chart": "title", "json-callout": "title" }
@@ -59,7 +58,7 @@ const extractLines = (content: string, startLine: number, endLine: number): stri
 const splitSentences = splitBySentences()
 const numberSection = (text: string): { sentences: string[]; numbered: string } => {
   const sentences = splitSentences(text).map((s) => s.text)
-  return { sentences, numbered: formatNumberedPassage(text) }
+  return { sentences, numbered: sentences.map((s, i) => `[${i + 1}] ${s}`).join("\n") }
 }
 
 const inputPath = process.argv[2]

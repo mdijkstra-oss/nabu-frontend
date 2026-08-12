@@ -15,18 +15,23 @@ const TRANSCRIPT = [
   "She wanted another week to check the figures.",
 ].join(" ")
 
-const find: FindCall = async (scan) => ({
-  hits:
-    scan.kind === "speaker"
-      ? [{ kind: "speaker", quote: "Rutte", hitSentence: 0, value: "rutte" }]
-      : [],
-  errors: [],
-  dropped: 0,
-})
+const find: FindCall = async (items, job) => {
+  for (const item of items) {
+    job.onAnswered(
+      item,
+      job.kind.id === "speaker" && item.unit.firstSentence === 0
+        ? [{ kind: "speaker", quote: "Rutte", hitSentence: 0, value: "rutte" }]
+        : []
+    )
+  }
+  return { unrecorded: [] }
+}
 
-const mark: MarkCall = async (target) => ({
-  mark: { ...target, startSentence: 0, endSentence: 1 },
-})
+const mark: MarkCall = async (items, job) => {
+  for (const item of items) {
+    job.onAnswered(item, { ...item.hit, startSentence: 0, endSentence: 1 })
+  }
+}
 
 const speakerOnly = () => regionKinds().filter((kind) => kind.id === "speaker")
 

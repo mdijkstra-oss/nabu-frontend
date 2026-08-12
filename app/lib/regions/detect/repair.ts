@@ -1,6 +1,13 @@
-import { toSentenceIndex } from "./payload"
-import type { MarkResult } from "./schema"
-import type { MarkInput } from "./types"
+export interface RepairTarget {
+  hitSentence: number
+  windowStart: number
+  windowEnd: number
+}
+
+export interface ReportedRange {
+  start: number
+  end: number
+}
 
 export interface RepairedRange {
   startSentence: number
@@ -10,9 +17,9 @@ export interface RepairedRange {
 const clamp = (value: number, low: number, high: number): number =>
   Math.min(high, Math.max(low, value))
 
-export const repairRange = (target: MarkInput, reported: MarkResult): RepairedRange => {
-  const start = clamp(toSentenceIndex(reported.start), target.windowStart, target.windowEnd)
-  const end = clamp(toSentenceIndex(reported.end), target.windowStart, target.windowEnd)
+export const repairRange = (target: RepairTarget, reported: ReportedRange): RepairedRange => {
+  const start = clamp(reported.start, target.windowStart, target.windowEnd)
+  const end = clamp(reported.end, target.windowStart, target.windowEnd)
   const collapsed =
     end < start ? { start: target.hitSentence, end: target.hitSentence } : { start, end }
 

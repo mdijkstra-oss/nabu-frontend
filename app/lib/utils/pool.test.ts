@@ -223,6 +223,63 @@ describe("processPool", () => {
         expect(failures.map((f) => f.item).sort()).toEqual([1, 2, 3])
       },
     },
+    {
+      name: "only empty resolutions count barren; alternating rejections never trip the failure stop",
+      check: async () => {
+        const fn = async (n: number): Promise<number[]> => {
+          if (n % 2 === 1) throw new Error("boom")
+          return []
+        }
+        const { stop, barren, failures, consumed } = await processPool(
+          [1, 2, 3, 4, 5, 6, 7, 8],
+          fn,
+          noop as (results: number[]) => void,
+          { concurrency: 1, maxBarren: 2 }
+        )
+        expect(stop).toBe("barren")
+        expect(barren).toBe(true)
+        expect(failures).toHaveLength(2)
+        expect(consumed).toBe(4)
+      },
+    },
+    {
+      name: "three consecutive rejections settle with the failure stop, undispatched items unconsumed",
+      check: async () => {
+        const fn = async (): Promise<number[]> => {
+          throw new Error("down")
+        }
+        const { stop, barren, failures, consumed, results } = await processPool(
+          [1, 2, 3, 4, 5],
+          fn,
+          noop as (results: number[]) => void,
+          { concurrency: 1, maxBarren: 2 }
+        )
+        expect(stop).toBe("failures")
+        expect(barren).toBe(false)
+        expect(results).toEqual([])
+        expect(failures).toHaveLength(3)
+        expect(consumed).toBe(3)
+      },
+    },
+    {
+      name: "a resolved call resets the failure streak",
+      check: async () => {
+        const fn = async (n: number): Promise<number[]> => {
+          if (n === 0) throw new Error("boom")
+          return [n]
+        }
+        const { stop, failures, results, consumed } = await processPool(
+          [0, 0, 1, 0, 0, 2],
+          fn,
+          noop as (results: number[]) => void,
+          { concurrency: 1 }
+        )
+        expect(stop).toBeUndefined()
+        expect(results).toEqual([1, 2])
+        expect(failures).toHaveLength(4)
+        expect(consumed).toBe(6)
+      },
+    },
   ]
 
   it.each(behaviorCases)("$name", ({ check }) => check())

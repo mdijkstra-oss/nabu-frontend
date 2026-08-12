@@ -1,4 +1,5 @@
-import type { RegionValueType } from "~/lib/regions/kinds/registry"
+import { UNIT_CEILING_CHARS } from "~/lib/cutting/constants"
+import type { KindDescriptor } from "~/lib/regions/kinds/registry"
 import type { Unit } from "~/lib/cutting/units"
 
 // Every index here is a 0-based position in indexFileSentences(raw), over the whole
@@ -29,47 +30,59 @@ export interface WindowedHit {
   window: SentenceWindow
 }
 
-export interface FindInput {
-  kind: string
-  rules: string
-  knownValues: string[]
-  valueType: RegionValueType
-  firstSentence: number
+export interface FindWork {
+  file: string
+  unit: ScanUnit
   sentences: string[]
 }
 
-export interface FindOutcome {
-  hits: Hit[]
-  errors: string[]
-  dropped: number
+export interface FindJob {
+  kind: KindDescriptor
+  knownValues: Set<string>
+  onAnswered: (work: FindWork, hits: Hit[]) => void
+  onAbandoned?: (work: FindWork) => void
 }
 
-export interface MarkInput {
-  kind: string
-  rules: string
-  quote: string
-  hitSentence: number
-  value: string
-  windowStart: number
-  windowEnd: number
+export interface FindRunResult {
+  unrecorded: FindWork[]
+}
+
+export type FindCall = (items: FindWork[], job: FindJob) => Promise<FindRunResult>
+
+export interface MarkWork {
+  file: string
   sentences: string[]
+  hit: Hit
+  window: SentenceWindow
 }
 
-export interface MarkOutcome {
-  mark: Mark | null
-  error?: string
+export interface MarkJob {
+  kind: KindDescriptor
+  onAnswered: (work: MarkWork, mark: Mark) => void
+  onFailed: (work: MarkWork) => void
 }
 
-export type FindCall = (input: FindInput) => Promise<FindOutcome>
-
-export type MarkCall = (input: MarkInput) => Promise<MarkOutcome>
+export type MarkCall = (items: MarkWork[], job: MarkJob) => Promise<void>
 
 export interface DetectCalls {
   find: FindCall
   mark: MarkCall
 }
 
+export interface Stretch {
+  file: string
+  sentences: string[]
+  window: SentenceWindow
+  works: MarkWork[]
+}
+
 export interface OverlapResolution {
   marks: Mark[]
   unranged: Hit[]
 }
+
+export const FIND_MAX_ITEMS = 20
+
+// One per-call character budget for both detect stages; find and mark diverge
+// here first if they ever need to.
+export const DETECT_CALL_MAX_CHARS = FIND_MAX_ITEMS * UNIT_CEILING_CHARS

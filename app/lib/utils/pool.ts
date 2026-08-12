@@ -1,6 +1,7 @@
 import { getActiveSignal } from "~/lib/utils/signal"
 
 const DEFAULT_CONCURRENCY = 4
+const MAX_CONSECUTIVE_FAILURES = 3
 
 export interface PoolFailure<T> {
   item: T
@@ -20,15 +21,22 @@ export interface PoolResult<T, R> {
   failures: PoolFailure<T>[]
   consumed: number
   barren: boolean
+  stop?: "barren" | "failures"
 }
 
 export const processPool = <T, R>(
   items: T[],
   fn: (item: T) => Promise<R[]>,
   onResults: (results: R[]) => void,
-  opts: PoolOptions
+  options: PoolOptions
 ): Promise<PoolResult<T, R>> => {
-  const { concurrency = DEFAULT_CONCURRENCY, target, warmup = 0, maxBarren, onItemComplete } = opts
+  const {
+    concurrency = DEFAULT_CONCURRENCY,
+    target,
+    warmup = 0,
+    maxBarren,
+    onItemComplete,
+  } = options
   const signal = getActiveSignal()
   const all: R[] = []
   const failed: PoolFailure<T>[] = []
@@ -37,6 +45,7 @@ export const processPool = <T, R>(
   let completed = 0
   let done = false
   let barrenSinceLastHit = 0
+  let consecutiveFailures = 0
 
   return new Promise<PoolResult<T, R>>((resolve) => {
     const isAborted = (): boolean => signal?.aborted === true
@@ -44,11 +53,19 @@ export const processPool = <T, R>(
       done || (inFlight === 0 && (cursor >= items.length || isAborted()))
     const hasReachedTarget = (): boolean => target !== undefined && all.length >= target
     const isDryRun = (): boolean => maxBarren !== undefined && barrenSinceLastHit >= maxBarren
+    const isFailedOut = (): boolean => consecutiveFailures >= MAX_CONSECUTIVE_FAILURES
 
     const settle = () => {
       if (!done) {
         done = true
-        resolve({ results: [...all], failures: [...failed], consumed: cursor, barren: isDryRun() })
+        const stop = isFailedOut() ? "failures" : isDryRun() ? "barren" : undefined
+        resolve({
+          results: [...all],
+          failures: [...failed],
+          consumed: cursor,
+          barren: stop === "barren",
+          stop,
+        })
       }
     }
 
@@ -63,6 +80,7 @@ export const processPool = <T, R>(
           (results) => {
             inFlight--
             completed++
+            consecutiveFailures = 0
             if (done) return
 
             onItemComplete?.(completed, items.length)
@@ -84,14 +102,14 @@ export const processPool = <T, R>(
           (error: unknown) => {
             inFlight--
             completed++
-            barrenSinceLastHit++
+            consecutiveFailures++
             failed.push({ item, error })
             console.error("[pool] item failed:", error)
             if (done) return
 
             onItemComplete?.(completed, items.length)
 
-            if (isDryRun() || isComplete()) {
+            if (isFailedOut() || isComplete()) {
               settle()
             } else {
               next()

@@ -18,7 +18,7 @@ The model's answers keep their shape: `{ id, code, judgment, reason }` per envel
 
 - `planBatches` is replaced by the packer with `groupKey` = code, `maxGroups` 3, cap 20, budget 40,000 ([packing.md](packing.md)), sized on the rendered entry.
 - The filter's two voters per batch are unchanged; both votes still come from the same rendered payload.
-- Adjudication packs its contested envelopes with the same numbers and runs its calls through a pool at concurrency 5. A contested envelope is now judged with only its batch as company — a deliberate change named in [spec.md](spec.md); nothing in the adjudication prompt reasons across envelopes, so the isolation the filter's distribution warning already demands extends to adjudication's batches.
+- Adjudication packs its contested envelopes with the same numbers and runs its calls through a pool at concurrency 5. A contested envelope is now judged with only its batch as company — a deliberate change named in [spec.md](spec.md); nothing in the adjudication prompt reasons across envelopes, so the isolation the filter's distribution warning already demands extends to adjudication's batches. Each adjudication call scopes its code sources and its schema's code enum to its batch's codes, as the filter already does per batch — the old single call scoped to every survivor's code, contested or not, which a bounded call has no use for.
 
 ### Silence and failure
 

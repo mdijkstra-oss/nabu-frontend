@@ -1,6 +1,6 @@
 import { z } from "zod"
-import { callLlm } from "~/lib/agent/client/fetch"
-import { extractText, toResponseFormat, toSystem, toUser } from "~/lib/agent/client/convert"
+import { callAndParse } from "~/lib/agent/client/call-parse"
+import { toSystem, toUser } from "~/lib/agent/client/convert"
 
 const ENDPOINT = "/topic-assigner"
 
@@ -37,23 +37,16 @@ export const classifyDocument = async (
   excerpt: string,
   existing: ExistingClassifications
 ): Promise<Classification | null> => {
-  const blocks = await callLlm({
-    endpoint: ENDPOINT,
-    messages: [toSystem(buildExistingMessage(existing)), toSystem(excerpt), toUser(CALL_TO_ACTION)],
-    responseFormat: toResponseFormat(ClassificationSchema),
-  })
+  const result = await callAndParse(
+    ENDPOINT,
+    [toSystem(buildExistingMessage(existing)), toSystem(excerpt), toUser(CALL_TO_ACTION)],
+    ClassificationSchema
+  )
 
-  const text = extractText(blocks)
-  if (!text) {
-    console.warn("[classify] empty LLM response")
+  if (!result.ok) {
+    console.warn(`[classify] ${result.error}`)
     return null
   }
 
-  const parsed = ClassificationSchema.safeParse(JSON.parse(text))
-  if (!parsed.success) {
-    console.warn(`[classify] failed to parse response — ${parsed.error.message}, raw: ${text}`)
-    return null
-  }
-
-  return lowercaseClassification(parsed.data)
+  return lowercaseClassification(result.data)
 }

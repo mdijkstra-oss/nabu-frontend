@@ -1,23 +1,40 @@
 import { findMatchOffset } from "~/lib/text/find"
 import { neutralizeMarkdown } from "~/lib/text/mark"
+import type { RegionValueType } from "~/lib/regions/kinds/registry"
 import { normalizeValue } from "./normalize"
-import { toSentenceIndex } from "./payload"
-import type { FindResult } from "./schema"
-import type { FindInput, Hit } from "./types"
+import type { FindWork, Hit } from "./types"
 
-export interface GatedHits {
-  hits: Hit[]
-  dropped: number
+// One reported occurrence after its ref resolved: the quote, the 0-based sentence
+// index within the entry the ref named, and the raw value.
+export interface OccurrenceCandidate {
+  quote: string
+  sentenceIndex: number
+  value: string
 }
 
-const isInsideUnit = (scan: FindInput, sentenceIndex: number): boolean =>
-  sentenceIndex >= scan.firstSentence &&
-  sentenceIndex <= scan.firstSentence + scan.sentences.length - 1
+export const gateOccurrences = (
+  kind: string,
+  valueType: RegionValueType,
+  work: FindWork,
+  occurrences: OccurrenceCandidate[]
+): Hit[] => {
+  const hits: Hit[] = []
+  const seen = new Set<string>()
+
+  for (const candidate of occurrences) {
+    const hit = toHit(kind, valueType, work, candidate)
+    if (!hit || seen.has(occurrenceOf(hit))) continue
+    seen.add(occurrenceOf(hit))
+    hits.push(hit)
+  }
+
+  return hits
+}
 
 const STRICT = true
 
 interface Located {
-  hitSentence: number
+  localIndex: number
   quote: string
 }
 
@@ -29,44 +46,37 @@ const locateIn = (sentence: string, quote: string): string | null => {
   return match === null ? null : sentence.slice(match.start, match.end)
 }
 
-const locateQuote = (scan: FindInput, named: number, quote: string): Located | null => {
-  const inNamed = locateIn(scan.sentences[named - scan.firstSentence], quote)
-  if (inNamed !== null) return { hitSentence: named, quote: inNamed }
+const locateQuote = (sentences: string[], named: number, quote: string): Located | null => {
+  const inNamed = locateIn(sentences[named], quote)
+  if (inNamed !== null) return { localIndex: named, quote: inNamed }
 
-  for (let i = 0; i < scan.sentences.length; i++) {
-    const elsewhere = locateIn(scan.sentences[i], quote)
-    if (elsewhere !== null) return { hitSentence: scan.firstSentence + i, quote: elsewhere }
+  for (let i = 0; i < sentences.length; i++) {
+    const elsewhere = locateIn(sentences[i], quote)
+    if (elsewhere !== null) return { localIndex: i, quote: elsewhere }
   }
   return null
 }
 
-const toHit = (scan: FindInput, found: FindResult): Hit | null => {
-  const named = toSentenceIndex(found.sentence)
-  if (!isInsideUnit(scan, named)) return null
-
-  const located = locateQuote(scan, named, found.quote)
+const toHit = (
+  kind: string,
+  valueType: RegionValueType,
+  work: FindWork,
+  candidate: OccurrenceCandidate
+): Hit | null => {
+  const located = locateQuote(work.sentences, candidate.sentenceIndex, candidate.quote)
   if (located === null) return null
 
-  const value = normalizeValue(scan.valueType, found.value)
+  const value = normalizeValue(valueType, candidate.value)
   if (value === null) return null
 
-  return { kind: scan.kind, quote: located.quote, hitSentence: located.hitSentence, value }
+  return {
+    kind,
+    quote: located.quote,
+    hitSentence: work.unit.firstSentence + located.localIndex,
+    value,
+  }
 }
 
 // A separator no value can contain, so two occurrences can only collide by genuinely
 // naming the same sentence and the same value.
-const occurrenceOf = (hit: Hit): string => `${hit.hitSentence}\u0000${hit.value}`
-
-export const gateResults = (scan: FindInput, results: FindResult[]): GatedHits => {
-  const hits: Hit[] = []
-  const seen = new Set<string>()
-
-  for (const found of results) {
-    const hit = toHit(scan, found)
-    if (!hit || seen.has(occurrenceOf(hit))) continue
-    seen.add(occurrenceOf(hit))
-    hits.push(hit)
-  }
-
-  return { hits, dropped: results.length - hits.length }
-}
+export const occurrenceOf = (hit: Hit): string => `${hit.hitSentence}\u0000${hit.value}`
