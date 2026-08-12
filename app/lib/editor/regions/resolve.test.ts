@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import type { Node } from "prosemirror-model"
 import { indexFileSentences } from "~/lib/text/halo"
+import { stripMarkdown } from "~/lib/text/strip"
 import { posToTextOffset } from "~/lib/editor/text"
 import { createDoc, schema, type BlockDef } from "./fixtures"
 import { iconSides, resolveRegions, type ResolvedRegion } from "./resolve"
@@ -310,7 +311,7 @@ describe("resolveRegions across the two text spaces", () => {
   ]
 
   // Space A comes from the real deriver, so the two streams differ exactly as a
-  // document does: heading hashes, surviving list markers and stripped link URLs.
+  // document does: the source carries its inline markdown and the editor renders it away.
   const sentences = indexFileSentences(MARKDOWN).map((s) => s.text)
 
   const indexOf = (needle: string): number => sentences.findIndex((s) => s.includes(needle))
@@ -360,13 +361,10 @@ describe("resolveRegions across the two text spaces", () => {
   it("the source stream is what the deriver really produces", () => {
     expect(sentences).toEqual([
       "# Interview transcript",
-      "Rutte: yeah, it was quite the event.",
-      "See the summary for the details.",
-      "The room was full of people.",
+      "Rutte: yeah, it was **quite the event**.",
+      "See [the summary](https://example.com/summary) for the details.",
+      "- The room was full of people.",
       "- Nobody left early.",
-      "``",
-      "const total = 1;",
-      "``",
       "This is great, said Rutte.",
     ])
   })
@@ -394,10 +392,25 @@ describe("resolveRegions across the two text spaces", () => {
     const { doc, rendered } = renderAgainst(EDITOR)
     const resolved = resolveRegions(doc, sentences, REGIONS)
     rendered.forEach((r, i) => {
-      const lastSentence = sentences[REGIONS[i].endSentence].replace(/^[#\-\s]+/, "")
+      const lastSentence = stripMarkdown(sentences[REGIONS[i].endSentence])
       expect(r.covers.endsWith(lastSentence)).toBe(true)
       expect(doc.textBetween(resolved[i].to, doc.content.size - 1)).not.toContain(lastSentence)
     })
+  })
+
+  it("draws the label for a stored quote carrying the syntax of the link it straddles", () => {
+    const straddling = region({
+      quote: "the summary](https://example.com/summary) for the details",
+      hitSentence: indexOf("the summary"),
+      startSentence: indexOf("the summary"),
+      endSentence: indexOf("the summary"),
+    })
+    const doc = createDoc(EDITOR)
+    const [resolved] = resolveRegions(doc, sentences, [straddling])
+
+    expect(doc.textBetween(resolved.labelFrom, resolved.labelTo)).toBe(
+      "the summary for the details."
+    )
   })
 
   it("removing the visible code block from the editor resyncs instead of shifting", () => {

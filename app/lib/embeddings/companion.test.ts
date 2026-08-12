@@ -7,7 +7,7 @@ import {
   parseCompanionEntries,
   fastParseBlockContents,
 } from "./companion"
-import type { EmbeddingEntry } from "./diff"
+import { diffChunks, type EmbeddingEntry } from "./diff"
 
 describe("companionFilename", () => {
   const cases: { name: string; input: string; expected: string }[] = [
@@ -147,5 +147,44 @@ describe("fastParseBlockContents", () => {
 
   it.each(cases)("$name", ({ input, expected }) => {
     expect(fastParseBlockContents(input)).toEqual(expected)
+  })
+})
+
+describe("an entry the database projection would reject", () => {
+  const withEntry = (entry: Record<string, unknown>): string =>
+    ["```json-embeddings", JSON.stringify(entry), "```"].join("\n")
+
+  const sound = {
+    hash: "abc",
+    text: "a chunk of prose",
+    embedding: [0.1, 0.2, 0.3],
+    chunkStart: 0,
+    chunkEnd: 16,
+  }
+
+  const malformed: { name: string; entry: Record<string, unknown> }[] = [
+    { name: "a vector of strings", entry: { ...sound, embedding: ["0.1", "0.2", "0.3"] } },
+    { name: "a fractional offset", entry: { ...sound, chunkEnd: 16.5 } },
+    { name: "a missing offset", entry: { hash: "abc", text: "x", embedding: [0.1] } },
+  ]
+
+  it.each(malformed)("is not read back: $name", ({ entry }) => {
+    expect(parseCompanionEntries(withEntry(entry))).toEqual([])
+  })
+
+  it("is not rewritten into the companion by a sync that keeps it", () => {
+    const stored = parseCompanionEntries(withEntry(malformed[0].entry))
+    const { keep, needed } = diffChunks(
+      stored,
+      [{ index: 0, text: sound.text, hash: sound.hash, chunkStart: 0, chunkEnd: 16 }],
+      3
+    )
+    expect(keep).toEqual([])
+    expect(needed).toHaveLength(1)
+  })
+
+  it("reads back an entry carrying a field this version does not know", () => {
+    const entry = { ...sound, futureField: "kept" }
+    expect(parseCompanionEntries(withEntry(entry))).toEqual([entry])
   })
 })

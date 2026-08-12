@@ -1,11 +1,14 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 import {
   splitBySentences,
   splitMarkdownBySentences,
-  neutralizeMarkdown,
   splitByLines,
   splitByParagraphs,
 } from "./split"
+import { neutralizeMarkdown, MARK_SENTINEL } from "./mark"
+import { readCorpus } from "./fixtures/corpus"
+
+const corpus = readCorpus()
 
 describe("splitBySentences", () => {
   const split = splitBySentences()
@@ -146,6 +149,102 @@ Geachte aanwezigen en ook beste ondernemers die meekijken. In deze coronacrisis 
   })
 })
 
+describe("splitMarkdownBySentences — constructs the segmenter must not see", () => {
+  const split = splitMarkdownBySentences()
+  const textsOf = (input: string): string[] => split(input).map((s) => s.text)
+
+  it("a link with a dotted URL stays one sentence", () => {
+    expect(textsOf("See [the report](https://ex.com/a.b.c) next.")).toEqual([
+      "See [the report](https://ex.com/a.b.c) next.",
+    ])
+  })
+
+  it("a numbered list yields one sentence per item, markers intact", () => {
+    expect(textsOf("1. First item.\n2. Second item.\n3. Third item.")).toEqual([
+      "1. First item.",
+      "2. Second item.",
+      "3. Third item.",
+    ])
+  })
+
+  it("a table drops its separator row and its outer pipes", () => {
+    const texts = textsOf(
+      "| Field | Meaning |\n| :--- | :--- |\n| alpha | Holds the count. |\n| beta | Holds the name. |"
+    )
+
+    expect(texts.some((t) => t.includes(":---"))).toBe(false)
+    for (const text of texts) {
+      expect(text.startsWith("|")).toBe(false)
+      expect(text.endsWith("|")).toBe(false)
+    }
+    expect(texts.some((t) => t.includes("Holds the count."))).toBe(true)
+  })
+
+  it("a bullet list and a heading keep their markers", () => {
+    expect(textsOf("# Title\n\n- Item one.\n- Item two.")).toEqual([
+      "# Title",
+      "- Item one.",
+      "- Item two.",
+    ])
+  })
+})
+
+describe("splitMarkdownBySentences — recovering markup the trim would eat", () => {
+  const split = splitMarkdownBySentences()
+
+  it("a sentence from an opening bracket to a closing bold runs edge to edge", () => {
+    const input = "[The report](https://ex.com/a) calls the result **entirely clear**."
+    const rows = split(input)
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0].text).toBe(input)
+    expect(rows[0].start).toBe(0)
+    expect(rows[0].end).toBe(input.length)
+  })
+
+  it("expansion never reaches into the next row", () => {
+    const input = "It was **entirely clear**. [The report](https://ex.com/a) says so."
+    const rows = split(input)
+
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text).toBe("It was **entirely clear**.")
+    expect(rows[1].text).toBe("[The report](https://ex.com/a) says so.")
+    expect(rows[0].end).toBeLessThanOrEqual(rows[1].start)
+  })
+})
+
+describe("splitMarkdownBySentences — the plain path", () => {
+  it("text with no markdown splits exactly as the plain splitter does", () => {
+    const input = "Hello world. How are you? I am fine!\n\nAnd a second paragraph."
+    expect(splitMarkdownBySentences()(input)).toEqual(splitBySentences()(input))
+  })
+})
+
+describe("splitMarkdownBySentences — the segmenter seam", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("never hands the segmenter a string containing the sentinel", () => {
+    const segmented: string[] = []
+    const segment = Intl.Segmenter.prototype.segment
+    vi.spyOn(Intl.Segmenter.prototype, "segment").mockImplementation(function (
+      this: Intl.Segmenter,
+      input: string
+    ) {
+      segmented.push(input)
+      return segment.call(this, input)
+    })
+
+    const split = splitMarkdownBySentences()
+    for (const { raw } of corpus) split(raw)
+    split(`markup **here** and a stray ${MARK_SENTINEL} there.`)
+
+    expect(segmented.length).toBeGreaterThan(0)
+    for (const input of segmented) expect(input).not.toContain(MARK_SENTINEL)
+  })
+})
+
 describe("splitBySentences — dutch parliamentary transcript (Rutte)", () => {
   const rutte = `RUTTE
 Wat je nu ziet is natuurlijk dat het virus zich nog uitbreidt, het aantal besmettingen. En denkbaar is dat ook mensen besmet zijn die we niet in beeld hebben nog. Dat kunnen ook huisgenoten zijn die niet getest zijn, omdat ze in dit moment in isolatie of quarantaine zijn bij hun partner. Op dit moment staat de teller op 804. En wat ik vooral wil benadrukken hier: hoe treurig we denk ik allemaal zijn en hoezeer we meeleven met ook de nabestaanden van de vijf mensen die vandaag moesten worden bericht ook zijn overleden sinds de vorige rapportage van gisteren, waarbij in totaal dus nu 10 corona patiënten zijn overleden. Dat zijn de aantallen. Dan is het zo dat wij op basis van de crisisorganisatie dagelijks kijken naar hoe zich dit ontwikkelt en zodra de deskundigen een aanleiding vinden om te zeggen: nu moet de dosis worden opgevoerd, de dosis medicijn, dan kan ik verzekeren dan liggen alle maatregelen klaar om dat ook te doen. Dat was wat we gisteren gedaan hebben vanwege de... het gaat niet alleen om de aantallen waar naar je kijkt, maar je moet ook kijken: hoe ontwikkelt het zich in Brabant, waar we in feite niet meer in de indamfase zitten, maar in de volgende fase. Je ziet ook een paar ontwikkelingen, wat ik gisteren ook in de Kamer geschetst, Jaap van Dissel, RIVM, heeft dat verteld. Een paar andere plekken waarvan je zegt 'dat roept extra bezorgdheid op' over die situatie. Aanleiding voor het OMT om dit uitgebreide pakket maatregelen te nemen.`
@@ -261,6 +360,42 @@ describe("splitByParagraphs", () => {
     const input = "paragraph one\n\nparagraph two"
     for (const s of splitByParagraphs(input)) {
       expect(input.slice(s.start, s.end)).toBe(s.text)
+    }
+  })
+})
+
+describe("splitMarkdownBySentences — markup meeting across a sentence boundary", () => {
+  const split = splitMarkdownBySentences()
+
+  it("leaves the next sentence its own opening bracket", () => {
+    const rows = split("It was **clear**.[The report](https://ex.com/a) says so.")
+    expect(rows.map((r) => r.text)).toEqual([
+      "It was **clear**.",
+      "[The report](https://ex.com/a) says so.",
+    ])
+  })
+
+  // Two runs of markup meeting with nothing between them cannot be divided by position
+  // alone, and the row that opens takes them. The rows still tile the document, which is
+  // the property everything downstream indexes against; the report warns about the rest.
+  it("keeps rows tiling the document when two runs of markup meet", () => {
+    const input = "**A one.****B two.**"
+    const rows = split(input)
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i - 1].end).toBeLessThanOrEqual(rows[i].start)
+    }
+    expect(rows.map((r) => r.text).join("")).toBe(input)
+  })
+})
+
+describe("splitMarkdownBySentences — a table with unpadded cells", () => {
+  const split = splitMarkdownBySentences()
+
+  it("its content rows carry no leading or trailing pipe", () => {
+    const table = "| Field | Meaning |\n|---|---|\n|alpha|Holds the count.|"
+    for (const { text } of split(table)) {
+      expect(text.startsWith("|"), text).toBe(false)
+      expect(text.endsWith("|"), text).toBe(false)
     }
   })
 })

@@ -1,12 +1,4 @@
-import { z } from "zod"
-
-export const EmbeddingRowSchema = z.object({
-  text: z.string(),
-  hash: z.string(),
-  embedding: z.array(z.number()),
-  chunkStart: z.number().int(),
-  chunkEnd: z.number().int(),
-  language: z.string().optional(),
-})
-
-export type EmbeddingRow = z.infer<typeof EmbeddingRowSchema>
+export {
+  EmbeddingEntrySchema as EmbeddingRowSchema,
+  type EmbeddingEntry as EmbeddingRow,
+} from "~/domain/data-blocks/embeddings/schema"

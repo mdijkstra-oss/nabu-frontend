@@ -1,5 +1,6 @@
-import type { EmbeddingEntry } from "./diff"
 import { findBlocksByLanguage } from "~/lib/data-blocks/parse"
+import { EmbeddingEntrySchema } from "~/domain/data-blocks/embeddings/schema"
+import type { EmbeddingEntry } from "./diff"
 
 const COMPANION_SUFFIX = ".embeddings.hidden.md"
 const MD_EXTENSION = ".md"
@@ -19,18 +20,12 @@ const entryToBlock = (entry: EmbeddingEntry): string =>
 export const buildCompanionMarkdown = (entries: EmbeddingEntry[]): string =>
   entries.map(entryToBlock).join("\n\n")
 
-const isValidEntry = (parsed: Record<string, unknown>): boolean =>
-  typeof parsed.hash === "string" &&
-  typeof parsed.text === "string" &&
-  Array.isArray(parsed.embedding) &&
-  typeof parsed.chunkStart === "number" &&
-  typeof parsed.chunkEnd === "number"
-
+// Validated against the schema but returned as it was parsed, so a field this version does
+// not know about survives the round trip instead of being stripped out of the companion.
 const parseEntry = (content: string): EmbeddingEntry | null => {
   try {
-    const parsed = JSON.parse(content)
-    if (!isValidEntry(parsed)) return null
-    return parsed as EmbeddingEntry
+    const parsed: unknown = JSON.parse(content)
+    return EmbeddingEntrySchema.safeParse(parsed).success ? (parsed as EmbeddingEntry) : null
   } catch {
     return null
   }

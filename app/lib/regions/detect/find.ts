@@ -12,6 +12,7 @@ export const FIND_ENDPOINT = "/region-finder"
 export const toFindInput = (
   kind: KindDescriptor,
   unit: ScanUnit,
+  sentences: string[],
   knownValues: string[]
 ): FindInput => ({
   kind: kind.id,
@@ -19,7 +20,7 @@ export const toFindInput = (
   knownValues,
   valueType: kind.valueType,
   firstSentence: unit.firstSentence,
-  sentences: unit.sentences,
+  sentences: sentences.slice(unit.firstSentence, unit.lastSentence + 1),
 })
 
 export const runFind = async (

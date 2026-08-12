@@ -1,9 +1,8 @@
-import { queryBm25, indexedLanguages, ownedHashesForFile, type Bm25Hit } from "./store"
+import { queryBm25, indexedLanguages, ownedIdsForFile, type Bm25Hit } from "./store"
 
 const candidatesForLanguage = (language: string, scopeFiles: string[]): Set<string> => {
   const out = new Set<string>()
-  for (const file of scopeFiles)
-    for (const hash of ownedHashesForFile(language, file)) out.add(hash)
+  for (const file of scopeFiles) for (const id of ownedIdsForFile(language, file)) out.add(id)
   return out
 }
 

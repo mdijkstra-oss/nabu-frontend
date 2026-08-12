@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import {
+  bm25DocId,
   queryBm25,
   replaceFile,
   removeFile,
@@ -11,6 +12,7 @@ import {
 
 const buildDoc = (overrides: Partial<Bm25Doc> = {}): Bm25Doc => ({
   id: "h1",
+  hash: "h1",
   file: "doc.md",
   text: "the quick brown fox jumps over the lazy dog",
   chunkStart: 0,
@@ -163,5 +165,28 @@ describe("bm25 store", () => {
       expect(queryBm25("eng", "fox", 10)).toHaveLength(0)
       expect(languageStats()).toEqual({})
     })
+  })
+})
+
+describe("two chunks whose text is identical", () => {
+  it("are both indexed, in one file and across two", () => {
+    const text = "the same paragraph appears twice in this corpus and hashes identically"
+    const shared = { hash: "same", text }
+
+    replaceFile("eng", "a.md", [
+      buildDoc({ ...shared, id: bm25DocId("a.md", 0), file: "a.md", chunkStart: 0 }),
+      buildDoc({ ...shared, id: bm25DocId("a.md", 900), file: "a.md", chunkStart: 900 }),
+    ])
+    replaceFile("eng", "b.md", [
+      buildDoc({ ...shared, id: bm25DocId("b.md", 0), file: "b.md", chunkStart: 0 }),
+    ])
+
+    const hits = queryBm25("eng", "paragraph", 10)
+    expect(hits.map((hit) => [hit.file, hit.chunkStart])).toEqual([
+      ["a.md", 0],
+      ["a.md", 900],
+      ["b.md", 0],
+    ])
+    expect(new Set(hits.map((hit) => hit.hash))).toEqual(new Set(["same"]))
   })
 })

@@ -1,5 +1,5 @@
 import type { FileStore } from "~/lib/files/store"
-import { extractProse } from "~/lib/data-blocks/parse"
+import { proseOf } from "~/lib/text/halo"
 import { createCappedCache } from "~/lib/utils/cache"
 import {
   companionFilename,
@@ -14,7 +14,7 @@ export const getEmbeddableSource = (file: string, files: FileStore): string | nu
   if (content === undefined) return null
   const cached = sourceCache.get(content)
   if (cached !== undefined) return cached
-  const source = extractProse(content)
+  const source = proseOf(content)
   sourceCache.set(content, source)
   return source
 }

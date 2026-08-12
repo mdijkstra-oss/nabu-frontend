@@ -2,7 +2,7 @@ import type { FileStore } from "~/lib/files/store"
 import { debounce } from "~/lib/utils/debounce"
 import { isCompanionFile, sourceFilename, parseCompanionEntries } from "~/lib/embeddings/companion"
 import type { EmbeddingEntry } from "~/lib/embeddings/diff"
-import { replaceFile, removeFileFromAllLanguages, resetBm25 } from "./store"
+import { bm25DocId, replaceFile, removeFileFromAllLanguages, resetBm25 } from "./store"
 import type { Bm25Doc } from "./store"
 
 const BM25_SYNC_DEBOUNCE = 200
@@ -18,7 +18,8 @@ const groupByLanguage = (entries: EmbeddingEntry[], file: string): Map<string, B
     const language = entry.language
     if (!language) continue
     const doc: Bm25Doc = {
-      id: entry.hash,
+      id: bm25DocId(file, entry.chunkStart),
+      hash: entry.hash,
       file,
       text: entry.text,
       chunkStart: entry.chunkStart,

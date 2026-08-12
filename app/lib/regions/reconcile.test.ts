@@ -6,7 +6,8 @@ import type { ScannedUnit } from "~/domain/data-blocks/regions/schema"
 const toUnit = (firstSentence: number, sentences: string[]): ScanUnit => ({
   firstSentence,
   lastSentence: firstSentence + sentences.length - 1,
-  sentences,
+  charStart: 0,
+  charEnd: 0,
   hash: hashSentenceRange(sentences, 0, sentences.length - 1),
 })
 

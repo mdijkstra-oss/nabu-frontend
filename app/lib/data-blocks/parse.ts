@@ -9,7 +9,10 @@ export interface CodeBlock {
   end: number
 }
 
-const CODE_BLOCK_REGEX = /```(\S+)[ \t]*\r?\n([\s\S]*?)```/g
+// The info string is optional. A bare fence is still a fenced block, and it has to be cut
+// out of the prose like any other: text inside one is not prose, and leaving it in makes
+// every offset below it move whenever the fenced text is edited.
+const CODE_BLOCK_REGEX = /```(\S*)[ \t]*\r?\n([\s\S]*?)```/g
 
 const blockCache = createCappedCache<string, CodeBlock[]>(1000)
 

@@ -7,17 +7,11 @@ import { getBlock, getBlocks } from "~/lib/data-blocks/query"
 import { EmbeddingRowSchema } from "~/domain/embeddings/schema"
 import { fastParseBlockContents } from "~/lib/embeddings/companion"
 
-const isValidEmbeddingBlock = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" &&
-  v !== null &&
-  typeof (v as Record<string, unknown>).hash === "string" &&
-  typeof (v as Record<string, unknown>).text === "string" &&
-  Array.isArray((v as Record<string, unknown>).embedding)
-
 const parseCompanionBlock = (content: string): Record<string, unknown> | null => {
   try {
-    const parsed = JSON.parse(content)
-    return isValidEmbeddingBlock(parsed) ? parsed : null
+    const parsed: unknown = JSON.parse(content)
+    if (!EmbeddingRowSchema.safeParse(parsed).success) return null
+    return parsed as Record<string, unknown>
   } catch {
     return null
   }

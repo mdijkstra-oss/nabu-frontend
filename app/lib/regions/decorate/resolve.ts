@@ -1,6 +1,5 @@
 import { getBlockUndecorated } from "~/lib/data-blocks/query"
-import { extractProse, parseCodeBlocks } from "~/lib/data-blocks/parse"
-import { stripMarkdown } from "~/lib/text/strip"
+import { parseCodeBlocks } from "~/lib/data-blocks/parse"
 import { indexFileSentences, proseOf, type SentenceRow } from "~/lib/text/halo"
 import { createCappedCache } from "~/lib/utils/cache"
 import { RegionsBlockSchema, type RegionRow } from "~/domain/data-blocks/regions/schema"
@@ -27,10 +26,7 @@ const readRegions = (raw: string): RegionRow[] =>
 
 const anchorBlocks = (raw: string): Map<number, number> =>
   new Map(
-    parseCodeBlocks(raw).map((block) => [
-      block.start,
-      stripMarkdown(extractProse(raw.slice(0, block.start)), { keepHeadings: true }).length,
-    ])
+    parseCodeBlocks(raw).map((block) => [block.start, proseOf(raw.slice(0, block.start)).length])
   )
 
 const EMPTY = (): DocumentRegions => ({

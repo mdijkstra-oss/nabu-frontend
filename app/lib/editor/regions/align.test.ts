@@ -21,6 +21,20 @@ describe("alignSentences", () => {
       expected: [0, 1, 2, 3],
     },
     {
+      name: "inline markdown the editor renders away leaves both signatures the same words",
+      source: [
+        "See [the report](https://ex.com/a) now.",
+        "**Rutte** opened the meeting.",
+        "The `total.count` value was wrong.",
+      ],
+      editor: [
+        "See the report now.",
+        "Rutte opened the meeting.",
+        "The total.count value was wrong.",
+      ],
+      expected: [0, 1, 2],
+    },
+    {
       name: "an extra editor sentence costs only itself",
       source: ["Alpha one.", "Beta two.", "Gamma three."],
       editor: ["Alpha one.", "const x = 1;", "Beta two.", "Gamma three."],

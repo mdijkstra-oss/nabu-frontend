@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest"
+import { readCorpusDocument } from "~/lib/text/fixtures/corpus"
+import { cutUnits } from "~/lib/cutting/units"
+import { indexProseSentences, proseOf } from "~/lib/text/halo"
 import type { ParseCall } from "./seam"
 import type { KindDescriptor } from "~/lib/regions/kinds/registry"
 import type { ScanUnit } from "./types"
@@ -13,14 +16,25 @@ const speaker: KindDescriptor = {
   valueType: "string",
 }
 
+const UNIT_TEXTS = [
+  "Rutte opened the meeting.",
+  "The room went quiet.",
+  "Kaag answered him directly.",
+]
+
+const sentences = Array.from({ length: 23 }, (_, i) => `Filler sentence ${i}.`)
+sentences.splice(12, UNIT_TEXTS.length, ...UNIT_TEXTS)
+sentences.splice(20, UNIT_TEXTS.length, ...UNIT_TEXTS)
+
 const unit: ScanUnit = {
   firstSentence: 12,
   lastSentence: 14,
-  sentences: ["Rutte opened the meeting.", "The room went quiet.", "Kaag answered him directly."],
+  charStart: 0,
+  charEnd: 0,
   hash: "irrelevant",
 }
 
-const input = toFindInput(speaker, unit, ["rutte"])
+const input = toFindInput(speaker, unit, sentences, ["rutte"])
 
 describe("toFindInput", () => {
   it("carries the kind's id, rules and value type beside the unit", () => {
@@ -30,8 +44,22 @@ describe("toFindInput", () => {
       knownValues: ["rutte"],
       valueType: "string",
       firstSentence: 12,
-      sentences: unit.sentences,
+      sentences: UNIT_TEXTS,
     })
+  })
+
+  it("slices the document's own sentences for every unit the cutter produced", () => {
+    const prose = proseOf(readCorpusDocument("links-and-code.md"))
+    const rows = indexProseSentences(prose)
+    const texts = rows.map((row) => row.text)
+    const units = cutUnits(prose, rows)
+
+    expect(units.length).toBeGreaterThan(1)
+    for (const unit of units) {
+      const built = toFindInput(speaker, unit, texts, [])
+      expect(built.firstSentence).toBe(unit.firstSentence)
+      expect(built.sentences).toEqual(texts.slice(unit.firstSentence, unit.lastSentence + 1))
+    }
   })
 })
 
@@ -72,7 +100,7 @@ describe("runFind", () => {
 
   it("sorts the known-value list so the cached prefix does not shift", async () => {
     const { parse, calls } = answering({ results: [] })
-    await runFind(toFindInput(speaker, unit, ["timmermans", "kaag", "rutte"]), parse)
+    await runFind(toFindInput(speaker, unit, sentences, ["timmermans", "kaag", "rutte"]), parse)
 
     const listed = textOf(calls[0].messages[1])
     expect(listed.indexOf("kaag")).toBeLessThan(listed.indexOf("rutte"))
@@ -81,7 +109,7 @@ describe("runFind", () => {
 
   it("tells a self-contained kind there is no list to reuse from", async () => {
     const { parse, calls } = answering({ results: [] })
-    await runFind(toFindInput(speaker, unit, []), parse)
+    await runFind(toFindInput(speaker, unit, sentences, []), parse)
 
     expect(textOf(calls[0].messages[1])).toMatch(/infer/i)
   })
@@ -110,7 +138,7 @@ describe("runFind", () => {
     })
     const [failed, survived] = await Promise.all([
       runFind(input, failing("LLM returned invalid JSON")),
-      runFind(toFindInput(speaker, sibling, ["rutte"]), parse),
+      runFind(toFindInput(speaker, sibling, sentences, ["rutte"]), parse),
     ])
 
     expect(failed.hits).toEqual([])
@@ -137,7 +165,7 @@ describe("runFind", () => {
     const { parse } = answering({
       results: [{ quote: "Rutte opened", sentence: 13, value: "last spring" }],
     })
-    const outcome = await runFind(toFindInput(date, unit, []), parse)
+    const outcome = await runFind(toFindInput(date, unit, sentences, []), parse)
 
     expect(outcome.hits).toEqual([])
     expect(outcome.errors).toHaveLength(1)

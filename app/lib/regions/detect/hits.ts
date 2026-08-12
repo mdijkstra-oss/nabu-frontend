@@ -1,4 +1,5 @@
 import { findMatchOffset } from "~/lib/text/find"
+import { neutralizeMarkdown } from "~/lib/text/mark"
 import { normalizeValue } from "./normalize"
 import { toSentenceIndex } from "./payload"
 import type { FindResult } from "./schema"
@@ -15,26 +16,41 @@ const isInsideUnit = (scan: FindInput, sentenceIndex: number): boolean =>
 
 const STRICT = true
 
-const occursIn = (sentence: string, quote: string): boolean =>
-  findMatchOffset(sentence, quote, STRICT) !== null
+interface Located {
+  hitSentence: number
+  quote: string
+}
 
-const locateQuote = (scan: FindInput, named: number, quote: string): number | null => {
-  if (occursIn(scan.sentences[named - scan.firstSentence], quote)) return named
-  const elsewhere = scan.sentences.findIndex((sentence) => occursIn(sentence, quote))
-  return elsewhere === -1 ? null : scan.firstSentence + elsewhere
+// The model quotes what reads as text, so a quote spanning a link would never match the
+// sentence's own tokens. Neutralizing puts the reader's words in front of the tokenizer,
+// and neutralizing preserves length, so the offsets it returns are valid in the original.
+const locateIn = (sentence: string, quote: string): string | null => {
+  const match = findMatchOffset(neutralizeMarkdown(sentence), quote, STRICT)
+  return match === null ? null : sentence.slice(match.start, match.end)
+}
+
+const locateQuote = (scan: FindInput, named: number, quote: string): Located | null => {
+  const inNamed = locateIn(scan.sentences[named - scan.firstSentence], quote)
+  if (inNamed !== null) return { hitSentence: named, quote: inNamed }
+
+  for (let i = 0; i < scan.sentences.length; i++) {
+    const elsewhere = locateIn(scan.sentences[i], quote)
+    if (elsewhere !== null) return { hitSentence: scan.firstSentence + i, quote: elsewhere }
+  }
+  return null
 }
 
 const toHit = (scan: FindInput, found: FindResult): Hit | null => {
   const named = toSentenceIndex(found.sentence)
   if (!isInsideUnit(scan, named)) return null
 
-  const hitSentence = locateQuote(scan, named, found.quote)
-  if (hitSentence === null) return null
+  const located = locateQuote(scan, named, found.quote)
+  if (located === null) return null
 
   const value = normalizeValue(scan.valueType, found.value)
   if (value === null) return null
 
-  return { kind: scan.kind, quote: found.quote, hitSentence, value }
+  return { kind: scan.kind, quote: located.quote, hitSentence: located.hitSentence, value }
 }
 
 // A separator no value can contain, so two occurrences can only collide by genuinely

@@ -4,6 +4,7 @@ import { searchBm25Live } from "./live"
 
 const doc = (id: string, file: string, text: string): Bm25Doc => ({
   id,
+  hash: id,
   file,
   text,
   chunkStart: 0,

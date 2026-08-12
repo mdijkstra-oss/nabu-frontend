@@ -1,15 +1,11 @@
 import type { RegionValueType } from "~/lib/regions/kinds/registry"
+import type { Unit } from "~/lib/cutting/units"
 
 // Every index here is a 0-based position in indexFileSentences(raw), over the whole
 // document. The 1-based numbering a model sees exists only inside a request body and
 // the response that comes back with it.
 
-export interface ScanUnit {
-  firstSentence: number
-  lastSentence: number
-  sentences: string[]
-  hash: string
-}
+export type ScanUnit = Unit
 
 export interface Hit {
   kind: string

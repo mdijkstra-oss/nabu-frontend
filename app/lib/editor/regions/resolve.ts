@@ -1,5 +1,6 @@
 import type { Node } from "prosemirror-model"
 import { findMatchOffset } from "~/lib/text/find"
+import { neutralizeMarkdown } from "~/lib/text/mark"
 import { splitBySentences } from "~/lib/text/split"
 import { proseTextContent, textOffsetToPos } from "~/lib/editor/text"
 import { alignSentences } from "./align"
@@ -49,10 +50,20 @@ const lastRowUntil = (aligned: Alignment, start: number, end: number): number | 
   return null
 }
 
+// A stored quote is a run of the document's own characters, so it can carry the syntax of
+// a construct it straddles. The editor renders that syntax away, and neutralizing the same
+// span of the source sentence is what leaves both sides holding the same words.
+const editorQuote = (source: string | undefined, quote: string): string => {
+  if (source === undefined) return quote
+  const at = source.indexOf(quote)
+  return at === -1 ? quote : neutralizeMarkdown(source).slice(at, at + quote.length)
+}
+
 const toResolvedRegion = (
   doc: Node,
   rows: EditorRow[],
   aligned: Alignment,
+  sentences: readonly string[],
   region: RenderableRegion
 ): ResolvedRegion | null => {
   const hitRow = aligned[region.hitSentence]
@@ -63,7 +74,7 @@ const toResolvedRegion = (
   if (startRow === null || endRow === null) return null
 
   const hit = rows[hitRow]
-  const quote = findMatchOffset(hit.text, region.quote)
+  const quote = findMatchOffset(hit.text, editorQuote(sentences[region.hitSentence], region.quote))
   if (!quote) return null
 
   return {
@@ -87,7 +98,7 @@ export const resolveRegions = (
     rows.map((row) => row.text)
   )
   return regions.flatMap((region) => {
-    const resolved = toResolvedRegion(doc, rows, aligned, region)
+    const resolved = toResolvedRegion(doc, rows, aligned, sentences, region)
     return resolved ? [resolved] : []
   })
 }

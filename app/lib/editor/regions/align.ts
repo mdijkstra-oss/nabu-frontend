@@ -1,6 +1,11 @@
 import { tokenizeWords } from "~/lib/text/find"
+import { neutralizeMarkdown } from "~/lib/text/mark"
 
-const signatureOf = (sentence: string): string => tokenizeWords(sentence).join(" ")
+// A source sentence carries its inline markdown and the editor renders it away, so a link
+// would put its URL's words into one signature and not the other. Neutralizing leaves the
+// words a reader sees on both sides.
+const signatureOf = (sentence: string): string =>
+  tokenizeWords(neutralizeMarkdown(sentence)).join(" ")
 
 const indexBySignature = (sentences: readonly string[]): Map<string, number[]> => {
   const rows = new Map<string, number[]>()

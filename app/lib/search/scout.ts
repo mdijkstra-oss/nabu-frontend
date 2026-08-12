@@ -2,7 +2,8 @@ import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
 import type { Chunk } from "~/lib/embeddings/chunk"
 import type { NumberedEntry } from "~/lib/agent/tools/scout-filter/messages"
-import { chunkText } from "~/lib/embeddings/chunk"
+import { chunkFileForEmbedding } from "~/lib/embeddings/chunk"
+import { getEmbeddableSource } from "./source"
 import { filterEntries } from "~/lib/agent/tools/scout-filter/api"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
@@ -42,10 +43,15 @@ const scoutFileExcludes = async (
   const content = files[file]
   if (content === undefined) return new Set()
 
-  const chunks = chunkText(content)
+  // A hit's chunkStart is an offset into the embeddable source, so an exclude can only
+  // match when the blocks are cut out of that same string.
+  const source = getEmbeddableSource(file, files)
+  if (source === null) return new Set()
+
+  const chunks = chunkFileForEmbedding(content)
   if (chunks.length === 0) return new Set()
 
-  const blocks = buildChunkBlocks(content, chunks)
+  const blocks = buildChunkBlocks(source, chunks)
   const excludedIds = await filterEntries(framework, toEntries(blocks))
   return excludedChunkStarts(blocks, excludedIds)
 }

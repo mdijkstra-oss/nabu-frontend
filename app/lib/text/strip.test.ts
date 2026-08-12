@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest"
+import { readCorpus } from "./fixtures/corpus"
 import { stripMarkdown } from "./strip"
+import { MARK_SENTINEL } from "./mark"
+
+const corpus = readCorpus()
 
 describe("stripMarkdown", () => {
   const cases: { name: string; input: string; expected: string; keepHeadings?: boolean }[] = [
@@ -66,5 +70,45 @@ describe("stripMarkdown", () => {
 
   it.each(cases)("$name", ({ input, expected, keepHeadings }) => {
     expect(stripMarkdown(input, keepHeadings ? { keepHeadings } : undefined)).toBe(expected)
+  })
+
+  it("does not delete a sentinel that was already in the input", () => {
+    expect(stripMarkdown(`a ${MARK_SENTINEL} b`)).toBe("a   b")
+  })
+})
+
+const stripBySequentialReplace = (text: string, options: { keepHeadings?: boolean } = {}) => {
+  const replacers: [RegExp, string][] = [
+    [/!\[([^\]]*)\]\([^)]+\)/g, "$1"],
+    [/\*\*(.+?)\*\*/g, "$1"],
+    [/~~(.+?)~~/g, "$1"],
+    [/\[([^\]]+)\]\([^)]+\)/g, "$1"],
+    [/`([^`]+)`/g, "$1"],
+    [/(?<!\*)\*([^*]+?)\*(?!\*)|_([^_]+?)_/g, "$1$2"],
+    [/^[-*+]\s+/gm, ""],
+    [/^\d+\.\s+/gm, ""],
+    [/^>\s?/gm, ""],
+    [/^\|?[\s-:|]+\|[\s-:|]*$/gm, ""],
+    [/^\|(.+)\|$/gm, "$1"],
+  ]
+  if (!options.keepHeadings) replacers.push([/^#{1,6}\s+/gm, ""])
+  return replacers.reduce(
+    (result, [pattern, replacement]) => result.replace(pattern, replacement),
+    text
+  )
+}
+
+describe("stripMarkdown matches the implementation it replaced", () => {
+  const optionCases = [
+    { name: "default", options: {} },
+    { name: "keepHeadings", options: { keepHeadings: true } },
+  ]
+
+  const runs = corpus.flatMap(({ name, raw }) =>
+    optionCases.map((o) => ({ name: `${name} — ${o.name}`, raw, options: o.options }))
+  )
+
+  it.each(runs)("$name", ({ raw, options }) => {
+    expect(stripMarkdown(raw, options)).toBe(stripBySequentialReplace(raw, options))
   })
 })

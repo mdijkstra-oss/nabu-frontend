@@ -80,7 +80,7 @@ const runBm25Query = (
   queryBm25(keywords.language, keywords.text, limit, { candidates }).map((hit) => ({
     file: hit.file,
     text: hit.text,
-    hash: hit.id,
+    hash: hit.hash,
     chunkStart: hit.chunkStart,
     chunkEnd: hit.chunkEnd,
     score: hit.score,

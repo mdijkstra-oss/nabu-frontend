@@ -99,6 +99,78 @@ describe("the quote gate", () => {
   })
 })
 
+describe("the quote gate against markdown", () => {
+  const MARKED_UP = [
+    "[the report](https://ex.com/a) is good.",
+    "**Rutte** opened the meeting.",
+    "- Kaag replied at **length** to the point.",
+    "The `total.count` value was wrong.",
+  ]
+
+  const markedUpInput = findInput({ firstSentence: 0, sentences: MARKED_UP })
+
+  const cases: {
+    name: string
+    quote: string
+    sentence: number
+    hitSentence: number
+    stored: string
+  }[] = [
+    {
+      name: "a quote spanning a link",
+      quote: "the report is good",
+      sentence: 1,
+      hitSentence: 0,
+      stored: "the report](https://ex.com/a) is good.",
+    },
+    {
+      name: "a quote inside a bold run",
+      quote: "Rutte",
+      sentence: 2,
+      hitSentence: 1,
+      stored: "Rutte",
+    },
+    {
+      name: "a quote spanning a bullet marker and a bold run",
+      quote: "Kaag replied at length",
+      sentence: 3,
+      hitSentence: 2,
+      stored: "Kaag replied at **length",
+    },
+    {
+      name: "a quote spanning a code span",
+      quote: "The total.count value",
+      sentence: 4,
+      hitSentence: 3,
+      stored: "The `total.count` value",
+    },
+    {
+      name: "a quote naming one sentence and reading as another's bold run",
+      quote: "Rutte opened",
+      sentence: 1,
+      hitSentence: 1,
+      stored: "Rutte** opened",
+    },
+  ]
+
+  it.each(cases)("accepts $name and stores the characters it covered", (row) => {
+    const outcome = gateResults(markedUpInput, [
+      result({ quote: row.quote, sentence: row.sentence }),
+    ])
+
+    expect(outcome.dropped).toBe(0)
+    expect(outcome.hits[0].hitSentence).toBe(row.hitSentence)
+    expect(outcome.hits[0].quote).toBe(row.stored)
+    expect(MARKED_UP[outcome.hits[0].hitSentence]).toContain(outcome.hits[0].quote)
+  })
+
+  it("drops a quote no sentence of the marked-up unit holds and stores nothing", () => {
+    const outcome = gateResults(markedUpInput, [result({ quote: "Timmermans left the room" })])
+    expect(outcome.hits).toEqual([])
+    expect(outcome.dropped).toBe(1)
+  })
+})
+
 describe("string value gating", () => {
   const cases: { name: string; value: string; expected: string | null }[] = [
     {

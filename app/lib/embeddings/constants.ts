@@ -7,10 +7,7 @@ export const MAX_BATCH_TOKENS = 200_000
 export const PROVIDER_BATCH_LIMIT = 512
 
 export const CHUNK_CHARS = CHUNK_TOKENS * CHARS_PER_TOKEN
-export const CHUNK_STRIDE_CHARS = Math.floor(CHUNK_CHARS * (1 - CHUNK_OVERLAP_RATIO))
-export const CHUNK_WORD_TOLERANCE = Math.floor(CHUNK_CHARS * 0.1)
 
-export const MAX_EMBEDDING_BATCH_SIZE = Math.min(
-  PROVIDER_BATCH_LIMIT,
-  Math.floor(MAX_BATCH_TOKENS / CHUNK_TOKENS)
-)
+// The same token budget in the unit this repository counts in, so a batch can be closed
+// on what the chunks actually hold rather than on an assumed size per chunk.
+export const MAX_BATCH_CHARS = MAX_BATCH_TOKENS * CHARS_PER_TOKEN

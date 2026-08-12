@@ -1,6 +1,6 @@
 import { isEmbeddableFile } from "~/lib/embeddings/filter"
 import type { FileStore } from "~/lib/files/store"
-import { indexFileSentences } from "~/lib/text/halo"
+import { indexFileSentences, indexProseSentences, proseOf } from "~/lib/text/halo"
 import { debounce } from "~/lib/utils/debounce"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { noop } from "~/lib/utils/noop"
@@ -15,7 +15,7 @@ import {
 import type { KindDescriptor, RegionValueType } from "./kinds/registry"
 import { toFindInput } from "./detect/find"
 import { toMarkInput } from "./detect/mark"
-import { accumulateScanUnits } from "./detect/units"
+import { cutUnits } from "~/lib/cutting/units"
 import { computeWindows } from "./detect/window"
 import { resolveOverlaps } from "./detect/overlap"
 import type { Hit, Mark, ScanUnit, WindowedHit } from "./detect/types"
@@ -115,8 +115,9 @@ const withRangeHash = (mark: Mark, sentences: string[]): StoredMark => ({
 })
 
 const prepareDocument = (path: string, raw: string): DocumentPass => {
-  const sentences = sentencesOf(raw)
-  return { path, raw, sentences, units: accumulateScanUnits(sentences) }
+  const prose = proseOf(raw)
+  const rows = indexProseSentences(prose)
+  return { path, raw, sentences: rows.map((row) => row.text), units: cutUnits(prose, rows) }
 }
 
 // A row whose indexes run past the end is stale rather than invalid, so the schema
@@ -256,7 +257,7 @@ export const startRegionSync = (deps: RegionSyncDeps): RegionSyncHandle => {
     if (aborted) return
 
     const outcome = await deps.detect.find(
-      toFindInput(work.kind, unit, known ? [...known].sort() : [])
+      toFindInput(work.kind, unit, work.doc.sentences, known ? [...known].sort() : [])
     )
 
     if (aborted) return

@@ -1,6 +1,5 @@
-import { splitBySentences } from "~/lib/text/split"
+import { splitMarkdownBySentences } from "~/lib/text/split"
 import { extractProse } from "~/lib/data-blocks/parse"
-import { stripMarkdown } from "~/lib/text/strip"
 
 export interface SentenceRow {
   text: string
@@ -18,17 +17,18 @@ export interface HaloResult {
   haloCharEnd: number
 }
 
-const splitSentencesWithOffsets = splitBySentences()
+const splitSentencesWithOffsets = splitMarkdownBySentences()
 
-export const proseOf = (rawFile: string): string =>
-  stripMarkdown(extractProse(rawFile), { keepHeadings: true })
+// Fenced blocks are cut out first and nothing else is removed, so a sentence row, an
+// embedding chunk and a search hit all measure offsets in one string. Writing a
+// json-regions or json-embeddings block into a document therefore moves no index.
+export const proseOf = (rawFile: string): string => extractProse(rawFile)
 
-export const indexFileSentences = (rawFile: string): SentenceRow[] => {
-  const prose = proseOf(rawFile)
-  return splitSentencesWithOffsets(prose)
-    .map((s) => ({ text: s.text, start: s.start, end: s.end }))
-    .filter((s) => s.text.trim().length > 0)
-}
+export const indexProseSentences = (prose: string): SentenceRow[] =>
+  splitSentencesWithOffsets(prose).map((s) => ({ text: s.text, start: s.start, end: s.end }))
+
+export const indexFileSentences = (rawFile: string): SentenceRow[] =>
+  indexProseSentences(proseOf(rawFile))
 
 export const findOverlappingRange = (
   rows: readonly SentenceRow[],

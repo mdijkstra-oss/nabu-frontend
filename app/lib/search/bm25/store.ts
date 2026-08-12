@@ -2,6 +2,7 @@ import MiniSearch from "minisearch"
 
 export interface Bm25Doc {
   id: string
+  hash: string
   file: string
   text: string
   chunkStart: number
@@ -11,12 +12,18 @@ export interface Bm25Doc {
 
 export interface Bm25Hit {
   id: string
+  hash: string
   file: string
   chunkStart: number
   chunkEnd: number
   score: number
   text: string
 }
+
+// A chunk's hash is its content, and content-defined boundaries make two copies of the
+// same passage hash identically — within a file or across two of them. The index needs an
+// identity that survives that, or the second copy is dropped and never found.
+export const bm25DocId = (file: string, chunkStart: number): string => `${file}\u0000${chunkStart}`
 
 interface LanguageState {
   index: MiniSearch<Bm25Doc>
@@ -119,6 +126,7 @@ export const queryBm25 = (
     return [
       {
         id: doc.id,
+        hash: doc.hash,
         file: doc.file,
         chunkStart: doc.chunkStart,
         chunkEnd: doc.chunkEnd,
@@ -131,7 +139,7 @@ export const queryBm25 = (
 
 export const indexedLanguages = (): string[] => [...states.keys()]
 
-export const ownedHashesForFile = (language: string, file: string): Set<string> =>
+export const ownedIdsForFile = (language: string, file: string): Set<string> =>
   states.get(language)?.ownership.get(file) ?? new Set()
 
 export const languageStats = (): Record<string, { docs: number; files: number }> => {

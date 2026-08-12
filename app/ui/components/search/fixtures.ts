@@ -5,6 +5,7 @@ import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 export const stackHits: Bm25Hit[] = [
   {
     id: "h1",
+    hash: "h1",
     file: "field_notes.md",
     chunkStart: 0,
     chunkEnd: 120,
@@ -13,6 +14,7 @@ export const stackHits: Bm25Hit[] = [
   },
   {
     id: "h2",
+    hash: "h2",
     file: "interview_maria.md",
     chunkStart: 40,
     chunkEnd: 180,
@@ -24,6 +26,7 @@ export const stackHits: Bm25Hit[] = [
 export const corpusHits: Bm25Hit[] = [
   {
     id: "c1",
+    hash: "c1",
     file: "archive_letters.md",
     chunkStart: 0,
     chunkEnd: 90,
@@ -32,6 +35,7 @@ export const corpusHits: Bm25Hit[] = [
   },
   {
     id: "c2",
+    hash: "c2",
     file: "press_clippings.md",
     chunkStart: 10,
     chunkEnd: 130,

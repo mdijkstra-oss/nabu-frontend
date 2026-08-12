@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest"
-import { indexFileSentences, buildHaloForRows, buildHalo, type HaloResult } from "./halo"
+import { extractProse } from "~/lib/data-blocks/parse"
+import { readCorpus } from "./fixtures/corpus"
+import { indexFileSentences, buildHaloForRows, buildHalo, proseOf, type HaloResult } from "./halo"
+
+const corpus = readCorpus()
 
 const FILE = [
   "First sentence.",
@@ -28,6 +32,42 @@ describe("indexFileSentences", () => {
 
   it("returns empty for empty input", () => {
     expect(indexFileSentences("")).toEqual([])
+  })
+
+  it.each(corpus)("$name — every row is a slice of the prose it addresses", ({ raw }) => {
+    const prose = proseOf(raw)
+    const rows = indexFileSentences(raw)
+
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      expect(prose.slice(row.start, row.end)).toBe(row.text)
+    }
+  })
+
+  it.each(corpus)("$name — rows ascend and never overlap", ({ raw }) => {
+    const rows = indexFileSentences(raw)
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i - 1].end).toBeLessThanOrEqual(rows[i].start)
+    }
+  })
+})
+
+describe("indexFileSentences — fenced code blocks", () => {
+  const withBlock = (code: string): string =>
+    `Before the block.\n\n\`\`\`ts\n${code}\n\`\`\`\n\nAfter the block. And one more.`
+
+  it("yields no sentence from inside the block", () => {
+    const rows = indexFileSentences(withBlock("const x = 1 // A sentence. Another one."))
+    expect(rows.some((r) => r.text.includes("A sentence."))).toBe(false)
+    expect(rows.map((r) => r.text)).toContain("Before the block.")
+  })
+
+  it("leaves the offsets after it unmoved when the block's content changes", () => {
+    const short = indexFileSentences(withBlock("const x = 1"))
+    const long = indexFileSentences(
+      withBlock("const x = 1 // A much longer body. With sentences.\nconst y = 2")
+    )
+    expect(long).toEqual(short)
   })
 })
 
@@ -86,5 +126,40 @@ describe("buildHalo (raw file)", () => {
 
   it("returns null when range can't be located", () => {
     expect(buildHalo(FILE, 1000000, 1000001, 1)).toBeNull()
+  })
+})
+
+describe("proseOf", () => {
+  it("is extractProse and nothing more", () => {
+    const raw =
+      "# Title\n\nSee [the report](https://ex.com/a) and **this**.\n\n```ts\nconst x = 1\n```\n"
+    expect(proseOf(raw)).toBe(extractProse(raw))
+  })
+
+  it("leaves a row's inline markdown in the text it returns", () => {
+    const rows = indexFileSentences("See [the report](https://ex.com/a.b.c) next.")
+    expect(rows.map((r) => r.text)).toEqual(["See [the report](https://ex.com/a.b.c) next."])
+  })
+})
+
+describe("indexFileSentences over a fence with no info string", () => {
+  const withBlock = (code: string): string =>
+    `Before the block.\n\n\`\`\`\n${code}\n\`\`\`\n\nAfter the block. And one more.`
+
+  it("takes no sentence from inside it", () => {
+    const rows = indexFileSentences(withBlock("const x = 1 // A sentence. Another one."))
+    expect(rows.map((row) => row.text)).toEqual([
+      "Before the block.",
+      "After the block.",
+      "And one more.",
+    ])
+  })
+
+  it("moves no offset when the code inside it is edited", () => {
+    const short = indexFileSentences(withBlock("const x = 1"))
+    const long = indexFileSentences(
+      withBlock("const x = 1 // A much longer body. With sentences.\nconst y = 2")
+    )
+    expect(long).toEqual(short)
   })
 })

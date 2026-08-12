@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { patchBlockContent } from "~/lib/data-blocks/patch"
 import { FileCorruptionError } from "~/lib/files/errors"
 import { indexFileSentences } from "~/lib/text/halo"
+import { stripMarkdown } from "~/lib/text/strip"
 import { isResolved, type RegionRow, type RegionsBlock } from "~/domain/data-blocks/regions/schema"
 import { sweepUnregisteredKinds } from "./boot-sweep"
+import { hashSentences } from "./detect/units"
 import type { FindInput, FindOutcome, Hit, MarkInput, MarkOutcome } from "./detect/types"
 import type { KindDescriptor } from "./kinds/registry"
 import { readStoredRegions } from "./stored"
@@ -215,21 +217,42 @@ const turn = (i: number): string =>
 const transcript = (turns: number): string =>
   Array.from({ length: turns }, (_, i) => turn(i)).join("\n\n")
 
-const EVEN_SENTENCE_CHARS = 100
+const markedTurn = (i: number): string =>
+  `- **${i % 2 === 0 ? "Rutte" : "Kaag"}** spoke about [item ${i}](https://example.org/item/${i}). The room considered point ${i} at some length.`
 
-const padTo = (head: string): string =>
-  `${head} ${"x".repeat(EVEN_SENTENCE_CHARS - head.length - 2)}.`
+const markedTranscript = (turns: number): string =>
+  Array.from({ length: turns }, (_, i) => markedTurn(i)).join("\n\n")
 
-const numbered = (label: string, i: number): string =>
-  padTo(`${label} about item ${String(i).padStart(3, "0")}`)
+const MARKDOWN_NOTES = [
+  "# Session notes",
+  "",
+  "- Rutte opened the meeting today. He welcomed the committee warmly.",
+  "- **Kaag** replied at length. She asked for the numbers again.",
+  "",
+  "See [the agenda](https://example.org/agenda) for the order of business.",
+  "",
+  "| Speaker | Turn |",
+  "| --- | --- |",
+  "| Rutte | 1 |",
+  "",
+  "Rutte closed the session. Everyone filed out quietly.",
+].join("\n")
 
-const evenTranscript = (lines: number): string =>
-  Array.from({ length: lines }, (_, i) =>
-    numbered(i % 4 === 0 ? "Rutte spoke" : "Kaag spoke", i)
-  ).join("\n\n")
+const FENCED_CODE_LINE = "const total = 1;"
 
-const evenInsertion = (lines: number): string =>
-  Array.from({ length: lines }, (_, i) => numbered("An added note", i)).join("\n\n")
+const DOCUMENT_WITH_CODE = [
+  "Rutte opened the meeting today. He welcomed the committee warmly.",
+  "",
+  "```js",
+  FENCED_CODE_LINE,
+  "```",
+  "",
+  "Kaag replied at length. She asked for the numbers again.",
+].join("\n")
+
+const ONE_PARAGRAPH = "Rutte opened the meeting. He welcomed the committee warmly."
+
+const INSERTED_SENTENCE = "A new opening line."
 
 const sentencesOf = (raw: string): string[] => indexFileSentences(raw).map((row) => row.text)
 
@@ -237,6 +260,40 @@ const rangesOf = (block: RegionsBlock): [number, number, number][] =>
   block.regions
     .filter(isResolved)
     .map((row) => [row.startSentence, row.endSentence, row.hitSentence])
+
+const rangesFrom = (block: RegionsBlock, first: number): [number, number, number][] =>
+  rangesOf(block).filter(([, , hit]) => hit >= first)
+
+const valuesFrom = (block: RegionsBlock, first: number): string[] =>
+  block.regions.filter((row) => row.hitSentence >= first).map((row) => row.parsed.value)
+
+const underPreviousRecipe = (
+  block: RegionsBlock,
+  sentences: string[],
+  kindId: string
+): RegionsBlock => {
+  const stripped = sentences.map((text) => stripMarkdown(text))
+  const units = block.scanned[kindId]
+  const lastSentenceOf = (index: number): number =>
+    (units[index + 1]?.firstSentence ?? sentences.length) - 1
+
+  return {
+    regions: block.regions.map((row) =>
+      isResolved(row)
+        ? {
+            ...row,
+            rangeHash: hashSentences(stripped.slice(row.startSentence, row.endSentence + 1)),
+          }
+        : row
+    ),
+    scanned: {
+      [kindId]: units.map((unit, index) => ({
+        hash: hashSentences(stripped.slice(unit.firstSentence, lastSentenceOf(index) + 1)),
+        firstSentence: unit.firstSentence,
+      })),
+    },
+  }
+}
 
 const coveredSentences = (block: RegionsBlock): number[] =>
   block.regions
@@ -295,21 +352,7 @@ describe("relocation across an edit", () => {
   })
 
   it("keeps every mark of a markdown-heavy document across a second pass", async () => {
-    const markdown = [
-      "# Session notes",
-      "",
-      "- Rutte opened the meeting today. He welcomed the committee warmly.",
-      "- **Kaag** replied at length. She asked for the numbers again.",
-      "",
-      "See [the agenda](https://example.org/agenda) for the order of business.",
-      "",
-      "| Speaker | Turn |",
-      "| --- | --- |",
-      "| Rutte | 1 |",
-      "",
-      "Rutte closed the session. Everyone filed out quietly.",
-    ].join("\n")
-    const project = createProject({ "notes.md": markdown })
+    const project = createProject({ "notes.md": MARKDOWN_NOTES })
     const detect = createDetect()
 
     const sync = startSync(project, detect)
@@ -347,6 +390,47 @@ describe("relocation across an edit", () => {
     const after = project.regionsIn("talk.md")
     expect(detect.marks.slice(marksBefore).map((m) => m.hitSentence)).toEqual([secondHit])
     expect(rangesOf(after)).toEqual(rangesOf(before))
+  })
+})
+
+describe("the units a document becomes", () => {
+  it("cuts one short paragraph into one unit and one find call", async () => {
+    const project = createProject({ "short.md": ONE_PARAGRAPH })
+    const detect = createDetect()
+
+    const sync = startSync(project, detect)
+    await sync.ready
+
+    expect(detect.finds).toHaveLength(1)
+    expect(detect.finds[0].sentences).toEqual(sentencesOf(ONE_PARAGRAPH))
+    expect(project.regionsIn("short.md").scanned.speaker).toHaveLength(1)
+  })
+})
+
+describe("a unit whose find call failed", () => {
+  it("stays out of the scanned record and is retried on the next tick", async () => {
+    const project = createProject({ "talk.md": transcript(40) })
+    const detect = createDetect()
+    let failed = false
+    detect.failFindWhen(() => {
+      if (failed) return null
+      failed = true
+      return "boom"
+    })
+
+    const sync = startSync(project, detect)
+    await sync.ready
+
+    const firstUnit = 0
+    const scanned = project.regionsIn("talk.md").scanned.speaker
+    expect(scanned.some((unit) => unit.firstSentence === firstUnit)).toBe(false)
+
+    const findsBefore = detect.finds.length
+    await sync.tick()
+
+    expect(detect.finds.slice(findsBefore).map((f) => f.firstSentence)).toContain(firstUnit)
+    const retried = project.regionsIn("talk.md").scanned.speaker
+    expect(retried.some((unit) => unit.firstSentence === firstUnit)).toBe(true)
   })
 })
 
@@ -399,41 +483,101 @@ describe("hit and unit invalidation", () => {
     ).toBe(true)
   })
 
-  it("keeps a resynchronised unit out of find and shifts its hits by its stored index", async () => {
-    const project = createProject({ "even.md": evenTranscript(40) })
+  it("keeps the units an edit did not touch out of find and shifts their hits with them", async () => {
+    const project = createProject({ "talk.md": transcript(40) })
     const detect = createDetect()
 
     const sync = startSync(project, detect)
     await sync.ready
 
-    const before = project.regionsIn("even.md")
+    const before = project.regionsIn("talk.md")
     const scannedBefore = before.scanned.speaker
-    const unitLength = scannedBefore[1].firstSentence
-    expect(scannedBefore.length).toBeGreaterThan(3)
+    expect(scannedBefore.length).toBeGreaterThan(2)
 
     const findsBefore = detect.finds.length
     const marksBefore = detect.marks.length
-    project.files["even.md"] = `${evenInsertion(unitLength)}\n\n${project.files["even.md"]}`
+    const inserted = sentencesOf(INSERTED_SENTENCE).length
+    project.files["talk.md"] = `${INSERTED_SENTENCE}\n\n${project.files["talk.md"]}`
 
     await sync.tick()
 
-    const after = project.regionsIn("even.md")
+    const after = project.regionsIn("talk.md")
+    const storedHashes = new Set(scannedBefore.map((unit) => unit.hash))
+    const survivors = after.scanned.speaker.filter((unit) => storedHashes.has(unit.hash))
+    const survivingHashes = new Set(survivors.map((unit) => unit.hash))
+    const refound = after.scanned.speaker.filter((unit) => !survivingHashes.has(unit.hash))
+    const firstSurvivor = survivors[0].firstSentence
 
-    expect(detect.finds.slice(findsBefore).map((f) => f.firstSentence)).toEqual([0])
-    expect(detect.marks).toHaveLength(marksBefore)
-    expect(after.scanned.speaker.slice(1)).toEqual(
-      scannedBefore.map((unit) => ({
-        hash: unit.hash,
-        firstSentence: unit.firstSentence + unitLength,
-      }))
+    expect(survivors.length).toBeGreaterThan(refound.length)
+    expect(detect.finds.slice(findsBefore).map((f) => f.firstSentence)).toEqual(
+      refound.map((unit) => unit.firstSentence)
     )
-    expect(rangesOf(after)).toEqual(
-      rangesOf(before).map(([start, end, hit]) => [
-        start + unitLength,
-        end + unitLength,
-        hit + unitLength,
+    expect(survivors).toEqual(
+      scannedBefore
+        .filter((unit) => survivingHashes.has(unit.hash))
+        .map((unit) => ({ hash: unit.hash, firstSentence: unit.firstSentence + inserted }))
+    )
+    expect(rangesFrom(after, firstSurvivor)).toEqual(
+      rangesFrom(before, firstSurvivor - inserted).map(([start, end, hit]) => [
+        start + inserted,
+        end + inserted,
+        hit + inserted,
       ])
     )
+    expect(valuesFrom(after, firstSurvivor)).toEqual(valuesFrom(before, firstSurvivor - inserted))
+    expect(detect.marks.slice(marksBefore).every((m) => m.hitSentence < firstSurvivor)).toBe(true)
+  })
+
+  it("re-finds every unit and re-marks every hit when the stored block came from the previous recipe", async () => {
+    const project = createProject({ "notes.md": markedTranscript(20) })
+    const scratch = createDetect()
+
+    const first = startSync(project, scratch)
+    await first.ready
+    first.stop()
+
+    const fresh = project.regionsIn("notes.md")
+    expect(fresh.scanned.speaker.length).toBeGreaterThan(1)
+    expect(fresh.regions.filter(isResolved).length).toBeGreaterThan(1)
+
+    project.deps.writeRegions(
+      "notes.md",
+      underPreviousRecipe(fresh, sentencesOf(project.files["notes.md"]), speakerKind.id)
+    )
+
+    const again = createDetect()
+    const second = startSync(project, again)
+    await second.ready
+
+    expect(again.finds.map((f) => f.firstSentence)).toEqual(
+      fresh.scanned.speaker.map((unit) => unit.firstSentence)
+    )
+    expect(again.marks).toHaveLength(scratch.marks.length)
+    expect(project.regionsIn("notes.md")).toEqual(fresh)
+  })
+
+  it("re-finds nothing and moves no index when a fenced code block is edited", async () => {
+    const project = createProject({ "code.md": DOCUMENT_WITH_CODE })
+    const detect = createDetect()
+
+    const sync = startSync(project, detect)
+    await sync.ready
+
+    const before = project.regionsIn("code.md")
+    expect(before.regions.length).toBeGreaterThan(0)
+
+    const findsBefore = detect.finds.length
+    const marksBefore = detect.marks.length
+    project.files["code.md"] = project.files["code.md"].replace(
+      FENCED_CODE_LINE,
+      "const runningTotal = compute(1, 2, 3); // a far longer line. And a second one."
+    )
+
+    await sync.tick()
+
+    expect(detect.finds).toHaveLength(findsBefore)
+    expect(detect.marks).toHaveLength(marksBefore)
+    expect(project.regionsIn("code.md")).toEqual(before)
   })
 
   it("hands overlap resolution the kept marks as well as the fresh ones", async () => {

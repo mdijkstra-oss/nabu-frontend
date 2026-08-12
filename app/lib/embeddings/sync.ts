@@ -3,15 +3,16 @@ import { debounce } from "~/lib/utils/debounce"
 import { processPool } from "~/lib/utils/pool"
 import { isEmbeddableFile } from "./filter"
 import { companionFilename, buildCompanionMarkdown, parseCompanionEntries } from "./companion"
-import { chunkFileForEmbedding } from "./chunk"
+import { chunkFileForEmbedding, type Chunk } from "./chunk"
 import { diffChunks, type EmbeddingEntry } from "./diff"
 import { fetchEmbeddingBatch } from "./client"
 import { getEmbeddingsDimensions } from "./env"
-import { EMBEDDING_SYNC_DEBOUNCE, MAX_EMBEDDING_BATCH_SIZE } from "./constants"
+import { EMBEDDING_SYNC_DEBOUNCE } from "./constants"
+import { batchBySize } from "./batch"
 
 import { detectLanguage } from "~/lib/language/detect"
 
-interface EmbeddingSyncDeps {
+export interface EmbeddingSyncDeps {
   getFiles: () => FileStore
   getFile: (f: string) => string | undefined
   updateFile: (f: string, content: string) => void
@@ -19,25 +20,18 @@ interface EmbeddingSyncDeps {
   subscribe: (listener: () => void) => () => void
   embeddingsUrl: string
   onProgress?: (processed: number, total: number) => void
-}
-
-interface NeededChunk {
-  index: number
-  text: string
-  hash: string
-  chunkStart: number
-  chunkEnd: number
+  fetchBatch?: typeof fetchEmbeddingBatch
 }
 
 interface FileChunks {
   filename: string
   entries: EmbeddingEntry[]
-  needed: NeededChunk[]
+  needed: Chunk[]
 }
 
 interface TaggedChunk {
   filename: string
-  chunk: NeededChunk
+  chunk: Chunk
 }
 
 const findDirtyFiles = (prev: FileStore, next: FileStore): string[] =>
@@ -60,15 +54,10 @@ const prepareFile = (
 const tagNeededChunks = (fileChunks: FileChunks[]): TaggedChunk[] =>
   fileChunks.flatMap((fc) => fc.needed.map((chunk) => ({ filename: fc.filename, chunk })))
 
-const toBatches = (tagged: TaggedChunk[]): TaggedChunk[][] => {
-  const batches: TaggedChunk[][] = []
-  for (let i = 0; i < tagged.length; i += MAX_EMBEDDING_BATCH_SIZE) {
-    batches.push(tagged.slice(i, i + MAX_EMBEDDING_BATCH_SIZE))
-  }
-  return batches
-}
+const toBatches = (tagged: TaggedChunk[]): TaggedChunk[][] =>
+  batchBySize(tagged, (t) => t.chunk.text.length)
 
-const toEntryWithEmbedding = (chunk: NeededChunk, embedding: number[]): EmbeddingEntry => {
+const toEntryWithEmbedding = (chunk: Chunk, embedding: number[]): EmbeddingEntry => {
   const language = detectLanguage(chunk.text)
   return {
     hash: chunk.hash,
@@ -90,6 +79,26 @@ const mergeNewEntries = (
     const entries = accumulated.get(filename) ?? []
     entries.push(toEntryWithEmbedding(chunk, embeddings[i]))
     accumulated.set(filename, entries)
+  }
+}
+
+// A file whose chunks all matched still needs its companion reconciled: a chunk that is
+// gone leaves an entry behind that goes on answering searches, and offsets move when text
+// above them changes. A file with no prose left keeps no companion at all.
+const settleUnchangedCompanions = (fileChunks: FileChunks[], deps: EmbeddingSyncDeps): void => {
+  for (const fc of fileChunks) {
+    if (fc.needed.length > 0) continue
+
+    const companion = companionFilename(fc.filename)
+    const stored = deps.getFile(companion)
+
+    if (fc.entries.length === 0) {
+      if (stored !== undefined) deps.deleteFile(companion)
+      continue
+    }
+
+    const settled = buildCompanionMarkdown(fc.entries)
+    if (settled !== stored) deps.updateFile(companion, settled)
   }
 }
 
@@ -131,6 +140,8 @@ const processSync = async (
     return prepareFile(filename, content, companion)
   })
 
+  settleUnchangedCompanions(fileChunks, deps)
+
   const allTagged = tagNeededChunks(fileChunks)
   if (allTagged.length === 0) return
 
@@ -139,12 +150,23 @@ const processSync = async (
   let processedChunks = 0
   deps.onProgress?.(0, allTagged.length)
 
+  const fetchBatch = deps.fetchBatch ?? fetchEmbeddingBatch
+
   const embedBatch = async (batch: TaggedChunk[]): Promise<number[]> => {
     const texts = batch.map((t) => t.chunk.text)
-    const result = await fetchEmbeddingBatch(texts, deps.embeddingsUrl)
+    const result = await fetchBatch(texts, deps.embeddingsUrl)
 
     if (!result.ok) {
       console.error("[embeddings] fetch failed:", result.error)
+      return []
+    }
+
+    // Merging positionally against a short answer would write entries with no vector,
+    // which the companion reader then drops without a word. The batch is left in needed.
+    if (result.value.length !== texts.length) {
+      console.error(
+        `[embeddings] provider answered ${result.value.length} of ${texts.length} chunks`
+      )
       return []
     }
 

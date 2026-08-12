@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor } from "storybook/test"
 import { withRouter, withSeededFiles } from "../../../../.storybook/decorators"
 import { indexFileSentences } from "~/lib/text/halo"
+import { stripMarkdown } from "~/lib/text/strip"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 
 interface RegionSpec {
@@ -13,8 +14,12 @@ interface RegionSpec {
   end: string | number
 }
 
+// A sentence row carries its inline markdown, so a story naming a sentence by the words a
+// reader sees has to look past the syntax to find it.
 const sentenceIndex = (prose: string, at: string | number): number =>
-  typeof at === "number" ? at : indexFileSentences(prose).findIndex((s) => s.text.includes(at))
+  typeof at === "number"
+    ? at
+    : indexFileSentences(prose).findIndex((s) => stripMarkdown(s.text).includes(at))
 
 const toRow = (prose: string, spec: RegionSpec) => ({
   kind: spec.kind,
