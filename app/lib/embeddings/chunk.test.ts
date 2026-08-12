@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { readCorpus } from "~/lib/text/fixtures/corpus"
 import { getEmbeddableSource, sliceSource } from "~/lib/search/source"
+import { OVERLAP_CHARS, UNIT_CEILING_CHARS } from "~/lib/cutting/constants"
 import { chunkFileForEmbedding } from "./chunk"
 import { hashChunk } from "./hash"
 
@@ -46,5 +47,22 @@ describe("chunkFileForEmbedding", () => {
   it("makes no chunk out of a document with no prose", () => {
     expect(chunkFileForEmbedding("")).toEqual([])
     expect(chunkFileForEmbedding("```ts\nconst a = 1\n```")).toEqual([])
+  })
+})
+
+describe("a document the segmenter returns as one sentence", () => {
+  const MAX_CHUNK_CHARS = UNIT_CEILING_CHARS + OVERLAP_CHARS
+
+  const cases: { name: string; content: string }[] = [
+    { name: "no terminal punctuation", content: "word ".repeat(20_000) },
+    { name: "one huge sentence", content: `Opening line. ${"x".repeat(60_000)}. Closing line.` },
+    { name: "a base64 blob with no spaces", content: "A1b2C3d4".repeat(20_000) },
+  ]
+
+  it.each(cases)("still fits a chunk a provider will accept: $name", ({ content }) => {
+    const chunks = chunkFileForEmbedding(content)
+
+    expect(chunks.length).toBeGreaterThan(1)
+    for (const chunk of chunks) expect(chunk.text.length).toBeLessThanOrEqual(MAX_CHUNK_CHARS)
   })
 })

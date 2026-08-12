@@ -24,6 +24,10 @@ That the prose string is now the _unstripped_ extraction is the change, and it i
 | `start` | integer | Offset of the sentence's first character in `proseOf(raw)`             |
 | `end`   | integer | Offset one past its last character in `proseOf(raw)`                   |
 
+**A row is never longer than `MAX_SENTENCE_CHARS`.** The segmenter breaks on terminal punctuation, so a document that has none — an unpunctuated transcript, a pasted log, a base64 blob — comes back as a single row the length of the whole file. That is a segmentation failure rather than a sentence, and nothing below this layer will divide it: the cutter never splits a row, so it becomes one unit, one chunk, and one request no embedding provider will accept. Measured, a 200,000-character document with no full stop produced a single 200,000-character chunk against a provider limit near 32,000.
+
+So a row over the cap is broken at the last whitespace before it, or at the cap itself where the text holds no whitespace at all. Every piece is still a slice of the prose at its own offsets, so the invariants below are unaffected. The cap is the same number as `UNIT_CEILING_CHARS`, which is what makes that ceiling a real bound rather than a preference.
+
 A sentence's index is its 0-based position in the returned array. Rows are non-overlapping and in ascending `start` order. Rows whose text is empty after trimming are dropped, which is how a table separator row or a lone list bullet disappears without leaving a phantom sentence behind.
 
 Two invariants hold for every row and are the cheapest things in the feature to assert:

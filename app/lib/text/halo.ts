@@ -1,5 +1,6 @@
 import { splitMarkdownBySentences } from "~/lib/text/split"
 import { extractProse } from "~/lib/data-blocks/parse"
+import { MAX_SENTENCE_CHARS } from "./constants"
 
 export interface SentenceRow {
   text: string
@@ -24,8 +25,37 @@ const splitSentencesWithOffsets = splitMarkdownBySentences()
 // json-regions or json-embeddings block into a document therefore moves no index.
 export const proseOf = (rawFile: string): string => extractProse(rawFile)
 
+const lastSpaceIn = (prose: string, from: number, to: number): number => {
+  for (let i = to; i > from; i--) {
+    if (/\s/.test(prose[i - 1])) return i - 1
+  }
+  return -1
+}
+
+// Cut at a word boundary where there is one, and at the cap where there is not — a run of
+// base64 with no space in it still has to end somewhere. Every piece stays a true slice of
+// the prose, so the offsets downstream indexes against are unaffected.
+const withinLength = (prose: string, row: SentenceRow): SentenceRow[] => {
+  if (row.end - row.start <= MAX_SENTENCE_CHARS) return [row]
+
+  const rows: SentenceRow[] = []
+  let start = row.start
+  while (row.end - start > MAX_SENTENCE_CHARS) {
+    const cap = start + MAX_SENTENCE_CHARS
+    const space = lastSpaceIn(prose, start, cap)
+    const end = space > start ? space : cap
+    rows.push({ text: prose.slice(start, end), start, end })
+    start = end
+    while (start < row.end && /\s/.test(prose[start])) start++
+  }
+  if (start < row.end) rows.push({ text: prose.slice(start, row.end), start, end: row.end })
+  return rows
+}
+
 export const indexProseSentences = (prose: string): SentenceRow[] =>
-  splitSentencesWithOffsets(prose).map((s) => ({ text: s.text, start: s.start, end: s.end }))
+  splitSentencesWithOffsets(prose).flatMap((s) =>
+    withinLength(prose, { text: s.text, start: s.start, end: s.end })
+  )
 
 export const indexFileSentences = (rawFile: string): SentenceRow[] =>
   indexProseSentences(proseOf(rawFile))

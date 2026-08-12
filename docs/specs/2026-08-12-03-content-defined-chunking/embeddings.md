@@ -23,7 +23,9 @@ So a batch is accumulated rather than sliced, and it closes on whichever bound i
 - **Characters.** Adding the next chunk would take the batch past `MAX_BATCH_CHARS`, which is `MAX_BATCH_TOKENS * CHARS_PER_TOKEN` — the same token budget, expressed in the only unit this repository counts in.
 - **Entries.** The batch holds `PROVIDER_BATCH_LIMIT` chunks.
 
-`MAX_EMBEDDING_BATCH_SIZE` is deleted; both bounds are applied directly, so neither hides inside a number derived from the other. A batch is never empty because the first chunk always goes in before the bound is tested, which is also what handles the one chunk that can exceed `MAX_BATCH_CHARS` on its own: the ceiling is three orders of magnitude below it, but the ceiling does not bind a unit holding a single sentence, so a document with no terminal punctuation is one unbounded chunk. It gets a request to itself and the provider rejects it, which is the boundary's answer to give.
+`MAX_EMBEDDING_BATCH_SIZE` is deleted; both bounds are applied directly, so neither hides inside a number derived from the other. A batch is never empty because the first chunk always goes in before the bound is tested. A chunk that on its own exceeds `MAX_BATCH_CHARS` cannot occur, and now genuinely cannot: [sentences.md](sentences.md) caps a row at `UNIT_CEILING_CHARS`, the ceiling therefore caps a unit, and a chunk is a unit plus at most `OVERLAP_CHARS`. The largest chunk this can produce is 2200 characters against a provider limit near 32,000.
+
+That bound matters more than the batching. A batch is sent as one request and a rejected request is dropped whole, so a single oversized chunk would take every other chunk in its batch down with it — none of them embedded, none of them written, all of them retried on the next sync and rejected again, with a line in the console as the only sign.
 
 Nothing else about the sync moves. Dirty-file detection, the debounce, companion deletion for removed files, progress reporting and the per-batch companion write all stay as they are.
 

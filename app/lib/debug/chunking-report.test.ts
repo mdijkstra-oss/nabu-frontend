@@ -132,15 +132,20 @@ describe("collectWarnings", () => {
       text: "Set `chunk.target to a value.",
       kinds: ["unpaired backtick"],
     },
-    {
-      name: "a sentence over the ceiling",
-      text: `${"word ".repeat(500)}stop.`,
-      kinds: ["over ceiling"],
-    },
   ]
 
   it.each(cases)("reports $name", ({ text, kinds }) => {
     expect(warningsFor(text).map((warning) => warning.kind)).toEqual(kinds)
+  })
+
+  // A row can no longer outrun the built-in ceiling — the sentence array caps it there —
+  // so this warning is what tells a reader sweeping the ceiling downward that they have
+  // gone below what the segmenter produces.
+  it("reports a sentence over a ceiling the run was given", () => {
+    const rows = indexProseSentences("word ".repeat(200))
+
+    expect(collectWarnings(rows, 400).map((warning) => warning.kind)).toEqual(["over ceiling"])
+    expect(collectWarnings(rows, 2000)).toEqual([])
   })
 
   it("reports nothing for balanced markdown", () => {

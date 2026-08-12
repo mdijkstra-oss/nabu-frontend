@@ -1,7 +1,15 @@
 import { describe, it, expect } from "vitest"
 import { extractProse } from "~/lib/data-blocks/parse"
+import { MAX_SENTENCE_CHARS } from "./constants"
 import { readCorpus } from "./fixtures/corpus"
-import { indexFileSentences, buildHaloForRows, buildHalo, proseOf, type HaloResult } from "./halo"
+import {
+  buildHalo,
+  buildHaloForRows,
+  indexFileSentences,
+  indexProseSentences,
+  proseOf,
+  type HaloResult,
+} from "./halo"
 
 const corpus = readCorpus()
 
@@ -161,5 +169,43 @@ describe("indexFileSentences over a fence with no info string", () => {
       withBlock("const x = 1 // A much longer body. With sentences.\nconst y = 2")
     )
     expect(long).toEqual(short)
+  })
+})
+
+describe("indexProseSentences over text the segmenter cannot break up", () => {
+  const cases: { name: string; prose: string }[] = [
+    { name: "no terminal punctuation at all", prose: "word ".repeat(10_000) },
+    {
+      name: "one very long sentence among ordinary ones",
+      prose: `Ordinary opening. ${"x".repeat(40_000)}. Ordinary close.`,
+    },
+    { name: "a run with no whitespace to break at", prose: "A1b2C3d4".repeat(10_000) },
+  ]
+
+  it.each(cases)("bounds every row: $name", ({ prose }) => {
+    const rows = indexProseSentences(prose)
+
+    expect(rows.length).toBeGreaterThan(1)
+    for (const row of rows) expect(row.end - row.start).toBeLessThanOrEqual(MAX_SENTENCE_CHARS)
+  })
+
+  it.each(cases)("keeps every row a slice of the prose in order: $name", ({ prose }) => {
+    const rows = indexProseSentences(prose)
+
+    for (const row of rows) expect(prose.slice(row.start, row.end)).toBe(row.text)
+    for (let i = 1; i < rows.length; i++) expect(rows[i - 1].end).toBeLessThanOrEqual(rows[i].start)
+  })
+
+  it("breaks at a word boundary where the text has one", () => {
+    const rows = indexProseSentences("alpha ".repeat(10_000))
+
+    for (const row of rows) {
+      expect(
+        row.text
+          .trim()
+          .split(/\s+/)
+          .every((word) => word === "alpha")
+      ).toBe(true)
+    }
   })
 })

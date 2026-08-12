@@ -26,7 +26,7 @@ Carrying both coordinate systems on one shape is deliberate. Sentence indexes ar
 
 A boundary may only fall in the gap after a sentence. Within that constraint, whether a given gap becomes one is decided by three tests at each gap, and **the order is the contract** — each answers before the next is asked:
 
-1. **Ceiling.** If adding the next sentence would take the unit past `UNIT_CEILING_CHARS`, cut here. A sentence is never split, so a single sentence longer than the ceiling becomes a unit of one.
+1. **Ceiling.** If adding the next sentence would take the unit past `UNIT_CEILING_CHARS`, cut here. A sentence is never split, so a single sentence longer than the ceiling would become a unit of one — [sentences.md](sentences.md) caps a row at the ceiling for exactly that reason, which is what makes this a bound and not a preference.
 2. **Floor.** Otherwise, if fewer than `UNIT_FLOOR_CHARS` characters have accumulated since the last cut, there is no boundary here regardless of what follows.
 3. **The content test.** Otherwise, take the `BOUNDARY_WINDOW_CHARS` characters of the prose string ending at this gap — fewer near the start of the document — hash them, and cut when the low bits are zero. **Which bits are tested depends on how far the gap sits from the last cut:** below `UNIT_TARGET_CHARS` the strict mask, at or above it the loose one. `fnvHash` returns its sixty-four bits as hex, so the low ones are read as a number before the mask is applied: `(parseInt(hash.slice(-4), 16) & BOUNDARY_MASK) === 0`. Four hex digits is sixteen bits, wider than any mask this component will use.
 
@@ -135,7 +135,7 @@ Riskiest first — the stability property is the reason the component exists, so
 
 > **Given** any document with more than one unit, **when** it is cut, **then** no unit's size is above `UNIT_CEILING_CHARS` except a unit holding one whole sentence, and no unit is below `UNIT_FLOOR_CHARS` except the last one and any unit closed because the sentence after it would breach the ceiling.
 
-> **Given** a single sentence longer than `UNIT_CEILING_CHARS`, **when** it is cut, **then** it forms one unit and is not split.
+> **Given** a single sentence longer than `UNIT_CEILING_CHARS` — which only a caller building rows by hand can produce — **when** it is cut, **then** it forms one unit and is not split.
 
 > **Given** two short sentences followed by one sentence longer than `UNIT_CEILING_CHARS`, **when** it is cut, **then** the two short sentences form a unit below the floor and the long one forms a unit of its own — the ceiling took precedence over the floor.
 
