@@ -34,6 +34,8 @@ A boundary may only fall in the gap after a sentence. Within that constraint, wh
 
 The last sentence always ends a unit. An empty sentence array produces no units.
 
+**A trailing unit below the floor is tacked onto the one before it.** Because the last sentence closes a unit whatever its length, a document ending in a short one leaves a stub the floor never got to judge — measured, a unit of 36 characters, costing a whole embedding request and a whole `find` call for one line. It is absorbed unless doing so would breach the ceiling. This is the one place a boundary is decided after the walk rather than during it, and it is safe there: it only ever touches the end of a document, so it cannot move a boundary above it.
+
 | Constant                | Value               | Where it comes from                                                                                             |
 | :---------------------- | :------------------ | :-------------------------------------------------------------------------------------------------------------- |
 | `UNIT_TARGET_CHARS`     | `CHUNK_CHARS`, 1000 | The existing embedding budget, `CHUNK_TOKENS * CHARS_PER_TOKEN`                                                 |
@@ -133,7 +135,9 @@ Riskiest first — the stability property is the reason the component exists, so
 
 > **Given** a transcript in which the same short sentence appears twenty times, **when** it is cut, **then** boundaries do not fall after every occurrence of it, and the unit sizes stay inside the floor and ceiling.
 
-> **Given** any document with more than one unit, **when** it is cut, **then** no unit's size is above `UNIT_CEILING_CHARS` except a unit holding one whole sentence, and no unit is below `UNIT_FLOOR_CHARS` except the last one and any unit closed because the sentence after it would breach the ceiling.
+> **Given** any document with more than one unit, **when** it is cut, **then** no unit's size is above `UNIT_CEILING_CHARS` except a unit holding one whole sentence, and no unit is below `UNIT_FLOOR_CHARS` except a unit closed because the sentence after it would breach the ceiling, or a last unit too long to be absorbed by the one before it.
+
+> **Given** a document whose last sentence is shorter than `UNIT_FLOOR_CHARS`, **when** it is cut, **then** that sentence belongs to the unit before it — unless absorbing it would take that unit past the ceiling, in which case it stands alone.
 
 > **Given** a single sentence longer than `UNIT_CEILING_CHARS` — which only a caller building rows by hand can produce — **when** it is cut, **then** it forms one unit and is not split.
 

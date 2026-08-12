@@ -310,3 +310,32 @@ describe("boundaryTestForMask near the start of the document", () => {
     expect(boundaryTestForMask(LOOSE_BOUNDARY_MASK)(prose, gap)).toBe(expected)
   })
 })
+
+describe("a document ending in a sentence too short to be a unit", () => {
+  const shortTail = "Yes."
+  const alwaysCuts: BoundaryTest = () => true
+
+  it("tacks it onto the unit before rather than leaving a stub", () => {
+    const body = [0, 1, 2].map((index) => sentenceOfLength(index, UNIT_FLOOR_CHARS + 50))
+    const document = documentOfSentences([...body, shortTail])
+    const units = cut(document, alwaysCuts)
+
+    expect(units).toHaveLength(body.length)
+    expect(units.at(-1)?.lastSentence).toBe(body.length)
+    expect(sizeOf(units.at(-1) as Unit)).toBeGreaterThanOrEqual(UNIT_FLOOR_CHARS)
+  })
+
+  it("leaves it alone when absorbing it would breach the ceiling", () => {
+    const document = documentOfSentences([sentenceOfLength(0, UNIT_CEILING_CHARS), shortTail])
+    const units = cut(document, alwaysCuts)
+
+    expect(units).toHaveLength(2)
+    expect(sizeOf(units[1])).toBeLessThan(UNIT_FLOOR_CHARS)
+  })
+
+  it("leaves a document that is one short sentence as one unit", () => {
+    const units = cut(documentOfSentences([shortTail]))
+
+    expect(units).toHaveLength(1)
+  })
+})

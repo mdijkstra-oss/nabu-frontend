@@ -97,6 +97,26 @@ const closesHere = (
   return verdict === "ceiling" || verdict === "content test"
 }
 
+// The last sentence always closes a unit, so a document ending in a short one leaves a
+// stub the floor never got to judge — a whole embedding request and a whole find call for
+// a line of text. Tacking it onto the unit before cannot move a boundary above it, because
+// it only ever touches the end.
+const withTailMerged = (
+  prose: string,
+  rows: readonly SentenceRow[],
+  units: Unit[],
+  rule: CutRule
+): Unit[] => {
+  if (units.length < 2) return units
+
+  const last = units[units.length - 1]
+  const previous = units[units.length - 2]
+  if (last.charEnd - last.charStart >= rule.floor) return units
+  if (last.charEnd - previous.charStart > rule.ceiling) return units
+
+  return [...units.slice(0, -2), toUnit(prose, rows, previous.firstSentence, last.lastSentence)]
+}
+
 export const cutUnits = (
   prose: string,
   rows: readonly SentenceRow[],
@@ -112,5 +132,5 @@ export const cutUnits = (
     firstSentence = index + 1
   }
 
-  return units
+  return withTailMerged(prose, rows, units, rule)
 }
