@@ -122,24 +122,35 @@ describe("bm25 store", () => {
   describe("candidates filter", () => {
     it("only returns docs whose id is in candidates set", () => {
       replaceFile("eng", "a.md", [
-        buildDoc({ id: "a1", file: "a.md", text: "fox sandals" }),
-        buildDoc({ id: "a2", file: "a.md", text: "fox boots" }),
+        buildDoc({ id: "a1", hash: "ha1", file: "a.md", text: "fox sandals" }),
+        buildDoc({ id: "a2", hash: "ha2", file: "a.md", text: "fox boots" }),
       ])
-      replaceFile("eng", "b.md", [buildDoc({ id: "b1", file: "b.md", text: "fox laptop" })])
+      replaceFile("eng", "b.md", [
+        buildDoc({ id: "b1", hash: "hb1", file: "b.md", text: "fox laptop" }),
+      ])
 
-      const candidates = new Set(["a1", "b1"])
-      const hits = queryBm25("eng", "fox", 10, { candidates })
+      const hits = queryBm25("eng", "fox", 10, { hashes: new Set(["ha1", "hb1"]) })
       expect(hits.map((h) => h.id).sort()).toEqual(["a1", "b1"])
     })
 
-    it("returns empty when candidates set is empty", () => {
-      replaceFile("eng", "a.md", [buildDoc()])
-      expect(queryBm25("eng", "fox", 10, { candidates: new Set() })).toEqual([])
+    // The database names chunks by hash and this index names them by place, so scoping a
+    // query is the one point where the two identities meet. Filtering on the wrong one
+    // silently returns nothing.
+    it("scopes by chunk hash, not by the index's own document id", () => {
+      replaceFile("eng", "a.md", [buildDoc({ id: "a1", hash: "ha1", text: "fox sandals" })])
+
+      expect(queryBm25("eng", "fox", 10, { hashes: new Set(["ha1"]) })).toHaveLength(1)
+      expect(queryBm25("eng", "fox", 10, { hashes: new Set(["a1"]) })).toEqual([])
     })
 
-    it("returns empty when no candidate id matches", () => {
-      replaceFile("eng", "a.md", [buildDoc({ id: "a1" })])
-      expect(queryBm25("eng", "fox", 10, { candidates: new Set(["nope"]) })).toEqual([])
+    it("returns empty when the hash set is empty", () => {
+      replaceFile("eng", "a.md", [buildDoc()])
+      expect(queryBm25("eng", "fox", 10, { hashes: new Set() })).toEqual([])
+    })
+
+    it("returns empty when no candidate hash matches", () => {
+      replaceFile("eng", "a.md", [buildDoc({ id: "a1", hash: "ha1" })])
+      expect(queryBm25("eng", "fox", 10, { hashes: new Set(["nope"]) })).toEqual([])
     })
   })
 

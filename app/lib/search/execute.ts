@@ -72,12 +72,8 @@ export const chunkToHit = (chunk: ScoredChunk): SearchHit => ({
 
 type QueryBuilder = (baseSql: string, hyde: HybridSearchPlan["hydes"][number]) => string
 
-const runBm25Query = (
-  keywords: KeywordsQuery,
-  candidates: Set<string>,
-  limit: number
-): ScoredChunk[] =>
-  queryBm25(keywords.language, keywords.text, limit, { candidates }).map((hit) => ({
+const runBm25Query = (keywords: KeywordsQuery, hashes: Set<string>, limit: number): ScoredChunk[] =>
+  queryBm25(keywords.language, keywords.text, limit, { hashes }).map((hit) => ({
     file: hit.file,
     text: hit.text,
     hash: hit.hash,

@@ -100,7 +100,10 @@ export const removeFileFromAllLanguages = (file: string): void => {
 }
 
 export interface QueryOptions {
-  candidates?: Set<string>
+  // Chunk hashes, which is the identity this index shares with the database. Its own
+  // document ids are a private matter — two copies of one passage need distinct ids and
+  // share a hash, so the two cannot be used interchangeably.
+  hashes?: Set<string>
 }
 
 export const queryBm25 = (
@@ -113,10 +116,13 @@ export const queryBm25 = (
   if (!state) return []
   const trimmed = text.trim()
   if (trimmed.length === 0) return []
-  const { candidates } = options
-  if (candidates && candidates.size === 0) return []
-  const filter = candidates
-    ? (result: { id: string | number }) => candidates.has(String(result.id))
+  const { hashes } = options
+  if (hashes && hashes.size === 0) return []
+  const filter = hashes
+    ? (result: { id: string | number }) => {
+        const doc = state.docs.get(String(result.id))
+        return doc !== undefined && hashes.has(doc.hash)
+      }
     : undefined
   const results = state.index.search(trimmed, { prefix: false, fuzzy: false, filter })
   const sliced = results.slice(0, limit)
@@ -141,6 +147,16 @@ export const indexedLanguages = (): string[] => [...states.keys()]
 
 export const ownedIdsForFile = (language: string, file: string): Set<string> =>
   states.get(language)?.ownership.get(file) ?? new Set()
+
+export const ownedHashesForFile = (language: string, file: string): Set<string> => {
+  const state = states.get(language)
+  const hashes = new Set<string>()
+  for (const id of state?.ownership.get(file) ?? []) {
+    const doc = state?.docs.get(id)
+    if (doc) hashes.add(doc.hash)
+  }
+  return hashes
+}
 
 export const languageStats = (): Record<string, { docs: number; files: number }> => {
   const out: Record<string, { docs: number; files: number }> = {}

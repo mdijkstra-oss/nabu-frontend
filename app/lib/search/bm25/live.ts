@@ -1,8 +1,9 @@
-import { queryBm25, indexedLanguages, ownedIdsForFile, type Bm25Hit } from "./store"
+import { queryBm25, indexedLanguages, ownedHashesForFile, type Bm25Hit } from "./store"
 
-const candidatesForLanguage = (language: string, scopeFiles: string[]): Set<string> => {
+const hashesForLanguage = (language: string, scopeFiles: string[]): Set<string> => {
   const out = new Set<string>()
-  for (const file of scopeFiles) for (const id of ownedIdsForFile(language, file)) out.add(id)
+  for (const file of scopeFiles)
+    for (const hash of ownedHashesForFile(language, file)) out.add(hash)
   return out
 }
 
@@ -13,9 +14,9 @@ export const searchBm25Live = (text: string, limit: number, scopeFiles?: string[
   if (trimmed.length === 0) return []
   const hits: Bm25Hit[] = []
   for (const language of indexedLanguages()) {
-    const candidates = scopeFiles ? candidatesForLanguage(language, scopeFiles) : undefined
-    if (candidates && candidates.size === 0) continue
-    hits.push(...queryBm25(language, trimmed, limit, candidates ? { candidates } : {}))
+    const hashes = scopeFiles ? hashesForLanguage(language, scopeFiles) : undefined
+    if (hashes && hashes.size === 0) continue
+    hits.push(...queryBm25(language, trimmed, limit, hashes ? { hashes } : {}))
   }
   return hits.sort(byScoreDesc).slice(0, limit)
 }
