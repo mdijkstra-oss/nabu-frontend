@@ -30,7 +30,7 @@ export const indexFileSentences = (rawFile: string): SentenceRow[] => {
     .filter((s) => s.text.trim().length > 0)
 }
 
-const findOverlappingRange = (
+export const findOverlappingRange = (
   rows: readonly SentenceRow[],
   charStart: number,
   charEnd: number

@@ -23,6 +23,7 @@ import {
   normalizeBlockFields,
   normalizeBlockKeyOrder,
   expandBlockIdRefs,
+  stripDecorations,
   type IdResolver,
 } from "~/lib/data-blocks/normalize"
 import { findAnnotationById } from "~/domain/data-blocks/attributes/annotations/selectors"
@@ -40,7 +41,10 @@ export const REQUIRED_FILES = [SETTINGS_FILE, PREFERENCES_FILE] as const
 
 const normalizeFile = (text: string, resolveId?: IdResolver): string =>
   normalizeSingletonOrder(
-    expandBlockIdRefs(normalizeBlockKeyOrder(normalizeBlockFields(normalize(text))), resolveId)
+    expandBlockIdRefs(
+      normalizeBlockKeyOrder(normalizeBlockFields(stripDecorations(normalize(text)))),
+      resolveId
+    )
   ) + "\n"
 import { memoByRef } from "~/lib/utils/memo"
 

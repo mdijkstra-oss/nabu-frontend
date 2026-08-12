@@ -22,7 +22,7 @@ const textOf = (content: MessageContent): string =>
 
 // The cached prefix ends at the last message, so the breakpoint rides on its
 // final content part. Nothing preceding means nothing to cache.
-const markCacheBreakpoint = (messages: Message[]): Message[] => {
+export const markCacheBreakpoint = (messages: Message[]): Message[] => {
   const last = messages.at(-1)
   if (!last) return messages
   return [

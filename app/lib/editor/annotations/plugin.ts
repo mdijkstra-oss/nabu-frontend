@@ -1,11 +1,12 @@
-import { Plugin, PluginKey } from "prosemirror-state"
-import { DecorationSet } from "prosemirror-view"
+import { PluginKey, type Plugin } from "prosemirror-state"
+import type { DecorationSet } from "prosemirror-view"
 import type { Node } from "prosemirror-model"
 import { hasReview, type Annotation } from "~/domain/data-blocks/attributes/annotations/selectors"
 import type { ResolvedAnnotation } from "./types"
 import { segmentByOverlap } from "./overlap"
 import { createDecorationSet, createMarkerDecorations } from "./decorations"
 import { findTextRange, proseTextContent } from "~/lib/editor/text"
+import { createDecorationPlugin, replaceInput } from "~/lib/editor/decoration-plugin"
 
 const pluginKey = new PluginKey("annotations")
 
@@ -41,11 +42,6 @@ const resolveAnnotations = (doc: Node, annotations: Annotation[]): ResolvedAnnot
   })
 }
 
-interface PluginState {
-  annotations: Annotation[]
-  decorations: DecorationSet
-}
-
 const computeDecorations = (doc: Node, annotations: Annotation[]): DecorationSet => {
   const resolved = resolveAnnotations(doc, annotations)
   const segments = segmentByOverlap(resolved)
@@ -54,29 +50,9 @@ const computeDecorations = (doc: Node, annotations: Annotation[]): DecorationSet
 }
 
 export const createAnnotationsPlugin = (): Plugin =>
-  new Plugin({
+  createDecorationPlugin<Annotation[], Annotation[]>({
     key: pluginKey,
-    state: {
-      init: (): PluginState => ({ annotations: [], decorations: DecorationSet.empty }),
-      apply: (tr, pluginState, _oldState, newState) => {
-        const newAnnotations = tr.getMeta(pluginKey) as Annotation[] | undefined
-        if (newAnnotations !== undefined) {
-          return {
-            annotations: newAnnotations,
-            decorations: computeDecorations(newState.doc, newAnnotations),
-          }
-        }
-        if (!tr.docChanged) return pluginState
-        return {
-          annotations: pluginState.annotations,
-          decorations: computeDecorations(newState.doc, pluginState.annotations),
-        }
-      },
-    },
-    props: {
-      decorations: (state) => {
-        const ps = pluginKey.getState(state) as PluginState | undefined
-        return ps?.decorations ?? DecorationSet.empty
-      },
-    },
+    initial: [],
+    reduce: replaceInput,
+    compute: computeDecorations,
   })

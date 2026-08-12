@@ -19,6 +19,7 @@ import {
 import { normalizeContent } from "~/lib/patch/diff/normalize"
 import { tryParseJson, parsePath, isObject } from "./json"
 import type { IdRefExpansion } from "./definition"
+import { stripInferredMetaBlocks } from "~/lib/regions/decorate/strip"
 
 export type IdResolver = (id: string) => string | undefined
 
@@ -305,3 +306,5 @@ export const expandBlockIdRefs = (markdown: string, resolveId?: IdResolver): str
 
   return result
 }
+
+export const stripDecorations = (markdown: string): string => stripInferredMetaBlocks(markdown)

@@ -8,6 +8,7 @@ const jsonTypeToDuckDb = (prop: JsonSchema): DuckDbType => {
   if (prop.type === "boolean") return "BOOLEAN"
   if (prop.type === "integer") return "INTEGER"
   if (prop.type === "string" && prop.format === "date") return "DATE"
+  if (prop.type === "string" && prop.format === "date-time") return "TIMESTAMP"
   if (prop.type === "array" && prop.items?.type === "string") return "VARCHAR[]"
   if (prop.type === "array" && prop.items?.type === "number") return "FLOAT[]"
   return "VARCHAR"

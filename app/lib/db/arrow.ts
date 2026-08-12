@@ -8,6 +8,7 @@ import {
   Int32,
   List,
   DateDay,
+  TimestampMillisecond,
 } from "apache-arrow"
 import type { DataType, Vector } from "apache-arrow"
 import type { DbColumn, DuckDbType } from "./types"
@@ -18,6 +19,7 @@ const STRING_LIST = new List(Field.new({ name: "item", type: new Utf8(), nullabl
 const ARROW_TYPES: Record<DuckDbType, DataType> = {
   VARCHAR: new Utf8(),
   DATE: new DateDay(),
+  TIMESTAMP: new TimestampMillisecond(),
   BOOLEAN: new Bool(),
   INTEGER: new Int32(),
   "FLOAT[]": FLOAT_LIST,
@@ -44,7 +46,7 @@ const toDate = (raw: unknown): Date | null => {
 
 export const coerceValue = (type: DuckDbType, raw: unknown): unknown => {
   if (raw === null || raw === undefined) return null
-  if (type === "DATE") return toDate(raw)
+  if (type === "DATE" || type === "TIMESTAMP") return toDate(raw)
   return raw
 }
 

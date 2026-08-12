@@ -10,7 +10,14 @@ export interface JsonSchema {
   enum?: string[]
 }
 
-export type DuckDbType = "VARCHAR" | "DATE" | "BOOLEAN" | "INTEGER" | "VARCHAR[]" | "FLOAT[]"
+export type DuckDbType =
+  | "VARCHAR"
+  | "DATE"
+  | "TIMESTAMP"
+  | "BOOLEAN"
+  | "INTEGER"
+  | "VARCHAR[]"
+  | "FLOAT[]"
 
 export interface DbColumn {
   name: string

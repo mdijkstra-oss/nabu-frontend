@@ -10,11 +10,16 @@ import { listener, listenerCtx } from "@milkdown/kit/plugin/listener"
 import { gapCursor } from "@milkdown/kit/prose/gapcursor"
 import "@milkdown/kit/prose/gapcursor/style/gapcursor.css"
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from "@milkdown/react"
-import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react"
+import {
+  ProsemirrorAdapterProvider,
+  useNodeViewFactory,
+  useWidgetViewFactory,
+} from "@prosemirror-adapter/react"
 import { $prose, replaceAll } from "@milkdown/utils"
 import { Plugin, PluginKey } from "prosemirror-state"
 import { createAnnotationsPlugin, annotationsMeta } from "~/lib/editor/annotations/plugin"
 import { createSpotlightPlugin, spotlightMeta } from "~/lib/editor/spotlight/plugin"
+import { createRegionsPlugin, regionsMeta } from "~/lib/editor/regions/plugin"
 import { createSelectionPlugin } from "~/lib/editor/selection/plugin"
 import { createHiddenBlocksPlugin } from "~/lib/editor/hidden-blocks/plugin"
 import { createPlaceholderPlugin } from "~/lib/editor/placeholder/plugin"
@@ -32,6 +37,7 @@ import {
   selectVisibleAnnotations,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
+import { getRenderableRegions } from "~/domain/regions/selectors"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
 import { useStableRef } from "~/ui/hooks/useStableRef"
 
@@ -65,7 +71,9 @@ const MilkdownEditorCore = ({
 }: MilkdownEditorCoreProps) => {
   const { files } = useFiles()
   const nodeViewFactory = useNodeViewFactory()
+  const widgetViewFactory = useWidgetViewFactory()
   const annotationsPlugin = $prose(() => createAnnotationsPlugin())
+  const regionsPlugin = $prose(() => createRegionsPlugin(widgetViewFactory))
   const spotlightPlugin = $prose(() => createSpotlightPlugin())
   const selectionPlugin = $prose(() => createSelectionPlugin(filePath ?? null))
   const hiddenBlocksPlugin = $prose(() => createHiddenBlocksPlugin())
@@ -86,6 +94,8 @@ const MilkdownEditorCore = ({
     [files, defaultValue, selectedCodes]
   )
   const annotations = useStableRef(rawAnnotations)
+  const rawRegions = useMemo(() => getRenderableRegions(defaultValue), [defaultValue])
+  const regions = useStableRef(rawRegions)
   const spotlights = useStableRef(normalizeSpotlights(spotlight))
 
   const readOnlyPlugin = $prose(createReadOnlyPlugin)
@@ -100,6 +110,7 @@ const MilkdownEditorCore = ({
         .use(commonmark)
         .use(gfm)
         .use(annotationsPlugin)
+        .use(regionsPlugin)
         .use(spotlightPlugin)
         .use(selectionPlugin)
 
@@ -150,9 +161,10 @@ const MilkdownEditorCore = ({
       const tr = view.state.tr
         .setMeta(annotationsMeta, annotations)
         .setMeta(spotlightMeta, spotlights)
+        .setMeta(regionsMeta, { type: "regions", ...regions })
       view.dispatch(tr)
     })
-  }, [loading, getEditor, defaultValue, annotations, spotlights])
+  }, [loading, getEditor, defaultValue, annotations, spotlights, regions])
 
   return (
     <FloatingToolbar>

@@ -18,6 +18,7 @@ export const jsonAnnotations: BlockTypeConfig<AnnotationsBlock> = {
   idPaths: [{ path: "annotations.*.id", prefix: "annotation" }],
   actorPaths: [{ path: "annotations.*.actor" }],
   fuzzyFields: ["annotations.*.text"],
+  spanField: "text",
   patchSchema: patchAnnotationRequired,
   normalize: normalizeAnnotations,
 }

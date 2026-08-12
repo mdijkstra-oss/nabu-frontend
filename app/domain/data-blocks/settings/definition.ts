@@ -1,6 +1,5 @@
 import { settingsSchema, type Settings } from "./schema"
 import type { BlockTypeConfig } from "~/lib/data-blocks/definition"
-import { validateSearchSql } from "./searches/validation"
 
 export const jsonSettings: BlockTypeConfig<Settings> = {
   schema: settingsSchema,
@@ -15,5 +14,8 @@ export const jsonSettings: BlockTypeConfig<Settings> = {
     { path: "tags.*.id", prefix: "tag" },
     { path: "searches.*.id", prefix: "search" },
   ],
-  asyncValidate: async (parsed) => validateSearchSql(parsed),
+  asyncValidate: async (parsed) => {
+    const { validateSearchSql } = await import("./searches/validation")
+    return validateSearchSql(parsed)
+  },
 }

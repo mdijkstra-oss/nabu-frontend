@@ -60,6 +60,7 @@ import {
 import { startEmbeddings } from "~/domain/embeddings/init"
 import { startBm25 } from "~/domain/search/bm25-init"
 import { startTopicAssignment } from "~/domain/corpus/init"
+import { startRegions, stopRegions, sweepRemovedKinds } from "~/domain/regions/init"
 import { WelcomeBackLoading } from "~/ui/components/WelcomeBackLoading"
 import {
   getAnnotationCount,
@@ -134,9 +135,10 @@ const isSyncMetaCommand = (command: Command): command is Command & { fileCount: 
 const isFileReceivedCommand = (command: Command): boolean => command.action === "WriteFile"
 
 const FILE_WEIGHT = 35
-const DB_WEIGHT = 40
+const DB_WEIGHT = 35
 const EMBEDDING_WEIGHT = 10
-const TOPIC_WEIGHT = 15
+const TOPIC_WEIGHT = 10
+const REGION_WEIGHT = 10
 
 const computeFileProgress = (loaded: number, total: number): number => {
   if (loaded === 0) return 0
@@ -198,6 +200,8 @@ export default function ProjectLayout() {
   const [embeddingTotal, setEmbeddingTotal] = useState(0)
   const [topicProcessed, setTopicProcessed] = useState(0)
   const [topicTotal, setTopicTotal] = useState(0)
+  const [regionProcessed, setRegionProcessed] = useState(0)
+  const [regionTotal, setRegionTotal] = useState(0)
   useNotifications()
 
   useEffect(() => {
@@ -244,6 +248,7 @@ export default function ProjectLayout() {
       setPendingRefsSuppressed(false)
       resolvePendingRefsInBulk()
       auditPendingRefsAtBoot()
+      sweepRemovedKinds()
       filesLoadedResolve?.()
     }
 
@@ -305,6 +310,15 @@ export default function ProjectLayout() {
       setTopicProcessed((t) => Math.max(t, 1))
       setTopicTotal((t) => Math.max(t, 1))
 
+      setStatusLabel("Finding regions...")
+      await startRegions((processed, total) => {
+        setRegionProcessed(processed)
+        setRegionTotal(total)
+      })
+      if (cancelled) return
+      setRegionProcessed((t) => Math.max(t, 1))
+      setRegionTotal((t) => Math.max(t, 1))
+
       setStatusLabel("Finalizing...")
       await syncOnce()
       startBackgroundSync()
@@ -315,6 +329,7 @@ export default function ProjectLayout() {
 
     return () => {
       cancelled = true
+      stopRegions()
       connection.close()
       setProjectId(null)
       setPendingRefsSuppressed(false)
@@ -780,7 +795,9 @@ export default function ProjectLayout() {
     EMBEDDING_WEIGHT
   )
   const topicsProgress = computeWeightedProgress(topicProcessed, topicTotal, TOPIC_WEIGHT)
-  const totalProgress = fileProgress + dbProgress + embeddingsProgress + topicsProgress
+  const regionsProgress = computeWeightedProgress(regionProcessed, regionTotal, REGION_WEIGHT)
+  const totalProgress =
+    fileProgress + dbProgress + embeddingsProgress + topicsProgress + regionsProgress
 
   return (
     <NabuProvider key={params.projectId}>

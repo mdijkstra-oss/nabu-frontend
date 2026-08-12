@@ -2,6 +2,7 @@ import type { z } from "zod"
 import { findSingletonBlock, findBlocksByLanguage } from "~/lib/data-blocks/parse"
 import { stripPendingRefs } from "~/lib/files/pending-refs"
 import { createCappedCache } from "~/lib/utils/cache"
+import { decorateParsed } from "~/lib/regions/decorate"
 
 export const recoverArrayItems = <T>(
   json: Record<string, unknown>,
@@ -84,13 +85,29 @@ const parseWithCache = <T>(language: string, content: string, schema: z.ZodType<
   }
 }
 
-export const getBlock = <T>(raw: string, language: string, schema: z.ZodType<T>): T | null => {
+export const getBlockUndecorated = <T>(
+  raw: string,
+  language: string,
+  schema: z.ZodType<T>
+): T | null => {
   const block = findSingletonBlock(raw, language)
   if (!block) return null
   return parseWithCache(language, block.content, schema)
 }
 
+export const getBlock = <T>(raw: string, language: string, schema: z.ZodType<T>): T | null => {
+  const block = findSingletonBlock(raw, language)
+  if (!block) return null
+  const parsed = parseWithCache(language, block.content, schema)
+  if (parsed === null) return null
+  return decorateParsed<T>(raw, language, parsed as T, block.start)
+}
+
 export const getBlocks = <T>(raw: string, language: string, schema: z.ZodType<T>): T[] =>
   findBlocksByLanguage(raw, language)
-    .map((block) => parseWithCache(language, block.content, schema))
+    .map((block): T | null => {
+      const parsed = parseWithCache(language, block.content, schema)
+      if (parsed === null) return null
+      return decorateParsed<T>(raw, language, parsed as T, block.start)
+    })
     .filter((b): b is T => b !== null)

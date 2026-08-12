@@ -100,14 +100,15 @@ Rows are replaced per file rather than patched, which makes the sync idempotent 
 
 Table structure is derived from the block's JSON Schema. Scalars become columns, nested objects flatten to prefixed columns, and arrays of objects become child tables keyed by file:
 
-| JSON Schema                    | DuckDB      |
-| ------------------------------ | ----------- |
-| `boolean`                      | `BOOLEAN`   |
-| `integer`                      | `INTEGER`   |
-| `string` with `format: "date"` | `DATE`      |
-| array of `string`              | `VARCHAR[]` |
-| array of `number`              | `FLOAT[]`   |
-| anything else                  | `VARCHAR`   |
+| JSON Schema                         | DuckDB      |
+| ----------------------------------- | ----------- |
+| `boolean`                           | `BOOLEAN`   |
+| `integer`                           | `INTEGER`   |
+| `string` with `format: "date"`      | `DATE`      |
+| `string` with `format: "date-time"` | `TIMESTAMP` |
+| array of `string`                   | `VARCHAR[]` |
+| array of `number`                   | `FLOAT[]`   |
+| anything else                       | `VARCHAR`   |
 
 Two escape hatches exist for types whose natural table shape differs from their block shape. `rowPath` projects one array field as the table's rows — `json-annotations` holds an `annotations` array and projects one row per annotation, not one row per block. `tableName` renames, so `json-callout` becomes `callouts`.
 
@@ -151,6 +152,43 @@ Chunks land in a table named `files` — one row per chunk, not per document —
 
 The generated DDL is handed to the model on every turn as the description of what it may query. Both the tables and their description come from the same registry, so the schema the model writes SQL against cannot drift from the tables that exist.
 
+## Regions
+
+Annotations mark short spans. Nothing in them says _who is speaking here_ or _what date this passage is from_, so a transcript is a flat wall of coded spans with no way to ask which are Rutte's, and a diary is one document with no way to order its entries.
+
+Regions are a second layer of markup that cuts a document into stretches rather than spans. A region has a **kind** — `speaker`, `date` — and a **value** drawn from a vocabulary shared across the whole corpus, so `rutte` is one person in every file rather than four spellings.
+
+Detection runs by itself, on the same debounce as embedding. One model call finds the occurrences in a stretch of the document; a second decides which sentences each occurrence owns. The result is written into the document as a `json-regions` block, so the document stays the only source of truth and reopening it re-runs no model call.
+
+In the editor, each region's label is drawn on the document's own words — the phrase the occurrence was found by — with the kind's icon and colour. Nothing is inserted: a transcript turn reading "Rutte: yeah, it was quite the event" carries the word Rutte once, and the chip is that word. Hovering a label tints the text that region covers.
+
+### Regions become columns
+
+The payoff is at read time. Every JSON block in a document is handed the regions it sits inside, as a field named `inferred_meta` keyed by kind:
+
+```json
+{
+  "text": "the budget was settled",
+  "reason": "attribution of the decision",
+  "code": "callout-3kf9m2qp",
+  "inferred_meta": {
+    "speaker": ["rutte"],
+    "date": { "start": "2020-03-12T00:00:00Z", "end": "2020-03-12T00:00:00Z" }
+  }
+}
+```
+
+That field is never stored. It is recomputed on every read and stripped on every write, so the file on disk holds the regions block and nothing else. What it produces is columns — `inferred_meta_speaker`, `inferred_meta_date_start`, `inferred_meta_date_end` — on every projected table, which turns two questions into ordinary SQL:
+
+```sql
+SELECT * FROM annotations WHERE list_contains(inferred_meta_speaker, 'rutte');
+SELECT * FROM charts WHERE inferred_meta_date_start >= TIMESTAMP '2020-03-01';
+```
+
+Kinds are a shipped list, not user configuration: adding one is a commit, the same as adding a block type. A kind is a folder holding the prose that describes it and a few lines of config naming its icon, its colour, and whether its values are free strings or timestamps.
+
+Regions are derived output, so no agent tool writes them — there is no verb to invoke rather than a verb that refuses.
+
 ## Config reference
 
 Every field of the config object introduced under [registering a block](#registering-a-block), grouped as the declaration groups them.
@@ -183,11 +221,18 @@ Every field of the config object introduced under [registering a block](#registe
 
 **SQL projection**
 
-| Field        | Purpose                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------ |
-| `projected?` | Becomes a table named after the language minus its `json-` prefix, shaped after the schema |
-| `tableName?` | Overrides that table name                                                                  |
-| `rowPath?`   | Projects this array field as the table's rows instead of the block itself                  |
+| Field            | Purpose                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `projected?`     | Becomes a table named after the language minus its `json-` prefix, shaped after the schema |
+| `tableName?`     | Overrides that table name                                                                  |
+| `rowPath?`       | Projects this array field as the table's rows instead of the block itself                  |
+| `hiddenColumns?` | Columns kept in the table but hidden from the schema the model is shown                    |
+
+**Where a row sits in the document**
+
+| Field        | Purpose                                                                               |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `spanField?` | Row field holding text quoted from the prose, located to give the row its own regions |
 
 **Identity and cross-references**
 

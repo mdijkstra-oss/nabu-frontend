@@ -9,10 +9,12 @@ import { jsonAnnotations } from "~/domain/data-blocks/annotations/definition"
 import { jsonChart } from "~/domain/data-blocks/chart/definition"
 import { jsonUx } from "~/domain/data-blocks/ux/definition"
 import { jsonEmbeddings } from "~/domain/data-blocks/embeddings/definition"
+import { jsonRegions } from "~/domain/data-blocks/regions/definition"
+import { withInferredMeta } from "~/lib/regions/decorate/extend-config"
 
 type AnyBlockConfig = BlockTypeConfig
 
-const blockTypes: Record<string, AnyBlockConfig> = {
+const declared: Record<string, AnyBlockConfig> = {
   "json-attributes": jsonAttributes as AnyBlockConfig,
   "json-settings": jsonSettings as AnyBlockConfig,
   "json-callout": jsonCallout as AnyBlockConfig,
@@ -20,7 +22,12 @@ const blockTypes: Record<string, AnyBlockConfig> = {
   "json-chart": jsonChart as AnyBlockConfig,
   "json-ux": jsonUx as AnyBlockConfig,
   "json-embeddings": jsonEmbeddings as AnyBlockConfig,
+  "json-regions": jsonRegions as AnyBlockConfig,
 }
+
+const blockTypes: Record<string, AnyBlockConfig> = Object.fromEntries(
+  Object.entries(declared).map(([language, config]) => [language, withInferredMeta(config)])
+)
 
 export const BLOCK_LANGUAGES = Object.keys(blockTypes) as [string, ...string[]]
 
@@ -111,3 +118,6 @@ export const getBlockSchemaDefinitions = (): BlockSchemaDefinition[] =>
     immutable: Object.keys(config.immutable),
     constraints: config.constraints,
   }))
+
+export const getSpanField = (language: string): string | undefined =>
+  blockTypes[language]?.spanField

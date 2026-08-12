@@ -62,6 +62,7 @@ const toProjectionConfig = ([language, config]: [string, BlockTypeConfig]): Proj
   singleton: config.singleton,
   blockParser: buildBlockParser(language, config.schema(), config.singleton, config.rowPath),
   allowedFiles: config.allowedFiles,
+  hiddenColumns: config.hiddenColumns,
 })
 
 const embeddingsProjection: ProjectionConfig = {

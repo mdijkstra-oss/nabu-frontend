@@ -157,7 +157,12 @@ const buildUrl = (endpoint: string): string => `${getLlmHost()}${endpoint}`
 
 const LLM_CACHE_PREFIX = "llm"
 const LLM_CACHE_CAP = 10_000
-const UNCACHEABLE_ENDPOINTS = ["/qual-coder", "/semantic-filter"]
+export const UNCACHEABLE_ENDPOINTS = [
+  "/qual-coder",
+  "/semantic-filter",
+  "/region-finder",
+  "/region-marker",
+]
 
 const isCacheable = (options: CallLlmOptions): boolean =>
   !options.callbacks && !UNCACHEABLE_ENDPOINTS.some((p) => options.endpoint.includes(p))

@@ -7,6 +7,7 @@ import { findMatchOffset } from "~/lib/text/find"
 import { selectVisibleAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { getEmbeddableSource } from "./source"
+import { stripInferredMeta } from "~/lib/regions/decorate/strip"
 
 interface ByteRange {
   start: number
@@ -29,8 +30,14 @@ interface ExtendResult {
   included: Annotation[]
 }
 
+// The undecorated row: the agent's view of raw document text stays the regions block
+// alone, with the joined view reaching it through SQL.
+const undecorated = (annotation: Annotation): Annotation =>
+  (stripInferredMeta(annotation as unknown as Record<string, unknown>) ??
+    annotation) as unknown as Annotation
+
 const formatAnnotationsBlock = (annotations: Annotation[]): string =>
-  "```json-annotations\n" + JSON.stringify({ annotations }) + "\n```"
+  "```json-annotations\n" + JSON.stringify({ annotations: annotations.map(undecorated) }) + "\n```"
 
 export const extendAndCollect = (
   range: ByteRange,

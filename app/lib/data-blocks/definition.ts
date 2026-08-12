@@ -66,6 +66,13 @@ export interface BlockTypeConfig<T = unknown> {
   tableName?: string
   // Projects this array field as the table's rows instead of the block itself
   rowPath?: string
+  // Columns kept in the table but hidden from the schema the agent is shown
+  hiddenColumns?: string[]
+
+  // --- Where a row sits in the document ---
+
+  // Row field holding text quoted from the prose, located to give the row its span
+  spanField?: string
 
   // --- Identity and cross-references ---
 

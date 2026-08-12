@@ -1,4 +1,4 @@
-import { Plugin, PluginKey } from "prosemirror-state"
+import { PluginKey, type Plugin } from "prosemirror-state"
 import { Decoration, DecorationSet } from "prosemirror-view"
 import type { Node } from "prosemirror-model"
 import type { Spotlight } from "./types"
@@ -7,6 +7,7 @@ import { getBlockConfig } from "~/lib/data-blocks/registry"
 import { findTextRange, proseTextContent, textOffsetToPos } from "~/lib/editor/text"
 import type { TextRange } from "~/lib/editor/text"
 import { findMatchOffset } from "~/lib/text/find"
+import { createDecorationPlugin, replaceInput } from "~/lib/editor/decoration-plugin"
 
 const pluginKey = new PluginKey("spotlight")
 
@@ -89,35 +90,10 @@ const computeDecorations = (doc: Node, spotlights: Spotlight[]): DecorationSet =
   return decorations.length > 0 ? DecorationSet.create(doc, decorations) : DecorationSet.empty
 }
 
-interface PluginState {
-  spotlights: Spotlight[]
-  decorations: DecorationSet
-}
-
 export const createSpotlightPlugin = (): Plugin =>
-  new Plugin({
+  createDecorationPlugin<Spotlight[], Spotlight[]>({
     key: pluginKey,
-    state: {
-      init: (): PluginState => ({ spotlights: [], decorations: DecorationSet.empty }),
-      apply: (tr, pluginState, _oldState, newState) => {
-        const meta = tr.getMeta(pluginKey) as Spotlight[] | undefined
-        if (meta !== undefined) {
-          return {
-            spotlights: meta,
-            decorations: computeDecorations(newState.doc, meta),
-          }
-        }
-        if (!tr.docChanged) return pluginState
-        return {
-          spotlights: pluginState.spotlights,
-          decorations: computeDecorations(newState.doc, pluginState.spotlights),
-        }
-      },
-    },
-    props: {
-      decorations: (state) => {
-        const ps = pluginKey.getState(state) as PluginState | undefined
-        return ps?.decorations ?? DecorationSet.empty
-      },
-    },
+    initial: [],
+    reduce: replaceInput,
+    compute: computeDecorations,
   })

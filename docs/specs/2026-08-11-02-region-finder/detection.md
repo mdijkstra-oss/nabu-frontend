@@ -101,10 +101,11 @@ Input:
 | `rules`                    | text                        | The same `rules.md` prose `find` was handed; the shared system prompt cannot know what a region means for this kind, so the semantics ride in as content |
 | `quote`                    | string                      | Names the one occurrence being bounded, in the model's own surface form                                                                   |
 | `hitSentence`              | absolute index              | Stated to the model as the sentence the occurrence sits in; also the floor and ceiling of the repair rules below                          |
+| `value`                    | normalized string or ISO-8601 instant | Carried through to the resulting mark, never rendered — see below                                                       |
 | `windowStart`, `windowEnd` | absolute indices            | Render bounds, and the clamp applied to the response                                                                                      |
 | `sentences`                | the window's sentence texts | The rendered payload                                                                                                                      |
 
-The hit's `value` is deliberately absent: the model bounds a passage using the surface phrase, and a vocabulary id it has never seen adds nothing it can act on.
+The hit's `value` is carried and never shown: the model bounds a passage using the surface phrase, and a vocabulary id it has never seen adds nothing it can act on. It is here because a mark is a hit plus a range and the call returns the mark whole, so the value has to survive the call to be on the far side of it; the alternative — returning a bare range and rebuilding the mark in [region-sync.md](region-sync.md) — would move that reassembly into the component that does not own the shape. What must hold is that no message this call builds contains the value, and that is the assertion, not the absence of the field.
 
 Message stack:
 

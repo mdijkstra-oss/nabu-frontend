@@ -47,22 +47,24 @@ export const removeFromRequired = (
     return { ...target, required: required.filter((f) => !fields.includes(f)) }
   })
 
-const actorSchemaPath = (parsed: ParsedPath): string[] => {
+const schemaPathOf = (parsed: ParsedPath): string[] => {
   if (parsed.type === "root") return []
   if (parsed.type === "root-array") return ["items"]
   return ["properties", parsed.arrayField, "items"]
 }
 
-const stripActorFields = (schema: JsonSchema, actorPaths: ActorPathConfig[]): JsonSchema =>
-  actorPaths.reduce((s, { path }) => {
-    const parsed = parsePath(path)
-    if (!parsed) return s
-    const field = parsed.type === "root" ? parsed.field : parsed.itemField
-    return removeFromProperties(s, actorSchemaPath(parsed), field)
-  }, schema)
+const stripAtPath = (schema: JsonSchema, path: string): JsonSchema => {
+  const parsed = parsePath(path)
+  if (!parsed) return schema
+  const field = parsed.type === "root" ? parsed.field : parsed.itemField
+  return removeFromProperties(schema, schemaPathOf(parsed), field)
+}
 
-const stripReadonlyFields = (schema: JsonSchema, fields: string[]): JsonSchema =>
-  fields.reduce((s, field) => removeFromProperties(s, [], field), schema)
+const stripActorFields = (schema: JsonSchema, actorPaths: ActorPathConfig[]): JsonSchema =>
+  actorPaths.reduce((s, { path }) => stripAtPath(s, path), schema)
+
+const stripReadonlyFields = (schema: JsonSchema, paths: string[]): JsonSchema =>
+  paths.reduce(stripAtPath, schema)
 
 export const toBlockSchema = (config: BlockTypeConfig): unknown => {
   let schema = z.toJSONSchema(config.schema(), { io: "input" }) as JsonSchema
