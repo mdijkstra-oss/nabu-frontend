@@ -27,9 +27,11 @@ export const documentOfSentences = (texts: readonly string[]): Document => {
 export const sentenceOfLength = (index: number, length: number): string =>
   `S${index} `.padEnd(length - 1, "x").slice(0, length - 1) + "."
 
-// The bounds a test is not exercising stay at their real values, so a case about the floor
-// cannot pass because the ceiling was quietly moved out of its way.
+// One predicate for both sides of the target, so a case about the floor, the ceiling or
+// the shape of a unit is not also a case about which mask a gap was tested with. The bounds
+// it is not exercising stay at their real values.
 export const ruleWith = (isBoundary: BoundaryTest): CutRule => ({
   ...DEFAULT_CUT_RULE,
-  isBoundary,
+  strict: isBoundary,
+  loose: isBoundary,
 })

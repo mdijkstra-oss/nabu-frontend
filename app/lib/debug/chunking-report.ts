@@ -1,9 +1,11 @@
 import {
-  BOUNDARY_MASK_BITS,
   BOUNDARY_WINDOW_CHARS,
+  LOOSE_MASK_BITS,
   maskOfBits,
+  STRICT_MASK_BITS,
   UNIT_CEILING_CHARS,
   UNIT_FLOOR_CHARS,
+  UNIT_TARGET_CHARS,
 } from "~/lib/cutting/constants"
 import {
   boundaryTestForMask,
@@ -77,21 +79,27 @@ export const PROBE_SENTENCE = "A newly inserted sentence sits here. "
 // What the report was run with. The script turns its flags into one of these, so a number
 // printed in the header is the number the units below it were cut by.
 export interface ReportSettings {
-  maskBits: number
+  strictBits: number
+  looseBits: number
+  target: number
   window: number
   floor: number
   ceiling: number
 }
 
 export const DEFAULT_SETTINGS: ReportSettings = {
-  maskBits: BOUNDARY_MASK_BITS,
+  strictBits: STRICT_MASK_BITS,
+  looseBits: LOOSE_MASK_BITS,
+  target: UNIT_TARGET_CHARS,
   window: BOUNDARY_WINDOW_CHARS,
   floor: UNIT_FLOOR_CHARS,
   ceiling: UNIT_CEILING_CHARS,
 }
 
 export const ruleOf = (settings: ReportSettings): CutRule => ({
-  isBoundary: boundaryTestForMask(maskOfBits(settings.maskBits), settings.window),
+  strict: boundaryTestForMask(maskOfBits(settings.strictBits), settings.window),
+  loose: boundaryTestForMask(maskOfBits(settings.looseBits), settings.window),
+  target: settings.target,
   floor: settings.floor,
   ceiling: settings.ceiling,
 })
@@ -160,7 +168,7 @@ export const sweepMasks = (
   bitWidths: readonly number[] = SWEEP_MASK_BITS
 ): MaskSweep[] =>
   bitWidths.map((bits) => {
-    const rule = ruleOf({ ...settings, maskBits: bits })
+    const rule = ruleOf({ ...settings, looseBits: bits })
     return {
       bits,
       mask: maskOfBits(bits),
@@ -250,7 +258,7 @@ const countSuppressedGaps = (
   let suppressed = 0
   for (let index = unit.firstSentence; index < unit.lastSentence; index++) {
     if (verdictAt(prose, rows, unit.firstSentence, index, rule) !== "floor") continue
-    if (rule.isBoundary(prose, rows[index].end)) suppressed++
+    if (rule.strict(prose, rows[index].end)) suppressed++
   }
   return suppressed
 }
@@ -297,7 +305,8 @@ const renderUnitBlock = (document: DocumentAnalysis, report: UnitReport, index: 
 
 const settingsLine = (settings: ReportSettings): string =>
   [
-    `mask 0b${maskOfBits(settings.maskBits).toString(2)}`,
+    `strict 0b${maskOfBits(settings.strictBits).toString(2)} below ${settings.target}`,
+    `loose 0b${maskOfBits(settings.looseBits).toString(2)} above`,
     `floor ${settings.floor}`,
     `ceiling ${settings.ceiling}`,
     `window ${settings.window}`,
@@ -389,7 +398,7 @@ const renderUnitSizes = (documents: readonly DocumentAnalysis[]): string =>
 
 const renderMaskSweep = (documents: readonly DocumentAnalysis[]): string =>
   section(
-    "MASK SWEEP — the whole corpus re-cut at each width",
+    "LOOSE MASK SWEEP — the whole corpus re-cut with the strict mask held where it is",
     formatTable(
       ["mask", ...summaryHeaders],
       sweepMasks(documents).map((sweep) => [

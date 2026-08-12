@@ -17,7 +17,9 @@ const USAGE = [
   "  boundary, and a header saying why that unit closed. A directory prints the",
   "  distribution: sentence lengths, unit sizes, a mask sweep and a stability probe.",
   "",
-  `  --mask <bits>      how rarely a gap becomes a boundary, 1 in 2^bits (default ${DEFAULT_SETTINGS.maskBits})`,
+  `  --strict <bits>    how rarely a gap fires below the target, 1 in 2^bits (default ${DEFAULT_SETTINGS.strictBits})`,
+  `  --loose <bits>     how rarely it fires at or above the target (default ${DEFAULT_SETTINGS.looseBits})`,
+  `  --target <chars>   where the strict mask gives way to the loose one (default ${DEFAULT_SETTINGS.target})`,
   `  --window <chars>   how much text before a gap is hashed (default ${DEFAULT_SETTINGS.window})`,
   `  --floor <chars>    below this a gap cannot become a boundary (default ${DEFAULT_SETTINGS.floor})`,
   `  --ceiling <chars>  above this a boundary is forced (default ${DEFAULT_SETTINGS.ceiling})`,
@@ -25,7 +27,9 @@ const USAGE = [
 
 const flags = mri(process.argv.slice(2), {
   default: {
-    mask: DEFAULT_SETTINGS.maskBits,
+    strict: DEFAULT_SETTINGS.strictBits,
+    loose: DEFAULT_SETTINGS.looseBits,
+    target: DEFAULT_SETTINGS.target,
     window: DEFAULT_SETTINGS.window,
     floor: DEFAULT_SETTINGS.floor,
     ceiling: DEFAULT_SETTINGS.ceiling,
@@ -33,7 +37,9 @@ const flags = mri(process.argv.slice(2), {
 })
 
 const settings: ReportSettings = {
-  maskBits: Number(flags.mask),
+  strictBits: Number(flags.strict),
+  looseBits: Number(flags.loose),
+  target: Number(flags.target),
   window: Number(flags.window),
   floor: Number(flags.floor),
   ceiling: Number(flags.ceiling),

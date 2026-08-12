@@ -1,10 +1,12 @@
 import { fnvHash } from "~/lib/utils/hash"
 import type { SentenceRow } from "~/lib/text/halo"
 import {
-  BOUNDARY_MASK,
   BOUNDARY_WINDOW_CHARS,
+  LOOSE_BOUNDARY_MASK,
+  STRICT_BOUNDARY_MASK,
   UNIT_CEILING_CHARS,
   UNIT_FLOOR_CHARS,
+  UNIT_TARGET_CHARS,
 } from "./constants"
 
 export interface Unit {
@@ -28,16 +30,20 @@ export const boundaryTestForMask =
   (prose, gap) =>
     (lowBitsOf(fnvHash(prose.slice(Math.max(0, gap - window), gap))) & mask) === 0
 
-// The three knobs travel together because a gap's verdict needs all three, and setting one
+// The knobs travel together because a gap's verdict needs all of them, and setting one
 // without the others is how a caller ends up measuring a rule nobody runs.
 export interface CutRule {
-  isBoundary: BoundaryTest
+  strict: BoundaryTest
+  loose: BoundaryTest
+  target: number
   floor: number
   ceiling: number
 }
 
 export const DEFAULT_CUT_RULE: CutRule = {
-  isBoundary: boundaryTestForMask(BOUNDARY_MASK),
+  strict: boundaryTestForMask(STRICT_BOUNDARY_MASK),
+  loose: boundaryTestForMask(LOOSE_BOUNDARY_MASK),
+  target: UNIT_TARGET_CHARS,
   floor: UNIT_FLOOR_CHARS,
   ceiling: UNIT_CEILING_CHARS,
 }
@@ -73,9 +79,11 @@ export const verdictAt = (
   rule: CutRule = DEFAULT_CUT_RULE
 ): GapVerdict => {
   const start = rows[firstSentence].start
+  const accumulated = rows[index].end - start
   if (rows[index + 1].end - start > rule.ceiling) return "ceiling"
-  if (rows[index].end - start < rule.floor) return "floor"
-  return rule.isBoundary(prose, rows[index].end) ? "content test" : "open"
+  if (accumulated < rule.floor) return "floor"
+  const isBoundary = accumulated < rule.target ? rule.strict : rule.loose
+  return isBoundary(prose, rows[index].end) ? "content test" : "open"
 }
 
 const closesHere = (

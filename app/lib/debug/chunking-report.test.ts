@@ -71,7 +71,7 @@ describe("sweepMasks", () => {
     const expected = cutUnits(
       document.prose,
       document.rows,
-      ruleOf({ ...DEFAULT_SETTINGS, maskBits: bits })
+      ruleOf({ ...DEFAULT_SETTINGS, looseBits: bits })
     )
 
     expect(sweep.mask).toBe(maskOfBits(bits))
@@ -199,8 +199,9 @@ describe("reportUnits", () => {
   }
 
   it("counts a gap as suppressed only where the content test fired under the floor", () => {
-    const { prose, rows } = rowsOfLengths([100, 100, UNIT_FLOOR_CHARS - 150, 20])
-    const firesAt = new Set([100, UNIT_FLOOR_CHARS + 50])
+    const underFloor = Math.floor(UNIT_FLOOR_CHARS / 2)
+    const { prose, rows } = rowsOfLengths([underFloor, UNIT_FLOOR_CHARS, 200, 20])
+    const firesAt = new Set([underFloor, underFloor + UNIT_FLOOR_CHARS])
     const [first] = reportUnits(
       prose,
       rows,
@@ -265,7 +266,7 @@ describe("report settings", () => {
     const [sweep] = sweepMasks([document], settings, [3])
 
     expect(sweep.units.map((report) => report.unit)).toEqual(
-      cutUnits(document.prose, document.rows, ruleOf({ ...settings, maskBits: 3 }))
+      cutUnits(document.prose, document.rows, ruleOf({ ...settings, looseBits: 3 }))
     )
   })
 })

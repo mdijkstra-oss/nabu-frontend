@@ -7,7 +7,7 @@ import {
   sentenceOfLength,
   type Document,
 } from "./test-documents"
-import { OVERLAP_CHARS, UNIT_FLOOR_CHARS } from "./constants"
+import { OVERLAP_CHARS } from "./constants"
 import { cutUnits, type BoundaryTest } from "./units"
 import { applyOverlap, type ChunkSpan } from "./overlap"
 
@@ -21,7 +21,9 @@ const chunkHash = (prose: string, span: ChunkSpan): string =>
   fnvHash(prose.slice(span.chunkStart, span.chunkEnd))
 
 describe("applyOverlap", () => {
-  const BODY_CHARS = Math.floor(UNIT_FLOOR_CHARS / 2) + 10
+  // A body sentence outruns the overlap and a head sentence fits inside it, so an extension
+  // reaches exactly one sentence past its unit and stops.
+  const BODY_CHARS = OVERLAP_CHARS + 60
   const HEAD_CHARS = Math.floor(OVERLAP_CHARS / 2)
 
   const documents: { name: string; document: Document; test?: BoundaryTest }[] = [

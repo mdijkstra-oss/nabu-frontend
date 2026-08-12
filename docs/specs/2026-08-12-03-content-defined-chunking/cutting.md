@@ -28,7 +28,7 @@ A boundary may only fall in the gap after a sentence. Within that constraint, wh
 
 1. **Ceiling.** If adding the next sentence would take the unit past `UNIT_CEILING_CHARS`, cut here. A sentence is never split, so a single sentence longer than the ceiling becomes a unit of one.
 2. **Floor.** Otherwise, if fewer than `UNIT_FLOOR_CHARS` characters have accumulated since the last cut, there is no boundary here regardless of what follows.
-3. **The content test.** Otherwise, take the `BOUNDARY_WINDOW_CHARS` characters of the prose string ending at this gap — fewer near the start of the document — hash them, and cut when the low bits are zero. `fnvHash` returns its sixty-four bits as hex, so the low ones are read as a number before the mask is applied: `(parseInt(hash.slice(-4), 16) & BOUNDARY_MASK) === 0`. Four hex digits is sixteen bits, wider than any mask this component will use.
+3. **The content test.** Otherwise, take the `BOUNDARY_WINDOW_CHARS` characters of the prose string ending at this gap — fewer near the start of the document — hash them, and cut when the low bits are zero. **Which bits are tested depends on how far the gap sits from the last cut:** below `UNIT_TARGET_CHARS` the strict mask, at or above it the loose one. `fnvHash` returns its sixty-four bits as hex, so the low ones are read as a number before the mask is applied: `(parseInt(hash.slice(-4), 16) & BOUNDARY_MASK) === 0`. Four hex digits is sixteen bits, wider than any mask this component will use.
 
 **The ceiling outranks the floor**, and it has to. Reverse them and a unit that has not yet reached 500 characters could not be closed even when the next sentence is 3000 long, which leaves splitting a sentence as the only way out. The consequence is worth stating rather than discovering: a unit _can_ come out below the floor when an oversized sentence follows a short run. That is the one exception, and the tests below name it.
 
@@ -37,8 +37,9 @@ The last sentence always ends a unit. An empty sentence array produces no units.
 | Constant                | Value               | Where it comes from                                                                                             |
 | :---------------------- | :------------------ | :-------------------------------------------------------------------------------------------------------------- |
 | `UNIT_TARGET_CHARS`     | `CHUNK_CHARS`, 1000 | The existing embedding budget, `CHUNK_TOKENS * CHARS_PER_TOKEN`                                                 |
-| `BOUNDARY_MASK`         | `0b11`              | Two bits — one gap in four fires, which is what leaves the ceiling almost nothing to close                      |
-| `UNIT_FLOOR_CHARS`      | 500                 | Half the target                                                                                                 |
+| `STRICT_MASK_BITS`      | 5                   | One gap in thirty-two, so a unit rarely closes before the target                                                |
+| `LOOSE_MASK_BITS`       | 2                   | One gap in four, so a unit closes soon after it                                                                 |
+| `UNIT_FLOOR_CHARS`      | 100                 | Only stops a run of very short sentences becoming a unit each                                                   |
 | `UNIT_CEILING_CHARS`    | 2000                | Twice the target                                                                                                |
 | `BOUNDARY_WINDOW_CHARS` | 200                 | Wide enough that a repeated short sentence is not self-similar, narrow enough that the blast radius stays small |
 
@@ -68,11 +69,9 @@ The content test alone is fully local: a boundary depends on 200 characters and 
 
 It re-syncs on its own. The first gap that both passes the content test and sits past the floor from its predecessor puts the edited and unedited versions back in agreement, and every unit after it hashes identically.
 
-Measured over the sample corpus, an insertion at the top costs one unit and a deletion in the middle costs one unit, on prose, on a link-dense reference and on a transcript of short turns alike. That is the claim, and it holds.
+Measured over the sample corpus, an insertion costs one unit and a deletion in the middle costs one unit, on prose, on a link-dense reference, on a transcript of short turns and on a page of table rows alike. That is the claim, and it holds on every shape of document tested. A page of tables and nested lists takes two units to re-sync after a deletion rather than one, because its sentences are short enough that a few still fire under the floor.
 
-**It fails completely on one shape of document, and the floor is why.** A page of table rows and nested list items has sentences averaging thirty-three characters — a fifteenth of `UNIT_FLOOR_CHARS`. Every unit there holds fifteen or more sentences, and the floor suppresses four firing gaps inside each one, so the boundary is not the gap the content test chose but the first one the floor allowed. Delete a sentence and a different gap is first. The run never re-syncs: every unit after the edit differs, all the way to the end of the document.
-
-This is the floor degenerating into counting, on exactly the documents where it has the most gaps to choose between. It is not fixed by moving the mask — at three bits the same document desyncs four units instead of every one, and prose gets worse. It is what FastCDC's normalized chunking exists to solve, and the tests pin it as measured rather than hide it under a bound wide enough to pass. That is the property the tests below pin, and it is the reason the floor is written as a suppression during the walk rather than as a merge pass afterwards: a merge pass has the same chain and is a second traversal to reason about.
+The worst case found across every insertion point of every document is four units, on documents whose sentences sit far from the window — too short and a handful still fire under the floor, too long and there are few gaps to fire at. That is the property the tests below pin, and it is the reason the floor is written as a suppression during the walk rather than as a merge pass afterwards: a merge pass has the same chain and is a second traversal to reason about.
 
 ### The overlap step
 
@@ -98,7 +97,9 @@ This is the existing `Chunk` shape, unchanged, so `diffChunks`, the companion wr
 
 Every implementation of it rolls a hash over a sliding window of _bytes_, because it chunks opaque data with no natural units and must therefore be able to cut anywhere. That is exactly what this must not do — a cut inside a word or a URL is a defect here. Since the sentence array already supplies the legal cut points, the rolling window collapses to one hash per gap over the preceding characters, which is a few lines rather than a dependency. Projecting sentences onto lines to feed a byte-level library would not help: those libraries do not look for line breaks either.
 
-**FastCDC's normalized chunking is the named refinement if the size distribution disappoints.** Instead of hard floor and ceiling clamps it uses a stricter mask before the target size and a looser one after, which narrows the distribution without a positional cut. It is deliberately not built now: hard clamps are simpler, and the measured distribution does not warrant it. It is what the mid-document desync above would be fixed with, since the desync comes from the clamps rather than from the content test.
+**FastCDC's normalized chunking is what the two masks are.** Rather than leaning on hard clamps to control size, it tests a gap with a stricter mask before the target and a looser one after, so the size is controlled by the content test itself and the clamps are left with almost nothing to do. Nothing is stored and nothing is derived from the document: the mask is chosen by how many characters have accumulated since the last cut, which both versions of an edited document compute identically at the same distance.
+
+It was written up as the refinement to reach for if hard clamps disappointed, and they did — a document of table rows never re-synced at all under them. Building it is a few lines in `verdictAt` and it removes the failure rather than documenting it, so the clamps did not survive to ship.
 
 **`fnvHash` in `app/lib/utils/hash.ts` is used as it stands**, for both the boundary test and the unit hash. It is already the corpus's hash — `hashChunk` is an alias of it and the region block's unit hashes and `rangeHash` both use it.
 

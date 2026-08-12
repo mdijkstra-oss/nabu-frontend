@@ -8,7 +8,7 @@ import {
   sentenceOfLength,
   type Document,
 } from "./test-documents"
-import { BOUNDARY_MASK, UNIT_CEILING_CHARS, UNIT_FLOOR_CHARS } from "./constants"
+import { LOOSE_BOUNDARY_MASK, UNIT_CEILING_CHARS, UNIT_FLOOR_CHARS } from "./constants"
 import { boundaryTestForMask, cutUnits, type BoundaryTest, type Unit } from "./units"
 
 const MULTI_UNIT_FIXTURES = [
@@ -77,15 +77,13 @@ const expectHashesRecomputeFromProse = (prose: string, units: readonly Unit[]): 
 describe("cutUnits stability", () => {
   const MAX_UNITS_DESYNCED_BY_AN_INSERT = 2
 
-  // A delete knocks the floor out of step, and how long it stays out of step depends on
-  // how many gaps the floor is suppressing. Prose re-syncs after one unit. A document of
-  // table rows and list items does not re-sync at all: its sentences average a fifteenth
-  // of UNIT_FLOOR_CHARS, so the floor — not the content test — picks every boundary, and
-  // one sentence fewer picks a different one every time.
-  const UNITS_DESYNCED_BY_A_DELETE: Record<string, number | "never re-syncs"> = {
+  // Every shape of document re-syncs, and all but one do it after a single unit. A page of
+  // table rows and list items takes two, because its sentences are short enough that a few
+  // still fire under the floor and the floor picks between them.
+  const UNITS_DESYNCED_BY_A_DELETE: Record<string, number> = {
     "links-and-code.md": 1,
     "long-sentence-prose.md": 1,
-    "tables-and-lists.md": "never re-syncs",
+    "tables-and-lists.md": 2,
     "transcript-short-turns.md": 1,
   }
 
@@ -133,9 +131,8 @@ describe("cutUnits stability", () => {
       })
 
       const reSynced = sharedSuffixLength(before, hashesOf(editedUnits))
-      const expected = UNITS_DESYNCED_BY_A_DELETE[name]
-      if (expected === "never re-syncs") expect(reSynced).toBe(0)
-      else expect(before.length - untouched.length - reSynced).toBe(expected)
+      expect(reSynced).toBeGreaterThan(0)
+      expect(before.length - untouched.length - reSynced).toBe(UNITS_DESYNCED_BY_A_DELETE[name])
     }
   )
 
@@ -203,7 +200,7 @@ describe("cutUnits shape", () => {
   const boundaryTests = (rows: readonly SentenceRow[]): { name: string; test: BoundaryTest }[] => {
     const everyThirdGap = new Set(rows.filter((_, index) => index % 3 === 2).map((row) => row.end))
     return [
-      { name: "the content test", test: boundaryTestForMask(BOUNDARY_MASK) },
+      { name: "the content test", test: boundaryTestForMask(LOOSE_BOUNDARY_MASK) },
       { name: "no gap passing", test: () => false },
       { name: "every gap passing", test: () => true },
       { name: "every third gap passing", test: (_prose, gap) => everyThirdGap.has(gap) },
@@ -307,8 +304,9 @@ describe("boundaryTestForMask near the start of the document", () => {
   it("hashes what there is when the gap sits inside the first window", () => {
     const prose = "The quick brown fox jumps over the lazy dog. ".repeat(100)
     const gap = 6
-    const expected = (parseInt(fnvHash(prose.slice(0, gap)).slice(-4), 16) & BOUNDARY_MASK) === 0
+    const expected =
+      (parseInt(fnvHash(prose.slice(0, gap)).slice(-4), 16) & LOOSE_BOUNDARY_MASK) === 0
 
-    expect(boundaryTestForMask(BOUNDARY_MASK)(prose, gap)).toBe(expected)
+    expect(boundaryTestForMask(LOOSE_BOUNDARY_MASK)(prose, gap)).toBe(expected)
   })
 })
