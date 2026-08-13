@@ -346,9 +346,14 @@ const BlockRenderer = ({ block, source, selected, onToggleSelect }: BlockRendere
             {...sel}
           />
           {block.encryptedContent && (
-            <div className="border-l-2 border-yellow-300 pl-2 select-none">
-              <span className="text-xs text-yellow-500 font-medium">&lt;encrypted&gt;</span>
-            </div>
+            <details className="border-l-2 border-yellow-300 pl-2">
+              <summary className="text-xs text-yellow-500 font-medium cursor-pointer select-none">
+                &lt;encrypted&gt; ({block.encryptedContent.length} chars)
+              </summary>
+              <pre className="text-xs font-mono text-yellow-700 whitespace-pre-wrap break-all">
+                {block.encryptedContent}
+              </pre>
+            </details>
           )}
         </>
       )
