@@ -11,9 +11,12 @@ const toUnit = (firstSentence: number, sentences: string[]): ScanUnit => ({
   hash: hashSentenceRange(sentences, 0, sentences.length - 1),
 })
 
+const RULES = "rules-v1"
+
 const toEntry = (unit: ScanUnit): ScannedUnit => ({
   hash: unit.hash,
   firstSentence: unit.firstSentence,
+  rules: RULES,
 })
 
 const hit = (hitSentence: number, value = "rutte"): Hit => ({
@@ -64,8 +67,8 @@ describe("reconcileHits", () => {
       dropped: [hit(0)],
       unitsToFind: [toUnit(0, ["A new opening.", "Another new one.", "And a third."])],
       nextScanned: [
-        { hash: scanned[1].hash, firstSentence: 3 },
-        { hash: scanned[2].hash, firstSentence: 5 },
+        { hash: scanned[1].hash, firstSentence: 3, rules: RULES },
+        { hash: scanned[2].hash, firstSentence: 5, rules: RULES },
       ],
     },
     {
@@ -95,8 +98,8 @@ describe("reconcileHits", () => {
     {
       name: "two units carrying the same hash each claim the one nearest their stored index",
       scanned: [
-        { hash: toUnit(0, A).hash, firstSentence: 0 },
-        { hash: toUnit(0, A).hash, firstSentence: 4 },
+        { hash: toUnit(0, A).hash, firstSentence: 0, rules: RULES },
+        { hash: toUnit(0, A).hash, firstSentence: 4, rules: RULES },
       ],
       units: [toUnit(0, A), toUnit(2, B), toUnit(4, A)],
       storedHits: [hit(0), hit(4)],
@@ -104,14 +107,37 @@ describe("reconcileHits", () => {
       dropped: [],
       unitsToFind: [toUnit(2, B)],
       nextScanned: [
-        { hash: toUnit(0, A).hash, firstSentence: 0 },
-        { hash: toUnit(0, A).hash, firstSentence: 4 },
+        { hash: toUnit(0, A).hash, firstSentence: 0, rules: RULES },
+        { hash: toUnit(0, A).hash, firstSentence: 4, rules: RULES },
       ],
+    },
+    {
+      name: "an entry scanned under different rules drops its hits and is re-found",
+      scanned: [
+        { hash: toUnit(0, A).hash, firstSentence: 0, rules: "rules-v0" },
+        toEntry(toUnit(2, B)),
+      ],
+      units: [toUnit(0, A), toUnit(2, B)],
+      storedHits: [hit(0), hit(2, "kaag")],
+      kept: [hit(2, "kaag")],
+      dropped: [hit(0)],
+      unitsToFind: [toUnit(0, A)],
+      nextScanned: [toEntry(toUnit(2, B))],
+    },
+    {
+      name: "an entry with no rules stamp drops its hits and is re-found",
+      scanned: [{ hash: toUnit(0, A).hash, firstSentence: 0 }],
+      units: [toUnit(0, A)],
+      storedHits: [hit(0)],
+      kept: [],
+      dropped: [hit(0)],
+      unitsToFind: [toUnit(0, A)],
+      nextScanned: [],
     },
   ]
 
   it.each(cases)("$name", ({ scanned: stored, units, storedHits, ...expected }) => {
-    const result = reconcileHits(storedHits, stored, units)
+    const result = reconcileHits(storedHits, stored, units, RULES)
     expect(result.kept).toEqual(expected.kept)
     expect(result.dropped).toEqual(expected.dropped)
     expect(result.unitsToFind).toEqual(expected.unitsToFind)

@@ -22,7 +22,8 @@ export interface MarkReconciliation {
 export type ReconcileHits = (
   storedHits: Hit[],
   scanned: ScannedUnit[],
-  units: ScanUnit[]
+  units: ScanUnit[],
+  rulesHash: string
 ) => HitReconciliation
 
 export type ReconcileMarks = (storedMarks: StoredMark[], sentences: string[]) => MarkReconciliation
@@ -67,9 +68,10 @@ const storedUnitOf = (scanned: ScannedUnit[], hitSentence: number): ScannedUnit 
     undefined
   )
 
-export const reconcileHits: ReconcileHits = (storedHits, scanned, units) => {
+export const reconcileHits: ReconcileHits = (storedHits, scanned, units, rulesHash) => {
   const inOrder = [...scanned].sort((a, b) => a.firstSentence - b.firstSentence)
-  const survivors = findSurvivors(inOrder, units)
+  const underCurrentRules = inOrder.filter((entry) => entry.rules === rulesHash)
+  const survivors = findSurvivors(underCurrentRules, units)
   const shiftOf = new Map(
     survivors.map(({ stored, current }) => [stored, current.firstSentence - stored.firstSentence])
   )
@@ -92,6 +94,7 @@ export const reconcileHits: ReconcileHits = (storedHits, scanned, units) => {
     nextScanned: survivors.map(({ stored, current }) => ({
       hash: stored.hash,
       firstSentence: current.firstSentence,
+      rules: rulesHash,
     })),
   }
 }

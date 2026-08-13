@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { fnvHash } from "~/lib/utils/hash"
 import { BLOCK_COLORS } from "~/ui/theme/colors"
 import { ICON_NAMES } from "~/ui/theme/icons"
 import { speakerKind } from "~/domain/regions/kinds/speaker/definition"
@@ -54,5 +55,7 @@ export const regionKinds = (): KindDescriptor[] => shipped
 const byId = new Map(shipped.map((k) => [k.id, k]))
 
 export const getKind = (id: string): KindDescriptor | undefined => byId.get(id)
+
+export const rulesHashOf = (kind: KindDescriptor): string => fnvHash(kind.rules)
 
 export const REGION_KIND_IDS = shipped.map((k) => k.id) as [string, ...string[]]

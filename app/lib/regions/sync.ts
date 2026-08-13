@@ -9,7 +9,7 @@ import {
   type RegionsBlock,
   type ScannedUnit,
 } from "~/domain/data-blocks/regions/schema"
-import type { KindDescriptor } from "./kinds/registry"
+import { rulesHashOf, type KindDescriptor } from "./kinds/registry"
 import { needsSharedVocabulary } from "./detect/find"
 import { occurrenceOf } from "./detect/hits"
 import { cutUnits } from "~/lib/cutting/units"
@@ -113,8 +113,9 @@ const prepareWork = (doc: DocumentPass, kind: KindDescriptor, stored: RegionsBlo
   const resolved = rows.filter(isResolved)
   const unresolved = rows.filter((row) => !isResolved(row))
 
-  const resolvedHits = reconcileHits(resolved.map(toHit), scanned, doc.units)
-  const unresolvedHits = reconcileHits(unresolved.map(toHit), scanned, doc.units)
+  const rulesHash = rulesHashOf(kind)
+  const resolvedHits = reconcileHits(resolved.map(toHit), scanned, doc.units, rulesHash)
+  const unresolvedHits = reconcileHits(unresolved.map(toHit), scanned, doc.units, rulesHash)
   const marks = reconcileMarks(
     rows.map(toStoredMark).filter((mark): mark is StoredMark => mark !== null),
     doc.sentences
@@ -233,7 +234,11 @@ export const startRegionSync = (deps: RegionSyncDeps): RegionSyncHandle => {
   const reportProgress = (): void => deps.onProgress?.(processed, total)
 
   const recordFound = (work: KindWork, unit: ScanUnit, hits: Hit[]): void => {
-    work.scanned.push({ hash: unit.hash, firstSentence: unit.firstSentence })
+    work.scanned.push({
+      hash: unit.hash,
+      firstSentence: unit.firstSentence,
+      rules: rulesHashOf(work.kind),
+    })
     work.foundHits.push(...hits)
   }
 

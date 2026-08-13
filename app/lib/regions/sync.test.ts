@@ -560,7 +560,11 @@ describe("hit and unit invalidation", () => {
     expect(survivors).toEqual(
       scannedBefore
         .filter((unit) => survivingHashes.has(unit.hash))
-        .map((unit) => ({ hash: unit.hash, firstSentence: unit.firstSentence + inserted }))
+        .map((unit) => ({
+          hash: unit.hash,
+          firstSentence: unit.firstSentence + inserted,
+          rules: unit.rules,
+        }))
     )
     expect(rangesFrom(after, firstSurvivor)).toEqual(
       rangesFrom(before, firstSurvivor - inserted).map(([start, end, hit]) => [
@@ -990,7 +994,7 @@ describe("idle passes and empty documents", () => {
     expect(detect.finds).toHaveLength(findsAfterBoot)
   })
 
-  it("makes no call and no write when only a kind's rules changed", async () => {
+  it("re-finds every unit when only a kind's rules changed", async () => {
     const project = createProject({ "talk.md": transcript(6) })
     const detect = createDetect()
 
@@ -998,7 +1002,7 @@ describe("idle passes and empty documents", () => {
     await first.ready
     first.stop()
 
-    const stored = project.files["talk.md"]
+    const scannedBefore = project.regionsIn("talk.md").scanned.speaker
     const improved = { ...speakerKind, rules: `${speakerKind.rules}, restated more precisely` }
     const revised = createDetect()
 
@@ -1011,9 +1015,11 @@ describe("idle passes and empty documents", () => {
     const second = startSync(project, revised, [improved])
     await second.ready
 
-    expect(revised.finds).toEqual([])
-    expect(revised.marks).toEqual([])
-    expect(project.files["talk.md"]).toBe(stored)
+    expect(revised.finds.map((f) => f.firstSentence)).toEqual(
+      scannedBefore.map((unit) => unit.firstSentence)
+    )
+    const scannedAfter = project.regionsIn("talk.md").scanned.speaker
+    expect(scannedAfter.map((unit) => unit.rules)).not.toContain(scannedBefore[0].rules)
   })
 })
 

@@ -41,6 +41,7 @@ export const regionRowSchema = z
 export const scannedUnitSchema = z.object({
   hash: z.string(),
   firstSentence: sentenceIndex,
+  rules: z.string().optional(),
 })
 
 export const regionsBlockSchema = () =>
