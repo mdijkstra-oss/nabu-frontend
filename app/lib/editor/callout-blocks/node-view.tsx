@@ -5,6 +5,7 @@ import { useNodeViewContext, type NodeViewContentRef } from "@prosemirror-adapte
 import type { DecorationSet } from "prosemirror-view"
 import type { Node as ProseMirrorNode } from "prosemirror-model"
 import { getBlockConfig, getCaptionType } from "~/lib/data-blocks/registry"
+import { tryParseJson, isObject } from "~/lib/data-blocks/json"
 import { findCaptionIndex, type CaptionEntry } from "~/lib/data-blocks/caption"
 import { parseCallout } from "~/domain/data-blocks/callout/schema"
 import { parseChart } from "~/domain/data-blocks/chart/schema"
@@ -34,6 +35,24 @@ const CodeBlockFallback = ({ language, contentRef, invalid }: CodeBlockFallbackP
   <pre className={`code-block${invalid ? " code-block-invalid" : ""}`} data-language={language}>
     <code ref={contentRef} />
   </pre>
+)
+
+// The shape add_<block> writes before its patch arrives: an id plus the actor stamp.
+const DRAFT_KEYS = new Set(["id", "actor"])
+
+const isDraftBlock = (text: string): boolean => {
+  const parsed = tryParseJson(text)
+  if (!isObject(parsed)) return false
+  return Object.keys(parsed).every((key) => DRAFT_KEYS.has(key))
+}
+
+const BuildingBlock = () => (
+  <div
+    contentEditable={false}
+    className="my-2 animate-pulse rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-3"
+  >
+    <span className="text-sm text-neutral-400">Building…</span>
+  </div>
 )
 
 const extractHighlights = (innerDecorations: unknown, textContent: string): HighlightEntry[] => {
@@ -87,6 +106,10 @@ export const CalloutNodeView = () => {
   const isRendered = isCallout || isChart
   const hasData = calloutData || chartData
   const isInvalid = isRendered && !hasData
+
+  if (isInvalid && isDraftBlock(node.textContent)) {
+    return <BuildingBlock />
+  }
 
   if (!isRendered || !hasData) {
     return <CodeBlockFallback language={language} contentRef={contentRef} invalid={isInvalid} />
