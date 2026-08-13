@@ -55,7 +55,7 @@ still belong to the speaker last named; the naming switching to a pronoun does n
 end the region.
 
 A recorded act reaches only the sentence or sentences that record it: "Seconded by
-Ms. Delgado. Carried." is Delgado's, and nothing more is.
+Ms. Delgado. Carried." is Delgado's, and nothing more.
 
 Regions of two people may overlap. A recorded act or a brief interjection inside
 someone's turn belongs to its own person without ending the surrounding region, and
