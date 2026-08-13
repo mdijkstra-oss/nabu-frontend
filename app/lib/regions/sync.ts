@@ -14,7 +14,7 @@ import { needsSharedVocabulary } from "./detect/find"
 import { occurrenceOf } from "./detect/hits"
 import { cutUnits } from "~/lib/cutting/units"
 import { computeWindows } from "./detect/window"
-import { resolveOverlaps } from "./detect/overlap"
+import { dedupeMarks } from "./detect/overlap"
 import type { FindWork, Hit, Mark, MarkWork, ScanUnit, WindowedHit } from "./detect/types"
 import { hashSentenceRange, reconcileHits, reconcileMarks, type StoredMark } from "./reconcile"
 import { readStoredRegions } from "./stored"
@@ -185,9 +185,9 @@ const toMarkWork = (work: KindWork, { hit, window }: WindowedHit): MarkWork => (
 })
 
 const resolveWork = (work: KindWork): void => {
-  const resolution = resolveOverlaps([...work.survivingMarks, ...work.freshMarks])
-  work.marks = resolution.marks.map((mark) => withRangeHash(mark, work.doc.sentences))
-  work.unranged = [...work.unresolvedHits, ...work.markFailures, ...resolution.unranged]
+  const deduped = dedupeMarks([...work.survivingMarks, ...work.freshMarks])
+  work.marks = deduped.map((mark) => withRangeHash(mark, work.doc.sentences))
+  work.unranged = [...work.unresolvedHits, ...work.markFailures]
 }
 
 const buildBlock = (works: KindWork[]): RegionsBlock =>

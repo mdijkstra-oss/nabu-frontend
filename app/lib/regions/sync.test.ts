@@ -309,16 +309,6 @@ const underPreviousRecipe = (
   }
 }
 
-const coveredSentences = (block: RegionsBlock): number[] =>
-  block.regions
-    .filter(isResolved)
-    .flatMap((row) =>
-      Array.from(
-        { length: row.endSentence - row.startSentence + 1 },
-        (_, i) => row.startSentence + i
-      )
-    )
-
 let errors: string[] = []
 
 beforeEach(() => {
@@ -659,7 +649,7 @@ describe("hit and unit invalidation", () => {
     expect(project.regionsIn("b.md").scanned.speaker).toEqual(scannedB)
   })
 
-  it("hands overlap resolution the kept marks as well as the fresh ones", async () => {
+  it("hands dedupe the kept marks as well as the fresh ones", async () => {
     const project = createProject({ "talk.md": transcript(6) })
     const wide = (work: MarkWork): Range => ({
       start: work.hit.hitSentence,
@@ -679,8 +669,12 @@ describe("hit and unit invalidation", () => {
 
     await sync.tick()
 
-    const covered = coveredSentences(project.regionsIn("talk.md"))
-    expect(new Set(covered).size).toBe(covered.length)
+    const rows = project.regionsIn("talk.md").regions
+    const identities = rows.map((row) =>
+      [row.kind, row.parsed.value, row.startSentence, row.endSentence, row.hitSentence].join(" ")
+    )
+    expect(rows.length).toBeGreaterThan(1)
+    expect(new Set(identities).size).toBe(identities.length)
   })
 })
 

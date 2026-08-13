@@ -76,11 +76,6 @@ export interface Stretch {
   works: MarkWork[]
 }
 
-export interface OverlapResolution {
-  marks: Mark[]
-  unranged: Hit[]
-}
-
 export const FIND_MAX_ITEMS = 20
 
 // One per-call character budget for both detect stages; find and mark diverge
