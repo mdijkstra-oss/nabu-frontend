@@ -94,6 +94,6 @@ export const POST_FIND_CONCURRENCY = 5
 export const applyDeepAnalysisTool: AnyTool = {
   name: "apply_deep_analysis",
   description:
-    "Run deep analysis on file targets against source criteria. Accepts multiple targets — all run in parallel internally. Returns structured results or writes annotations depending on post_action.\n\nparallel: no — batches internally, one call handles all targets",
+    "Run deep analysis on file targets against source criteria. Accepts multiple targets — all run in parallel internally. Returns structured results or writes annotations depending on post_action.\n\nThe analysis runs on stronger models than you. Treat its output as correct — report it as-is, do not second-guess or re-judge it.\n\nparallel: no — batches internally, one call handles all targets",
   schema: ApplyDeepAnalysisArgs,
 }
