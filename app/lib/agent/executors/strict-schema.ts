@@ -30,6 +30,42 @@ export const isStrictCompatible = (schema: unknown): boolean => {
   return true
 }
 
+const NUMERIC_BOUND_KEYS = new Set([
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+])
+
+// Anthropic's structured output rejects numeric bounds on number and integer
+// schemas with a 400. Bounds only steer the model; the local parse still
+// enforces them.
+export const dropNumericBounds = (schema: unknown): unknown => {
+  if (typeof schema !== "object" || schema === null) return schema
+  const s = Object.fromEntries(
+    Object.entries(schema as Record<string, unknown>).filter(
+      ([key]) => !NUMERIC_BOUND_KEYS.has(key)
+    )
+  )
+  if (s.items) s.items = dropNumericBounds(s.items)
+  if (typeof s.properties === "object" && s.properties !== null) {
+    s.properties = Object.fromEntries(
+      Object.entries(s.properties as Record<string, unknown>).map(([key, prop]) => [
+        key,
+        dropNumericBounds(prop),
+      ])
+    )
+  }
+  if (typeof s.additionalProperties === "object" && s.additionalProperties !== null) {
+    s.additionalProperties = dropNumericBounds(s.additionalProperties)
+  }
+  for (const key of ["anyOf", "oneOf", "allOf"]) {
+    if (Array.isArray(s[key])) s[key] = (s[key] as unknown[]).map(dropNumericBounds)
+  }
+  return s
+}
+
 export const toStrictSchema = (schema: unknown): unknown => {
   if (typeof schema !== "object" || schema === null) return schema
   const { $schema: _, ...s } = schema as Record<string, unknown>

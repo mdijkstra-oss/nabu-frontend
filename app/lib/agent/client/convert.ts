@@ -1,6 +1,6 @@
 import type { z } from "zod"
 import type { Block } from "./blocks"
-import { toStrictSchema } from "../executors/strict-schema"
+import { dropNumericBounds, toStrictSchema } from "../executors/strict-schema"
 
 export interface InputTextPart {
   type: "input_text"
@@ -27,7 +27,7 @@ export interface ResponseFormat {
 export const toResponseFormat = <T extends z.ZodType>(schema: T): ResponseFormat => ({
   type: "json_schema",
   name: "response",
-  schema: toStrictSchema(schema.toJSONSchema()),
+  schema: dropNumericBounds(toStrictSchema(schema.toJSONSchema())),
   strict: true,
 })
 

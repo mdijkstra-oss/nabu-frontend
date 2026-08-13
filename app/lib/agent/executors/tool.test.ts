@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { toStrictSchema, isStrictCompatible, stripUnsupportedKeywords } from "./tool"
+import { dropNumericBounds } from "./strict-schema"
 
 describe("toStrictSchema", () => {
   const cases = [
@@ -173,6 +174,54 @@ describe("isStrictCompatible", () => {
 
   it.each(cases)("$name", ({ input, expected }) => {
     expect(isStrictCompatible(input)).toBe(expected)
+  })
+})
+
+describe("dropNumericBounds", () => {
+  const cases = [
+    {
+      name: "drops bounds from an integer property",
+      input: {
+        type: "object",
+        properties: { id: { type: "integer", minimum: 1, maximum: 10 } },
+        required: ["id"],
+      },
+      expected: {
+        type: "object",
+        properties: { id: { type: "integer" } },
+        required: ["id"],
+      },
+    },
+    {
+      name: "drops bounds inside array items and unions",
+      input: {
+        type: "array",
+        items: {
+          anyOf: [{ type: "number", exclusiveMinimum: 0, multipleOf: 2 }, { type: "null" }],
+        },
+      },
+      expected: {
+        type: "array",
+        items: { anyOf: [{ type: "number" }, { type: "null" }] },
+      },
+    },
+    {
+      name: "keeps a property named like a bound keyword",
+      input: {
+        type: "object",
+        properties: { minimum: { type: "string" } },
+        required: ["minimum"],
+      },
+      expected: {
+        type: "object",
+        properties: { minimum: { type: "string" } },
+        required: ["minimum"],
+      },
+    },
+  ]
+
+  it.each(cases)("$name", ({ input, expected }) => {
+    expect(dropNumericBounds(input)).toEqual(expected)
   })
 })
 
