@@ -33,6 +33,24 @@ export const WithNewButton: Story = {
   },
 }
 
+export const WithAiNewButton: Story = {
+  args: {
+    title: "Codes",
+    filterPlaceholder: "Filter codes...",
+    filterValue: "",
+    onFilterChange: fn(),
+    onNew: fn(),
+    newVariant: "ai",
+  },
+  play: async ({ canvasElement, args }) => {
+    const button = canvasElement.querySelector("svg.lucide-plus")?.closest("button")
+    expect(button).not.toBeNull()
+    expect(button?.className).toContain("border-brand-600")
+    if (button) await userEvent.click(button)
+    expect(args.onNew).toHaveBeenCalledTimes(1)
+  },
+}
+
 export const WithoutNewButton: Story = {
   args: {
     title: "Documents",

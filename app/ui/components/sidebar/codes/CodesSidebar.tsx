@@ -1,6 +1,13 @@
 "use client"
 
-import { useState, useMemo, useLayoutEffect, useRef } from "react"
+import {
+  useState,
+  useMemo,
+  useLayoutEffect,
+  useRef,
+  type ReactElement,
+  type ReactNode,
+} from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { CheckSquare, ExternalLink, FileSearch, Search } from "lucide-react"
 import { SidebarHeader } from "~/ui/components/sidebar/SidebarHeader"
@@ -30,6 +37,8 @@ export interface CodesSidebarProps {
   onToggleCode?: (id: string) => void
   searchValue?: string
   onSearchChange?: (value: string) => void
+  onNewCode?: () => void
+  gateNewCode?: (button: ReactElement<{ disabled?: boolean }>) => ReactNode
   onSelectAll?: () => void
   onDeselectAll?: () => void
   onEditCode?: (code: Code) => void
@@ -110,6 +119,8 @@ export const CodesSidebar = ({
   onToggleCode,
   searchValue = "",
   onSearchChange,
+  onNewCode,
+  gateNewCode,
   onSelectAll,
   onDeselectAll,
   onEditCode,
@@ -153,7 +164,9 @@ export const CodesSidebar = ({
           filterPlaceholder="Filter codes..."
           filterValue={searchValue}
           onFilterChange={(v) => onSearchChange?.(v)}
-          onNew={() => undefined}
+          onNew={onNewCode}
+          newVariant="ai"
+          gateNew={gateNewCode}
         />
       </div>
 

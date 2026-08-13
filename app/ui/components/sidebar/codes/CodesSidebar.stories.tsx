@@ -46,6 +46,19 @@ const meta: Meta<typeof CodesSidebar> = {
 export default meta
 type Story = StoryObj<typeof CodesSidebar>
 
+export const NewCodeButton: Story = {
+  args: {
+    codebook: sampleCodebook,
+    onNewCode: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const button = canvasElement.querySelector("svg.lucide-plus")?.closest("button")
+    expect(button).not.toBeNull()
+    if (button) await userEvent.click(button)
+    expect(args.onNewCode).toHaveBeenCalledTimes(1)
+  },
+}
+
 export const Selection: Story = {
   args: {
     codebook: sampleCodebook,

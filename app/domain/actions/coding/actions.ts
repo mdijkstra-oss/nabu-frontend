@@ -118,6 +118,11 @@ After every file is coded, write a brief synthesis across all of them as your ch
 export const codeFiles = (docs: string[], dimensions: CodingFileRef[]): TaskConfig =>
   docs.length <= 1 ? codeFile(docs[0], dimensions) : buildPlanCodingNudge(docs, dimensions)
 
+export const addCodebookEntry = (): TaskConfig => ({
+  context: `The user wants to add a new codebook entry. Interview them before writing anything: ask what it is about, a short title, a one-line definition, when to pick it, and when NOT to pick it (near-misses that belong to other codes). Ask only for what the conversation has not already given you. Once you have enough, add the entry to the appropriate codebook file and confirm what you wrote.`,
+  userMessage: "I'd like to add a new codebook entry",
+})
+
 export const codeWithSearch = (refs: CodingFileRef[], searchId: string): TaskConfig =>
   buildDeepAnalysisNudge(
     refs,
