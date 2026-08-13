@@ -96,7 +96,11 @@ const stripProperty = (schema: JsonSchema, field: string): JsonSchema => {
   const props = (schema.properties ?? {}) as Properties
   if (!(field in props)) return schema
   const { [field]: _, ...rest } = props
-  return { ...schema, properties: rest }
+  const stripped: JsonSchema = { ...schema, properties: rest }
+  if (Array.isArray(schema.required)) {
+    stripped.required = (schema.required as string[]).filter((name) => name !== field)
+  }
+  return stripped
 }
 
 const buildAddOpSchema = (singular: string, itemSchema: unknown, matchKey: string): JsonSchema => ({

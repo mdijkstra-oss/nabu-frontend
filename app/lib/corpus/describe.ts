@@ -1,5 +1,5 @@
 import { callLlm } from "~/lib/agent/client/fetch"
-import { extractText, toSystem } from "~/lib/agent/client/convert"
+import { extractText, toSystem, toUser } from "~/lib/agent/client/convert"
 import { fnvHash } from "~/lib/utils/hash"
 import type { CorpusDescription } from "~/domain/corpus/types"
 
@@ -24,8 +24,8 @@ const buildDescription = async (
     endpoint: ENDPOINT,
     messages: [
       toSystem(`corpus: ${corpus}\nlanguage: ${language}`),
-      toSystem(formatSamples(samples)),
-      toSystem(callToAction(language)),
+      toUser(formatSamples(samples)),
+      toUser(callToAction(language)),
     ],
   })
 
