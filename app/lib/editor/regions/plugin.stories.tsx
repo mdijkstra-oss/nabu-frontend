@@ -265,9 +265,17 @@ export const OverlappingKinds: Story = {
     expect(tintedText(editor)).toContain("The room was full of people.")
     expect(tintedText(editor)).toContain("This is great")
     expect(labelText(editor, 1)).toBe("room was full")
+    expect(labelsFor(editor, 1)[0].style.color).toBe("")
 
     await userEvent.unhover(labels[0])
-    await userEvent.hover(labels[1])
+    const dateLabel = await waitFor(() => {
+      const [el] = labelsFor(editor, 1)
+      if (!el || el.style.color === "") throw new Error("date label pill not redrawn yet")
+      return el
+    })
+    expect(labelText(editor, 1)).toBe("room was full")
+
+    await userEvent.hover(dateLabel)
     await waitFor(() => expect(tintedText(editor)).not.toContain("quite the event"))
     expect(tintedText(editor)).toContain("The room was full of people.")
     expect(tintedText(editor)).not.toContain("This is great")

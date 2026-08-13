@@ -56,6 +56,11 @@ const releaseActiveInstance = (dismissOther: () => void): void => {
 const isDecoration = (el: HTMLElement): boolean =>
   el.style.background !== "" && el.style.background !== "none"
 
+// A region mark's text (a speaker, a date) repeats across the document, so a tooltip
+// matched on it would list every annotation containing that text.
+const isRegionMark = (el: HTMLElement): boolean =>
+  el.closest("[data-region-kind], [data-region-icon]") !== null
+
 const isWithinRect = (x: number, y: number, rect: DOMRect): boolean =>
   x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
 
@@ -285,7 +290,7 @@ export const AnnotationHover = ({ annotations, filePath, children }: AnnotationH
       if (e.buttons !== 0) return
       if (hasEditorSelection()) return
       const target = e.target as HTMLElement
-      if (!isDecoration(target)) return
+      if (!isDecoration(target) || isRegionMark(target)) return
       const text = target.textContent ?? ""
       if (!text) return
       cancelDismiss()
