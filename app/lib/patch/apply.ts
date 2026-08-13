@@ -49,6 +49,30 @@ const buildValidationContext = (): ValidationContext => ({
   availableTags: getTagDefinitions(getFiles()).map((t) => ({ id: t.id, label: t.label })),
 })
 
+const errorKey = (e: ValidationError): string =>
+  [e.block, e.field ?? "", e.message, e.received ?? ""].join("|")
+
+// A write may only be blocked by invalidity it introduces. Errors the file already
+// had (draft blocks inserted empty, awaiting their fields) would otherwise deadlock
+// every single-block patch or delete while a sibling draft exists.
+const withoutPreexisting = (
+  errors: ValidationError[],
+  path: string,
+  original: string | undefined,
+  skipImmutableCheck: boolean | undefined
+): ValidationError[] => {
+  if (!original) return errors
+  const baseline = validateSemantic(original, {
+    path,
+    context: buildValidationContext(),
+    original,
+    skipImmutableCheck,
+  })
+  if (baseline.errors.length === 0) return errors
+  const known = new Set(baseline.errors.map(errorKey))
+  return errors.filter((e) => !known.has(errorKey(e)))
+}
+
 const formatBlockErrors = (errors: ValidationError[]): string =>
   errors
     .map((e) => {
@@ -127,18 +151,22 @@ export const finalizeContent = (
         skipImmutableCheck: options.skipImmutableCheck,
       })
 
-  if (!validation.valid) {
+  const blockingErrors = validation.valid
+    ? []
+    : withoutPreexisting(validation.errors, path, options.original, options.skipImmutableCheck)
+
+  if (blockingErrors.length > 0) {
     if (options.skipSemanticValidation) {
       console.warn(
         `[patch] semantic validation warnings for "${path}":`,
-        formatBlockErrors(validation.errors)
+        formatBlockErrors(blockingErrors)
       )
     } else {
       return {
         path,
         status: "error",
-        error: formatBlockErrors(validation.errors),
-        blockErrors: validation.errors,
+        error: formatBlockErrors(blockingErrors),
+        blockErrors: blockingErrors,
       }
     }
   }
