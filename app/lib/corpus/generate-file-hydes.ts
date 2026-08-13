@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { callAndParse } from "~/lib/agent/client/call-parse"
-import { toSystem } from "~/lib/agent/client/convert"
+import { toSystem, toUser } from "~/lib/agent/client/convert"
 import { HydeListSchema, type HydeAngle } from "./hyde-schema"
 
 const FileHydeResponseSchema = z.object({
@@ -26,7 +26,7 @@ export const generateFileHydes = async (
     [
       toSystem(`<file name="${filename}">\n${fileContent}\n</file>`),
       toSystem(`language: ${language}`),
-      toSystem(formatCallToAction(language)),
+      toUser(formatCallToAction(language)),
     ],
     FileHydeResponseSchema
   )

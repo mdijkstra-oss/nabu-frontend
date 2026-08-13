@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { callAndParse } from "~/lib/agent/client/call-parse"
-import { toSystem } from "~/lib/agent/client/convert"
+import { toSystem, toUser } from "~/lib/agent/client/convert"
 import { HydeListSchema, HYDE_COUNT, type HydeAngle } from "./hyde-schema"
 import type { CorpusDescription } from "~/domain/corpus/types"
 
@@ -37,11 +37,11 @@ export const generateHydesForDescription = async (
   callHydeEndpoint(HYDE_GENERATOR_ENDPOINT, [
     toSystem(`[${description.corpus}] ${description.description}`),
     toSystem(`language: ${description.language}\nquery: ${query}`),
-    toSystem(formatCallToAction(description.language)),
+    toUser(formatCallToAction(description.language)),
   ])
 
 export const generateGenericHydes = async (language: string, query: string): Promise<HydeAngle[]> =>
   callHydeEndpoint(GENERIC_HYDE_ENDPOINT, [
     toSystem(`language: ${language}\nquery: ${query}`),
-    toSystem(formatCallToAction(language)),
+    toUser(formatCallToAction(language)),
   ])
