@@ -7,7 +7,7 @@ Nabu is an IRE — an Integrated Research Environment — applying the machinery
 > [!NOTE]
 > A walkthrough video is in progress and will sit here.
 
-Researchers are generally not as tech-oriented as the software engineers IDEs are built for, so many abstractions hide the machinery underlying the system. It has to be easy to use and still have powerful capabilities, and LLMs are what make that gap bridgeable.
+Researchers are generally not as tech-oriented as the software engineers IDEs are built for, so, many abstractions hide the machinery underlying the system. It has to be easy to use and still have powerful capabilities, and LLMs are what make that gap bridgeable.
 
 The first area of research targeted is [qualitative coding](https://gradcoach.com/qualitative-data-coding-101/) so phrasing as of now in this document may reflect that, though in theory it extends to other domains.
 
