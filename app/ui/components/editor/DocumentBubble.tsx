@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, type ReactNode } from "react"
+import { useCallback, useRef } from "react"
 import { useEditorSelection } from "~/ui/hooks/useEditorSelection"
 import { useScrollToEntity } from "~/ui/hooks/useScrollToEntity"
 import { toDisplayName } from "~/lib/files/filename"
@@ -8,7 +8,7 @@ import { consumeTitleEdit, useTitleEditRequested } from "~/lib/ui/title-edit"
 import { MilkdownEditor } from "./MilkdownEditor"
 import { ScrollGutter } from "./ScrollGutter"
 import { ScrollShadow } from "~/ui/components/ScrollShadow"
-import { FileHeader } from "./FileHeader"
+import { FileHeader, type MenuItem } from "./FileHeader"
 import { StatusBar } from "~/ui/components/StatusBar"
 import {
   computeTextStats,
@@ -27,12 +27,6 @@ import type { Spotlight } from "~/lib/editor/spotlight/types"
 import type { DebugOptions } from "./debug-config"
 import { cn } from "~/ui/utils"
 
-interface MenuItem {
-  icon: ReactNode
-  label: string
-  onClick: () => void
-}
-
 interface DocumentBubbleProps {
   filename: string
   content: string
@@ -44,8 +38,7 @@ interface DocumentBubbleProps {
   debugMode?: boolean
   debugOptions?: DebugOptions
   spotlight?: Spotlight | Spotlight[] | null
-  menuItems?: MenuItem[]
-  onAddTag?: () => void
+  menuGroups?: MenuItem[][]
   onRemoveTag?: (tagId: string) => void
   onClick?: () => void
   onChange?: (markdown: string) => void
@@ -64,8 +57,7 @@ export const DocumentBubble = ({
   debugMode = false,
   debugOptions,
   spotlight = null,
-  menuItems = [],
-  onAddTag,
+  menuGroups = [],
   onRemoveTag,
   onClick,
   onChange,
@@ -107,8 +99,7 @@ export const DocumentBubble = ({
         date={date}
         tags={tags}
         onRemoveTag={onRemoveTag}
-        menuItems={menuItems}
-        onAddTag={onAddTag}
+        menuGroups={menuGroups}
         onRename={readOnly || headerOnly ? undefined : onRenameTitle}
         renameRequested={renameRequested}
         onRenameSettled={settleRenameRequest}

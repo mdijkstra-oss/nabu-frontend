@@ -56,7 +56,7 @@ export const TagsReadOnly: Story = {
 }
 
 export const TagsRemovable: Story = {
-  args: { title: "Interview Notes", tags, onRemoveTag: fn(), onAddTag: fn() },
+  args: { title: "Interview Notes", tags, onRemoveTag: fn() },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     const dots = canvas.getAllByRole("button", { name: /remove/i })
@@ -64,11 +64,6 @@ export const TagsRemovable: Story = {
 
     await userEvent.click(dots[1])
     expect(args.onRemoveTag).toHaveBeenCalledWith("tag-fieldwork")
-
-    const addButton = canvasElement.querySelector("button:not([aria-label])")
-    expect(addButton).not.toBeNull()
-    if (addButton) await userEvent.click(addButton)
-    expect(args.onAddTag).toHaveBeenCalledOnce()
   },
 }
 
@@ -82,16 +77,68 @@ export const WithDate: Story = {
 export const WithMenu: Story = {
   args: {
     title: "Interview Notes",
-    menuItems: [
-      { icon: <Download />, label: "Export", onClick: fn() },
-      { icon: <Trash2 />, label: "Delete", onClick: fn() },
+    menuGroups: [
+      [
+        { icon: <Download />, label: "Export", onClick: fn() },
+        { icon: <Trash2 />, label: "Delete", onClick: fn() },
+      ],
     ],
   },
   play: async ({ canvasElement, args }) => {
     await userEvent.click(within(canvasElement).getByRole("button"))
     const exportItem = await waitFor(() => within(document.body).getByText("Export"))
     await userEvent.click(exportItem)
-    await waitFor(() => expect(args.menuItems?.[0].onClick).toHaveBeenCalledOnce())
+    await waitFor(() => expect(args.menuGroups?.[0][0].onClick).toHaveBeenCalledOnce())
+  },
+}
+
+export const MenuDisabledItem: Story = {
+  args: {
+    title: "Interview Notes",
+    menuGroups: [
+      [
+        { icon: <Download />, label: "Export", onClick: fn(), disabled: true },
+        { icon: <Trash2 />, label: "Delete", onClick: fn() },
+      ],
+    ],
+  },
+  play: async ({ canvasElement, args }) => {
+    await userEvent.click(within(canvasElement).getByRole("button"))
+    const exportItem = await waitFor(() => within(document.body).getByText("Export"))
+    await userEvent.click(exportItem)
+    expect(args.menuGroups?.[0][0].onClick).not.toHaveBeenCalled()
+  },
+}
+
+export const MenuGroupsDivided: Story = {
+  args: {
+    title: "Interview Notes",
+    menuGroups: [
+      [{ icon: <Trash2 />, label: "Delete", onClick: fn() }],
+      [{ icon: <Download />, label: "Copy raw", onClick: fn() }],
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button"))
+    await waitFor(() => expect(within(document.body).getByText("Copy raw")).toBeInTheDocument())
+  },
+}
+
+export const MenuConfirmDelete: Story = {
+  args: {
+    title: "Interview Notes",
+    menuGroups: [[{ icon: <Trash2 />, label: "Delete", onClick: fn(), confirm: true }]],
+  },
+  play: async ({ canvasElement, args }) => {
+    await userEvent.click(within(canvasElement).getByRole("button"))
+    const deleteItem = await waitFor(() => within(document.body).getByText("Delete"))
+
+    await userEvent.click(deleteItem)
+    expect(args.menuGroups?.[0][0].onClick).not.toHaveBeenCalled()
+    const confirmItem = await waitFor(() => within(document.body).getByText("Confirm"))
+
+    await userEvent.click(confirmItem)
+    await waitFor(() => expect(args.menuGroups?.[0][0].onClick).toHaveBeenCalledOnce())
   },
 }
 

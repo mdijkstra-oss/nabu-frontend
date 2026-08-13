@@ -8,8 +8,13 @@ import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
 import { selectedFiles } from "~/domain/data-blocks/ux/selectors"
 import { buildSelectionEntry } from "~/domain/search/selection-search"
 import { saveNewSearch } from "~/lib/agent/tools/search/settings"
-import { updateFileRaw, renameFile, schedulePersist, getFiles } from "~/lib/files/store"
-import { isProtectedFile, isHiddenFile, renameTargetFor } from "~/lib/files/filename"
+import { updateFileRaw, renameFile, deleteFile, schedulePersist, getFiles } from "~/lib/files/store"
+import {
+  isProtectedFile,
+  isHiddenFile,
+  renameTargetFor,
+  nextAvailableFilename,
+} from "~/lib/files/filename"
 import { FileCorruptionError } from "~/lib/files/errors"
 import { useProject } from "./project"
 import { DocumentBubble } from "~/ui/components/editor/DocumentBubble"
@@ -44,6 +49,19 @@ export default function ProjectFile() {
   const copyRawMarkdown = useCallback(() => {
     if (content) navigator.clipboard.writeText(content)
   }, [content])
+
+  const duplicateFile = useCallback(() => {
+    if (!currentFile || content === undefined) return
+    const target = nextAvailableFilename(currentFile, Object.keys(getFiles()))
+    updateFileRaw(target, content)
+    navigate(`/project/${params.projectId}/file/${encodeURIComponent(target)}`)
+  }, [currentFile, content, params.projectId, navigate])
+
+  const deleteCurrentFile = useCallback(() => {
+    if (!currentFile) return
+    deleteFile(currentFile)
+    navigate(`/project/${params.projectId}`)
+  }, [currentFile, params.projectId, navigate])
 
   const openStack = useCallback(() => {
     const ids = selectedFiles(files, currentFile)
@@ -129,14 +147,26 @@ export default function ProjectFile() {
             debugMode={debugOptions.renderAsJson}
             debugOptions={debugOptions}
             spotlight={spotlight}
-            menuItems={[
-              { icon: <Clipboard />, label: "Copy raw", onClick: copyRawMarkdown },
-              { icon: <Share2 />, label: "Share", onClick: () => undefined },
-              { icon: <Copy />, label: "Duplicate", onClick: () => undefined },
-              { icon: <FileText />, label: "Export", onClick: () => undefined },
-              { icon: <Trash />, label: "Delete", onClick: () => undefined },
+            menuGroups={[
+              [
+                {
+                  icon: <Copy />,
+                  label: "Duplicate",
+                  onClick: duplicateFile,
+                  disabled: isProtectedFile(currentFile),
+                },
+                { icon: <Share2 />, label: "Share", onClick: () => undefined, disabled: true },
+                { icon: <FileText />, label: "Export", onClick: () => undefined, disabled: true },
+                {
+                  icon: <Trash />,
+                  label: "Delete",
+                  onClick: deleteCurrentFile,
+                  disabled: isProtectedFile(currentFile),
+                  confirm: true,
+                },
+              ],
+              [{ icon: <Clipboard />, label: "Copy raw", onClick: copyRawMarkdown }],
             ]}
-            onAddTag={() => undefined}
             onRemoveTag={handleRemoveTag}
             onChange={handleEditorChange}
             // preferences.md is hardcoded (REQUIRED_FILES, agent memory): renaming

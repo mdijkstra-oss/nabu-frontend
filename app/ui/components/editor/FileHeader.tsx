@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
-import { MoreHorizontal, Plus } from "lucide-react"
+import { Fragment, useState, type ReactNode } from "react"
+import { MoreHorizontal } from "lucide-react"
 import * as SubframeCore from "@subframe/core"
 import { DropdownMenu } from "~/ui/components/DropdownMenu"
 import { IconButton } from "~/ui/components/IconButton"
@@ -12,10 +12,12 @@ import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
 import { solidBackground } from "~/ui/theme/radix"
 import { formatShortDate } from "~/lib/format/date"
 
-interface MenuItem {
+export interface MenuItem {
   icon: ReactNode
   label: string
   onClick: () => void
+  disabled?: boolean
+  confirm?: boolean
 }
 
 interface FileHeaderProps {
@@ -23,8 +25,7 @@ interface FileHeaderProps {
   date?: string
   tags?: TagDefinition[]
   onRemoveTag?: (tagId: string) => void
-  onAddTag?: () => void
-  menuItems?: MenuItem[]
+  menuGroups?: MenuItem[][]
   onTitleClick?: () => void
   onRename?: (title: string) => void
   renameRequested?: boolean
@@ -50,6 +51,48 @@ export const TagDot = ({ tag, onRemove }: { tag: TagDefinition; onRemove?: () =>
         <span className={dot} style={style} />
       )}
     </TooltipWrap>
+  )
+}
+
+const disabledItemStyle = "cursor-default opacity-40 hover:bg-transparent active:bg-transparent"
+
+const PlainMenuItem = ({ item }: { item: MenuItem }) => (
+  <DropdownMenu.DropdownItem
+    icon={item.icon}
+    disabled={item.disabled}
+    onClick={item.disabled ? undefined : item.onClick}
+    className={item.disabled ? disabledItemStyle : undefined}
+  >
+    {item.label}
+  </DropdownMenu.DropdownItem>
+)
+
+// Arming must not close the menu, so the first select is prevented; the state
+// lives here and the closed menu unmounts it, disarming on dismiss.
+const ConfirmMenuItem = ({ item }: { item: MenuItem }) => {
+  const [armed, setArmed] = useState(false)
+  const handleSelect = (event: Event) => {
+    if (!armed) {
+      event.preventDefault()
+      setArmed(true)
+      return
+    }
+    item.onClick()
+  }
+  return (
+    <DropdownMenu.DropdownItem
+      icon={item.icon}
+      disabled={item.disabled}
+      onSelect={item.disabled ? undefined : handleSelect}
+      onMouseLeave={() => setArmed(false)}
+      className={cn(
+        item.disabled && disabledItemStyle,
+        armed &&
+          "bg-error-600 hover:bg-error-500 active:bg-error-500 data-[highlighted]:bg-error-500 [&_span]:text-white [&_svg]:text-white"
+      )}
+    >
+      {armed ? "Confirm" : item.label}
+    </DropdownMenu.DropdownItem>
   )
 }
 
@@ -116,8 +159,7 @@ export const FileHeader = ({
   date,
   tags = [],
   onRemoveTag,
-  onAddTag,
-  menuItems = [],
+  menuGroups = [],
   onTitleClick,
   onRename,
   renameRequested,
@@ -164,8 +206,7 @@ export const FileHeader = ({
           {formatShortDate(date)}
         </span>
       )}
-      {onAddTag && <IconButton size="small" icon={<Plus />} onClick={onAddTag} />}
-      {menuItems.length > 0 && (
+      {menuGroups.some((group) => group.length > 0) && (
         <SubframeCore.DropdownMenu.Root>
           <SubframeCore.DropdownMenu.Trigger asChild>
             <IconButton size="small" icon={<MoreHorizontal />} />
@@ -173,14 +214,17 @@ export const FileHeader = ({
           <SubframeCore.DropdownMenu.Portal>
             <SubframeCore.DropdownMenu.Content side="bottom" align="end" sideOffset={4} asChild>
               <DropdownMenu>
-                {menuItems.map((item) => (
-                  <DropdownMenu.DropdownItem
-                    key={item.label}
-                    icon={item.icon}
-                    onClick={item.onClick}
-                  >
-                    {item.label}
-                  </DropdownMenu.DropdownItem>
+                {menuGroups.map((group, index) => (
+                  <Fragment key={index}>
+                    {index > 0 && <DropdownMenu.DropdownDivider />}
+                    {group.map((item) =>
+                      item.confirm ? (
+                        <ConfirmMenuItem key={item.label} item={item} />
+                      ) : (
+                        <PlainMenuItem key={item.label} item={item} />
+                      )
+                    )}
+                  </Fragment>
                 ))}
               </DropdownMenu>
             </SubframeCore.DropdownMenu.Content>
