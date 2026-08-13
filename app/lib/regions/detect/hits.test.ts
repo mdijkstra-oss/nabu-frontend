@@ -79,6 +79,20 @@ describe("the quote gate", () => {
     expect(gate(work, [candidate({ quote: "Timmermans left the room" })])).toEqual([])
   })
 
+  it.each([{ quote: "him" }, { quote: "She," }, { quote: "THEY" }, { quote: "it" }])(
+    "drops the bare-pronoun quote $quote",
+    ({ quote }) => {
+      expect(gate(work, [candidate({ quote, sentenceIndex: 2 })])).toEqual([])
+    }
+  )
+
+  it("keeps a quote that contains a pronoun among other words", () => {
+    const hits = gate(work, [
+      candidate({ quote: "Kaag answered him", sentenceIndex: 2, value: "Kaag" }),
+    ])
+    expect(hits).toHaveLength(1)
+  })
+
   it("drops a ten-token quote sharing nine tokens in order with the sentence it names", () => {
     const sentences = ["alpha bravo charlie delta echo foxtrot golf hotel india kilo."]
     const hits = gate(workAt(0, sentences), [

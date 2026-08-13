@@ -31,6 +31,27 @@ export const gateOccurrences = (
   return hits
 }
 
+// A pronoun points at an identity but never names one, so a quote that is only a
+// pronoun cannot anchor an occurrence. Its sentences fall to the last named
+// occurrence instead, whose reach the marker extends through them.
+const PRONOUNS = new Set([
+  "i",
+  "we",
+  "you",
+  "he",
+  "she",
+  "it",
+  "they",
+  "me",
+  "us",
+  "him",
+  "her",
+  "them",
+])
+
+const isBarePronoun = (quote: string): boolean =>
+  PRONOUNS.has(quote.toLowerCase().replace(/[^\p{L}]/gu, ""))
+
 const STRICT = true
 
 interface Located {
@@ -63,6 +84,8 @@ const toHit = (
   work: FindWork,
   candidate: OccurrenceCandidate
 ): Hit | null => {
+  if (valueType === "string" && isBarePronoun(candidate.quote)) return null
+
   const located = locateQuote(work.sentences, candidate.sentenceIndex, candidate.quote)
   if (located === null) return null
 

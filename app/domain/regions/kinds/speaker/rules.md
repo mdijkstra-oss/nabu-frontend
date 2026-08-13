@@ -41,7 +41,9 @@ this person.
 
 A speaker's region is every sentence whose words are theirs, up to the point another
 speaker takes over. It ends at the last sentence they own — not at the next
-attribution marker, which belongs to the next speaker.
+attribution marker, which belongs to the next speaker. Sentences that carry on with
+a pronoun — "She went on to recommend…" — still belong to the speaker last named;
+the naming switching to a pronoun does not end the region.
 
 Where attribution trails the words ("This is great, said Rutte"), the region starts
 before the attribution and includes it: the sentence naming the speaker is part of
