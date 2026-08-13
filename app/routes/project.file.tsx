@@ -26,8 +26,14 @@ const ATTRIBUTES_LANGUAGE = "json-attributes"
 const sortTagsByDisplay = (tags: TagDefinition[]): TagDefinition[] =>
   [...tags].sort((a, b) => getTagDisplay(a).localeCompare(getTagDisplay(b)))
 
-const removeTagOp = (allTagIds: string[], tagId: string) => [
-  { op: "replace" as const, path: "/tags", value: allTagIds.filter((id) => id !== tagId) },
+const toggleTagOp = (allTagIds: string[], tagId: string, enabled: boolean) => [
+  {
+    op: "replace" as const,
+    path: "/tags",
+    value: enabled
+      ? [...allTagIds.filter((id) => id !== tagId), tagId]
+      : allTagIds.filter((id) => id !== tagId),
+  },
 ]
 
 export default function ProjectFile() {
@@ -114,11 +120,11 @@ export default function ProjectFile() {
     [currentFile, params.projectId, navigate]
   )
 
-  const handleRemoveTag = useCallback(
-    (tagId: string) => {
+  const handleToggleTag = useCallback(
+    (tagId: string, enabled: boolean) => {
       if (!currentFile) return
       const allTagIds = getFileTags(currentFile)
-      patchBlock(currentFile, ATTRIBUTES_LANGUAGE, removeTagOp(allTagIds, tagId))
+      patchBlock(currentFile, ATTRIBUTES_LANGUAGE, toggleTagOp(allTagIds, tagId, enabled))
     },
     [currentFile, getFileTags]
   )
@@ -167,7 +173,8 @@ export default function ProjectFile() {
               ],
               [{ icon: <Clipboard />, label: "Copy raw", onClick: copyRawMarkdown }],
             ]}
-            onRemoveTag={handleRemoveTag}
+            availableTags={sortTagsByDisplay(tagDefinitions)}
+            onToggleTag={handleToggleTag}
             onChange={handleEditorChange}
             // preferences.md is hardcoded (REQUIRED_FILES, agent memory): renaming
             // it strands the next boot in waitForRequiredFiles. Hidden files open

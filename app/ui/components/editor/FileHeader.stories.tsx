@@ -51,19 +51,17 @@ export const RenamableTitle: Story = {
 export const TagsReadOnly: Story = {
   args: { title: "Interview Notes", tags },
   play: async ({ canvasElement }) => {
-    expect(within(canvasElement).queryByRole("button", { name: /remove/i })).toBeNull()
+    expect(within(canvasElement).getByLabelText("Tags")).toBeInTheDocument()
   },
 }
 
-export const TagsRemovable: Story = {
-  args: { title: "Interview Notes", tags, onRemoveTag: fn() },
+export const TagsTogglable: Story = {
+  args: { title: "Interview Notes", tags, availableTags: tags, onToggleTag: fn() },
   play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement)
-    const dots = canvas.getAllByRole("button", { name: /remove/i })
-    expect(dots).toHaveLength(2)
-
-    await userEvent.click(dots[1])
-    expect(args.onRemoveTag).toHaveBeenCalledWith("tag-fieldwork")
+    await userEvent.hover(within(canvasElement).getByLabelText("Tags"))
+    const row = await waitFor(() => within(document.body).getByText("Fieldwork"))
+    await userEvent.click(row)
+    expect(args.onToggleTag).toHaveBeenCalledWith("tag-fieldwork", false)
   },
 }
 

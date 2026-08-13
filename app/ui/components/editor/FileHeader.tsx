@@ -5,11 +5,9 @@ import { MoreHorizontal } from "lucide-react"
 import * as SubframeCore from "@subframe/core"
 import { DropdownMenu } from "~/ui/components/DropdownMenu"
 import { IconButton } from "~/ui/components/IconButton"
-import { TooltipWrap } from "~/ui/components/TooltipWrap"
 import { cn } from "~/ui/utils"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
-import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
-import { solidBackground } from "~/ui/theme/radix"
+import { TagPill } from "./TagPill"
 import { formatShortDate } from "~/lib/format/date"
 
 export interface MenuItem {
@@ -24,7 +22,8 @@ interface FileHeaderProps {
   title: string
   date?: string
   tags?: TagDefinition[]
-  onRemoveTag?: (tagId: string) => void
+  availableTags?: TagDefinition[]
+  onToggleTag?: (tagId: string, enabled: boolean) => void
   menuGroups?: MenuItem[][]
   onTitleClick?: () => void
   onRename?: (title: string) => void
@@ -32,26 +31,6 @@ interface FileHeaderProps {
   onRenameSettled?: () => void
   trailing?: ReactNode
   className?: string
-}
-
-export const TagDot = ({ tag, onRemove }: { tag: TagDefinition; onRemove?: () => void }) => {
-  const dot = "h-2.5 w-2.5 flex-none rounded-full"
-  const style = { backgroundColor: solidBackground(tag.color) }
-  return (
-    <TooltipWrap text={getTagDisplay(tag)}>
-      {onRemove ? (
-        <button
-          type="button"
-          aria-label={`Remove ${getTagDisplay(tag)}`}
-          onClick={onRemove}
-          className={cn(dot, "cursor-pointer transition-transform hover:scale-125")}
-          style={style}
-        />
-      ) : (
-        <span className={dot} style={style} />
-      )}
-    </TooltipWrap>
-  )
 }
 
 const disabledItemStyle = "cursor-default opacity-40 hover:bg-transparent active:bg-transparent"
@@ -158,7 +137,8 @@ export const FileHeader = ({
   title,
   date,
   tags = [],
-  onRemoveTag,
+  availableTags,
+  onToggleTag,
   menuGroups = [],
   onTitleClick,
   onRename,
@@ -170,17 +150,7 @@ export const FileHeader = ({
   <div
     className={cn("flex w-full items-center gap-2.5 px-4 py-2.5 shadow-header-divider", className)}
   >
-    {tags.length > 0 && (
-      <span className="flex flex-none items-center gap-1">
-        {tags.map((tag) => (
-          <TagDot
-            key={tag.id}
-            tag={tag}
-            onRemove={onRemoveTag ? () => onRemoveTag(tag.id) : undefined}
-          />
-        ))}
-      </span>
-    )}
+    <TagPill tags={tags} availableTags={availableTags} onToggleTag={onToggleTag} />
     {onRename ? (
       <EditableTitle
         title={title}

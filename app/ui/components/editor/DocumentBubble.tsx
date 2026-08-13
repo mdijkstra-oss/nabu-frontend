@@ -39,7 +39,8 @@ interface DocumentBubbleProps {
   debugOptions?: DebugOptions
   spotlight?: Spotlight | Spotlight[] | null
   menuGroups?: MenuItem[][]
-  onRemoveTag?: (tagId: string) => void
+  availableTags?: TagDefinition[]
+  onToggleTag?: (tagId: string, enabled: boolean) => void
   onClick?: () => void
   onChange?: (markdown: string) => void
   onRenameTitle?: (title: string) => void
@@ -58,7 +59,8 @@ export const DocumentBubble = ({
   debugOptions,
   spotlight = null,
   menuGroups = [],
-  onRemoveTag,
+  availableTags,
+  onToggleTag,
   onClick,
   onChange,
   onRenameTitle,
@@ -98,8 +100,9 @@ export const DocumentBubble = ({
         title={toDisplayName(filename)}
         date={date}
         tags={tags}
-        onRemoveTag={onRemoveTag}
         menuGroups={menuGroups}
+        availableTags={availableTags}
+        onToggleTag={onToggleTag}
         onRename={readOnly || headerOnly ? undefined : onRenameTitle}
         renameRequested={renameRequested}
         onRenameSettled={settleRenameRequest}
