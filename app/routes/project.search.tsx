@@ -102,7 +102,7 @@ export default function ProjectSearch() {
     dbReady
   )
 
-  const [mode, setMode] = useState<LayoutMode>("stacked")
+  const [mode, setMode] = useState<LayoutMode>("flat")
   const [band, setBand] = useState<VisibleBand>({ current: 0, total: 0 })
   const engineRef = useRef<CardLayoutHandle>(null)
 
