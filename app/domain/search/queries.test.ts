@@ -11,13 +11,13 @@ describe("buildRegionSearch", () => {
     )
   })
 
-  it("titles the search with the display label", () => {
+  it("titles the search with the kind tag and display label", () => {
     const dated = buildRegionSearch({
       kind: "date",
       value: "2026-08-02T00:00:00Z",
       label: "2 Aug 2026",
     })
-    expect(dated.title).toBe("2 Aug 2026")
+    expect(dated.title).toBe(":date: 2 Aug 2026")
     expect(dated.description).toBe("Passages where date is 2 Aug 2026")
   })
 

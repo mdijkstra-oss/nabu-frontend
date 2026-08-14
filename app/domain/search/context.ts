@@ -6,6 +6,7 @@ import { toDisplayName } from "~/lib/files/filename"
 import { getStoredAnnotations } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getCodeTitle } from "~/domain/data-blocks/callout/codes/selectors"
 import { CONTEXT_PREFIX } from "~/lib/editor/chat-context"
+import { stripKindTags } from "~/lib/regions/kinds/title-tags"
 
 const MAX_CONTEXT_RESULTS = 8
 
@@ -36,7 +37,7 @@ export const buildSearchContextMessage = (
   const preview = results.slice(0, MAX_CONTEXT_RESULTS)
   const lines = [
     CONTEXT_PREFIX,
-    `Search: "${search.title}" (${search.id})`,
+    `Search: "${stripKindTags(search.title)}" (${search.id})`,
     `Description: ${search.description}`,
     `Query: ${search.sql}`,
   ]

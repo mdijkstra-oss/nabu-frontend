@@ -31,6 +31,7 @@ import { findSearchById } from "~/domain/data-blocks/settings/searches/selectors
 import { resolveEntityName } from "~/lib/files/selectors"
 import { toDisplayName } from "~/lib/files/filename"
 import { resolveIdentifiers } from "~/lib/markdown/linkify/entities"
+import { stripKindTags } from "~/lib/regions/kinds/title-tags"
 
 export interface ResolvedColors {
   text: string
@@ -193,7 +194,7 @@ const resolveSearchRef = (
     colors: SEARCH_COLORS,
     icon: icons.search ?? icons.file,
     url: buildSearchUrl(projectId, ref.id),
-    label: resolveIdentifiers(search.title, (id) => resolveEntityName(files, id)),
+    label: resolveIdentifiers(stripKindTags(search.title), (id) => resolveEntityName(files, id)),
   }
 }
 

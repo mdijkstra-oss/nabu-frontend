@@ -1,4 +1,5 @@
 import type { NewSearchData } from "~/domain/search/types"
+import { kindTitle } from "~/lib/regions/kinds/title-tags"
 
 const buildFlaggedAnnotationsSql = (codeId: string): string =>
   `SELECT file, id, text, vote_review FROM annotations WHERE code = '${codeId}' AND vote_review IS NOT NULL AND vote_review != ''`
@@ -18,7 +19,7 @@ export interface RegionSearchTarget {
 }
 
 export const buildRegionSearch = ({ kind, value, label }: RegionSearchTarget): NewSearchData => ({
-  title: label,
+  title: kindTitle(kind, label),
   description: `Passages where ${kind} is ${label}`,
   sql: `SELECT file, quote AS text, startSentence, endSentence FROM regions WHERE kind = '${escapeSqlString(kind)}' AND parsed_value = '${escapeSqlString(value)}' ORDER BY file, startSentence`,
 })

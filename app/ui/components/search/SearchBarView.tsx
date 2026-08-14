@@ -13,6 +13,7 @@ import type { SearchEntry } from "~/domain/search/types"
 import type { Bm25Hit } from "~/lib/search/bm25/store"
 import { toDisplayName } from "~/lib/files/filename"
 import { BookmarkBtn } from "./BookmarkBtn"
+import { KindTaggedText } from "~/ui/components/KindTaggedText"
 import { cn } from "~/ui/utils"
 
 export interface SearchBarViewProps {
@@ -80,7 +81,9 @@ export const SearchRow = ({
   >
     <BookmarkBtn saved={entry.saved} onToggle={onToggleSave} className="mt-0.5" />
     <div className="flex min-w-0 flex-1 flex-col">
-      <span className="truncate text-body font-body text-default-font">{entry.title}</span>
+      <span className="truncate text-body font-body text-default-font">
+        <KindTaggedText text={entry.title} />
+      </span>
       <span className="truncate text-caption font-caption text-subtext-color">
         {entry.description}
       </span>
@@ -151,7 +154,7 @@ export const SearchBarView = ({
         />
         {currentSearch && !typing && (
           <span className="hidden max-w-[40%] truncate text-caption font-caption text-subtext-color sm:inline">
-            {currentSearch.title}
+            <KindTaggedText text={currentSearch.title} />
           </span>
         )}
         {currentSearch && (
