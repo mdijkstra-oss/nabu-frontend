@@ -289,11 +289,13 @@ export default function ProjectSearch() {
                 )}
               />
             </DebugOptionsProvider>
-            <ResultRail
-              band={band}
-              onScrollTo={(i) => engineRef.current?.scrollToIndex(i)}
-              onStep={(n) => engineRef.current?.scrollByCards(n)}
-            />
+            {mode === "stacked" && (
+              <ResultRail
+                band={band}
+                onScrollTo={(i) => engineRef.current?.scrollToIndex(i)}
+                onStep={(n) => engineRef.current?.scrollByCards(n)}
+              />
+            )}
           </>
         )}
       </div>
