@@ -34,3 +34,4 @@ storybook-static
 
 public/jq.js
 public/jq.wasm
+.playwright-mcp/
