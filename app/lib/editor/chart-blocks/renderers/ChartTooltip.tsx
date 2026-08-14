@@ -3,6 +3,7 @@
 import type { ReactElement } from "react"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { allowFileProtocol } from "~/ui/components/nabu/MessageContent"
 import { createEntityLinkComponents } from "~/ui/components/markdown/createEntityLinkComponents"
 import type { FileStore } from "~/lib/files/store"
 import { resolveTemplateToMarkdown } from "~/lib/chart/template"
@@ -87,7 +88,11 @@ export const ChartTooltip = ({ context, active, payload, label }: ChartTooltipPr
 
   return (
     <div className="rounded border border-solid border-neutral-border bg-default-background px-3 py-2 text-xs shadow-md">
-      <Markdown remarkPlugins={remarkPlugins} components={components}>
+      <Markdown
+        remarkPlugins={remarkPlugins}
+        components={components}
+        urlTransform={allowFileProtocol}
+      >
         {markdown}
       </Markdown>
     </div>

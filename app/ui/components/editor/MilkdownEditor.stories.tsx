@@ -13,7 +13,7 @@ const chartJson = JSON.stringify({
   id: "chart-codes",
   caption: { label: "Codes per month" },
   query: "SELECT month, count FROM codes",
-  spec: { type: "bar", x: "month", y: "count", color: "blue" },
+  spec: { type: "axis", x: "month", layers: [{ mark: "bar", y: "count", color: "blue" }] },
 })
 
 const kitchenSinkContent = [

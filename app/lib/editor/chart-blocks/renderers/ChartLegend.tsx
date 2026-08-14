@@ -5,6 +5,7 @@ import type { ReactElement } from "react"
 export interface ChartLegendEntry {
   value?: string | number
   color?: string
+  dataKey?: string | number
 }
 
 export interface ChartLegendProps {
@@ -13,8 +14,11 @@ export interface ChartLegendProps {
 
 export const ChartLegend = ({ payload = [] }: ChartLegendProps): ReactElement => (
   <ul className="nabu-chart-legend">
-    {payload.map((entry) => (
-      <li key={String(entry.value)} className="nabu-chart-legend-item">
+    {payload.map((entry, index) => (
+      <li
+        key={entry.dataKey !== undefined ? String(entry.dataKey) : index}
+        className="nabu-chart-legend-item"
+      >
         <span className="nabu-chart-legend-swatch" style={{ background: entry.color }} />
         {entry.value}
       </li>

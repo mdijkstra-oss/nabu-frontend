@@ -55,7 +55,6 @@ const buildChartEntityMap = (
       label: resolved.label,
       url: resolved.url,
       color: resolved.color ?? "",
-      icon: resolved.icon,
     }
   }
   return map

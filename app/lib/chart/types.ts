@@ -1,64 +1,23 @@
-import type { ComponentType } from "react"
+import type { z } from "zod"
+// Type-only edge: schema.ts value-imports from template.ts, which value-imports
+// from this file, so this import must never become a runtime one.
+import type {
+  AxisChartSpecSchema,
+  ChartLayerSchema,
+  ChartSpecSchema,
+} from "~/domain/data-blocks/chart/schema"
 
-export type ChartType =
-  | "bar"
-  | "stacked-bar"
-  | "grouped-bar"
-  | "line"
-  | "area"
-  | "scatter"
-  | "pie"
-  | "treemap"
-  | "heatmap"
+export type ChartSpec = z.infer<typeof ChartSpecSchema>
+export type AxisChartSpec = z.infer<typeof AxisChartSpecSchema>
+export type ChartLayer = z.infer<typeof ChartLayerSchema>
+export type PartChartSpec = Extract<ChartSpec, { type: "pie" | "treemap" }>
+export type MatrixChartSpec = Extract<ChartSpec, { type: "heatmap" }>
 
-export type AxisChartType = "bar" | "stacked-bar" | "grouped-bar" | "line" | "area" | "scatter"
-
-export type Orientation = "horizontal" | "vertical"
-
-export interface FieldBindingObject {
-  field: string
-  label?: string
-  format?: string
-}
-
-export type FieldBinding = string | FieldBindingObject
-
-export interface ChartBand {
-  from: string | number
-  to: string | number
-  label?: string
-}
-
-export interface AxisChartSpec {
-  type: AxisChartType
-  x: FieldBinding
-  y: FieldBinding
-  series?: FieldBinding
-  orientation?: Orientation
-  color: string
-  tooltip?: string
-  bands?: ChartBand[]
-}
-
-export interface PartChartSpec {
-  type: "pie" | "treemap"
-  label: FieldBinding
-  value: FieldBinding
-  parent?: FieldBinding
-  color: string
-  tooltip?: string
-}
-
-export interface MatrixChartSpec {
-  type: "heatmap"
-  x: FieldBinding
-  y: FieldBinding
-  value: FieldBinding
-  color: string
-  tooltip?: string
-}
-
-export type ChartSpec = AxisChartSpec | PartChartSpec | MatrixChartSpec
+export type LayerMark = ChartLayer["mark"]
+export type Orientation = AxisChartSpec["orientation"]
+export type AxisSide = ChartLayer["axis"]
+export type FieldBinding = AxisChartSpec["x"]
+export type ChartBand = NonNullable<AxisChartSpec["bands"]>[number]
 
 export interface TemplateLiteralNode {
   type: "literal"
@@ -68,7 +27,7 @@ export interface TemplateLiteralNode {
 export type TemplateRefOp =
   | { kind: "raw" }
   | { kind: "format"; format: string }
-  | { kind: "property"; property: "color" | "name" | "label" | "icon" }
+  | { kind: "property"; property: "color" | "name" | "label" }
 
 export interface TemplateRefNode {
   type: "ref"
@@ -83,10 +42,18 @@ export interface ChartEntityInfo {
   label: string
   url: string
   color: string
-  icon?: ComponentType<{ className?: string }>
 }
 
 export type ChartEntityMap = Record<string, ChartEntityInfo>
+
+export interface SeriesDescriptor {
+  key: string
+  name: string
+  mark: LayerMark
+  color: string
+  stackId?: string
+  axis: AxisSide
+}
 
 export interface AxisRow {
   x: string | number
@@ -94,7 +61,18 @@ export interface AxisRow {
   _tooltipNodes?: TemplateNode[]
   _colors: Record<string, string>
   _entityUrl?: string
-  [seriesName: string]: unknown
+  [seriesKey: string]: unknown
+}
+
+export interface AxisRenderable {
+  kind: "axis"
+  orientation: Orientation
+  xFormat?: string
+  leftAxisFormat?: string
+  rightAxisFormat?: string
+  series: SeriesDescriptor[]
+  rows: AxisRow[]
+  bands: ChartBand[]
 }
 
 export interface PartRow {
@@ -104,19 +82,6 @@ export interface PartRow {
   _raw: Record<string, unknown>
   _tooltipNodes?: TemplateNode[]
   _entityUrl?: string
-  _parent?: string
-}
-
-export interface AxisRenderable {
-  kind: "axis"
-  type: AxisChartType
-  orientation: Orientation
-  xFormat?: string
-  yFormat?: string
-  seriesNames: string[]
-  seriesColors: Record<string, string>
-  rows: AxisRow[]
-  bands: ChartBand[]
 }
 
 export interface PartRenderable {
@@ -125,9 +90,24 @@ export interface PartRenderable {
   rows: PartRow[]
 }
 
+export interface MatrixCell {
+  value: number
+  _raw: Record<string, unknown>
+  _tooltipNodes?: TemplateNode[]
+  _entityUrl?: string
+}
+
 export interface MatrixRenderable {
   kind: "matrix"
-  type: "heatmap"
+  xKeys: (string | number)[]
+  yKeys: (string | number)[]
+  cells: Map<string | number, Map<string | number, MatrixCell>>
+  min?: number
+  max?: number
+  colorToken: string
+  xFormat?: string
+  yFormat?: string
+  valueFormat?: string
 }
 
 export type RenderableChart = AxisRenderable | PartRenderable | MatrixRenderable
@@ -140,13 +120,10 @@ export const bindingFormat = (binding: FieldBinding | undefined): string | undef
   return typeof binding === "string" ? undefined : binding.format
 }
 
-export const isAxisSpec = (spec: ChartSpec): spec is AxisChartSpec =>
-  spec.type === "bar" ||
-  spec.type === "stacked-bar" ||
-  spec.type === "grouped-bar" ||
-  spec.type === "line" ||
-  spec.type === "area" ||
-  spec.type === "scatter"
+export const bindingLabel = (binding: FieldBinding): string | undefined =>
+  typeof binding === "string" ? undefined : binding.label
+
+export const isAxisSpec = (spec: ChartSpec): spec is AxisChartSpec => spec.type === "axis"
 
 export const isPartSpec = (spec: ChartSpec): spec is PartChartSpec =>
   spec.type === "pie" || spec.type === "treemap"

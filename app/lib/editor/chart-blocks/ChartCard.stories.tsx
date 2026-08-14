@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
-import { chartFixture, sampleTooltipContext } from "~/lib/chart/test-helpers"
+import { chartFixture, renderableOfKind, sampleTooltipContext } from "~/lib/chart/test-helpers"
 import { withSize } from "../../../../.storybook/decorators"
 import { ChartCard, type ChartCardState } from "./ChartCard"
 import { CHART_HEIGHT } from "./renderers/shared"
@@ -18,7 +18,7 @@ const barFixture = chartFixture("bar")
 
 const readyState: ChartCardState = {
   status: "ready",
-  renderable: barFixture.renderable,
+  renderable: renderableOfKind("bar", "axis"),
   tooltipContext: sampleTooltipContext(),
 }
 

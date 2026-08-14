@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, within } from "storybook/test"
-import { sampleTooltipContext, sampleTooltipPayload } from "~/lib/chart/test-helpers"
+import { entity, sampleTooltipContext, sampleTooltipPayload } from "~/lib/chart/test-helpers"
 import { parseTemplate } from "~/lib/chart/template"
 import { ChartTooltip } from "./ChartTooltip"
 
@@ -26,6 +26,28 @@ export const Templated: Story = {
   },
   play: async ({ canvasElement }) => {
     expect(within(canvasElement).getByText("Month Jan saw 12 visits")).toBeInTheDocument()
+  },
+}
+
+export const EntityPill: Story = {
+  args: {
+    context: {
+      ...sampleTooltipContext({ "grief.md": entity("grief.md", "Grief", "#4f46e5") }),
+      files: { "grief.md": "# Grief" },
+      projectId: "p1",
+    },
+    active: true,
+    label: "Jan",
+    payload: sampleTooltipPayload({
+      payload: {
+        _raw: { code: "grief.md", count: 3 },
+        _tooltipNodes: parseTemplate("{code} appears {count} times"),
+      },
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const pill = await within(canvasElement).findByRole("link", { name: "Grief" })
+    expect(pill).toHaveAttribute("href", "/project/p1/file/grief.md")
   },
 }
 

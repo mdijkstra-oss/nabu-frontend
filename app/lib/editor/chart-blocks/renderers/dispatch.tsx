@@ -4,7 +4,7 @@ import type { RenderableChart } from "~/lib/chart/types"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import { AxisChart } from "./AxisChart"
 import { PartChart } from "./PartChart"
-import { HeatmapPlaceholder } from "./HeatmapPlaceholder"
+import { Heatmap } from "./Heatmap"
 import type { ChartTooltipContext } from "./ChartTooltip"
 
 export interface ChartRendererProps {
@@ -40,7 +40,14 @@ export const ChartRenderer = ({
         />
       )
     case "matrix":
-      return <HeatmapPlaceholder height={height} />
+      return (
+        <Heatmap
+          renderable={renderable}
+          tooltipContext={tooltipContext}
+          onDatumClick={onDatumClick}
+          height={height}
+        />
+      )
     default:
       return exhaustive(renderable)
   }

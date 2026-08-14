@@ -1,23 +1,29 @@
 import { parseTemplate } from "./template"
+import { toNumber as coerceNumber } from "./format"
 import { resolveRowColor, type ColorContext } from "./color"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import {
   bindingField,
   bindingFormat,
+  bindingLabel,
   isAxisSpec,
   isMatrixSpec,
   isPartSpec,
   type AxisChartSpec,
   type AxisRenderable,
   type AxisRow,
+  type AxisSide,
   type ChartEntityMap,
+  type ChartLayer,
   type ChartSpec,
+  type MatrixCell,
   type MatrixChartSpec,
   type MatrixRenderable,
   type PartChartSpec,
   type PartRenderable,
   type PartRow,
   type RenderableChart,
+  type SeriesDescriptor,
   type TemplateNode,
 } from "./types"
 
@@ -34,15 +40,7 @@ const toKey = (value: unknown): string | number => {
   return String(value)
 }
 
-const toNumber = (value: unknown): number => {
-  if (typeof value === "number") return value
-  if (typeof value === "bigint") return Number(value)
-  if (typeof value === "string") {
-    const n = Number(value)
-    return isNaN(n) ? 0 : n
-  }
-  return 0
-}
+const toNumber = (value: unknown): number => coerceNumber(value) ?? 0
 
 const toLabel = (value: unknown, entityMap: ChartEntityMap): string => {
   if (typeof value !== "string") return value === null || value === undefined ? "" : String(value)
@@ -87,12 +85,20 @@ const groupRowsByX = (rows: Record<string, unknown>[], xField: string): GroupedR
   return result
 }
 
-const seriesNameFor = (
-  row: Record<string, unknown>,
-  seriesField: string | undefined,
-  fallback: string,
-  entityMap: ChartEntityMap
-): string => (seriesField ? toLabel(row[seriesField], entityMap) : fallback)
+const layerStacks = (layer: ChartLayer): boolean =>
+  (layer.mark === "bar" || layer.mark === "area") && layer.stack
+
+const stackIdFor = (layer: ChartLayer): string | undefined =>
+  layerStacks(layer) ? `${layer.mark}-${layer.axis}` : undefined
+
+const axisFormat = (layers: ChartLayer[], side: AxisSide): string | undefined => {
+  for (const layer of layers) {
+    if (layer.axis !== side) continue
+    const format = bindingFormat(layer.y)
+    if (format) return format
+  }
+  return undefined
+}
 
 const resolveAxis = (
   spec: AxisChartSpec,
@@ -101,45 +107,68 @@ const resolveAxis = (
   colorContext: ColorContext
 ): AxisRenderable => {
   const xField = bindingField(spec.x)
-  const yField = bindingField(spec.y)
-  const seriesField = spec.series ? bindingField(spec.series) : undefined
-  const defaultSeriesName = typeof spec.y === "string" ? yField : (spec.y.label ?? yField)
-  const colorNodes = parseTemplate(spec.color)
   const tooltipNodes = parseTooltip(spec.tooltip)
-
-  const seriesNameSet = new Set<string>()
-  const seriesColors: Record<string, string> = {}
   const groups = groupRowsByX(rows, xField)
 
-  const axisRows: AxisRow[] = groups.map(({ key, rows: groupRows }) => {
-    const colors: Record<string, string> = {}
-    const row: AxisRow = {
-      x: key,
-      _raw: groupRows[0],
-      _tooltipNodes: tooltipNodes,
-      _colors: colors,
-      _entityUrl: findEntityUrl(groupRows[0], entityMap),
+  const axisRows: AxisRow[] = groups.map(({ key, rows: groupRows }) => ({
+    x: key,
+    _raw: groupRows[0],
+    _tooltipNodes: tooltipNodes,
+    _colors: {},
+    _entityUrl: findEntityUrl(groupRows[0], entityMap),
+  }))
+
+  const series: SeriesDescriptor[] = []
+
+  spec.layers.forEach((layer, layerIndex) => {
+    const yField = bindingField(layer.y)
+    const seriesField = layer.series ? bindingField(layer.series) : undefined
+    const colorNodes = parseTemplate(layer.color)
+    const stackId = stackIdFor(layer)
+    const layerDescriptors = new Map<string | number, SeriesDescriptor>()
+
+    // Deduped by the series value, not its label: two entities sharing a
+    // display name stay two series.
+    const descriptorFor = (seriesValue: unknown): SeriesDescriptor => {
+      const dedupeKey = seriesField ? toKey(seriesValue) : ""
+      const existing = layerDescriptors.get(dedupeKey)
+      if (existing) return existing
+      const descriptor: SeriesDescriptor = {
+        key: `l${layerIndex}s${layerDescriptors.size}`,
+        name: seriesField ? toLabel(seriesValue, entityMap) : (bindingLabel(layer.y) ?? yField),
+        mark: layer.mark,
+        color: "",
+        stackId,
+        axis: layer.axis,
+      }
+      layerDescriptors.set(dedupeKey, descriptor)
+      series.push(descriptor)
+      return descriptor
     }
-    for (const sourceRow of groupRows) {
-      const seriesName = seriesNameFor(sourceRow, seriesField, defaultSeriesName, entityMap)
-      seriesNameSet.add(seriesName)
-      const current = typeof row[seriesName] === "number" ? (row[seriesName] as number) : 0
-      row[seriesName] = current + toNumber(sourceRow[yField])
-      const color = resolveRowColor(colorNodes, sourceRow, colorContext)
-      colors[seriesName] = color
-      if (!(seriesName in seriesColors)) seriesColors[seriesName] = color
-    }
-    return row
+
+    if (!seriesField) descriptorFor(undefined)
+
+    groups.forEach(({ rows: groupRows }, groupIndex) => {
+      const axisRow = axisRows[groupIndex]
+      for (const sourceRow of groupRows) {
+        const descriptor = descriptorFor(seriesField ? sourceRow[seriesField] : undefined)
+        const current =
+          typeof axisRow[descriptor.key] === "number" ? (axisRow[descriptor.key] as number) : 0
+        axisRow[descriptor.key] = current + toNumber(sourceRow[yField])
+        const color = resolveRowColor(colorNodes, sourceRow, colorContext)
+        axisRow._colors[descriptor.key] = color
+        if (!descriptor.color) descriptor.color = color
+      }
+    })
   })
 
   return {
     kind: "axis",
-    type: spec.type,
-    orientation: spec.orientation ?? "horizontal",
+    orientation: spec.orientation,
     xFormat: bindingFormat(spec.x),
-    yFormat: bindingFormat(spec.y),
-    seriesNames: [...seriesNameSet],
-    seriesColors,
+    leftAxisFormat: axisFormat(spec.layers, "left"),
+    rightAxisFormat: axisFormat(spec.layers, "right"),
+    series,
     rows: axisRows,
     bands: spec.bands ?? [],
   }
@@ -153,7 +182,6 @@ const resolvePart = (
 ): PartRenderable => {
   const labelField = bindingField(spec.label)
   const valueField = bindingField(spec.value)
-  const parentField = spec.parent ? bindingField(spec.parent) : undefined
   const colorNodes = parseTemplate(spec.color)
   const tooltipNodes = parseTooltip(spec.tooltip)
 
@@ -164,21 +192,76 @@ const resolvePart = (
     _raw: row,
     _tooltipNodes: tooltipNodes,
     _entityUrl: findEntityUrl(row, entityMap),
-    _parent: parentField ? toLabel(row[parentField], entityMap) : undefined,
   }))
 
   return { kind: "part", type: spec.type, rows: partRows }
 }
 
-const resolveMatrix = (_spec: MatrixChartSpec): MatrixRenderable => ({
-  kind: "matrix",
-  type: "heatmap",
-})
+const resolveMatrix = (
+  spec: MatrixChartSpec,
+  rows: Record<string, unknown>[],
+  entityMap: ChartEntityMap
+): MatrixRenderable => {
+  const xField = bindingField(spec.x)
+  const yField = bindingField(spec.y)
+  const valueField = bindingField(spec.value)
+  const tooltipNodes = parseTooltip(spec.tooltip)
+
+  const xKeys: (string | number)[] = []
+  const yKeys: (string | number)[] = []
+  const cells = new Map<string | number, Map<string | number, MatrixCell>>()
+  let min: number | undefined
+  let max: number | undefined
+
+  for (const row of rows) {
+    const xKey = toKey(row[xField])
+    const yKey = toKey(row[yField])
+    let column = cells.get(xKey)
+    if (!column) {
+      column = new Map()
+      cells.set(xKey, column)
+      xKeys.push(xKey)
+    }
+    if (!yKeys.includes(yKey)) yKeys.push(yKey)
+
+    const existing = column.get(yKey)
+    if (existing) {
+      existing.value += toNumber(row[valueField])
+    } else {
+      column.set(yKey, {
+        value: toNumber(row[valueField]),
+        _raw: row,
+        _tooltipNodes: tooltipNodes,
+        _entityUrl: findEntityUrl(row, entityMap),
+      })
+    }
+  }
+
+  for (const column of cells.values()) {
+    for (const cell of column.values()) {
+      if (min === undefined || cell.value < min) min = cell.value
+      if (max === undefined || cell.value > max) max = cell.value
+    }
+  }
+
+  return {
+    kind: "matrix",
+    xKeys,
+    yKeys,
+    cells,
+    min,
+    max,
+    colorToken: spec.color,
+    xFormat: bindingFormat(spec.x),
+    yFormat: bindingFormat(spec.y),
+    valueFormat: bindingFormat(spec.value),
+  }
+}
 
 export const resolveChartData = (options: ResolveOptions): RenderableChart => {
   const { spec, rows, entityMap, colorContext } = options
   if (isAxisSpec(spec)) return resolveAxis(spec, rows, entityMap, colorContext)
   if (isPartSpec(spec)) return resolvePart(spec, rows, entityMap, colorContext)
-  if (isMatrixSpec(spec)) return resolveMatrix(spec)
+  if (isMatrixSpec(spec)) return resolveMatrix(spec, rows, entityMap)
   return exhaustive(spec)
 }

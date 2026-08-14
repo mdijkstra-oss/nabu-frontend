@@ -18,7 +18,7 @@ const toDate = (value: unknown): Date | null => {
   return null
 }
 
-const toNumber = (value: unknown): number | null => {
+export const toNumber = (value: unknown): number | null => {
   if (typeof value === "number") return isNaN(value) ? null : value
   if (typeof value === "bigint") return Number(value)
   if (typeof value === "string") {

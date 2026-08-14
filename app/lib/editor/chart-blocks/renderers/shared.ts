@@ -10,9 +10,9 @@ export const CHART_BAR_RADIUS = 4
 
 export const CHART_AREA_FILL_OPACITY = 0.9
 
-export const CHART_STACK_ID = "stack"
-
 export const STACKED_BAR_CLASS = "nabu-chart-stacked"
+
+export const HEATMAP_MIN_CELL = 36
 
 export const CHART_MARGIN = { top: 20, right: 12, bottom: 4, left: 4 }
 
@@ -24,13 +24,13 @@ interface PayloadWrapper {
   payload?: PayloadWithEntityUrl
 }
 
-const unwrapPayload = (input: unknown): PayloadWithEntityUrl | undefined => {
-  if (!input || typeof input !== "object") return undefined
-  if ("payload" in input) {
-    const wrapped = (input as PayloadWrapper).payload
+const unwrapPayload = (clickedDatum: unknown): PayloadWithEntityUrl | undefined => {
+  if (!clickedDatum || typeof clickedDatum !== "object") return undefined
+  if ("payload" in clickedDatum) {
+    const wrapped = (clickedDatum as PayloadWrapper).payload
     if (wrapped) return wrapped
   }
-  return input as PayloadWithEntityUrl
+  return clickedDatum as PayloadWithEntityUrl
 }
 
 export const buildDatumClickHandler = (

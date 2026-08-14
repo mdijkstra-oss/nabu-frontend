@@ -19,7 +19,7 @@ const fileWithTagDefinition = (id: string, label: string, color: string, icon: s
   `# Prefs\n\n\`\`\`json-settings\n${JSON.stringify({ tags: [{ id, label, color, icon }] })}\n\`\`\``
 
 const fileWithSearch = (id: string, title: string): string =>
-  `# Settings\n\n\`\`\`json-settings\n${JSON.stringify({ searches: [{ id, title, description: title, highlight: "", saved: false, createdAt: 0, sql: "SELECT 1" }] })}\n\`\`\``
+  `# Settings\n\n\`\`\`json-settings\n${JSON.stringify({ searches: [{ id, title, description: title, highlight: "", saved: false, createdAt: "1970-01-01T00:00:00.000Z", sql: "SELECT 1" }] })}\n\`\`\``
 
 describe("resolveEntityLink", () => {
   const cases: {

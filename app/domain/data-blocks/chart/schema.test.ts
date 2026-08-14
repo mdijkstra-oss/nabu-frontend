@@ -1,202 +1,191 @@
 import { describe, it, expect } from "vitest"
-import { ChartSchema, parseChart } from "./schema"
+import { parseChart } from "./schema"
+import { allChartFixtureNames, chartFixture, type ChartFixtureName } from "~/lib/chart/test-helpers"
 
-const baseChart = (spec: unknown) => ({
-  id: "chart-001",
-  caption: { label: "Demo" },
-  query: "SELECT * FROM t",
-  spec,
+const chartJson = (spec: unknown): string =>
+  JSON.stringify({
+    id: "chart-001",
+    caption: { label: "Demo" },
+    query: "SELECT * FROM t",
+    spec,
+  })
+
+const barLayer = (overrides: Record<string, unknown> = {}) => ({
+  mark: "bar",
+  y: "count",
+  color: "blue",
+  ...overrides,
 })
 
-describe("ChartSchema — valid specs", () => {
-  const cases: {
-    name: string
-    spec: Record<string, unknown>
-  }[] = [
+const axisSpec = (overrides: Record<string, unknown> = {}) => ({
+  type: "axis",
+  x: "month",
+  layers: [barLayer()],
+  ...overrides,
+})
+
+describe("parseChart — hostile content", () => {
+  const cases: { name: string; content: string }[] = [
+    { name: "not JSON", content: "not json at all" },
+    { name: "JSON string", content: '"just a string"' },
+    { name: "JSON number", content: "42" },
+    { name: "JSON array", content: "[1, 2, 3]" },
+    { name: "JSON null", content: "null" },
     {
-      name: "bar with string bindings and radix color",
-      spec: { type: "bar", x: "code", y: "count", color: "blue" },
+      name: "object missing spec",
+      content: JSON.stringify({ id: "chart-1", caption: { label: "x" }, query: "SELECT 1" }),
+    },
+  ]
+
+  it.each(cases)("$name → null", ({ content }) => {
+    expect(parseChart(content)).toBeNull()
+  })
+})
+
+describe("parseChart — rejected specs", () => {
+  const cases: { name: string; spec: unknown }[] = [
+    {
+      name: "old flat format (type bar)",
+      spec: { type: "bar", x: "month", y: "count", color: "blue" },
+    },
+    { name: "empty layers", spec: axisSpec({ layers: [] }) },
+    { name: "absent layers", spec: { type: "axis", x: "month" } },
+    { name: "unknown mark", spec: axisSpec({ layers: [barLayer({ mark: "lollipop" })] }) },
+    { name: "unknown family", spec: { type: "lollipop", x: "a", y: "b", color: "blue" } },
+    {
+      name: "stack on line layer",
+      spec: axisSpec({ layers: [{ mark: "line", y: "count", color: "blue", stack: true }] }),
     },
     {
-      name: "stacked-bar with series and entity color template",
-      spec: {
-        type: "stacked-bar",
-        x: "month",
-        y: "value",
-        series: "category",
-        color: "{category:color}",
-      },
+      name: "stack on scatter layer",
+      spec: axisSpec({ layers: [{ mark: "scatter", y: "count", color: "blue", stack: true }] }),
     },
+    { name: "orientation diagonal", spec: axisSpec({ orientation: "diagonal" }) },
+    { name: "axis middle", spec: axisSpec({ layers: [barLayer({ axis: "middle" })] }) },
+    { name: "empty x binding string", spec: axisSpec({ x: "" }) },
+    { name: "empty x binding field", spec: axisSpec({ x: { field: "" } }) },
+    { name: "empty layer y binding string", spec: axisSpec({ layers: [barLayer({ y: "" })] }) },
     {
-      name: "grouped-bar with object bindings and format",
-      spec: {
-        type: "grouped-bar",
-        x: { field: "category", label: "Category" },
-        y: { field: "amount", label: "Amount", format: ",.0f" },
-        color: "green",
-      },
-    },
-    {
-      name: "line with orientation vertical and tooltip",
-      spec: {
-        type: "line",
-        x: "date",
-        y: "value",
-        orientation: "vertical",
-        color: "purple",
-        tooltip: "{value:,.0f} on {date:%b %Y}",
-      },
-    },
-    {
-      name: "area with column template color",
-      spec: { type: "area", x: "t", y: "v", color: "{color}" },
-    },
-    {
-      name: "scatter minimal",
-      spec: { type: "scatter", x: "x", y: "y", color: "orange" },
-    },
-    {
-      name: "pie with label/value + radix",
-      spec: { type: "pie", label: "name", value: "amount", color: "pink" },
-    },
-    {
-      name: "treemap with parent",
-      spec: {
-        type: "treemap",
-        label: "name",
-        value: "amount",
-        parent: "group",
-        color: "cyan",
-      },
-    },
-    {
-      name: "heatmap with x/y/value",
-      spec: {
-        type: "heatmap",
-        x: "day",
-        y: "hour",
-        value: "count",
-        color: "teal",
-      },
+      name: "empty layer y binding field",
+      spec: axisSpec({ layers: [barLayer({ y: { field: "" } })] }),
     },
   ]
 
   it.each(cases)("$name", ({ spec }) => {
-    const result = ChartSchema.safeParse(baseChart(spec))
-    expect(result.success).toBe(true)
+    expect(parseChart(chartJson(spec))).toBeNull()
   })
 })
 
-describe("ChartSchema — color forms", () => {
-  const cases: {
-    name: string
-    color: string
-    valid: boolean
-  }[] = [
-    { name: "radix token", color: "blue", valid: true },
-    { name: "radix token (gray)", color: "gray", valid: true },
-    { name: "column template raw", color: "{color_col}", valid: true },
-    { name: "entity property template", color: "{code:color}", valid: true },
-    { name: "unknown radix-like literal", color: "fuchsia", valid: false },
-    { name: "hex literal", color: "#3b82f6", valid: false },
-    { name: "empty string", color: "", valid: false },
-    { name: "arbitrary string", color: "rainbow", valid: false },
+describe("parseChart — orientation", () => {
+  const cases: { orientation: string }[] = [
+    { orientation: "vertical" },
+    { orientation: "horizontal" },
   ]
 
-  it.each(cases)("$name", ({ color, valid }) => {
-    const result = ChartSchema.safeParse(baseChart({ type: "bar", x: "a", y: "b", color }))
-    expect(result.success).toBe(valid)
+  it.each(cases)("accepts $orientation", ({ orientation }) => {
+    const block = parseChart(chartJson(axisSpec({ orientation })))
+    expect(block).not.toBeNull()
+    if (block?.spec.type !== "axis") throw new Error("expected axis spec")
+    expect(block.spec.orientation).toBe(orientation)
   })
 })
 
-describe("ChartSchema — invalid", () => {
-  const cases: {
-    name: string
-    payload: unknown
-  }[] = [
+describe("parseChart — defaults materialize", () => {
+  it("orientation, stack, and axis come out concrete", () => {
+    const block = parseChart(chartJson(axisSpec()))
+    expect(block).not.toBeNull()
+    if (block?.spec.type !== "axis") throw new Error("expected axis spec")
+    expect(block.spec.orientation).toBe("vertical")
+    const layer = block.spec.layers[0]
+    if (layer.mark !== "bar") throw new Error("expected bar layer")
+    expect(layer.stack).toBe(false)
+    expect(layer.axis).toBe("left")
+  })
+})
+
+describe("parseChart — color forms", () => {
+  const cases: { name: string; family: "axis" | "heatmap"; color: string; valid: boolean }[] = [
+    { name: "axis radix token", family: "axis", color: "blue", valid: true },
+    { name: "axis column template", family: "axis", color: "{color_col}", valid: true },
+    { name: "axis entity property template", family: "axis", color: "{code:color}", valid: true },
+    { name: "axis hex literal", family: "axis", color: "#3b82f6", valid: false },
+    { name: "axis unknown token", family: "axis", color: "fuchsia", valid: false },
+    { name: "axis empty string", family: "axis", color: "", valid: false },
+    { name: "axis whitespace template field", family: "axis", color: "{ }", valid: false },
+    { name: "axis name-property template", family: "axis", color: "{code:name}", valid: false },
+    { name: "axis format template", family: "axis", color: "{n:.0f}", valid: false },
+    { name: "axis multi-node template", family: "axis", color: "a{b}c", valid: false },
+    { name: "axis empty property template field", family: "axis", color: "{:color}", valid: false },
+    { name: "heatmap radix token", family: "heatmap", color: "blue", valid: true },
+    { name: "heatmap column template", family: "heatmap", color: "{color_col}", valid: false },
     {
-      name: "missing id",
-      payload: {
-        caption: { label: "x" },
-        query: "SELECT 1",
-        spec: { type: "bar", x: "a", y: "b", color: "blue" },
-      },
+      name: "heatmap entity property template",
+      family: "heatmap",
+      color: "{code:color}",
+      valid: false,
     },
-    {
-      name: "missing caption.label",
-      payload: {
-        id: "chart-1",
-        caption: {},
-        query: "SELECT 1",
-        spec: { type: "bar", x: "a", y: "b", color: "blue" },
-      },
-    },
-    {
-      name: "SEMANTIC() in query",
-      payload: {
-        id: "chart-1",
-        caption: { label: "x" },
-        query: "SELECT SEMANTIC('foo')",
-        spec: { type: "bar", x: "a", y: "b", color: "blue" },
-      },
-    },
-    {
-      name: "unknown chart type",
-      payload: baseChart({ type: "lollipop", x: "a", y: "b", color: "blue" }),
-    },
-    {
-      name: "bar missing y",
-      payload: baseChart({ type: "bar", x: "a", color: "blue" }),
-    },
-    {
-      name: "pie missing value",
-      payload: baseChart({ type: "pie", label: "n", color: "blue" }),
-    },
-    {
-      name: "heatmap missing value",
-      payload: baseChart({ type: "heatmap", x: "d", y: "h", color: "blue" }),
-    },
-    {
-      name: "field binding with empty field name",
-      payload: baseChart({
-        type: "bar",
-        x: { field: "" },
-        y: "y",
-        color: "blue",
-      }),
-    },
-    {
-      name: "invalid orientation",
-      payload: baseChart({
-        type: "bar",
-        x: "a",
-        y: "b",
-        orientation: "diagonal",
-        color: "blue",
-      }),
-    },
+    { name: "heatmap hex literal", family: "heatmap", color: "#3b82f6", valid: false },
+    { name: "heatmap unknown token", family: "heatmap", color: "fuchsia", valid: false },
+    { name: "heatmap empty string", family: "heatmap", color: "", valid: false },
   ]
 
-  it.each(cases)("$name", ({ payload }) => {
-    const result = ChartSchema.safeParse(payload)
-    expect(result.success).toBe(false)
+  const specWithColor = (family: "axis" | "heatmap", color: string): unknown =>
+    family === "axis"
+      ? axisSpec({ layers: [barLayer({ color })] })
+      : { type: "heatmap", x: "doc", y: "code", value: "n", color }
+
+  it.each(cases)("$name → valid: $valid", ({ family, color, valid }) => {
+    expect(parseChart(chartJson(specWithColor(family, color))) !== null).toBe(valid)
   })
 })
 
-describe("parseChart", () => {
-  it("returns parsed block on valid JSON", () => {
-    const json = JSON.stringify(baseChart({ type: "bar", x: "a", y: "b", color: "blue" }))
-    const result = parseChart(json)
-    expect(result).not.toBeNull()
-    expect(result?.spec.type).toBe("bar")
+describe("parseChart — query refinement", () => {
+  const semanticQueries = [
+    "SELECT SEMANTIC('foo')",
+    "SELECT semantic('foo')",
+    "SELECT SEMANTIC ('foo')",
+  ]
+
+  it.each(semanticQueries.map((query) => ({ query })))("rejects $query", ({ query }) => {
+    const content = JSON.stringify({
+      id: "chart-1",
+      caption: { label: "x" },
+      query,
+      spec: axisSpec(),
+    })
+    expect(parseChart(content)).toBeNull()
+  })
+})
+
+describe("parseChart — fixtures", () => {
+  const names: ChartFixtureName[] = ["combo", "stacked", "grouped", "horizontal", "wide-stacked"]
+
+  it.each(allChartFixtureNames.map((name) => ({ name })))(
+    "every fixture spec passes the schema: $name",
+    ({ name }) => {
+      expect(parseChart(chartJson(chartFixture(name).spec))).not.toBeNull()
+    }
+  )
+
+  it.each(names.map((name) => ({ name })))("$name parses with concrete defaults", ({ name }) => {
+    const block = parseChart(chartJson(chartFixture(name).spec))
+    expect(block).not.toBeNull()
+    if (block?.spec.type !== "axis") throw new Error("expected axis spec")
+    expect(["vertical", "horizontal"]).toContain(block.spec.orientation)
+    for (const layer of block.spec.layers) {
+      expect(["left", "right"]).toContain(layer.axis)
+      if (layer.mark === "bar" || layer.mark === "area") {
+        expect(typeof layer.stack).toBe("boolean")
+      }
+    }
   })
 
-  it("returns null on invalid JSON", () => {
-    expect(parseChart("not json")).toBeNull()
-  })
-
-  it("returns null on schema violation", () => {
-    const json = JSON.stringify(baseChart({ type: "bogus" }))
-    expect(parseChart(json)).toBeNull()
+  it("combo comes back as a bar layer and a right-axis line layer over one x", () => {
+    const block = parseChart(chartJson(chartFixture("combo").spec))
+    expect(block).not.toBeNull()
+    if (block?.spec.type !== "axis") throw new Error("expected axis spec")
+    expect(block.spec.x).toBe("month")
+    expect(block.spec.layers.map((layer) => layer.mark)).toEqual(["bar", "line"])
+    expect(block.spec.layers[1].axis).toBe("right")
   })
 })

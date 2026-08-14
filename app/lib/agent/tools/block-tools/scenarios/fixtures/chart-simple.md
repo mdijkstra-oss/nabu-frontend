@@ -8,10 +8,15 @@
 	},
 	"query": "SELECT 1",
 	"spec": {
-		"type": "bar",
+		"type": "axis",
 		"x": "x",
-		"y": "y",
-		"color": "blue"
+		"layers": [
+			{
+				"mark": "bar",
+				"y": "y",
+				"color": "blue"
+			}
+		]
 	}
 }
 ```

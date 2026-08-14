@@ -19,7 +19,7 @@ const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/
 
 const isHex = (value: string): boolean => HEX_PATTERN.test(value)
 
-const isRadixToken = (value: string): boolean => RADIX_TOKENS.has(value)
+export const isRadixToken = (value: string): boolean => RADIX_TOKENS.has(value)
 
 const resolveAtomicColor = (value: string, context: ColorContext): string | undefined => {
   if (isHex(value)) return value

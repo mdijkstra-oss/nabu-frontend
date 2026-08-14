@@ -6,7 +6,7 @@ import type { EntityKind, EntityRef } from "./linkify/types"
 import { parseEntityLink } from "./linkify/parse"
 import { serializeSpotlightParam } from "~/lib/editor/spotlight/serialize"
 import { BarChart, ChartLine, ChartPie, ChartScatter } from "lucide-react"
-import type { ChartType } from "~/lib/chart/types"
+import type { ChartSpec, LayerMark } from "~/lib/chart/types"
 import { calloutTypeIcons } from "~/domain/data-blocks/callout/schema"
 import { annotationIcon } from "~/domain/data-blocks/attributes/schema"
 import {
@@ -148,16 +148,17 @@ const resolveTagRef = (
   }
 }
 
-const CHART_TYPE_ICONS: Record<ChartType, ComponentType<{ className?: string }>> = {
+const MARK_ICONS: Record<LayerMark, ComponentType<{ className?: string }>> = {
   bar: BarChart,
-  "stacked-bar": BarChart,
-  "grouped-bar": BarChart,
   line: ChartLine,
   area: ChartLine,
-  pie: ChartPie,
-  treemap: ChartPie,
   scatter: ChartScatter,
-  heatmap: ChartLine,
+}
+
+const chartSpecIcon = (spec: ChartSpec): ComponentType<{ className?: string }> => {
+  if (spec.type === "axis") return MARK_ICONS[spec.layers[0].mark]
+  if (spec.type === "heatmap") return ChartLine
+  return ChartPie
 }
 
 const resolveChartRef = (
@@ -172,7 +173,7 @@ const resolveChartRef = (
   return {
     kind: "chart",
     colors: CHART_COLORS,
-    icon: CHART_TYPE_ICONS[chart.spec.type],
+    icon: chartSpecIcon(chart.spec),
     url: buildEntityUrl(projectId, documentId, ref.id),
     label: chart.caption.label,
   }

@@ -45,6 +45,11 @@ describe("parseTemplate", () => {
       expected: [{ type: "ref", field: "code", op: { kind: "property", property: "label" } }],
     },
     {
+      name: "icon is an unrecognized tail, not a property op",
+      input: "{code:icon}",
+      expected: [{ type: "ref", field: "code", op: { kind: "format", format: "icon" } }],
+    },
+    {
       name: "literal and refs mixed",
       input: "total: {count} items",
       expected: [
@@ -175,46 +180,86 @@ describe("collectReferencedFields", () => {
     expected: string[]
   }[] = [
     {
-      name: "bar with string bindings",
+      name: "pie tooltip fields join the collected set",
       spec: {
-        type: "bar",
-        x: "code",
-        y: "count",
+        type: "pie",
+        label: "code",
+        value: "count",
         color: "blue",
+        tooltip: "{code}: {pct}",
+      },
+      expected: ["code", "count", "pct"],
+    },
+    {
+      name: "heatmap tooltip fields join the collected set",
+      spec: {
+        type: "heatmap",
+        x: "doc",
+        y: "code",
+        value: "n",
+        color: "blue",
+        tooltip: "{extra_col}",
+      },
+      expected: ["doc", "code", "n", "extra_col"],
+    },
+    {
+      name: "single-layer axis with string bindings",
+      spec: {
+        type: "axis",
+        x: "code",
+        orientation: "vertical",
+        layers: [{ mark: "bar", y: "count", color: "blue", stack: false, axis: "left" }],
       },
       expected: ["code", "count"],
     },
     {
-      name: "bar with series and color template",
+      name: "two layers with series and per-layer color templates",
       spec: {
-        type: "bar",
+        type: "axis",
         x: "month",
-        y: "value",
-        series: "category",
-        color: "{category:color}",
+        orientation: "vertical",
+        layers: [
+          {
+            mark: "bar",
+            y: "count",
+            series: "region",
+            color: "{region:color}",
+            stack: false,
+            axis: "left",
+          },
+          { mark: "line", y: "ratio", series: "cohort", color: "{palette}", axis: "right" },
+        ],
       },
-      expected: ["month", "value", "category"],
+      expected: ["month", "count", "region", "ratio", "cohort", "palette"],
     },
     {
-      name: "bar with object bindings",
+      name: "axis with object bindings",
       spec: {
-        type: "bar",
+        type: "axis",
         x: { field: "date", label: "Date", format: "%b %Y" },
-        y: { field: "count", label: "Count" },
-        color: "blue",
+        orientation: "vertical",
+        layers: [
+          {
+            mark: "bar",
+            y: { field: "count", label: "Count" },
+            color: "blue",
+            stack: false,
+            axis: "left",
+          },
+        ],
       },
       expected: ["date", "count"],
     },
     {
-      name: "pie with parent",
+      name: "pie with parent and color template",
       spec: {
         type: "pie",
         label: "name",
         value: "amount",
         parent: "group",
-        color: "blue",
+        color: "{shade_col}",
       },
-      expected: ["name", "amount", "group"],
+      expected: ["name", "amount", "group", "shade_col"],
     },
     {
       name: "heatmap",
@@ -230,10 +275,10 @@ describe("collectReferencedFields", () => {
     {
       name: "tooltip contributes fields",
       spec: {
-        type: "line",
+        type: "axis",
         x: "date",
-        y: "value",
-        color: "blue",
+        orientation: "vertical",
+        layers: [{ mark: "line", y: "value", color: "blue", axis: "left" }],
         tooltip: "{label}: {value} ({pct:.0%})",
       },
       expected: ["date", "value", "label", "pct"],

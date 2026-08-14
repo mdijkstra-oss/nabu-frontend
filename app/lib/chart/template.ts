@@ -17,7 +17,7 @@ export interface TemplateContext {
   entityMap: ChartEntityMap
 }
 
-const ENTITY_PROPERTIES = ["color", "name", "label", "icon"] as const
+const ENTITY_PROPERTIES = ["color", "name", "label"] as const
 type EntityProperty = (typeof ENTITY_PROPERTIES)[number]
 
 const isEntityProperty = (value: string): value is EntityProperty =>
@@ -104,10 +104,19 @@ const collectRefFields = (template: string): string[] =>
     .map((n) => n.field)
 
 const collectBindingFields = (spec: ChartSpec): FieldBinding[] => {
-  if (isAxisSpec(spec)) return [spec.x, spec.y, ...(spec.series ? [spec.series] : [])]
+  if (isAxisSpec(spec))
+    return [
+      spec.x,
+      ...spec.layers.flatMap((layer) => [layer.y, ...(layer.series ? [layer.series] : [])]),
+    ]
   if (isPartSpec(spec)) return [spec.label, spec.value, ...(spec.parent ? [spec.parent] : [])]
   if (isMatrixSpec(spec)) return [spec.x, spec.y, spec.value]
   return exhaustive(spec)
+}
+
+const collectColorTemplates = (spec: ChartSpec): string[] => {
+  if (isAxisSpec(spec)) return spec.layers.map((layer) => layer.color)
+  return [spec.color]
 }
 
 export const collectReferencedFields = (spec: ChartSpec): string[] => {
@@ -115,8 +124,10 @@ export const collectReferencedFields = (spec: ChartSpec): string[] => {
   for (const binding of collectBindingFields(spec)) {
     fields.add(bindingField(binding))
   }
-  if (isTemplate(spec.color)) {
-    for (const field of collectRefFields(spec.color)) fields.add(field)
+  for (const color of collectColorTemplates(spec)) {
+    if (isTemplate(color)) {
+      for (const field of collectRefFields(color)) fields.add(field)
+    }
   }
   if (spec.tooltip) {
     for (const field of collectRefFields(spec.tooltip)) fields.add(field)

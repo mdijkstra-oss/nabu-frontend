@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
-import { expect, waitFor, within } from "storybook/test"
-import { allChartTypes, chartFixture, sampleTooltipContext } from "~/lib/chart/test-helpers"
+import { expect, waitFor } from "storybook/test"
+import {
+  allRenderableFixtureNames,
+  renderableFixture,
+  sampleTooltipContext,
+} from "~/lib/chart/test-helpers"
 import { ChartRenderer } from "./dispatch"
 
 const meta: Meta<typeof ChartRenderer> = {
@@ -11,12 +15,12 @@ const meta: Meta<typeof ChartRenderer> = {
 export default meta
 type Story = StoryObj<typeof ChartRenderer>
 
-const ChartTypeGallery = () => (
+const ChartKindGallery = () => (
   <div className="flex flex-col gap-4">
-    {allChartTypes.map((type) => (
-      <div key={type} data-chart-type={type} style={{ width: 640 }}>
+    {allRenderableFixtureNames.map((name) => (
+      <div key={name} data-chart-fixture={name} style={{ width: 640 }}>
         <ChartRenderer
-          renderable={chartFixture(type).renderable}
+          renderable={renderableFixture(name)}
           tooltipContext={sampleTooltipContext()}
         />
       </div>
@@ -25,18 +29,21 @@ const ChartTypeGallery = () => (
 )
 
 export const Gallery: Story = {
-  render: () => <ChartTypeGallery />,
+  render: () => <ChartKindGallery />,
   play: async ({ canvasElement }) => {
     await waitFor(() => {
       const axisCharts = canvasElement.querySelectorAll(
-        "[data-chart-type] .recharts-cartesian-grid"
+        "[data-chart-fixture] .recharts-cartesian-grid"
       )
-      expect(axisCharts).toHaveLength(6)
+      expect(axisCharts).toHaveLength(4)
       expect(
-        canvasElement.querySelectorAll('[data-chart-type="pie"] .recharts-pie-sector').length
+        canvasElement.querySelectorAll('[data-chart-fixture="pie"] .recharts-pie-sector').length
       ).toBeGreaterThan(0)
-      expect(canvasElement.querySelector('[data-chart-type="treemap"] svg')).not.toBeNull()
-      expect(within(canvasElement).getByText("Too cold for heatmap")).toBeInTheDocument()
+      expect(canvasElement.querySelector('[data-chart-fixture="treemap"] svg')).not.toBeNull()
+      expect(
+        canvasElement.querySelectorAll('[data-chart-fixture="heatmap"] .nabu-chart-heatmap-cell')
+          .length
+      ).toBeGreaterThan(0)
     })
   },
 }
