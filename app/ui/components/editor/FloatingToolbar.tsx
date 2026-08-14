@@ -1,20 +1,44 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import {
   Bold,
-  Code2,
   Heading1,
   Heading2,
   Heading3,
   Italic,
   List,
   ListOrdered,
+  Pilcrow,
   Quote,
   Strikethrough,
   BookMarked,
-  Highlighter,
 } from "lucide-react"
+import { editorViewCtx, type CmdKey } from "@milkdown/kit/core"
+import {
+  liftListItemCommand,
+  toggleEmphasisCommand,
+  toggleStrongCommand,
+  turnIntoTextCommand,
+  wrapInBlockquoteCommand,
+  wrapInBulletListCommand,
+  wrapInHeadingCommand,
+  wrapInOrderedListCommand,
+} from "@milkdown/kit/preset/commonmark"
+import { toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm"
+import { lift } from "@milkdown/kit/prose/commands"
+import type { Command, EditorState } from "@milkdown/kit/prose/state"
+import type { MarkType } from "@milkdown/kit/prose/model"
+import { callCommand } from "@milkdown/utils"
+import { useInstance } from "@milkdown/react"
 import { EditorToolbar } from "./EditorToolbar"
 import { IconButton } from "~/ui/components/IconButton"
 import { useFiles } from "~/ui/hooks/useFiles"
@@ -70,41 +94,152 @@ const getNativeSelectionRect = (
 const clampCenterX = (x: number, containerWidth: number): number =>
   Math.max(VIEWPORT_MARGIN, Math.min(x, containerWidth - VIEWPORT_MARGIN))
 
+interface Bounds {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+const intersect = (a: Bounds, b: Bounds): Bounds => ({
+  left: Math.max(a.left, b.left),
+  top: Math.max(a.top, b.top),
+  right: Math.min(a.right, b.right),
+  bottom: Math.min(a.bottom, b.bottom),
+})
+
+const getVisibleBounds = (container: HTMLElement): Bounds => {
+  let bounds: Bounds = container.getBoundingClientRect()
+  for (let node = container.parentElement; node; node = node.parentElement) {
+    const { overflow, overflowX, overflowY } = getComputedStyle(node)
+    if (/auto|scroll|hidden|clip/.test(overflow + overflowX + overflowY)) {
+      bounds = intersect(bounds, node.getBoundingClientRect())
+    }
+  }
+  return intersect(bounds, {
+    left: VIEWPORT_MARGIN,
+    top: VIEWPORT_MARGIN,
+    right: window.innerWidth - VIEWPORT_MARGIN,
+    bottom: window.innerHeight - VIEWPORT_MARGIN,
+  })
+}
+
+const clampShift = (start: number, end: number, min: number, max: number): number => {
+  if (end - start > max - min) return min - start
+  if (start < min) return min - start
+  if (end > max) return max - end
+  return 0
+}
+
 const computePlacement = (rect: DOMRect, isBackward: boolean): boolean => {
   if (isBackward) return false
   return rect.top > MIN_TOP_SPACE
 }
 
-const TOOLBAR_GROUPS = [
-  [
-    { icon: <Heading1 />, disabled: true },
-    { icon: <Heading2 />, disabled: true },
-    { icon: <Heading3 />, disabled: true },
-  ],
-  [
-    { icon: <Bold />, disabled: true },
-    { icon: <Italic />, disabled: true },
-    { icon: <Strikethrough />, disabled: true },
-  ],
-  [
-    { icon: <Code2 />, disabled: true },
-    { icon: <Quote />, disabled: true },
-  ],
-  [
-    { icon: <List />, disabled: true },
-    { icon: <ListOrdered />, disabled: true },
-  ],
-]
+export type RunEditorCommand = <T>(key: CmdKey<T>, payload?: T) => void
+export type RunProseCommand = (command: Command) => void
+
+export interface ActiveFormats {
+  heading: number
+  bold: boolean
+  italic: boolean
+  strike: boolean
+  quote: boolean
+  bulletList: boolean
+  orderedList: boolean
+}
+
+export const INACTIVE_FORMATS: ActiveFormats = {
+  heading: 0,
+  bold: false,
+  italic: false,
+  strike: false,
+  quote: false,
+  bulletList: false,
+  orderedList: false,
+}
+
+const isMarkActive = (state: EditorState, type: MarkType | undefined): boolean => {
+  if (!type) return false
+  const { empty, from, to, $from } = state.selection
+  if (empty) return !!type.isInSet(state.storedMarks ?? $from.marks())
+  return state.doc.rangeHasMark(from, to, type)
+}
+
+export const getActiveFormats = (state: EditorState): ActiveFormats => {
+  const { schema } = state
+  const { $from } = state.selection
+  const active = {
+    ...INACTIVE_FORMATS,
+    bold: isMarkActive(state, schema.marks.strong),
+    italic: isMarkActive(state, schema.marks.emphasis),
+    strike: isMarkActive(state, schema.marks.strike_through),
+  }
+  for (let depth = $from.depth; depth >= 0; depth--) {
+    const node = $from.node(depth)
+    if (node.type === schema.nodes.heading) active.heading = node.attrs.level as number
+    if (node.type === schema.nodes.blockquote) active.quote = true
+    if (node.type === schema.nodes.bullet_list) active.bulletList = true
+    if (node.type === schema.nodes.ordered_list) active.orderedList = true
+  }
+  return active
+}
+
+export const buildToolbarGroups = (
+  run: RunEditorCommand,
+  runProse: RunProseCommand,
+  active: ActiveFormats
+) => {
+  const heading = (level: number, icon: ReactNode) => ({
+    icon,
+    active: active.heading === level,
+    onClick: () =>
+      active.heading === level
+        ? run(turnIntoTextCommand.key)
+        : run(wrapInHeadingCommand.key, level),
+  })
+  const list = (isActive: boolean, icon: ReactNode, wrap: CmdKey<unknown>) => ({
+    icon,
+    active: isActive,
+    onClick: () => (isActive ? run(liftListItemCommand.key) : run(wrap)),
+  })
+  return [
+    [
+      {
+        icon: <Pilcrow />,
+        active: active.heading === 0,
+        onClick: () => run(turnIntoTextCommand.key),
+      },
+      heading(1, <Heading1 />),
+      heading(2, <Heading2 />),
+      heading(3, <Heading3 />),
+    ],
+    [
+      { icon: <Bold />, active: active.bold, onClick: () => run(toggleStrongCommand.key) },
+      { icon: <Italic />, active: active.italic, onClick: () => run(toggleEmphasisCommand.key) },
+      {
+        icon: <Strikethrough />,
+        active: active.strike,
+        onClick: () => run(toggleStrikethroughCommand.key),
+      },
+    ],
+    [
+      {
+        icon: <Quote />,
+        active: active.quote,
+        onClick: () => (active.quote ? runProse(lift) : run(wrapInBlockquoteCommand.key)),
+      },
+    ],
+    [
+      list(active.bulletList, <List />, wrapInBulletListCommand.key),
+      list(active.orderedList, <ListOrdered />, wrapInOrderedListCommand.key),
+    ],
+  ]
+}
 
 const SpotlightCodebookIcon = () => (
   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-400">
     <BookMarked className="h-3 w-3 text-white" />
-  </div>
-)
-
-const MarkerHighlightIcon = () => (
-  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-300">
-    <Highlighter className="h-3 w-3 text-amber-800" />
   </div>
 )
 
@@ -171,7 +306,6 @@ export const AnnotationPill = ({
           </div>
         )}
       </div>
-      <IconButton size="small" icon={<MarkerHighlightIcon />} variant="neutral-tertiary" disabled />
     </div>
   )
 }
@@ -180,10 +314,12 @@ export const SelectionToolbarOverlay = ({
   selection,
   codes,
   onCodeClick,
+  groups,
 }: {
   selection: SelectionState
   codes: readonly Code[]
   onCodeClick: (codeId: string) => void
+  groups: ReturnType<typeof buildToolbarGroups>
 }) => (
   <div
     className="flex items-center gap-2"
@@ -195,7 +331,7 @@ export const SelectionToolbarOverlay = ({
       zIndex: 9999,
     }}
   >
-    <EditorToolbar groups={TOOLBAR_GROUPS} />
+    <EditorToolbar groups={groups} />
     {selection.hasRange && <AnnotationPill codes={codes} onCodeClick={onCodeClick} />}
   </div>
 )
@@ -209,9 +345,34 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
   const placementRef = useRef<boolean | null>(null)
   const selectionOnly = useIsReadOnly()
   const { files } = useFiles()
+  const [, getEditor] = useInstance()
+  const runCommand = useCallback(
+    <T,>(key: CmdKey<T>, payload?: T) => getEditor()?.action(callCommand(key, payload)),
+    [getEditor]
+  )
+  const runProse = useCallback(
+    (command: Command) =>
+      getEditor()?.action((ctx) => {
+        const view = ctx.get(editorViewCtx)
+        command(view.state, view.dispatch, view)
+      }),
+    [getEditor]
+  )
   const selectedCodes = useMemo(() => getResolvedSelectedCodes(files), [files])
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [hovered, setHovered] = useState(true)
+  const toolbarGroups = useMemo(() => {
+    let active = INACTIVE_FORMATS
+    if (selection) {
+      getEditor()?.action((ctx) => {
+        active = getActiveFormats(ctx.get(editorViewCtx).state)
+      })
+    }
+    const groups = buildToolbarGroups(runCommand, runProse, active)
+    return selectionOnly
+      ? groups.map((group) => group.map((item) => ({ ...item, disabled: true })))
+      : groups
+  }, [runCommand, runProse, selectionOnly, selection, getEditor])
 
   const handleCodeClick = useCallback((codeId: string) => {
     const resolved = resolveEditorSelection()
@@ -309,19 +470,55 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
     scheduleHide()
   }, [scheduleHide])
 
+  // Moving off the toolbar back onto the text schedules a hide without a
+  // compensating container mouseenter; any movement inside restores it.
+  const handleContainerMove = useCallback(() => {
+    cancelHide()
+    setHovered(true)
+  }, [cancelHide])
+
   const visible = selection && hovered
+
+  const [clampOffset, setClampOffset] = useState({ dx: 0, dy: 0 })
+  const clampOffsetRef = useRef(clampOffset)
+
+  useLayoutEffect(() => {
+    const overlayEl = toolbarRef.current?.firstElementChild as HTMLElement | null
+    const container = containerRef.current
+    if (!selection || !hovered || !overlayEl || !container) return
+    const rect = overlayEl.getBoundingClientRect()
+    const prev = clampOffsetRef.current
+    const rawLeft = rect.left - prev.dx
+    const rawTop = rect.top - prev.dy
+    const bounds = getVisibleBounds(container)
+    const next = {
+      dx: clampShift(rawLeft, rawLeft + rect.width, bounds.left, bounds.right),
+      dy: clampShift(rawTop, rawTop + rect.height, bounds.top, bounds.bottom),
+    }
+    if (next.dx !== prev.dx || next.dy !== prev.dy) {
+      clampOffsetRef.current = next
+      setClampOffset(next)
+    }
+  }, [selection, hovered])
 
   return (
     <div
       ref={containerRef}
       className="relative"
       onMouseEnter={handleContainerEnter}
+      onMouseMove={handleContainerMove}
       onMouseLeave={handleContainerLeave}
     >
       {children}
       {visible && (
         <div
           ref={toolbarRef}
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            transform: `translate(${clampOffset.dx}px, ${clampOffset.dy}px)`,
+          }}
           onMouseDown={(e) => e.preventDefault()}
           onMouseEnter={cancelHide}
           onMouseLeave={scheduleHide}
@@ -330,6 +527,7 @@ export const FloatingToolbar = ({ children }: FloatingToolbarProps) => {
             selection={selection}
             codes={selectedCodes}
             onCodeClick={handleCodeClick}
+            groups={toolbarGroups}
           />
         </div>
       )}

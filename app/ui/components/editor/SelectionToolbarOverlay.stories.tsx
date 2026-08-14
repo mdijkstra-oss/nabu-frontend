@@ -1,14 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, within } from "storybook/test"
 import type { Code } from "~/domain/data-blocks/callout/codes/selectors"
-import { SelectionToolbarOverlay } from "./FloatingToolbar"
+import { SelectionToolbarOverlay, buildToolbarGroups, INACTIVE_FORMATS } from "./FloatingToolbar"
 
 const codes: Code[] = [
   { id: "code-trust", name: "Trust", color: "blue", detail: "Signals of trust" },
 ]
 
+const groups = buildToolbarGroups(fn(), fn(), INACTIVE_FORMATS)
+
 const FORMATTING_BUTTON_COUNT = 10
-const PILL_BUTTON_COUNT = 2
+const PILL_BUTTON_COUNT = 1
 
 const meta: Meta<typeof SelectionToolbarOverlay> = {
   title: "Custom/Editor/SelectionToolbarOverlay",
@@ -36,6 +38,7 @@ export const CaretOnly: Story = {
     selection: { top: 120, centerX: 320, hasRange: false, showAbove: false },
     codes,
     onCodeClick: fn(),
+    groups,
   },
   play: async ({ canvasElement }) => {
     expect(within(canvasElement).getAllByRole("button")).toHaveLength(FORMATTING_BUTTON_COUNT)
@@ -47,6 +50,7 @@ export const RangeBelow: Story = {
     selection: { top: 120, centerX: 320, hasRange: true, showAbove: false },
     codes,
     onCodeClick: fn(),
+    groups,
   },
   play: async ({ canvasElement }) => {
     expect(within(canvasElement).getAllByRole("button")).toHaveLength(
@@ -64,6 +68,7 @@ export const RangeAbove: Story = {
     selection: { top: 120, centerX: 320, hasRange: true, showAbove: true },
     codes,
     onCodeClick: fn(),
+    groups,
   },
   play: async ({ canvasElement }) => {
     const root = getOverlayRoot(canvasElement)
