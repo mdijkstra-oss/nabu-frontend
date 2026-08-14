@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { setFiles, getFileRaw } from "~/lib/files/store"
+import { setFiles, getFileRaw, updateFileRaw, deleteFile } from "~/lib/files/store"
+import { ok } from "~/lib/fp/result"
+import { getEmbeddingsDimensions } from "~/lib/embeddings/env"
 import { writeRegionsBlock } from "~/domain/regions/init"
 import { regionKinds } from "~/lib/regions/kinds/registry"
-import { startRegionSync } from "~/lib/regions/sync"
+import { startEngine } from "~/lib/engine/engine"
 import type { FindCall, MarkCall } from "~/lib/regions/detect/types"
 
 const PATH = "interview.md"
@@ -35,14 +37,24 @@ const mark: MarkCall = async (items, job) => {
 
 const speakerOnly = () => regionKinds().filter((kind) => kind.id === "speaker")
 
+const zeroVector = (): number[] => new Array<number>(getEmbeddingsDimensions()).fill(0)
+
 const runOnePass = async (): Promise<void> => {
-  const handle = startRegionSync({
+  const handle = startEngine({
     getFiles: () => ({ [PATH]: getFileRaw(PATH), [SIBLING]: getFileRaw(SIBLING) }),
     getFile: (path) => getFileRaw(path) || undefined,
+    updateFile: updateFileRaw,
+    deleteFile,
     subscribe: () => () => undefined,
+    embeddingsUrl: "http://embeddings.test",
+    fetchBatch: (texts) => Promise.resolve(ok(texts.map(() => zeroVector()))),
+    classify: () => Promise.resolve(null),
     getKinds: speakerOnly,
     detect: { find, mark },
     writeRegions: writeRegionsBlock,
+    getSignificantLanguages: () => Promise.resolve([]),
+    syncDescriptions: () => Promise.resolve(),
+    onEvent: () => undefined,
   })
   await handle.ready
   handle.stop()
@@ -86,8 +98,6 @@ describe("a stored hit whose sentence index is past the end of the document", ()
 
     await runOnePass()
 
-    // The re-found hit takes its place; the unlocatable one does not survive the pass
-    // that re-derived the document it no longer fits.
     expect(getFileRaw(PATH)).not.toContain(`"hitSentence": 99`)
   })
 })

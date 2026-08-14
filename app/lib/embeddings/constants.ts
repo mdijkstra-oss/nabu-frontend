@@ -2,7 +2,6 @@ import { CHARS_PER_TOKEN } from "~/lib/text/constants"
 
 export const CHUNK_TOKENS = 250
 export const CHUNK_OVERLAP_RATIO = 0.2
-export const EMBEDDING_SYNC_DEBOUNCE = 5000
 export const MAX_BATCH_TOKENS = 200_000
 export const PROVIDER_BATCH_LIMIT = 512
 

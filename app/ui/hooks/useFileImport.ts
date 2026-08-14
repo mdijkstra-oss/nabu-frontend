@@ -1,86 +1,72 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react"
-import { produce } from "immer"
 import { processFiles } from "~/lib/import/process"
 import { isMarkdownFile } from "~/lib/import/read"
 import { readDroppedItems } from "~/lib/import/folder"
+import { subscribeEngineEvents } from "~/domain/engine/init"
+import {
+  emptyImportRows,
+  addRows,
+  applyImportStatus,
+  applyEngineEvent,
+  deriveProgress,
+} from "./fileImportRows"
+import type { ImportRows } from "./fileImportRows"
+import type { EngineEvent } from "~/lib/engine/types"
 import type { ImportFile, ImportStatus } from "~/lib/import/types"
 
-interface ImportState {
-  files: Record<string, ImportFile>
-  isProcessing: boolean
-}
-
-const initialState: ImportState = {
-  files: {},
-  isProcessing: false,
-}
-
-const createImportFile = (file: File): ImportFile => ({
-  id: file.name,
-  name: file.name,
-  size: file.size,
-  status: isMarkdownFile(file.name) ? "pending" : "unsupported",
-})
-
 export const useFileImport = () => {
-  const [state, setState] = useState<ImportState>(initialState)
+  // React batches setState, so the authoritative state lives in a ref written
+  // synchronously as processFiles reports finalPath — an engine event emitted in
+  // the same tick as the store write must find its row. State mirrors it to render.
+  const rowsRef = useRef<ImportRows>(emptyImportRows)
+  const [rowsState, setRowsState] = useState<ImportRows>(emptyImportRows)
   const [isDragging, setIsDragging] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const dragCounterRef = useRef(0)
 
-  const files = useMemo(() => Object.values(state.files), [state.files])
+  const commit = useCallback((next: ImportRows) => {
+    rowsRef.current = next
+    setRowsState(next)
+  }, [])
+
+  const files = useMemo(() => Object.values(rowsState.rows), [rowsState])
 
   const hasFiles = files.length > 0
 
-  const progress = useMemo(() => {
-    const total = files.length
-    const completed = files.filter((f) => f.status === "completed").length
-    const failed = files.filter((f) => f.status === "error").length
-    const unsupported = files.filter((f) => f.status === "unsupported").length
-    return { total, completed, failed, unsupported, processed: completed + failed + unsupported }
-  }, [files])
+  const progress = useMemo(() => deriveProgress(files), [files])
+
+  const isProcessing = progress.total > 0 && progress.processed < progress.total
 
   const updateFileStatus = useCallback(
     (id: string, status: ImportStatus, extra?: Partial<ImportFile>) => {
-      setState((prev) =>
-        produce(prev, (draft) => {
-          const file = draft.files[id]
-          if (file) {
-            file.status = status
-            if (extra?.error) file.error = extra.error
-            if (extra?.finalPath) file.finalPath = extra.finalPath
-          }
-        })
-      )
+      commit(applyImportStatus(rowsRef.current, id, status, extra))
     },
-    []
+    [commit]
   )
+
+  const handleEngineEvent = useCallback(
+    (event: EngineEvent) => {
+      const next = applyEngineEvent(rowsRef.current, event)
+      if (next !== rowsRef.current) commit(next)
+    },
+    [commit]
+  )
+
+  useEffect(() => {
+    if (!hasFiles) return
+    return subscribeEngineEvents(handleEngineEvent)
+  }, [hasFiles, handleEngineEvent])
 
   const addFiles = useCallback(
     async (dropped: File[]) => {
       if (dropped.length === 0) return
 
-      setState((prev) =>
-        produce(prev, (draft) => {
-          for (const file of dropped) {
-            if (!draft.files[file.name]) {
-              draft.files[file.name] = createImportFile(file)
-            }
-          }
-          draft.isProcessing = true
-        })
-      )
+      commit(addRows(rowsRef.current, dropped))
 
       const markdownFiles = dropped.filter((file) => isMarkdownFile(file.name))
       await processFiles(markdownFiles, updateFileStatus)
-
-      setState((prev) =>
-        produce(prev, (draft) => {
-          draft.isProcessing = false
-        })
-      )
     },
-    [updateFileStatus]
+    [commit, updateFileStatus]
   )
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -128,8 +114,8 @@ export const useFileImport = () => {
 
   const dismiss = useCallback(() => {
     setIsVisible(false)
-    setState(initialState)
-  }, [])
+    commit(emptyImportRows)
+  }, [commit])
 
   useEffect(() => {
     if (!isVisible && !hasFiles) {
@@ -149,7 +135,7 @@ export const useFileImport = () => {
     hasFiles,
     isDragging,
     isVisible,
-    isProcessing: state.isProcessing,
+    isProcessing,
     progress,
     addFiles,
     dismiss,

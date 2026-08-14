@@ -14,7 +14,7 @@ In:
 Out, a discriminated result:
 
 - Success. The file is in the store under `path` in stored-normal form. Carries one field, `migrated`: whether migrations rewrote the content on the way in. Consumed by the sync path to persist the rewritten form back to the server; the import path ignores it, because the store's own persist already sends whatever was stored.
-- Rejection. The structural validation errors (the payload of `FileCorruptionError`, `app/lib/files/errors.ts`). The file never landed in the store. Consumed by the import UI for the row's "Could not import" state and by the sync path's console report.
+- Rejection. The structural validation errors (the payload of `FileCorruptionError`, `app/lib/files/errors.ts`), or — for content that makes a migration itself throw (a block matching the old-shape schema whose values the upgrade chokes on, e.g. an out-of-range epoch) — a single synthesized error under the block name `migration`. Either way the file never landed in the store, and ingest never lets a throw escape. Consumed by the import UI for the row's "Could not import" state and by the sync path's console report.
 
 Side effects at the boundary:
 
@@ -43,9 +43,9 @@ Riskiest first:
 
 - **Given** a file whose block matches an old migration schema, **when** it arrives via import, **then** the stored content is the migrated form, and the server receives that migrated form — one write, never the pre-migration bytes.
 - **Given** a structurally corrupt file, **when** it arrives via import, **then** ingest returns the rejection with the validation errors, the store does not contain the file, and the import row shows the error.
-- **Given** the same corrupt file, **when** it arrives via WebSocket sync — today `updateFileRaw` throws `FileCorruptionError` and `apply.ts` does not catch, so the exception escapes `applyCommand` into the socket message handler — **then** under this spec: ingest returns the rejection, the sync caller logs it (the store already reports the corruption to the console), the file never lands, no persist-back is scheduled, and subsequent commands in the stream still apply. Same stored outcome as today; the change is that one bad file no longer breaks the command loop.
+- **Given** the same corrupt file, **when** it arrives via WebSocket sync — today `updateFileRaw` throws `FileCorruptionError`, `apply.ts` does not catch, and the uncaught throw skips the file-count increment in `project.tsx`'s `trackAndApply`, so boot hangs forever on "Loading files..." — **then** under this spec: the rejection is logged, the file is absent from the store, no persist-back is scheduled, and the command still counts toward file-loading progress so boot proceeds. A corrupt synced file no longer wedges boot.
 - **Given** an already-migrated file already in stored-normal form, **when** it arrives via either path, **then** it passes through byte-identical, the result says not migrated, and sync schedules no persist-back.
-- **Given** initial sync running under `withoutPersist`, **when** ingest writes an unchanged file, **then** no server write occurs — only `schedulePersist` for migration-rewritten files reaches the server, pinned today by the `app/lib/server/sync` tests and kept true.
+- **Given** initial sync running under `withoutPersist`, **when** ingest writes an unchanged file, **then** no server write occurs — only `schedulePersist` for migration-rewritten files reaches the server. Unpinned today; the test pinning migration persist-back and `withoutPersist` suppression is written against today's sync path before the refactor starts and kept green after (spec.md).
 
 ### Isolation
 

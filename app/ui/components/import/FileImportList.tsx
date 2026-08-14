@@ -8,7 +8,7 @@ import type { ImportFile, ImportProgress } from "~/lib/import/types"
 
 interface FileImportListProps {
   files: ImportFile[]
-  progress: ImportProgress & { processed: number }
+  progress: ImportProgress
   isProcessing: boolean
   onCancel?: () => void
 }
@@ -54,6 +54,7 @@ export const FileImportList = ({
         <div className="flex w-full items-center justify-between">
           <span className="text-caption font-caption text-subtext-color">
             {progress.completed} added
+            {progress.incomplete > 0 && `, ${progress.incomplete} incomplete`}
             {progress.failed > 0 && `, ${progress.failed} failed`}
             {progress.unsupported > 0 && `, ${progress.unsupported} unsupported`}
           </span>

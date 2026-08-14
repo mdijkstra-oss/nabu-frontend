@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { patchBlockContent } from "~/lib/data-blocks/patch"
 import { FileCorruptionError } from "~/lib/files/errors"
+import { ok } from "~/lib/fp/result"
+import { zeroVector } from "~/lib/embeddings/embedding.fixtures"
+import { startEngine, ENGINE_DEBOUNCE, ENGINE_MAX_WAIT } from "~/lib/engine/engine"
+import type { EngineHandle } from "~/lib/engine/types"
 import { indexFileSentences } from "~/lib/text/halo"
 import { stripMarkdown } from "~/lib/text/strip"
 import { isResolved, type RegionRow, type RegionsBlock } from "~/domain/data-blocks/regions/schema"
@@ -8,17 +12,9 @@ import { sweepUnregisteredKinds } from "./boot-sweep"
 import { hashSentences } from "./detect/units"
 import type { FindCall, FindWork, Hit, MarkCall, MarkWork } from "./detect/types"
 import type { KindDescriptor } from "./kinds/registry"
+import { speakerKind, transcript } from "./speaker.fixtures"
 import { readStoredRegions } from "./stored"
-import { startRegionSync, REGION_SYNC_DEBOUNCE, REGION_SYNC_MAX_WAIT } from "./sync"
-import type { RegionSyncHandle, WriteOutcome } from "./sync-types"
-
-const speakerKind: KindDescriptor = {
-  id: "speaker",
-  rules: "fixture rules: a speaker owns the words of their own turn",
-  icon: "mic",
-  color: "indigo",
-  valueType: "string",
-}
+import type { WriteOutcome } from "./sync-types"
 
 const dateKind: KindDescriptor = {
   id: "date",
@@ -207,6 +203,12 @@ const createProject = (initial: Record<string, string>) => {
     deps: {
       getFiles: () => files,
       getFile: (path: string) => files[path],
+      updateFile: (path: string, content: string) => {
+        files[path] = content
+      },
+      deleteFile: (path: string) => {
+        Reflect.deleteProperty(files, path)
+      },
       subscribe: (listener: () => void) => {
         listeners.add(listener)
         return () => listeners.delete(listener)
@@ -218,18 +220,27 @@ const createProject = (initial: Record<string, string>) => {
 
 type Project = ReturnType<typeof createProject>
 
+let engines: EngineHandle[] = []
+
 const startSync = (
   project: Project,
   detect: Detect,
   kinds: KindDescriptor[] = [speakerKind]
-): RegionSyncHandle =>
-  startRegionSync({ ...project.deps, getKinds: () => kinds, detect: detect.calls })
-
-const turn = (i: number): string =>
-  `${i % 2 === 0 ? "Rutte" : "Kaag"} spoke about item number ${i}. The room considered point ${i} at some length.`
-
-const transcript = (turns: number): string =>
-  Array.from({ length: turns }, (_, i) => turn(i)).join("\n\n")
+): EngineHandle => {
+  const engine = startEngine({
+    ...project.deps,
+    embeddingsUrl: "http://embeddings.test",
+    fetchBatch: (texts) => Promise.resolve(ok(texts.map(() => zeroVector()))),
+    classify: () => Promise.resolve(null),
+    getKinds: () => kinds,
+    detect: detect.calls,
+    getSignificantLanguages: () => Promise.resolve([]),
+    syncDescriptions: () => Promise.resolve(),
+    onEvent: () => undefined,
+  })
+  engines.push(engine)
+  return engine
+}
 
 const markedTurn = (i: number): string =>
   `- **${i % 2 === 0 ? "Rutte" : "Kaag"}** spoke about [item ${i}](https://example.org/item/${i}). The room considered point ${i} at some length.`
@@ -313,12 +324,15 @@ let errors: string[] = []
 
 beforeEach(() => {
   errors = []
+  engines = []
+  vi.spyOn(console, "warn").mockImplementation(() => undefined)
   vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
     errors.push(args.map(String).join(" "))
   })
 })
 
 afterEach(() => {
+  for (const engine of engines) engine.stop()
   vi.restoreAllMocks()
   vi.useRealTimers()
 })
@@ -687,7 +701,7 @@ describe("the seam and the shared vocabulary", () => {
     { kind: "date", quote: "considered" },
   ]
 
-  it("hands each kind one flat find list spanning every document", async () => {
+  it("offers each kind every document's units, starting from an empty vocabulary", async () => {
     const project = createProject({
       "a.md": transcript(20),
       "b.md": transcript(20),
@@ -697,10 +711,16 @@ describe("the seam and the shared vocabulary", () => {
     const sync = startSync(project, detect, twoKinds)
     await sync.ready
 
-    expect(detect.findCalls.map((c) => c.kind).sort()).toEqual(["date", "speaker"])
-    for (const call of detect.findCalls) {
-      expect(call.files.sort()).toEqual(["a.md", "b.md"])
-      expect(call.knownValues).toEqual([])
+    expect(detect.findCalls.map((c) => c.kind).sort()).toEqual([
+      "date",
+      "date",
+      "speaker",
+      "speaker",
+    ])
+    for (const kind of ["date", "speaker"]) {
+      const calls = detect.findCalls.filter((c) => c.kind === kind)
+      expect(calls.flatMap((c) => c.files).sort()).toEqual(["a.md", "b.md"])
+      expect(calls[0].knownValues).toEqual([])
     }
   })
 
@@ -757,12 +777,13 @@ describe("triggering", () => {
     await Promise.resolve()
     project.notify()
     project.notify()
-    vi.advanceTimersByTime(REGION_SYNC_DEBOUNCE)
+    vi.advanceTimersByTime(ENGINE_DEBOUNCE)
 
     expect(project.writes).toHaveLength(0)
 
     detect.release()
     await ready
+    await vi.waitFor(() => expect(project.writes).toHaveLength(2))
 
     expect(project.writes.map((w) => w.path)).toEqual(["talk.md", "talk.md"])
     expect(project.writes[1].block.regions).toEqual(project.regionsIn("talk.md").regions)
@@ -790,13 +811,13 @@ describe("triggering", () => {
     project.files["talk.md"] =
       `${project.files["talk.md"]}\n\nRutte added a closing remark. The room emptied.`
     project.notify()
-    vi.advanceTimersByTime(REGION_SYNC_DEBOUNCE - 1)
+    vi.advanceTimersByTime(ENGINE_DEBOUNCE - 1)
     expect(project.writes).toHaveLength(writesAfterBoot)
 
     vi.advanceTimersByTime(1)
     await vi.waitFor(() => expect(project.writes.length).toBeGreaterThan(writesAfterBoot))
 
-    expect(REGION_SYNC_MAX_WAIT).toBeGreaterThan(REGION_SYNC_DEBOUNCE)
+    expect(ENGINE_MAX_WAIT).toBeGreaterThan(ENGINE_DEBOUNCE)
   })
 })
 
@@ -1029,13 +1050,13 @@ describe("stop", () => {
     await Promise.resolve()
 
     project.notify()
-    vi.advanceTimersByTime(REGION_SYNC_DEBOUNCE)
+    vi.advanceTimersByTime(ENGINE_DEBOUNCE)
     sync.stop()
     detect.release()
     await ready
 
     const findsAtStop = detect.finds.length
-    vi.advanceTimersByTime(REGION_SYNC_MAX_WAIT)
+    vi.advanceTimersByTime(ENGINE_MAX_WAIT)
     await Promise.resolve()
 
     expect(project.writes).toHaveLength(0)

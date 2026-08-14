@@ -57,10 +57,10 @@ import {
   startBackgroundSync,
   type OnDbSyncProgress,
 } from "~/domain/db/database"
-import { startEmbeddings } from "~/domain/embeddings/init"
 import { startBm25 } from "~/domain/search/bm25-init"
-import { startTopicAssignment } from "~/domain/corpus/init"
-import { startRegions, stopRegions, sweepRemovedKinds } from "~/domain/regions/init"
+import { sweepRemovedKinds } from "~/domain/regions/init"
+import { startProjectEngine, stopProjectEngine, subscribeEngineEvents } from "~/domain/engine/init"
+import { createStageCounterFold, type StageCounterMap } from "~/lib/engine/stage-counters"
 import { WelcomeBackLoading } from "~/ui/components/WelcomeBackLoading"
 import {
   getAnnotationCount,
@@ -196,12 +196,8 @@ export default function ProjectLayout() {
   const [totalFiles, setTotalFiles] = useState(0)
   const [dbSyncProcessed, setDbSyncProcessed] = useState(0)
   const [dbSyncTotal, setDbSyncTotal] = useState(0)
-  const [embeddingProcessed, setEmbeddingProcessed] = useState(0)
-  const [embeddingTotal, setEmbeddingTotal] = useState(0)
-  const [topicProcessed, setTopicProcessed] = useState(0)
-  const [topicTotal, setTopicTotal] = useState(0)
-  const [regionProcessed, setRegionProcessed] = useState(0)
-  const [regionTotal, setRegionTotal] = useState(0)
+  const [stageCounters, setStageCounters] = useState<StageCounterMap | null>(null)
+  const [engineSettled, setEngineSettled] = useState(false)
   useNotifications()
 
   useEffect(() => {
@@ -230,12 +226,14 @@ export default function ProjectLayout() {
     if (!params.projectId) return
     setProjectId(params.projectId)
     setPendingRefsSuppressed(true)
+    setEngineSettled(false)
 
     let localFileCount = 0
     let localTotalFiles = 0
     let pendingRefsResolved = false
     let cancelled = false
 
+    let unsubscribeEngineEvents: (() => void) | null = null
     let filesLoadedResolve: (() => void) | null = null
     const filesLoadedPromise = new Promise<void>((r) => {
       filesLoadedResolve = r
@@ -289,39 +287,25 @@ export default function ProjectLayout() {
       await waitForDatabase()
       if (cancelled) return
 
-      setStatusLabel("Understanding your content...")
-      await startEmbeddings((processed, total) => {
-        setEmbeddingProcessed(processed)
-        setEmbeddingTotal(total)
-      })
+      setStatusLabel("")
+      const fold = createStageCounterFold()
+      setStageCounters(fold.counters())
+      unsubscribeEngineEvents = subscribeEngineEvents((event) =>
+        setStageCounters(fold.apply(event))
+      )
+      const engine = startProjectEngine()
+      await engine.ready
       if (cancelled) return
-      setEmbeddingProcessed((t) => Math.max(t, 1))
-      setEmbeddingTotal((t) => Math.max(t, 1))
+      setEngineSettled(true)
 
       await startBm25()
       if (cancelled) return
 
-      setStatusLabel("Classifying documents...")
-      await startTopicAssignment((processed, total) => {
-        setTopicProcessed(processed)
-        setTopicTotal(total)
-      })
-      if (cancelled) return
-      setTopicProcessed((t) => Math.max(t, 1))
-      setTopicTotal((t) => Math.max(t, 1))
-
-      setStatusLabel("Finding regions...")
-      await startRegions((processed, total) => {
-        setRegionProcessed(processed)
-        setRegionTotal(total)
-      })
-      if (cancelled) return
-      setRegionProcessed((t) => Math.max(t, 1))
-      setRegionTotal((t) => Math.max(t, 1))
-
       setStatusLabel("Finalizing...")
       await syncOnce()
       startBackgroundSync()
+      unsubscribeEngineEvents?.()
+      unsubscribeEngineEvents = null
       setLoading(false)
     }
 
@@ -329,7 +313,8 @@ export default function ProjectLayout() {
 
     return () => {
       cancelled = true
-      stopRegions()
+      unsubscribeEngineEvents?.()
+      stopProjectEngine()
       connection.close()
       setProjectId(null)
       setPendingRefsSuppressed(false)
@@ -787,15 +772,24 @@ export default function ProjectLayout() {
       : {}),
   }
 
+  // A settled first pass over a project with no content files emits no events,
+  // so a stage still at 0/0 then credits its full weight, as the phase awaits
+  // did. The stage rows keep the real counters; only the bar is floored.
+  const stageProgress = (
+    counters: { settled: number; total: number } | undefined,
+    weight: number
+  ) =>
+    counters === undefined
+      ? 0
+      : engineSettled && counters.total === 0
+        ? weight
+        : computeWeightedProgress(counters.settled, counters.total, weight)
+
   const fileProgress = computeFileProgress(fileCount, totalFiles)
   const dbProgress = computeWeightedProgress(dbSyncProcessed, dbSyncTotal, DB_WEIGHT)
-  const embeddingsProgress = computeWeightedProgress(
-    embeddingProcessed,
-    embeddingTotal,
-    EMBEDDING_WEIGHT
-  )
-  const topicsProgress = computeWeightedProgress(topicProcessed, topicTotal, TOPIC_WEIGHT)
-  const regionsProgress = computeWeightedProgress(regionProcessed, regionTotal, REGION_WEIGHT)
+  const embeddingsProgress = stageProgress(stageCounters?.embed, EMBEDDING_WEIGHT)
+  const topicsProgress = stageProgress(stageCounters?.classify, TOPIC_WEIGHT)
+  const regionsProgress = stageProgress(stageCounters?.regions, REGION_WEIGHT)
   const totalProgress =
     fileProgress + dbProgress + embeddingsProgress + topicsProgress + regionsProgress
 
@@ -803,7 +797,11 @@ export default function ProjectLayout() {
     <NabuProvider key={params.projectId}>
       {loading && (
         <div className="fixed inset-0 z-[100]">
-          <WelcomeBackLoading progress={totalProgress} statusLabel={statusLabel} />
+          <WelcomeBackLoading
+            progress={totalProgress}
+            statusLabel={statusLabel}
+            stages={stageCounters ?? undefined}
+          />
         </div>
       )}
       <div {...fileImport.dragHandlers} className="contents">

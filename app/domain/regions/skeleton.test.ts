@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { setFiles, getFileRaw } from "~/lib/files/store"
+import { setFiles, getFileRaw, updateFileRaw, deleteFile } from "~/lib/files/store"
 import { getBlock } from "~/lib/data-blocks/query"
+import { ok } from "~/lib/fp/result"
+import { getEmbeddingsDimensions } from "~/lib/embeddings/env"
 import { getProjections, toJsonSchema } from "~/domain/db/projections"
 import { jsonSchemaToTableProjection } from "~/lib/db/ddl"
 import { extractRows } from "~/lib/db/extract"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
 import { RegionsBlockSchema } from "~/domain/data-blocks/regions/schema"
-import { startRegionSync } from "~/lib/regions/sync"
+import { startEngine } from "~/lib/engine/engine"
+import type { DetectCalls } from "~/lib/regions/detect/types"
 import { regionKinds } from "~/lib/regions/kinds/registry"
 import type { FindCall, MarkCall } from "~/lib/regions/detect/types"
 import { getRenderableRegions } from "./selectors"
@@ -63,18 +66,30 @@ const mark: MarkCall = async (items, job) => {
 
 const speakerOnly = () => regionKinds().filter((kind) => kind.id === "speaker")
 
-const runOnePass = async (): Promise<void> => {
-  const handle = startRegionSync({
+const zeroVector = (): number[] => new Array<number>(getEmbeddingsDimensions()).fill(0)
+
+const runEnginePass = async (detect: DetectCalls): Promise<void> => {
+  const handle = startEngine({
     getFiles: () => ({ [PATH]: getFileRaw(PATH) }),
     getFile: (path) => getFileRaw(path) || undefined,
+    updateFile: updateFileRaw,
+    deleteFile,
     subscribe: () => () => undefined,
+    embeddingsUrl: "http://embeddings.test",
+    fetchBatch: (texts) => Promise.resolve(ok(texts.map(() => zeroVector()))),
+    classify: () => Promise.resolve(null),
     getKinds: speakerOnly,
-    detect: { find, mark },
+    detect,
     writeRegions: writeRegionsBlock,
+    getSignificantLanguages: () => Promise.resolve([]),
+    syncDescriptions: () => Promise.resolve(),
+    onEvent: () => undefined,
   })
   await handle.ready
   handle.stop()
 }
+
+const runOnePass = (): Promise<void> => runEnginePass({ find, mark })
 
 beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => undefined)
@@ -138,25 +153,16 @@ describe("the walking skeleton", () => {
     vi.spyOn(console, "error").mockImplementation((...args) => {
       errors.push(args)
     })
-    const handle = startRegionSync({
-      getFiles: () => ({ [PATH]: getFileRaw(PATH) }),
-      getFile: (path) => getFileRaw(path) || undefined,
-      subscribe: () => () => undefined,
-      getKinds: speakerOnly,
-      detect: {
-        find: async (items, job) => {
-          for (const item of items) calls.push(`find:${job.kind.id}:${item.unit.firstSentence}`)
-          return find(items, job)
-        },
-        mark: async (items, job) => {
-          for (const item of items) calls.push(`mark:${item.hit.quote}`)
-          return mark(items, job)
-        },
+    await runEnginePass({
+      find: async (items, job) => {
+        for (const item of items) calls.push(`find:${job.kind.id}:${item.unit.firstSentence}`)
+        return find(items, job)
       },
-      writeRegions: writeRegionsBlock,
+      mark: async (items, job) => {
+        for (const item of items) calls.push(`mark:${item.hit.quote}`)
+        return mark(items, job)
+      },
     })
-    await handle.ready
-    handle.stop()
     expect(calls).toEqual([])
     expect(getFileRaw(PATH)).toBe(afterFirst)
     expect(errors).toEqual([])

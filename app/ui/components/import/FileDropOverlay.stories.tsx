@@ -10,7 +10,7 @@ const meta: Meta<typeof FileDropOverlay> = {
     isVisible: true,
     isDragging: false,
     files: [],
-    progress: { total: 0, completed: 0, failed: 0, unsupported: 0, processed: 0 },
+    progress: { total: 0, completed: 0, incomplete: 0, failed: 0, unsupported: 0, processed: 0 },
     isProcessing: false,
     dragHandlers: dragHandlers(),
     onDismiss: fn(),
@@ -37,7 +37,7 @@ export const EmptyDragging: Story = {
 export const Processing: Story = {
   args: {
     files: [importFile("interview-1", "completed"), importFile("interview-2", "processing")],
-    progress: { total: 2, completed: 1, failed: 0, unsupported: 0, processed: 1 },
+    progress: { total: 2, completed: 1, incomplete: 0, failed: 0, unsupported: 0, processed: 1 },
     isProcessing: true,
   },
   play: async ({ canvas }) => {
@@ -50,7 +50,7 @@ export const Processing: Story = {
 export const StalledIncomplete: Story = {
   args: {
     files: [importFile("interview-1", "completed"), importFile("interview-2", "error")],
-    progress: { total: 3, completed: 1, failed: 1, unsupported: 0, processed: 2 },
+    progress: { total: 3, completed: 1, incomplete: 0, failed: 1, unsupported: 0, processed: 2 },
     isProcessing: false,
   },
   play: async ({ canvas }) => {
@@ -61,7 +61,7 @@ export const StalledIncomplete: Story = {
 export const Complete: Story = {
   args: {
     files: [importFile("interview-1", "completed"), importFile("interview-2", "completed")],
-    progress: { total: 2, completed: 2, failed: 0, unsupported: 0, processed: 2 },
+    progress: { total: 2, completed: 2, incomplete: 0, failed: 0, unsupported: 0, processed: 2 },
     isProcessing: false,
   },
   play: async ({ args, canvas }) => {

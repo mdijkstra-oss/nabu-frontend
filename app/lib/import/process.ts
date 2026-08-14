@@ -1,26 +1,48 @@
-import { updateFileRaw, getFiles } from "~/lib/files/store"
+import { getFiles } from "~/lib/files/store"
+import { ingestFile } from "~/lib/files/ingest"
+import { formatValidationErrors } from "~/lib/data-blocks/validate"
 import { deduplicateName } from "./dedupe"
 import { readFileContent, isMarkdownFile } from "./read"
-import { normalizeFilename } from "~/lib/files/filename"
+import { normalizeFilename, isHiddenFile } from "~/lib/files/filename"
+import { isEmbeddableFile } from "~/lib/embeddings/filter"
 import type { ImportFile, ImportStatus } from "./types"
-
-interface ProcessResult {
-  status: ImportStatus
-  error?: string
-  finalPath?: string
-}
 
 type StatusCallback = (id: string, status: ImportStatus, extra?: Partial<ImportFile>) => void
 
 const getExistingNames = (): Set<string> => new Set(Object.keys(getFiles()))
 
-const processMarkdownFile = (file: File, content: string): ProcessResult => {
-  const existingNames = getExistingNames()
-  const finalPath = deduplicateName(normalizeFilename(file.name), existingNames)
+const processMarkdownFile = (file: File, content: string, onStatus: StatusCallback): void => {
+  const id = file.name
+  const normalized = normalizeFilename(file.name)
 
-  updateFileRaw(finalPath, content)
+  // The hidden check runs on the normalized name, before dedupe: normalizeFilename
+  // lowercases (a raw "Notes.Hidden.md" only reveals its marker here), and a dedupe
+  // suffix would split the ".hidden." marker apart and let the name slip through.
+  // A hidden file would never receive engine events and its row would sit at
+  // "Queued" forever.
+  if (isHiddenFile(normalized)) {
+    onStatus(id, "unsupported")
+    return
+  }
 
-  return { status: "completed", finalPath }
+  const finalPath = deduplicateName(normalized, getExistingNames())
+
+  // The engine only processes embeddable paths; a stored file it will never
+  // touch gets no events and its row would sit at "Queued" forever.
+  if (!isEmbeddableFile(finalPath)) {
+    onStatus(id, "unsupported")
+    return
+  }
+
+  onStatus(id, "processing", { finalPath })
+
+  const result = ingestFile(finalPath, content)
+  if (!result.ok) {
+    onStatus(id, "error", { error: formatValidationErrors(result.errors) })
+    return
+  }
+
+  onStatus(id, "pending")
 }
 
 const processFile = async (file: File, onStatus: StatusCallback): Promise<void> => {
@@ -40,14 +62,7 @@ const processFile = async (file: File, onStatus: StatusCallback): Promise<void> 
     return
   }
 
-  onStatus(id, "processing")
-
-  const processResult = processMarkdownFile(file, readResult.content)
-
-  onStatus(id, processResult.status, {
-    error: processResult.error,
-    finalPath: processResult.finalPath,
-  })
+  processMarkdownFile(file, readResult.content, onStatus)
 }
 
 export const processFiles = async (files: File[], onStatus: StatusCallback): Promise<void> => {

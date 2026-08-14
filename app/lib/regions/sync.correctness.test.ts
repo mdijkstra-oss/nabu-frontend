@@ -1,31 +1,20 @@
-// Adversarial pins for the sync around batched detection: every terminal state
-// reports processed == total (regions.md:16), and a unit that was not explicitly
-// acknowledged — abandoned or left by the no-progress exit — never enters `scanned`
-// (regions.md:13). Mark abandonment lands durably as an unranged row (regions.md:25).
+// Adversarial pins for the pass around batched detection: a unit that was not
+// explicitly acknowledged — abandoned or left by the no-progress exit — never enters
+// `scanned` (regions.md:13), every candidate (file, stage) pair still terminates in
+// exactly one settled or failed event, and mark abandonment lands durably as an
+// unranged row (regions.md:25).
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { patchBlockContent } from "~/lib/data-blocks/patch"
+import { ok } from "~/lib/fp/result"
+import { zeroVector } from "~/lib/embeddings/embedding.fixtures"
+import { startEngine } from "~/lib/engine/engine"
+import type { EngineEvent } from "~/lib/engine/types"
 import { isResolved, type RegionsBlock } from "~/domain/data-blocks/regions/schema"
 import type { FindCall, FindWork, MarkCall } from "./detect/types"
-import type { KindDescriptor } from "./kinds/registry"
+import { speakerKind, transcript } from "./speaker.fixtures"
 import { readStoredRegions } from "./stored"
-import { startRegionSync } from "./sync"
 import type { WriteOutcome } from "./sync-types"
-
-const speakerKind: KindDescriptor = {
-  id: "speaker",
-  rules: "fixture rules: a speaker owns the words of their own turn",
-  icon: "mic",
-  color: "indigo",
-  valueType: "string",
-}
-
-const transcript = (turns: number): string =>
-  Array.from(
-    { length: turns },
-    (_, i) =>
-      `${i % 2 === 0 ? "Rutte" : "Kaag"} spoke about item number ${i}. The room considered point ${i} at some length.`
-  ).join("\n\n")
 
 const REGION_OPS = (block: RegionsBlock) => [
   { op: "add" as const, path: "/regions", value: block.regions },
@@ -48,6 +37,12 @@ const createProject = (initial: Record<string, string>) => {
     deps: {
       getFiles: () => files,
       getFile: (path: string) => files[path],
+      updateFile: (path: string, content: string) => {
+        files[path] = content
+      },
+      deleteFile: (path: string) => {
+        Reflect.deleteProperty(files, path)
+      },
       subscribe: () => () => undefined,
       getKinds: () => [speakerKind],
       writeRegions,
@@ -96,28 +91,37 @@ const markOwnSentence: MarkCall = async (items, job) => {
   }
 }
 
-interface Progress {
-  processed: number
-  total: number
-}
+const startSync = (
+  project: ReturnType<typeof createProject>,
+  find: FindCall,
+  mark: MarkCall,
+  events: EngineEvent[]
+) =>
+  startEngine({
+    ...project.deps,
+    embeddingsUrl: "http://embeddings.test",
+    fetchBatch: (texts) => Promise.resolve(ok(texts.map(() => zeroVector()))),
+    classify: () => Promise.resolve(null),
+    detect: { find, mark },
+    getSignificantLanguages: () => Promise.resolve([]),
+    syncDescriptions: () => Promise.resolve(),
+    onEvent: (event) => events.push(event),
+  })
 
 const runOnePass = async (
   project: ReturnType<typeof createProject>,
   find: FindCall,
   mark: MarkCall = markOwnSentence
-): Promise<Progress[]> => {
-  const progress: Progress[] = []
-  const handle = startRegionSync({
-    ...project.deps,
-    detect: { find, mark },
-    onProgress: (processed, total) => progress.push({ processed, total }),
-  })
+): Promise<EngineEvent[]> => {
+  const events: EngineEvent[] = []
+  const handle = startSync(project, find, mark, events)
   await handle.ready
   handle.stop()
-  return progress
+  return events
 }
 
 beforeEach(() => {
+  vi.spyOn(console, "warn").mockImplementation(() => undefined)
   vi.spyOn(console, "error").mockImplementation(() => undefined)
 })
 
@@ -125,10 +129,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("progress at every terminal state", () => {
-  // regions.md:16 — processed counts units that left the pending list, acknowledged or
-  // abandoned, "and on the no-progress exit the pending remainder counts too, so every
-  // terminal state reports complete".
+describe("terminality at every find outcome", () => {
+  // The progress counter the old sync reported ("processed == total at every terminal
+  // state", regions.md:16) is retired with it; what survives is the engine's event
+  // contract — every candidate (file, stage) pair ends in exactly one terminal event,
+  // whatever detection answered, abandoned, or left unrecorded.
   const cases: { name: string; split: FindSplit }[] = [
     {
       name: "all entries acknowledged",
@@ -148,14 +153,16 @@ describe("progress at every terminal state", () => {
     },
   ]
 
-  it.each(cases)("reports processed == total with $name", async ({ split }) => {
+  it.each(cases)("terminates every stage exactly once with $name", async ({ split }) => {
     const project = createProject({ "talk.md": transcript(20) })
-    const progress = await runOnePass(project, findWith(split))
+    const events = await runOnePass(project, findWith(split))
 
-    const last = progress.at(-1)
-    expect(last).toBeDefined()
-    expect(last?.total).toBeGreaterThan(0)
-    expect(last?.processed).toBe(last?.total)
+    const terminals = events.filter((e) => e.status === "settled" || e.status === "failed")
+    expect(terminals.map((e) => `${e.file} ${e.stage}`).sort()).toEqual([
+      "talk.md classify",
+      "talk.md embed",
+      "talk.md regions",
+    ])
   })
 })
 
@@ -175,10 +182,8 @@ describe("what enters scanned", () => {
       return { unrecorded: [] }
     }
 
-    const handle = startRegionSync({
-      ...project.deps,
-      detect: { find, mark: markOwnSentence },
-    })
+    const events: EngineEvent[] = []
+    const handle = startSync(project, find, markOwnSentence, events)
     await handle.ready
 
     const abandonedFirstSentence = offered[0][0]
@@ -197,7 +202,7 @@ describe("what enters scanned", () => {
   })
 
   // regions.md:13 + calling.md rounds step 5 — units the no-progress exit left
-  // unrecorded were never acknowledged, so the sync must not write them into scanned.
+  // unrecorded were never acknowledged, so the pass must not write them into scanned.
   it("keeps units left by the no-progress exit out of scanned", async () => {
     const project = createProject({ "talk.md": transcript(20) })
     const offered: number[] = []

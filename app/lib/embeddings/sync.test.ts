@@ -5,13 +5,13 @@ import { ok } from "~/lib/fp/result"
 import { bm25DocId, ownedIdsForFile, resetBm25 } from "~/lib/search/bm25/store"
 import { startBm25Sync } from "~/lib/search/bm25/sync"
 import { proseOf } from "~/lib/text/halo"
+import { startEngine, ENGINE_DEBOUNCE } from "~/lib/engine/engine"
+import type { EngineDeps, EngineHandle } from "~/lib/engine/types"
 import { chunkFileForEmbedding, type Chunk } from "./chunk"
 import { buildCompanionMarkdown, companionFilename, parseCompanionEntries } from "./companion"
-import { EMBEDDING_SYNC_DEBOUNCE } from "./constants"
 import type { EmbeddingEntry } from "./diff"
 import { getEmbeddingsDimensions } from "./env"
 import { hashChunk } from "./hash"
-import { startEmbeddingSync, type EmbeddingSyncDeps } from "./sync"
 
 const DOC = "notes.md"
 const COMPANION = companionFilename(DOC)
@@ -32,7 +32,7 @@ const createProject = (initial: Record<string, string>) => {
   let writes: string[] = []
   let issued = 0
 
-  const deps: EmbeddingSyncDeps = {
+  const deps: EngineDeps = {
     getFiles: () => files,
     getFile: (name) => files[name],
     updateFile: (name, content) => {
@@ -52,6 +52,13 @@ const createProject = (initial: Record<string, string>) => {
       requests.push(texts)
       return Promise.resolve(ok(texts.map(() => vectorStamped(++issued))))
     },
+    classify: () => Promise.resolve(null),
+    getKinds: () => [],
+    detect: { find: () => Promise.resolve({ unrecorded: [] }), mark: () => Promise.resolve() },
+    writeRegions: () => "unchanged",
+    getSignificantLanguages: () => Promise.resolve([]),
+    syncDescriptions: () => Promise.resolve(),
+    onEvent: () => undefined,
   }
 
   return {
@@ -79,8 +86,17 @@ const createProject = (initial: Record<string, string>) => {
 
 type Project = ReturnType<typeof createProject>
 
+let engines: EngineHandle[] = []
+
+const boot = async (deps: EngineDeps): Promise<EngineHandle> => {
+  const engine = startEngine(deps)
+  engines.push(engine)
+  await engine.ready
+  return engine
+}
+
 const settle = async (): Promise<void> => {
-  await vi.advanceTimersByTimeAsync(EMBEDDING_SYNC_DEBOUNCE)
+  await vi.advanceTimersByTimeAsync(ENGINE_DEBOUNCE)
   await vi.advanceTimersByTimeAsync(BM25_SETTLE)
 }
 
@@ -130,12 +146,15 @@ beforeEach(() => {
   vi.useFakeTimers()
   resetBm25()
   errors = []
+  engines = []
+  vi.spyOn(console, "warn").mockImplementation(() => undefined)
   vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
     errors.push(args.map(String).join(" "))
   })
 })
 
 afterEach(() => {
+  for (const engine of engines) engine.stop()
   expect(errors).toEqual([])
   vi.restoreAllMocks()
   vi.useRealTimers()
@@ -147,7 +166,7 @@ describe("an edit confined to the first unit", () => {
 
   it("requests only the chunks whose text changed and keeps the rest with their vectors", async () => {
     const project = createProject({ [DOC]: original })
-    await startEmbeddingSync(project.deps).ready
+    await boot(project.deps)
 
     const before = chunkFileForEmbedding(original)
     const stored = byHash(entriesIn(project))
@@ -181,7 +200,7 @@ describe("a companion written under the old boundary rule", () => {
 
   it("re-embeds every chunk and leaves no entry from the old run", async () => {
     const project = createProject({ [DOC]: content, [COMPANION]: buildCompanionMarkdown(old) })
-    await startEmbeddingSync(project.deps).ready
+    await boot(project.deps)
 
     const chunks = chunkFileForEmbedding(content)
     expect(project.requested()).toEqual(chunks.map((c) => c.text))
@@ -196,7 +215,7 @@ describe("a companion written under the old boundary rule", () => {
     startBm25Sync(project.bm25Deps)
     expect(ownedIdsForFile(LANGUAGE, DOC)).toEqual(idsOf(old))
 
-    await startEmbeddingSync(project.deps).ready
+    await boot(project.deps)
     project.notify()
     await settle()
 
@@ -208,7 +227,7 @@ describe("an edit that changes no chunk", () => {
   it("makes no request when a fenced code block is edited", async () => {
     const original = fixture("mostly-code.md")
     const project = createProject({ [DOC]: original })
-    await startEmbeddingSync(project.deps).ready
+    await boot(project.deps)
     expect(project.requested().length).toBeGreaterThan(0)
 
     const edited = original.replace("const step7 = compute(7)", "const step7 = compute(70007)")
@@ -228,7 +247,7 @@ describe("an edit that changes no chunk", () => {
 
   it("makes no request for a document with no prose to chunk", async () => {
     const project = createProject({ [DOC]: "```ts\nconst a = 1\n```" })
-    await startEmbeddingSync(project.deps).ready
+    await boot(project.deps)
 
     expect(project.requested()).toEqual([])
     expect(project.written()).toEqual([])
@@ -239,7 +258,7 @@ describe("an edit that changes no chunk", () => {
 describe("a file edited down to nothing an embedding could cover", () => {
   it("loses its companion rather than keeping entries for chunks that are gone", async () => {
     const project = createProject({ [DOC]: fixture("links-and-code.md") })
-    await startEmbeddingSync(project.deps).ready
+    await boot(project.deps)
     expect(entriesIn(project).length).toBeGreaterThan(0)
 
     project.setFile(DOC, "```ts\nconst a = 1\n```")
@@ -252,7 +271,7 @@ describe("a file edited down to nothing an embedding could cover", () => {
   it("drops the entries whose chunks are gone when the rest still match", async () => {
     const content = fixture("links-and-code.md")
     const project = createProject({ [DOC]: content })
-    await startEmbeddingSync(project.deps).ready
+    await boot(project.deps)
 
     const before = entriesIn(project)
     expect(before.length).toBeGreaterThan(2)
@@ -276,7 +295,7 @@ describe("a provider answering with fewer vectors than the batch it was sent", (
     const content = fixture("links-and-code.md")
     let short = true
     const project = createProject({ [DOC]: content })
-    const deps: EmbeddingSyncDeps = {
+    const deps: EngineDeps = {
       ...project.deps,
       fetchBatch: (texts) => {
         const answered = short ? texts.slice(0, -1) : texts
@@ -285,7 +304,7 @@ describe("a provider answering with fewer vectors than the batch it was sent", (
       },
     }
 
-    await startEmbeddingSync(deps).ready
+    await boot(deps)
     expect(project.fileAt(COMPANION)).toBeUndefined()
     expect(errors).toEqual([expect.stringContaining("provider answered")])
     errors = []

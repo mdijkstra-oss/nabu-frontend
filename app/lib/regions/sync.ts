@@ -1,7 +1,6 @@
 import { isEmbeddableFile } from "~/lib/embeddings/filter"
 import type { FileStore } from "~/lib/files/store"
 import { indexFileSentences, indexProseSentences, proseOf } from "~/lib/text/halo"
-import { debounce } from "~/lib/utils/debounce"
 import { canonicalizeRegionsBlock } from "~/domain/data-blocks/regions/canonical"
 import {
   isResolved,
@@ -10,7 +9,6 @@ import {
   type ScannedUnit,
 } from "~/domain/data-blocks/regions/schema"
 import { rulesHashOf, type KindDescriptor } from "./kinds/registry"
-import { needsSharedVocabulary } from "./detect/find"
 import { occurrenceOf } from "./detect/hits"
 import { cutUnits } from "~/lib/cutting/units"
 import { computeWindows } from "./detect/window"
@@ -18,11 +16,116 @@ import { dedupeMarks } from "./detect/overlap"
 import type { FindWork, Hit, Mark, MarkWork, ScanUnit, WindowedHit } from "./detect/types"
 import { hashSentenceRange, reconcileHits, reconcileMarks, type StoredMark } from "./reconcile"
 import { readStoredRegions } from "./stored"
-import type { RegionSyncDeps, RegionSyncHandle } from "./sync-types"
+import type { WriteOutcome } from "./sync-types"
+import type { DetectCalls } from "./detect/types"
+import type { StagePassPlan } from "~/lib/engine/types"
 
-export const REGION_SYNC_DEBOUNCE = 5_000
-export const REGION_SYNC_MAX_WAIT = 30_000
 export const MAX_CONSECUTIVE_WRITE_FAILURES = 3
+
+export class RegionWriteFailure extends Error {
+  constructor(path: string, detail?: string) {
+    super(`regions write did not apply for ${path}${detail ? `: ${detail}` : ""}`)
+    this.name = "RegionWriteFailure"
+  }
+}
+
+export interface RegionFilePassDeps {
+  getFile: (path: string) => string | undefined
+  detect: DetectCalls
+  writeRegions: (path: string, next: RegionsBlock) => WriteOutcome
+  isAborted?: () => boolean
+}
+
+export const seedVocabulary = (files: FileStore, kindId: string): Set<string> => {
+  const values = new Set<string>()
+  for (const path of Object.keys(files)) {
+    if (!isEmbeddableFile(path)) continue
+    for (const row of readStoredRegions(files[path]).regions) {
+      if (row.kind === kindId) values.add(row.parsed.value)
+    }
+  }
+  return values
+}
+
+export const planRegionFilePass = (
+  path: string,
+  raw: string,
+  kinds: KindDescriptor[],
+  knownValuesFor: (kind: KindDescriptor) => Set<string>,
+  deps: RegionFilePassDeps
+): StagePassPlan => {
+  const doc = prepareDocument(path, raw)
+  const stored = readStoredRegions(raw)
+  const works = kinds.map((kind) => prepareWork(doc, kind, stored))
+
+  const dirty =
+    works.some((work) => work.unitsToFind.length > 0) ||
+    works.some((work) => planMarkWindows(work).length > 0)
+
+  const runKindForFile = async (work: KindWork): Promise<void> => {
+    if (work.unitsToFind.length > 0) {
+      const findWorks = new Map(work.unitsToFind.map((unit) => [toFindWork(work, unit), unit]))
+      await deps.detect.find([...findWorks.keys()], {
+        kind: work.kind,
+        knownValues: knownValuesFor(work.kind),
+        onAnswered: (item, hits) => {
+          const unit = findWorks.get(item)
+          if (!unit) return
+          work.scanned.push({
+            hash: unit.hash,
+            firstSentence: unit.firstSentence,
+            rules: rulesHashOf(work.kind),
+          })
+          work.foundHits.push(...hits)
+        },
+        onAbandoned: () => undefined,
+      })
+    }
+    if (deps.isAborted?.()) return
+
+    const windows = planMarkWindows(work)
+    if (windows.length > 0) {
+      const markWorks = new Set(windows.map((windowed) => toMarkWork(work, windowed)))
+      await deps.detect.mark([...markWorks], {
+        kind: work.kind,
+        onAnswered: (item, mark) => {
+          if (markWorks.has(item)) work.freshMarks.push(mark)
+        },
+        onFailed: (item) => {
+          if (markWorks.has(item)) work.markFailures.push(item.hit)
+        },
+      })
+    }
+
+    resolveWork(work)
+  }
+
+  const writeDoc = (): void => {
+    const current = deps.getFile(path)
+    if (current === undefined) return
+
+    const currentSentences = current === raw ? doc.sentences : sentencesOf(current)
+    if (!haveSameSentences(doc.sentences, currentSentences)) {
+      for (const work of works) work.marks = reconcileMarks(work.marks, currentSentences).kept
+    }
+
+    let outcome: WriteOutcome
+    try {
+      outcome = deps.writeRegions(path, buildBlock(works))
+    } catch (e) {
+      throw new RegionWriteFailure(path, e instanceof Error ? e.message : String(e))
+    }
+    if (outcome === "failed") throw new RegionWriteFailure(path)
+  }
+
+  const run = async (): Promise<void> => {
+    await Promise.all(works.map(runKindForFile))
+    if (deps.isAborted?.()) return
+    writeDoc()
+  }
+
+  return { dirty, run }
+}
 
 interface DocumentPass {
   path: string
@@ -45,11 +148,6 @@ interface KindWork {
   markFailures: Hit[]
   marks: StoredMark[]
   unranged: Hit[]
-}
-
-interface WriteFailure {
-  count: number
-  content: string
 }
 
 const sentencesOf = (raw: string): string[] => indexFileSentences(raw).map((row) => row.text)
@@ -138,17 +236,6 @@ const prepareWork = (doc: DocumentPass, kind: KindDescriptor, stored: RegionsBlo
   }
 }
 
-const seedVocabulary = (files: FileStore, kindId: string): Set<string> => {
-  const values = new Set<string>()
-  for (const path of Object.keys(files)) {
-    if (!isEmbeddableFile(path)) continue
-    for (const row of readStoredRegions(files[path]).regions) {
-      if (row.kind === kindId) values.add(row.parsed.value)
-    }
-  }
-  return values
-}
-
 // A relocated mark survives when a hit this pass still holds answers to it; an orphan
 // is dropped rather than written.
 const survivingMarksOf = (work: KindWork, everyHit: Hit[]): StoredMark[] =>
@@ -201,217 +288,3 @@ const buildBlock = (works: KindWork[]): RegionsBlock =>
 
 const haveSameSentences = (a: string[], b: string[]): boolean =>
   a.length === b.length && a.every((text, i) => text === b[i])
-
-export const startRegionSync = (deps: RegionSyncDeps): RegionSyncHandle => {
-  const snapshots = new Map<string, string>()
-  const failures = new Map<string, WriteFailure>()
-
-  let stopped = false
-  let aborted = false
-  let running: Promise<void> | null = null
-  let rerunRequested = false
-
-  let processed = 0
-  let total = 0
-
-  const isQuarantined = (path: string, content: string): boolean => {
-    const failure = failures.get(path)
-    return (
-      failure !== undefined &&
-      failure.count >= MAX_CONSECUTIVE_WRITE_FAILURES &&
-      failure.content === content
-    )
-  }
-
-  const changedPaths = (files: FileStore): string[] =>
-    Object.keys(files).filter(
-      (path) =>
-        isEmbeddableFile(path) &&
-        files[path] !== snapshots.get(path) &&
-        !isQuarantined(path, files[path])
-    )
-
-  const reportProgress = (): void => deps.onProgress?.(processed, total)
-
-  const recordFound = (work: KindWork, unit: ScanUnit, hits: Hit[]): void => {
-    work.scanned.push({
-      hash: unit.hash,
-      firstSentence: unit.firstSentence,
-      rules: rulesHashOf(work.kind),
-    })
-    work.foundHits.push(...hits)
-  }
-
-  const settleUnit = (): void => {
-    processed++
-    reportProgress()
-  }
-
-  const runKind = async (
-    kind: KindDescriptor,
-    works: KindWork[],
-    files: FileStore
-  ): Promise<void> => {
-    const known = needsSharedVocabulary(kind.valueType)
-      ? seedVocabulary(files, kind.id)
-      : new Set<string>()
-
-    const findWorks = new Map<FindWork, KindWork>()
-    for (const work of works) {
-      for (const unit of work.unitsToFind) findWorks.set(toFindWork(work, unit), work)
-    }
-
-    const found = await deps.detect.find([...findWorks.keys()], {
-      kind,
-      knownValues: known,
-      onAnswered: (item, hits) => {
-        if (aborted) return
-        settleUnit()
-        const work = findWorks.get(item)
-        if (work) recordFound(work, item.unit, hits)
-      },
-      onAbandoned: () => {
-        if (aborted) return
-        settleUnit()
-      },
-    })
-    if (aborted) return
-
-    processed += found.unrecorded.length
-    reportProgress()
-
-    const markWorks = new Map<MarkWork, KindWork>()
-    for (const work of works) {
-      for (const windowed of planMarkWindows(work)) markWorks.set(toMarkWork(work, windowed), work)
-    }
-
-    await deps.detect.mark([...markWorks.keys()], {
-      kind,
-      onAnswered: (item, mark) => {
-        if (aborted) return
-        markWorks.get(item)?.freshMarks.push(mark)
-      },
-      onFailed: (item) => {
-        if (aborted) return
-        markWorks.get(item)?.markFailures.push(item.hit)
-      },
-    })
-    if (aborted) return
-
-    works.forEach(resolveWork)
-  }
-
-  const recordWriteFailure = (path: string, content: string): void => {
-    const count = (failures.get(path)?.count ?? 0) + 1
-    failures.set(path, { count, content })
-    if (count === MAX_CONSECUTIVE_WRITE_FAILURES) {
-      console.error(`[region-sync] skipping ${path} after ${count} consecutive write failures`)
-    }
-  }
-
-  const writeDocument = (doc: DocumentPass, works: KindWork[]): void => {
-    const current = deps.getFile(doc.path)
-    if (current === undefined) {
-      snapshots.delete(doc.path)
-      failures.delete(doc.path)
-      return
-    }
-
-    const currentSentences = current === doc.raw ? doc.sentences : sentencesOf(current)
-    if (!haveSameSentences(doc.sentences, currentSentences)) {
-      for (const work of works) work.marks = reconcileMarks(work.marks, currentSentences).kept
-    }
-
-    try {
-      if (deps.writeRegions(doc.path, buildBlock(works)) === "failed") {
-        console.error(`[region-sync] write did not apply for ${doc.path}`)
-        recordWriteFailure(doc.path, current)
-        return
-      }
-    } catch (e) {
-      console.error(`[region-sync] write failed for ${doc.path}:`, e)
-      recordWriteFailure(doc.path, current)
-      return
-    }
-
-    failures.delete(doc.path)
-    if (current === doc.raw) snapshots.set(doc.path, doc.raw)
-  }
-
-  const runPass = async (): Promise<void> => {
-    try {
-      const files = deps.getFiles()
-      const kinds = deps.getKinds()
-      const paths = changedPaths(files)
-      if (paths.length === 0 || kinds.length === 0) return
-
-      const docs = paths.map((path) => prepareDocument(path, files[path]))
-      const works = docs.flatMap((doc) => {
-        const stored = readStoredRegions(doc.raw)
-        return kinds.map((kind) => prepareWork(doc, kind, stored))
-      })
-
-      processed = 0
-      total = works.reduce((count, work) => count + work.unitsToFind.length, 0)
-      reportProgress()
-
-      await Promise.all(
-        kinds.map((kind) =>
-          runKind(
-            kind,
-            works.filter((work) => work.kind === kind),
-            files
-          )
-        )
-      )
-      if (aborted) return
-
-      for (const doc of docs) {
-        writeDocument(
-          doc,
-          works.filter((work) => work.doc === doc)
-        )
-      }
-    } catch (e) {
-      console.error("[region-sync] pass error:", e)
-    }
-  }
-
-  const runChain = async (): Promise<void> => {
-    try {
-      await runPass()
-      while (rerunRequested && !stopped) {
-        rerunRequested = false
-        await runPass()
-      }
-    } finally {
-      running = null
-    }
-  }
-
-  const tick = (): Promise<void> => {
-    if (stopped) return Promise.resolve()
-    if (running) {
-      rerunRequested = true
-      return running
-    }
-    aborted = false
-    running = runChain()
-    return running
-  }
-
-  const debouncedTick = debounce(() => void tick(), REGION_SYNC_DEBOUNCE, {
-    maxWait: REGION_SYNC_MAX_WAIT,
-  })
-  const unsubscribe = deps.subscribe(debouncedTick)
-
-  const stop = (): void => {
-    stopped = true
-    aborted = true
-    rerunRequested = false
-    debouncedTick.cancel()
-    unsubscribe()
-  }
-
-  return { ready: tick(), tick, stop }
-}

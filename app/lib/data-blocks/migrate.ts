@@ -24,11 +24,11 @@ export const shouldMigrate = (markdown: string, migration: Migration): boolean =
     blockMatchesOldSchema(block, migration.from)
   )
 
-export const migrateFile = (markdown: string, migrations: readonly Migration[]): MigrateResult =>
-  migrations.reduce<MigrateResult>(
-    (acc, migration) => {
-      if (!shouldMigrate(acc.markdown, migration)) return acc
-      return { markdown: migration.upgrade(acc.markdown), changed: true }
-    },
-    { markdown, changed: false }
+export const migrateFile = (markdown: string, migrations: readonly Migration[]): MigrateResult => {
+  const upgraded = migrations.reduce(
+    (current, migration) =>
+      shouldMigrate(current, migration) ? migration.upgrade(current) : current,
+    markdown
   )
+  return { markdown: upgraded, changed: upgraded !== markdown }
+}

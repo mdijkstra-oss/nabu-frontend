@@ -1,7 +1,5 @@
-import { getFiles, getFileRaw } from "~/lib/files/store"
-import { subscribeContentChanges } from "~/lib/files/subscribe-content"
+import { getFiles } from "~/lib/files/store"
 import { getDatabase } from "~/domain/db/database"
-import { startCorpusSync } from "~/lib/corpus/sync-topics"
 import { fetchLanguageStats, filterSignificantLanguages } from "~/lib/search/resolve-semantic"
 import { getCorpusDescriptions, getDescriptionsHash } from "./selectors"
 import type { SemanticContext } from "~/lib/search/resolve-semantic"
@@ -12,11 +10,9 @@ export type SemanticContextBase = Pick<
   "db" | "embeddingsUrl" | "descriptions" | "descriptionsHash"
 >
 
-type OnSyncProgress = (processed: number, total: number) => void
-
-let tick: (() => Promise<void>) | null = null
-
-const ensureCorpusFresh = (): Promise<void> => (tick ? tick() : Promise.resolve())
+export const setCorpusTick = (next: () => Promise<void>): void => {
+  tick = next
+}
 
 export const buildSemanticContext = async (
   db: Database,
@@ -29,26 +25,13 @@ export const buildSemanticContext = async (
   return { db, embeddingsUrl, descriptions, descriptionsHash }
 }
 
-const getSignificantLanguages = async (): Promise<string[]> => {
+export const getSignificantLanguages = async (): Promise<string[]> => {
   const db = getDatabase()
   if (!db) return ["eng"]
   const rows = await fetchLanguageStats(db)
   return filterSignificantLanguages(rows)
 }
 
-export const startTopicAssignment = async (onProgress?: OnSyncProgress): Promise<void> => {
-  const handle = startCorpusSync({
-    getFiles,
-    getFile: (f) => {
-      const raw = getFileRaw(f)
-      return raw || undefined
-    },
-    subscribe: subscribeContentChanges,
-    getSignificantLanguages,
-    onProgress,
-  })
+let tick: (() => Promise<void>) | null = null
 
-  tick = handle.tick
-
-  await handle.ready
-}
+const ensureCorpusFresh = (): Promise<void> => (tick ? tick() : Promise.resolve())

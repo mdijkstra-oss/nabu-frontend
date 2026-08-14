@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn } from "storybook/test"
 import type { ImportFile } from "~/lib/import/types"
+import { deriveProgress } from "~/ui/hooks/fileImportRows"
 import { withSize } from "../../../../.storybook/decorators"
-import { importFile } from "./fixtures"
+import { importFile, mixedQueue } from "./fixtures"
 import { FileImportList } from "./FileImportList"
 
 const midFiles: ImportFile[] = [
@@ -36,7 +37,7 @@ type Story = StoryObj<typeof FileImportList>
 export const MidProcessing: Story = {
   args: {
     files: midFiles,
-    progress: { total: 5, completed: 2, failed: 0, unsupported: 0, processed: 2 },
+    progress: { total: 5, completed: 2, incomplete: 0, failed: 0, unsupported: 0, processed: 2 },
     isProcessing: true,
     onCancel: fn(),
   },
@@ -47,10 +48,33 @@ export const MidProcessing: Story = {
   },
 }
 
+export const MixedQueue: Story = {
+  args: {
+    files: mixedQueue,
+    progress: deriveProgress(mixedQueue),
+    isProcessing: true,
+    onCancel: fn(),
+  },
+  play: async ({ canvas, canvasElement }) => {
+    expect(canvas.getByText("Processing files...")).toBeInTheDocument()
+    expect(canvas.getByText("3 of 5 files processed")).toBeInTheDocument()
+    expect(canvas.getByText("1 added, 1 incomplete, 1 unsupported")).toBeInTheDocument()
+    expect(progressBar(canvasElement).style.width).toBe("60%")
+
+    expect(canvas.getByText("Queued").closest(".shadow-sm")?.className).toContain("opacity-50")
+    expect(
+      canvas.getByText("Classifying...").closest(".shadow-sm")?.querySelector(".animate-spin")
+    ).not.toBeNull()
+    expect(canvas.getByText("Imported, processing incomplete")).toBeInTheDocument()
+    expect(canvas.getByText("24.0 KB - Classification failed")).toBeInTheDocument()
+    expect(canvas.getByText("Added")).toBeInTheDocument()
+  },
+}
+
 export const Complete: Story = {
   args: {
     files: completeFiles,
-    progress: { total: 5, completed: 3, failed: 1, unsupported: 1, processed: 5 },
+    progress: { total: 5, completed: 3, incomplete: 0, failed: 1, unsupported: 1, processed: 5 },
     isProcessing: false,
     onCancel: fn(),
   },

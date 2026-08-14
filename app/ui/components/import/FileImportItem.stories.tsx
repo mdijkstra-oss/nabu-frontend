@@ -12,12 +12,22 @@ const statusFiles: Record<ImportStatus, ImportFile> = {
   pending: fileWith("pending"),
   reading: fileWith("reading"),
   processing: fileWith("processing"),
+  embedding: fileWith("embedding"),
+  classifying: fileWith("classifying"),
+  regions: fileWith("regions"),
   completed: fileWith("completed"),
+  incomplete: fileWith("incomplete", { error: "Classification failed" }),
   unsupported: fileWith("unsupported"),
   error: fileWith("error", { error: "Could not parse file" }),
 }
 
-const activeStatuses: ImportStatus[] = ["reading", "processing"]
+const activeStatuses: ImportStatus[] = [
+  "reading",
+  "processing",
+  "embedding",
+  "classifying",
+  "regions",
+]
 
 const assertMatchesStatusConfig = (canvasElement: HTMLElement, status: ImportStatus) => {
   const config = statusConfigs[status]
@@ -56,12 +66,42 @@ type Story = StoryObj<typeof FileImportItem>
 export const Pending: Story = storyFor("pending")
 export const Reading: Story = storyFor("reading")
 export const Processing: Story = storyFor("processing")
+export const Embedding: Story = {
+  ...storyFor("embedding"),
+  play: async (context) => {
+    assertMatchesStatusConfig(context.canvasElement, "embedding")
+    expect(context.canvas.getByText("Understanding...")).toBeInTheDocument()
+  },
+}
+export const Classifying: Story = {
+  ...storyFor("classifying"),
+  play: async (context) => {
+    assertMatchesStatusConfig(context.canvasElement, "classifying")
+    expect(context.canvas.getByText("Classifying...")).toBeInTheDocument()
+  },
+}
+export const Regions: Story = {
+  ...storyFor("regions"),
+  play: async (context) => {
+    assertMatchesStatusConfig(context.canvasElement, "regions")
+    expect(context.canvas.getByText("Finding regions...")).toBeInTheDocument()
+  },
+}
 export const Completed: Story = storyFor("completed")
+export const Incomplete: Story = {
+  ...storyFor("incomplete"),
+  play: async (context) => {
+    assertMatchesStatusConfig(context.canvasElement, "incomplete")
+    expect(context.canvas.getByText("Imported, processing incomplete")).toBeInTheDocument()
+    expect(context.canvas.getByText("24.0 KB - Classification failed")).toBeInTheDocument()
+  },
+}
 export const Unsupported: Story = storyFor("unsupported")
 export const Error: Story = {
   ...storyFor("error"),
   play: async (context) => {
     assertMatchesStatusConfig(context.canvasElement, "error")
+    expect(context.canvas.getByText("Could not import")).toBeInTheDocument()
     expect(context.canvas.getByText("24.0 KB - Could not parse file")).toBeInTheDocument()
   },
 }

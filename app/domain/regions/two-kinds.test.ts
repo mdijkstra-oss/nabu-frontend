@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { setFiles, getFileRaw } from "~/lib/files/store"
+import { setFiles, getFileRaw, updateFileRaw, deleteFile } from "~/lib/files/store"
 import { executeFileAction } from "~/lib/data-blocks/file-action"
 import { clearEntries, getEntries } from "~/lib/mutation-history/store"
 import { getBlock } from "~/lib/data-blocks/query"
+import { ok } from "~/lib/fp/result"
+import { getEmbeddingsDimensions } from "~/lib/embeddings/env"
 import { RegionsBlockSchema } from "~/domain/data-blocks/regions/schema"
-import { startRegionSync } from "~/lib/regions/sync"
+import { startEngine } from "~/lib/engine/engine"
 import { regionKinds } from "~/lib/regions/kinds/registry"
 import type { FindCall, Hit, MarkCall } from "~/lib/regions/detect/types"
 import { writeRegionsBlock } from "./init"
@@ -56,11 +58,18 @@ const mark: MarkCall = async (items, job) => {
   }
 }
 
+const zeroVector = (): number[] => new Array<number>(getEmbeddingsDimensions()).fill(0)
+
 const runOnePass = async (calls: string[]): Promise<void> => {
-  const handle = startRegionSync({
+  const handle = startEngine({
     getFiles: () => ({ [PATH]: getFileRaw(PATH) }),
     getFile: (path) => getFileRaw(path) || undefined,
+    updateFile: updateFileRaw,
+    deleteFile,
     subscribe: () => () => undefined,
+    embeddingsUrl: "http://embeddings.test",
+    fetchBatch: (texts) => Promise.resolve(ok(texts.map(() => zeroVector()))),
+    classify: () => Promise.resolve(null),
     getKinds: regionKinds,
     detect: {
       find: async (items, job) => {
@@ -73,6 +82,9 @@ const runOnePass = async (calls: string[]): Promise<void> => {
       },
     },
     writeRegions: writeRegionsBlock,
+    getSignificantLanguages: () => Promise.resolve([]),
+    syncDescriptions: () => Promise.resolve(),
+    onEvent: () => undefined,
   })
   await handle.ready
   handle.stop()

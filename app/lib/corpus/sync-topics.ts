@@ -1,49 +1,51 @@
 import type { FileStore } from "~/lib/files/store"
-import { debounce } from "~/lib/utils/debounce"
-import { serialize } from "~/lib/utils/serialize"
-import { isEmbeddableFile } from "~/lib/embeddings/filter"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { buildExcerpt } from "~/lib/text/excerpt"
 import { shouldReclassify, contentHash } from "~/domain/data-blocks/attributes/topics/selectors"
 import { executeFileAction } from "~/lib/data-blocks/file-action"
-import { classifyDocument, type Classification, type ExistingClassifications } from "./classify"
+import type { classifyDocument, Classification, ExistingClassifications } from "./classify"
 import { collectTypeCounts, collectSubjectCounts } from "./tree"
-import { processDescriptionSync } from "./sync-descriptions"
-import { processPool } from "~/lib/utils/pool"
-import { getEmbeddingsUrl } from "~/lib/embeddings/env"
+import type { StagePassPlan } from "~/lib/engine/types"
 
-const CORPUS_SYNC_DEBOUNCE = 30_000
+export const collectExisting = (files: FileStore): ExistingClassifications => ({
+  types: [...collectTypeCounts(files).keys()],
+  subjects: [...collectSubjectCounts(files).keys()],
+})
+
+export const planClassifyFilePass = (
+  filename: string,
+  content: string,
+  existing: ExistingClassifications,
+  classify: typeof classifyDocument,
+  writeClassification: typeof writeClassificationToAttributes = writeClassificationToAttributes
+): StagePassPlan => {
+  if (!shouldReclassify(content)) return { dirty: false, run: () => Promise.resolve() }
+
+  return {
+    dirty: true,
+    run: async () => {
+      const excerpt = toExcerpt(content)
+      if (excerpt.length === 0) return
+
+      const classification = await classify(excerpt, existing)
+      if (!classification) {
+        console.warn(`[classify] no classification for ${filename}`)
+        return
+      }
+
+      writeClassification(content, classification, filename)
+    },
+  }
+}
 
 const TOKENS_PER_SECTION = 250
-
-interface CorpusSyncDeps {
-  getFiles: () => FileStore
-  getFile: (f: string) => string | undefined
-  subscribe: (listener: () => void) => () => void
-  getSignificantLanguages: () => Promise<string[]>
-  onProgress?: (processed: number, total: number) => void
-}
-
-interface CorpusSyncHandle {
-  ready: Promise<void>
-  tick: () => Promise<void>
-}
-
-const findChangedFiles = (prev: FileStore, curr: FileStore): string[] => {
-  const changed: string[] = []
-  for (const key of Object.keys(curr)) {
-    if (!isEmbeddableFile(key)) continue
-    if (prev[key] !== curr[key]) changed.push(key)
-  }
-  return changed
-}
 
 const toExcerpt = (raw: string): string => {
   const prose = extractProse(raw)
   return buildExcerpt(prose, TOKENS_PER_SECTION)
 }
 
-const writeClassificationToAttributes = (
+export const writeClassificationToAttributes = (
   content: string,
   classification: Classification,
   filename: string
@@ -62,83 +64,4 @@ const writeClassificationToAttributes = (
     ],
     skipPendingRefs: true,
   })
-}
-
-const collectExisting = (files: FileStore): ExistingClassifications => ({
-  types: [...collectTypeCounts(files).keys()],
-  subjects: [...collectSubjectCounts(files).keys()],
-})
-
-interface FileToClassify {
-  filename: string
-  content: string
-}
-
-const classifyFile =
-  (existing: ExistingClassifications) =>
-  async (item: FileToClassify): Promise<Classification[]> => {
-    const excerpt = toExcerpt(item.content)
-    if (excerpt.length === 0) return []
-
-    const classification = await classifyDocument(excerpt, existing)
-    if (!classification) {
-      console.warn(`[classify] no classification for ${item.filename}`)
-      return []
-    }
-
-    writeClassificationToAttributes(item.content, classification, item.filename)
-    return [classification]
-  }
-
-const toFilesToClassify = (files: FileStore, changedFiles: string[]): FileToClassify[] =>
-  changedFiles
-    .filter((f) => shouldReclassify(files[f]))
-    .map((filename) => ({ filename, content: files[filename] }))
-    .filter((item) => item.content !== undefined)
-
-const processTopics = async (changedFiles: string[], deps: CorpusSyncDeps): Promise<boolean> => {
-  const files = deps.getFiles()
-  const items = toFilesToClassify(files, changedFiles)
-
-  if (items.length === 0) return false
-
-  const existing = collectExisting(files)
-  deps.onProgress?.(0, items.length)
-
-  await processPool(items, classifyFile(existing), () => undefined, {
-    concurrency: 10,
-    onItemComplete: (completed, total) => deps.onProgress?.(completed, total),
-  })
-
-  return true
-}
-
-export const startCorpusSync = (deps: CorpusSyncDeps): CorpusSyncHandle => {
-  let previousFiles: FileStore = {}
-
-  const doSync = async (): Promise<void> => {
-    try {
-      const currentFiles = deps.getFiles()
-      const changed = findChangedFiles(previousFiles, currentFiles)
-      previousFiles = currentFiles
-
-      if (changed.length === 0) return
-
-      await processTopics(changed, deps)
-
-      const significantLanguages = await deps.getSignificantLanguages()
-      await processDescriptionSync(deps.getFiles, significantLanguages, getEmbeddingsUrl())
-    } catch (e) {
-      console.error("[corpus-sync] error:", e)
-    }
-  }
-
-  const tick = serialize(doSync)
-
-  const ready = tick()
-
-  const debouncedTick = debounce(tick, CORPUS_SYNC_DEBOUNCE)
-  deps.subscribe(debouncedTick)
-
-  return { ready, tick }
 }

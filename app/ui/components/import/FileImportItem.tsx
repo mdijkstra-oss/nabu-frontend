@@ -30,10 +30,33 @@ export const statusConfigs: Record<ImportStatus, StatusConfig> = {
     labelClass: "text-brand-600",
     showSpinner: true,
   },
+  embedding: {
+    iconVariant: "brand",
+    label: "Understanding...",
+    labelClass: "text-brand-600",
+    showSpinner: true,
+  },
+  classifying: {
+    iconVariant: "brand",
+    label: "Classifying...",
+    labelClass: "text-brand-600",
+    showSpinner: true,
+  },
+  regions: {
+    iconVariant: "brand",
+    label: "Finding regions...",
+    labelClass: "text-brand-600",
+    showSpinner: true,
+  },
   completed: {
     iconVariant: "success",
     label: "Added",
     labelClass: "text-success-600",
+  },
+  incomplete: {
+    iconVariant: "warning",
+    label: "Imported, processing incomplete",
+    labelClass: "text-warning-600",
   },
   unsupported: {
     iconVariant: "warning",
@@ -42,7 +65,7 @@ export const statusConfigs: Record<ImportStatus, StatusConfig> = {
   },
   error: {
     iconVariant: "error",
-    label: "Failed",
+    label: "Could not import",
     labelClass: "text-error-600",
   },
 }
@@ -55,7 +78,15 @@ const formatFileSize = (bytes: number): string => {
 
 const isPending = (status: ImportStatus): boolean => status === "pending"
 
-const isActive = (status: ImportStatus): boolean => status === "reading" || status === "processing"
+const activeStatuses: ImportStatus[] = [
+  "reading",
+  "processing",
+  "embedding",
+  "classifying",
+  "regions",
+]
+
+const isActive = (status: ImportStatus): boolean => activeStatuses.includes(status)
 
 interface StatusIconProps {
   status: ImportStatus
@@ -68,9 +99,14 @@ const StatusIcon = ({ status, className }: StatusIconProps) => {
       return <Clock className={className} />
     case "reading":
     case "processing":
+    case "embedding":
+    case "classifying":
+    case "regions":
       return <Loader2 className={`${className} animate-spin`} />
     case "completed":
       return <Check className={className} />
+    case "incomplete":
+      return <AlertCircle className={className} />
     case "unsupported":
       return <FileX className={className} />
     case "error":

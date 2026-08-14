@@ -1,12 +1,5 @@
-import {
-  updateFileRaw,
-  deleteFile,
-  renameFile,
-  withoutPersist,
-  schedulePersist,
-} from "~/lib/files/store"
-import { migrateFile } from "~/lib/data-blocks/migrate"
-import { migrations } from "~/domain/data-blocks/migrations"
+import { deleteFile, renameFile, withoutPersist, schedulePersist } from "~/lib/files/store"
+import { ingestFile } from "~/lib/files/ingest"
 import type { Command } from "./types"
 import { exhaustive } from "~/lib/utils/exhaustive"
 
@@ -18,9 +11,14 @@ const applyCommandInner = (command: Command): string | undefined => {
   switch (action) {
     case "WriteFile": {
       if (content === undefined) return undefined
-      const migrated = migrateFile(content, migrations)
-      updateFileRaw(path, migrated.markdown)
-      return migrated.changed ? path : undefined
+      const result = ingestFile(path, content)
+      // A corrupt synced file is reported and skipped; the command still counts
+      // toward file-loading progress at the caller, so boot proceeds without it.
+      if (!result.ok) {
+        console.error(`[sync] rejected corrupt file ${path}:`, result.errors)
+        return undefined
+      }
+      return result.migrated ? path : undefined
     }
 
     case "DeleteFile":
