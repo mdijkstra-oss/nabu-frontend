@@ -2,21 +2,23 @@ import type { ComponentType } from "react"
 import { useWidgetViewContext } from "@prosemirror-adapter/react"
 import { Search } from "lucide-react"
 import { resolveIcon } from "~/ui/theme/icon-map"
-import { elementBackground, hoveredElementBorder, lowContrastText } from "~/ui/theme/radix"
+import { lowContrastText, radixVar } from "~/ui/theme/radix"
 
 const DEFAULT_COLOUR = "gray"
 
-const Glyph = ({ icon: Icon }: { icon: ComponentType<{ className?: string }> }) => (
-  <Icon className="inline-block h-[0.75em] w-[0.75em]" />
-)
+const Glyph = ({
+  icon: Icon,
+}: {
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>
+}) => <Icon className="inline-block h-[0.75em] w-[0.75em] align-[-0.05em]" strokeWidth={2.75} />
 
 export const RegionIcon = () => {
   const { spec } = useWidgetViewContext()
   const colour = (spec?.colour as string | undefined) ?? DEFAULT_COLOUR
-  const muted = spec?.muted === true
+  const hovered = spec?.hovered === true
   const kind = (spec?.kind as string | undefined) ?? ""
   const label = (spec?.label as string | undefined) ?? ""
-  const asSearchButton = spec?.searchable === true && spec?.hovered === true
+  const asSearchButton = spec?.searchable === true && hovered
   return (
     <span
       aria-hidden={asSearchButton ? undefined : "true"}
@@ -27,15 +29,11 @@ export const RegionIcon = () => {
       data-region-icon={kind}
       data-region-index={spec?.index !== undefined ? String(spec.index) : undefined}
       data-region-search={asSearchButton ? "" : undefined}
-      className={`rounded-l-[3px] py-[1px] pl-[2px]${asSearchButton ? " cursor-pointer" : ""}`}
+      className={`pr-[1px]${asSearchButton ? " cursor-pointer" : ""}`}
       style={{
         color: lowContrastText(colour),
-        border: `1px solid ${muted ? "transparent" : hoveredElementBorder(colour)}`,
-        borderRight: "none",
         marginLeft: spec?.atBlockStart === true ? undefined : "2px",
-        ...(muted
-          ? {}
-          : { background: elementBackground(colour), position: "relative", zIndex: 1 }),
+        ...(hovered ? { background: radixVar(colour, 5) } : {}),
       }}
     >
       <Glyph
