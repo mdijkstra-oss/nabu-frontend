@@ -2,28 +2,35 @@ import type { FileStore } from "~/lib/files/store"
 import { toDisplayName } from "~/lib/files/filename"
 import { getCharts } from "~/domain/data-blocks/chart/selectors"
 import type { ChartBlock } from "~/domain/data-blocks/chart/schema"
-import type { ChartType } from "~/lib/chart/types"
+import type { ChartSpec, LayerMark } from "~/lib/chart/types"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import type { ExhibitItem, ChartSubtype, ExhibitKind } from "./types"
 
-export const inferChartSubtype = (type: ChartType): ChartSubtype => {
-  switch (type) {
+const subtypeForMark = (mark: LayerMark): ChartSubtype => {
+  switch (mark) {
     case "bar":
-    case "stacked-bar":
-    case "grouped-bar":
       return "bar"
     case "line":
     case "area":
       return "line"
+    case "scatter":
+      return "scatter"
+    default:
+      return exhaustive(mark)
+  }
+}
+
+export const inferChartSubtype = (spec: ChartSpec): ChartSubtype => {
+  switch (spec.type) {
+    case "axis":
+      return subtypeForMark(spec.layers[0].mark)
     case "pie":
     case "treemap":
       return "pie"
-    case "scatter":
-      return "scatter"
     case "heatmap":
       return "other"
     default:
-      return exhaustive(type)
+      return exhaustive(spec)
   }
 }
 
@@ -31,7 +38,7 @@ const chartToExhibit = (chart: ChartBlock, filename: string): ExhibitItem => ({
   id: chart.id,
   title: chart.caption.label,
   kind: "chart",
-  subtype: inferChartSubtype(chart.spec.type),
+  subtype: inferChartSubtype(chart.spec),
   documentId: filename,
   documentTitle: toDisplayName(filename),
 })

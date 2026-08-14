@@ -31,18 +31,58 @@ describe("reduceByKind", () => {
       expected: { speaker: ["alice", "bob"] },
     },
     {
-      name: "one datetime region reduces to a span starting and ending at its value",
+      name: "one datetime region reduces to a span starting, ending and happening at its value",
       regions: [resolved(dateRegion("2026-03-03T00:00:00Z", 0, 4))],
-      expected: { date: { start: "2026-03-03T00:00:00Z", end: "2026-03-03T00:00:00Z" } },
+      expected: {
+        date: {
+          start: "2026-03-03T00:00:00Z",
+          end: "2026-03-03T00:00:00Z",
+          when: "2026-03-03T00:00:00Z",
+        },
+      },
     },
     {
-      name: "several datetime regions reduce to the earliest and the latest",
+      name: "several datetime regions reduce to the earliest and the latest, and the narrowest becomes when",
       regions: [
         resolved(dateRegion("2026-03-05T00:00:00Z", 2, 2)),
         resolved(dateRegion("2026-03-01T00:00:00Z", 0, 1)),
         resolved(dateRegion("2026-03-09T12:30:00Z", 3, 4)),
       ],
-      expected: { date: { start: "2026-03-01T00:00:00Z", end: "2026-03-09T12:30:00Z" } },
+      expected: {
+        date: {
+          start: "2026-03-01T00:00:00Z",
+          end: "2026-03-09T12:30:00Z",
+          when: "2026-03-05T00:00:00Z",
+        },
+      },
+    },
+    {
+      name: "a narrow marker beats a document-wide one for when, whatever their instants",
+      regions: [
+        resolved(dateRegion("2026-03-01T00:00:00Z", 0, 4)),
+        resolved(dateRegion("2026-03-09T14:30:00Z", 3, 3)),
+      ],
+      expected: {
+        date: {
+          start: "2026-03-01T00:00:00Z",
+          end: "2026-03-09T14:30:00Z",
+          when: "2026-03-09T14:30:00Z",
+        },
+      },
+    },
+    {
+      name: "equally narrow markers tie-break to the earlier hit for when",
+      regions: [
+        resolved(dateRegion("2026-03-07T00:00:00Z", 3, 3)),
+        resolved(dateRegion("2026-03-05T00:00:00Z", 1, 1)),
+      ],
+      expected: {
+        date: {
+          start: "2026-03-05T00:00:00Z",
+          end: "2026-03-07T00:00:00Z",
+          when: "2026-03-05T00:00:00Z",
+        },
+      },
     },
     {
       name: "kinds reduce independently of one another",
@@ -52,7 +92,11 @@ describe("reduceByKind", () => {
       ],
       expected: {
         speaker: ["alice"],
-        date: { start: "2026-03-03T00:00:00Z", end: "2026-03-03T00:00:00Z" },
+        date: {
+          start: "2026-03-03T00:00:00Z",
+          end: "2026-03-03T00:00:00Z",
+          when: "2026-03-03T00:00:00Z",
+        },
       },
     },
     {
@@ -79,17 +123,25 @@ describe("the datetime reducer over values the schema admits", () => {
       resolved(dateRegion("2026-03-02T23:00:00Z", 2, 3)),
     ]
     expect(reduceByKind(regions)).toEqual({
-      date: { start: "2026-03-03T01:00:00+05:00", end: "2026-03-02T23:00:00Z" },
+      date: {
+        start: "2026-03-03T01:00:00+05:00",
+        end: "2026-03-02T23:00:00Z",
+        when: "2026-03-03T01:00:00+05:00",
+      },
     })
   })
 
-  it("never makes an unparseable value an edge", () => {
+  it("never makes an unparseable value an edge or a when", () => {
     const regions = [
       resolved(dateRegion("not a date at all", 0, 1)),
       resolved(dateRegion("2026-03-02T23:00:00Z", 2, 3)),
     ]
     expect(reduceByKind(regions)).toEqual({
-      date: { start: "2026-03-02T23:00:00Z", end: "2026-03-02T23:00:00Z" },
+      date: {
+        start: "2026-03-02T23:00:00Z",
+        end: "2026-03-02T23:00:00Z",
+        when: "2026-03-02T23:00:00Z",
+      },
     })
   })
 })

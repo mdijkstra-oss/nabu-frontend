@@ -9,7 +9,8 @@ export const getSearchEntries = (files: FileStore): SearchEntry[] =>
 export const findSearchById = (files: FileStore, id: string): SearchEntry | undefined =>
   getSearchEntries(files).find((s) => s.id === id)
 
-const byCreatedAtDesc = (a: SearchEntry, b: SearchEntry): number => b.createdAt - a.createdAt
+const byCreatedAtDesc = (a: SearchEntry, b: SearchEntry): number =>
+  b.createdAt.localeCompare(a.createdAt)
 
 export const getRecentSearches = (files: FileStore): SearchEntry[] =>
   getSearchEntries(files)

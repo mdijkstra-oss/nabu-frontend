@@ -3,6 +3,7 @@ import {
   Table,
   Field,
   Float32,
+  Float64,
   Utf8,
   Bool,
   Int32,
@@ -22,6 +23,7 @@ const ARROW_TYPES: Record<DuckDbType, DataType> = {
   TIMESTAMP: new TimestampMillisecond(),
   BOOLEAN: new Bool(),
   INTEGER: new Int32(),
+  DOUBLE: new Float64(),
   "FLOAT[]": FLOAT_LIST,
   "VARCHAR[]": STRING_LIST,
 }

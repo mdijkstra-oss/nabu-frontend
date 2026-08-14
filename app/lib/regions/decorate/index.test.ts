@@ -119,7 +119,11 @@ describe("decorated read path", () => {
     const charts = getBlocks(raw, "json-chart", schemaOf("json-chart"))
 
     expect(charts[0].inferred_meta).toEqual({
-      date: { start: "2026-03-03T00:00:00Z", end: "2026-03-03T00:00:00Z" },
+      date: {
+        start: "2026-03-03T00:00:00Z",
+        end: "2026-03-03T00:00:00Z",
+        when: "2026-03-03T00:00:00Z",
+      },
     })
   })
 
@@ -134,7 +138,11 @@ describe("decorated read path", () => {
     )
 
     expect(readSingleton(raw, "json-attributes").inferred_meta).toEqual({
-      date: { start: "2026-03-01T00:00:00Z", end: "2026-03-09T00:00:00Z" },
+      date: {
+        start: "2026-03-01T00:00:00Z",
+        end: "2026-03-09T00:00:00Z",
+        when: "2026-03-05T00:00:00Z",
+      },
     })
   })
 
@@ -167,7 +175,11 @@ describe("decorated read path", () => {
     const speakerRow = rows.find((r) => r.kind === "speaker")
 
     expect(speakerRow?.inferred_meta).toEqual({
-      date: { start: "2026-03-03T00:00:00Z", end: "2026-03-03T00:00:00Z" },
+      date: {
+        start: "2026-03-03T00:00:00Z",
+        end: "2026-03-03T00:00:00Z",
+        when: "2026-03-03T00:00:00Z",
+      },
     })
   })
 

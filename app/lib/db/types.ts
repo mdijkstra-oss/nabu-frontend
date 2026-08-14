@@ -16,6 +16,7 @@ export type DuckDbType =
   | "TIMESTAMP"
   | "BOOLEAN"
   | "INTEGER"
+  | "DOUBLE"
   | "VARCHAR[]"
   | "FLOAT[]"
 

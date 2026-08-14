@@ -32,7 +32,7 @@
 			"description": "All annotations with blue color",
 			"highlight": "",
 			"saved": false,
-			"createdAt": 1775821756305,
+			"createdAt": "2026-04-10T11:49:16.305Z",
 			"sql": "SELECT file, id, text FROM annotations WHERE color = 'blue'"
 		}
 	]

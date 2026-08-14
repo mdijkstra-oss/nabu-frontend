@@ -211,7 +211,7 @@ const buildCosineBase = (baseSql: string, hyde: HydeQuery): string => {
   const withLanguage = injectLanguageFilter(core, hyde.language)
   return injectSelectColumn(
     withLanguage,
-    `hash, chunkStart, chunkEnd, list_cosine_similarity(embedding, ${vec}) AS ${SCORE_COLUMN}`
+    `hash, chunk_start, chunk_end, list_cosine_similarity(embedding, ${vec}) AS ${SCORE_COLUMN}`
   )
 }
 

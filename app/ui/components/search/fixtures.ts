@@ -51,7 +51,7 @@ export const recentSearches: SearchEntry[] = [
     description: "Passages about seasonal floods and their aftermath",
     highlight: "",
     saved: false,
-    createdAt: 1735000000000,
+    createdAt: "2024-12-24T01:46:40.000Z",
     sql: "",
   },
   {
@@ -60,7 +60,7 @@ export const recentSearches: SearchEntry[] = [
     description: "Where informants describe time through natural cycles",
     highlight: "",
     saved: false,
-    createdAt: 1735100000000,
+    createdAt: "2024-12-25T05:33:20.000Z",
     sql: "",
   },
 ]
@@ -72,7 +72,7 @@ export const savedSearches: SearchEntry[] = [
     description: "Mentions of the ford and who controlled it",
     highlight: "",
     saved: true,
-    createdAt: 1734900000000,
+    createdAt: "2024-12-22T22:00:00.000Z",
     sql: "",
   },
 ]

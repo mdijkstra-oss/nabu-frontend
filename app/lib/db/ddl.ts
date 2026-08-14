@@ -1,4 +1,5 @@
 import type { DuckDbType, DbColumn, TableSchema, JsonSchema } from "./types"
+import { toSnakeCase } from "./naming"
 
 interface TableProjection {
   schemas: TableSchema[]
@@ -7,6 +8,7 @@ interface TableProjection {
 const jsonTypeToDuckDb = (prop: JsonSchema): DuckDbType => {
   if (prop.type === "boolean") return "BOOLEAN"
   if (prop.type === "integer") return "INTEGER"
+  if (prop.type === "number") return "DOUBLE"
   if (prop.type === "string" && prop.format === "date") return "DATE"
   if (prop.type === "string" && prop.format === "date-time") return "TIMESTAMP"
   if (prop.type === "array" && prop.items?.type === "string") return "VARCHAR[]"
@@ -28,7 +30,7 @@ const buildColumns = (schema: JsonSchema, prefix = ""): DbColumn[] => {
 
   for (const [name, prop] of Object.entries(properties)) {
     if (isObjectArray(prop)) continue
-    const colName = prefix ? `${prefix}_${name}` : name
+    const colName = prefix ? `${prefix}_${toSnakeCase(name)}` : toSnakeCase(name)
     if (isNestedObject(prop)) {
       columns.push(...buildColumns(prop, colName))
     } else {
@@ -44,7 +46,7 @@ const buildChildTable = (
   field: string,
   itemSchema: JsonSchema
 ): TableSchema => ({
-  name: `${parentName}_${field}`,
+  name: `${parentName}_${toSnakeCase(field)}`,
   columns: [fileColumn, ...buildColumns(itemSchema)],
 })
 

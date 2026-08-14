@@ -60,7 +60,7 @@ export const SearchEntrySchema = z.object({
   description: z.string(),
   highlight: z.string().default(""),
   saved: z.boolean(),
-  createdAt: z.number(),
+  createdAt: z.iso.datetime(),
   sql: validSql,
   embeddings: EmbeddingsCacheSchema.optional(),
   meta: z.record(z.string(), z.string()).optional(),

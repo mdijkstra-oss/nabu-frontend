@@ -373,10 +373,10 @@ describe("buildCosineQuery", () => {
       ],
     },
     {
-      name: "selects hash, chunkStart, chunkEnd alongside score",
+      name: "selects hash, chunk_start, chunk_end alongside score",
       baseSql: "SELECT f.file, f.text FROM files f",
       hyde: hyde("eng", [0.1]),
-      expectedContains: ["hash, chunkStart, chunkEnd, list_cosine_similarity"],
+      expectedContains: ["hash, chunk_start, chunk_end, list_cosine_similarity"],
     },
     {
       name: "strips existing ORDER BY and LIMIT from base",

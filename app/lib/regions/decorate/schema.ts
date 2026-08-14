@@ -6,13 +6,18 @@ export const INFERRED_META = "inferred_meta"
 export interface DateSpan {
   start: string
   end: string
+  when?: string
 }
 
 export type InferredMetaValue = string[] | DateSpan
 
 export type InferredMeta = Record<string, InferredMetaValue>
 
-const dateSpanSchema = z.object({ start: z.iso.datetime(), end: z.iso.datetime() })
+const dateSpanSchema = z.object({
+  start: z.iso.datetime(),
+  end: z.iso.datetime(),
+  when: z.iso.datetime().optional(),
+})
 
 // Total over the value-type union: a third value type fails typecheck here until a
 // reducer and a column type exist for it.

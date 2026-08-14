@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest"
-import { rejectCase, rejectStringFormatting, rejectSqlPatterns } from "./reject"
+import {
+  rejectCase,
+  rejectConcatOperator,
+  rejectStringFormatting,
+  rejectSqlPatterns,
+} from "./reject"
 
 describe("rejectCase", () => {
   const cases: { name: string; sql: string; rejected: boolean }[] = [
@@ -32,10 +37,25 @@ describe("rejectCase", () => {
   })
 })
 
+describe("rejectConcatOperator", () => {
+  const cases: { name: string; sql: string; rejected: boolean }[] = [
+    { name: "plain select passes", sql: "SELECT file FROM t", rejected: false },
+    { name: "|| concat rejected", sql: "SELECT a || b FROM t", rejected: true },
+    {
+      name: "|| in a join condition rejected",
+      sql: "SELECT x FROM t WHERE a = b || c",
+      rejected: true,
+    },
+  ]
+
+  it.each(cases)("$name", ({ sql, rejected }) => {
+    expect(rejectConcatOperator(sql).length > 0).toBe(rejected)
+  })
+})
+
 describe("rejectStringFormatting", () => {
   const cases: { name: string; sql: string; rejected: boolean; contains?: string }[] = [
     { name: "plain select passes", sql: "SELECT file FROM t", rejected: false },
-    { name: "|| concat passes (not a function)", sql: "SELECT a || b FROM t", rejected: false },
     {
       name: "concat rejected",
       sql: "SELECT concat('File: ', name) FROM t",

@@ -22,7 +22,7 @@ const isUnsaved = (entry: SearchEntry): boolean => !entry.saved
 const rotateUnsaved = (entries: SearchEntry[]): SearchEntry[] => {
   const saved = entries.filter((e) => e.saved)
   const unsaved = entries.filter(isUnsaved)
-  const sorted = [...unsaved].sort((a, b) => b.createdAt - a.createdAt)
+  const sorted = [...unsaved].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   return [...saved, ...sorted.slice(0, MAX_UNSAVED)]
 }
 
@@ -57,7 +57,7 @@ const bumpExisting = (
     e.sql === sql
       ? {
           ...e,
-          createdAt: Date.now(),
+          createdAt: new Date().toISOString(),
           ...(embeddings && { embeddings }),
           ...(meta && { meta }),
         }
@@ -81,7 +81,7 @@ export const saveNewSearch = (data: NewSearchData): string => {
     description: data.description,
     highlight: data.highlight ?? "",
     saved: false,
-    createdAt: Date.now(),
+    createdAt: new Date().toISOString(),
     sql: data.sql,
     ...(data.embeddings && { embeddings: data.embeddings }),
     ...(data.meta && { meta: data.meta }),

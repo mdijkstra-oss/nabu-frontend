@@ -143,10 +143,10 @@ describe("the derived table", () => {
     ["parsed_type", "VARCHAR"],
     ["parsed_value", "VARCHAR"],
     ["quote", "VARCHAR"],
-    ["hitSentence", "INTEGER"],
-    ["startSentence", "INTEGER"],
-    ["endSentence", "INTEGER"],
-    ["rangeHash", "VARCHAR"],
+    ["hit_sentence", "INTEGER"],
+    ["start_sentence", "INTEGER"],
+    ["end_sentence", "INTEGER"],
+    ["range_hash", "VARCHAR"],
   ]
 
   it("is named regions with no tableName override", () => {
@@ -172,8 +172,8 @@ describe("the derived table", () => {
       file: "notes.md",
       kind: "speaker",
       parsed_value: "rutte",
-      startSentence: 0,
-      endSentence: 1,
+      start_sentence: 0,
+      end_sentence: 1,
     })
   })
 
@@ -185,7 +185,11 @@ describe("the derived table", () => {
       hitSentence: 2,
     }
     const [rows] = extractRows("regions", toJsonSchema(regionsProjection()), unresolved, "notes.md")
-    expect(rows.rows[0]).toMatchObject({ startSentence: null, endSentence: null, rangeHash: null })
+    expect(rows.rows[0]).toMatchObject({
+      start_sentence: null,
+      end_sentence: null,
+      range_hash: null,
+    })
   })
 })
 

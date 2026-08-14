@@ -1,4 +1,5 @@
 import type { JsonSchema } from "./types"
+import { toSnakeCase } from "./naming"
 
 interface TableRows {
   table: string
@@ -21,7 +22,7 @@ const flattenScalars = (
 
   for (const [field, prop] of Object.entries(properties)) {
     if (isObjectArray(prop)) continue
-    const key = prefix ? `${prefix}_${field}` : field
+    const key = prefix ? `${prefix}_${toSnakeCase(field)}` : toSnakeCase(field)
     if (isNestedObject(prop)) {
       const nested = (data[field] ?? {}) as Record<string, unknown>
       entries.push(...flattenScalars(prop, nested, key))
@@ -49,7 +50,7 @@ const extractChildRows = (
   itemSchema: JsonSchema,
   filename: string
 ): TableRows => ({
-  table: `${parentName}_${field}`,
+  table: `${parentName}_${toSnakeCase(field)}`,
   rows: items.map((item) => extractScalars(itemSchema, item as Record<string, unknown>, filename)),
 })
 

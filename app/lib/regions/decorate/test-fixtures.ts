@@ -72,7 +72,7 @@ export const chartBlock = (id: string): string =>
       id,
       caption: { label: "Funding" },
       query: "SELECT 1",
-      spec: { type: "bar", x: "a", y: "b", color: "blue" },
+      spec: { type: "axis", x: "a", layers: [{ mark: "bar", y: "b", color: "blue" }] },
     })
   )
 

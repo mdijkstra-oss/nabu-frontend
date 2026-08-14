@@ -21,6 +21,7 @@ const DECORATED_COLUMNS: DbColumn[] = [
   { name: "inferred_meta_speaker", type: "VARCHAR[]", nullable: true },
   { name: "inferred_meta_date_start", type: "TIMESTAMP", nullable: true },
   { name: "inferred_meta_date_end", type: "TIMESTAMP", nullable: true },
+  { name: "inferred_meta_date_when", type: "TIMESTAMP", nullable: true },
 ]
 
 const projectionFor = (language: string): ProjectionConfig => {
@@ -93,6 +94,9 @@ describe("decorated rows", () => {
     expect(coerceValue("TIMESTAMP", rows[0].inferred_meta_date_end)).toEqual(
       new Date("2026-03-03T00:00:00Z")
     )
+    expect(coerceValue("TIMESTAMP", rows[0].inferred_meta_date_when)).toEqual(
+      new Date("2026-03-03T00:00:00Z")
+    )
   })
 
   it("counts one row per chart block", () => {
@@ -116,6 +120,7 @@ describe("an undecorated row", () => {
     inferred_meta_speaker: null,
     inferred_meta_date_start: null,
     inferred_meta_date_end: null,
+    inferred_meta_date_when: null,
   }
 
   const inAGap = [
@@ -209,6 +214,9 @@ describe("the attributes row's document span", () => {
       new Date("2026-03-01T00:00:00Z")
     )
     expect(coerceValue("TIMESTAMP", rows[0].inferred_meta_date_end)).toEqual(
+      new Date("2026-03-05T00:00:00Z")
+    )
+    expect(coerceValue("TIMESTAMP", rows[0].inferred_meta_date_when)).toEqual(
       new Date("2026-03-05T00:00:00Z")
     )
   })

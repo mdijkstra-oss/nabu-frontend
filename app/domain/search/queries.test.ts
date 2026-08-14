@@ -7,7 +7,7 @@ describe("buildRegionSearch", () => {
 
   it("filters the regions table on kind and value", () => {
     expect(search.sql).toBe(
-      "SELECT file, quote AS text, startSentence, endSentence FROM regions WHERE kind = 'speaker' AND parsed_value = 'rutte' ORDER BY file, startSentence"
+      "SELECT file, quote AS text, start_sentence, end_sentence FROM regions WHERE kind = 'speaker' AND parsed_value = 'rutte' ORDER BY file, start_sentence"
     )
   })
 

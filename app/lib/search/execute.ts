@@ -20,14 +20,14 @@ const numberColumn = (value: unknown): number | undefined =>
   value === undefined || value === null ? undefined : Number(value)
 
 const toHit = (row: RawRow): SearchHit => {
-  const startSentence = numberColumn(row.startSentence)
-  const endSentence = numberColumn(row.endSentence)
+  const startSentence = numberColumn(row.start_sentence)
+  const endSentence = numberColumn(row.end_sentence)
   return {
     file: String(row.file),
     ...(row.id !== undefined ? { id: String(row.id) } : {}),
     ...(row.text !== undefined ? { text: String(row.text) } : {}),
-    ...(row.chunkStart !== undefined ? { chunkStart: Number(row.chunkStart) } : {}),
-    ...(row.chunkEnd !== undefined ? { chunkEnd: Number(row.chunkEnd) } : {}),
+    ...(row.chunk_start !== undefined ? { chunkStart: Number(row.chunk_start) } : {}),
+    ...(row.chunk_end !== undefined ? { chunkEnd: Number(row.chunk_end) } : {}),
     ...(startSentence !== undefined ? { startSentence } : {}),
     ...(endSentence !== undefined ? { endSentence } : {}),
   }
@@ -57,8 +57,8 @@ const toScoredChunk = (row: RawRow): ScoredChunk => ({
   text: row.text !== undefined ? String(row.text) : undefined,
   hash: row.hash !== undefined ? String(row.hash) : undefined,
   score: Number(row._semantic_score ?? 0),
-  chunkStart: row.chunkStart !== undefined ? Number(row.chunkStart) : undefined,
-  chunkEnd: row.chunkEnd !== undefined ? Number(row.chunkEnd) : undefined,
+  chunkStart: row.chunk_start !== undefined ? Number(row.chunk_start) : undefined,
+  chunkEnd: row.chunk_end !== undefined ? Number(row.chunk_end) : undefined,
 })
 
 const runScoredQuery = async (

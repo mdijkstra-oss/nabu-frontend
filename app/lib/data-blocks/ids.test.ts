@@ -182,7 +182,7 @@ describe("collectAllEntityIds", () => {
       id,
       caption: { label: "Test Chart" },
       query: "SELECT 1",
-      spec: { type: "bar", x: "month", y: "value", color: "blue" },
+      spec: { type: "axis", x: "month", layers: [{ mark: "bar", y: "value", color: "blue" }] },
     })
 
   const makeAnnotations = (
@@ -197,7 +197,7 @@ describe("collectAllEntityIds", () => {
       description: string
       sql: string
       saved: boolean
-      createdAt: number
+      createdAt: string
     }[]
   ) => JSON.stringify({ tags, searches, corpusDescriptions: [] })
 
@@ -266,7 +266,7 @@ describe("collectAllEntityIds", () => {
                 description: "test",
                 sql: "SELECT 1",
                 saved: true,
-                createdAt: 1000,
+                createdAt: "1970-01-01T00:00:01.000Z",
               },
             ]
           )

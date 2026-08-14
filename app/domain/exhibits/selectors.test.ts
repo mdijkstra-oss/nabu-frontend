@@ -1,38 +1,72 @@
 import { describe, it, expect } from "vitest"
 import { inferChartSubtype, collectExhibits, groupByKind } from "./selectors"
-import type { ChartType } from "~/lib/chart/types"
+import type { ChartLayer, ChartSpec, LayerMark } from "~/lib/chart/types"
 import type { ChartSubtype, ExhibitItem, ExhibitKind } from "./types"
+
+const axisLayer = (mark: LayerMark): ChartLayer =>
+  mark === "line" || mark === "scatter"
+    ? { mark, y: "count", color: "blue", axis: "left" }
+    : { mark, y: "count", color: "blue", stack: false, axis: "left" }
+
+const axisSpec = (mark: LayerMark): ChartSpec => ({
+  type: "axis",
+  x: "month",
+  orientation: "vertical",
+  layers: [axisLayer(mark)],
+})
 
 describe("inferChartSubtype", () => {
   interface Case {
-    type: ChartType
+    name: string
+    spec: ChartSpec
     expected: ChartSubtype
   }
 
   const cases: Case[] = [
-    { type: "bar", expected: "bar" },
-    { type: "stacked-bar", expected: "bar" },
-    { type: "grouped-bar", expected: "bar" },
-    { type: "line", expected: "line" },
-    { type: "area", expected: "line" },
-    { type: "pie", expected: "pie" },
-    { type: "treemap", expected: "pie" },
-    { type: "scatter", expected: "scatter" },
-    { type: "heatmap", expected: "other" },
+    { name: "axis with bar first layer", spec: axisSpec("bar"), expected: "bar" },
+    { name: "axis with line first layer", spec: axisSpec("line"), expected: "line" },
+    { name: "axis with area first layer", spec: axisSpec("area"), expected: "line" },
+    { name: "axis with scatter first layer", spec: axisSpec("scatter"), expected: "scatter" },
+    {
+      name: "pie",
+      spec: { type: "pie", label: "region", value: "total", color: "blue" },
+      expected: "pie",
+    },
+    {
+      name: "treemap",
+      spec: { type: "treemap", label: "region", value: "total", color: "blue" },
+      expected: "pie",
+    },
+    {
+      name: "heatmap",
+      spec: { type: "heatmap", x: "document", y: "code", value: "n", color: "blue" },
+      expected: "other",
+    },
   ]
 
-  it.each(cases)("$type → $expected", ({ type, expected }) => {
-    expect(inferChartSubtype(type)).toBe(expected)
+  it.each(cases)("$name → $expected", ({ spec, expected }) => {
+    expect(inferChartSubtype(spec)).toBe(expected)
   })
 })
 
 describe("collectExhibits", () => {
-  const axisChartBlock = (id: string, title: string, type: ChartType) =>
+  const axisChartBlock = (id: string, title: string, mark: LayerMark, { stack = false } = {}) =>
     JSON.stringify({
       id,
       caption: { label: title },
       query: "SELECT 1",
-      spec: { type, x: "month", y: "revenue", color: "blue" },
+      spec: {
+        type: "axis",
+        x: "month",
+        layers: [
+          {
+            mark,
+            y: "revenue",
+            color: "blue",
+            ...(mark === "bar" || mark === "area" ? { stack } : {}),
+          },
+        ],
+      },
     })
 
   const wrapInDocument = (chartJson: string) =>
@@ -77,13 +111,13 @@ describe("collectExhibits", () => {
       check: (exhibits) => expect(exhibits).toEqual([]),
     },
     {
-      name: "maps stacked-bar and area to their canonical subtypes",
+      name: "maps stacked bar and area layers to their canonical subtypes",
       files: {
         "multi.md": [
           "# Multi chart doc",
           "",
           "```json-chart",
-          axisChartBlock("chart-a", "First", "stacked-bar"),
+          axisChartBlock("chart-a", "First", "bar", { stack: true }),
           "```",
           "",
           "```json-chart",

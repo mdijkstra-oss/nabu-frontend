@@ -17,13 +17,19 @@ const distinctValues: Reducer = (regions) => {
 // disagree. A value that is not a timestamp at all sorts last and never becomes an edge.
 const byInstant = (a: string, b: string): number => Date.parse(a) - Date.parse(b)
 
+const rangeWidth = (r: ResolvedRegionRow): number => r.endSentence - r.startSentence
+
+// The narrowest marker is the most specific evidence for the row's own moment: a
+// timestamp governing three sentences beats a document date governing all of them.
+const bySpecificity = (a: ResolvedRegionRow, b: ResolvedRegionRow): number =>
+  rangeWidth(a) - rangeWidth(b) || a.hitSentence - b.hitSentence
+
 const span: Reducer = (regions) => {
-  const instants = regions
-    .map((region) => region.parsed.value)
-    .filter((value) => !Number.isNaN(Date.parse(value)))
-    .sort(byInstant)
-  if (instants.length === 0) return undefined
-  return { start: instants[0], end: instants[instants.length - 1] }
+  const dated = regions.filter((r) => !Number.isNaN(Date.parse(r.parsed.value)))
+  if (dated.length === 0) return undefined
+  const instants = dated.map((r) => r.parsed.value).sort(byInstant)
+  const narrowest = [...dated].sort(bySpecificity)[0]
+  return { start: instants[0], end: instants[instants.length - 1], when: narrowest.parsed.value }
 }
 
 // Total over the value-type union, which is what keeps a kind's values reducible.

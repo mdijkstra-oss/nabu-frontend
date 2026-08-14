@@ -21,7 +21,7 @@ export interface RegionSearchTarget {
 export const buildRegionSearch = ({ kind, value, label }: RegionSearchTarget): NewSearchData => ({
   title: kindTitle(kind, label),
   description: `Passages where ${kind} is ${label}`,
-  sql: `SELECT file, quote AS text, startSentence, endSentence FROM regions WHERE kind = '${escapeSqlString(kind)}' AND parsed_value = '${escapeSqlString(value)}' ORDER BY file, startSentence`,
+  sql: `SELECT file, quote AS text, start_sentence, end_sentence FROM regions WHERE kind = '${escapeSqlString(kind)}' AND parsed_value = '${escapeSqlString(value)}' ORDER BY file, start_sentence`,
 })
 
 const buildCandidateFilename = (codeId: string): string => `${codeId}.generated.hidden.md`

@@ -45,6 +45,15 @@ const extractStringFunctions = (sql: string): string[] => {
   return [...found]
 }
 
+const CONCAT_OPERATOR_RE = /\|\|/
+
+export const rejectConcatOperator = (sql: string): string[] => {
+  if (!CONCAT_OPERATOR_RE.test(sql)) return []
+  return [
+    "The || concatenation operator is not allowed in data queries. Output columns as-is — the renderer resolves labels, colors, and links from entity properties.",
+  ]
+}
+
 export const rejectStringFormatting = (sql: string): string[] => {
   const found = extractStringFunctions(sql)
   if (found.length === 0) return []
