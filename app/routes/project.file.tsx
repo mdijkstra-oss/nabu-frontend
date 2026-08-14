@@ -7,6 +7,8 @@ import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { getTagDisplay } from "~/domain/data-blocks/settings/tags/selectors"
 import { selectedFiles } from "~/domain/data-blocks/ux/selectors"
 import { buildSelectionEntry } from "~/domain/search/selection-search"
+import { buildRegionSearch } from "~/domain/search/queries"
+import type { RenderableRegion } from "~/lib/editor/regions/types"
 import { saveNewSearch } from "~/lib/agent/tools/search/settings"
 import { updateFileRaw, renameFile, deleteFile, schedulePersist, getFiles } from "~/lib/files/store"
 import {
@@ -75,6 +77,14 @@ export default function ProjectFile() {
     const id = saveNewSearch(buildSelectionEntry(ids))
     navigate(`/project/${params.projectId}/search/${id}`)
   }, [files, currentFile, params.projectId, navigate])
+
+  const handleRegionSearch = useCallback(
+    (region: RenderableRegion) => {
+      const id = saveNewSearch(buildRegionSearch(region))
+      navigate(`/project/${params.projectId}/search/${id}`)
+    },
+    [params.projectId, navigate]
+  )
 
   const tagDefMap = useMemo(() => new Map(tagDefinitions.map((d) => [d.id, d])), [tagDefinitions])
   const tags = useMemo(() => {
@@ -176,6 +186,7 @@ export default function ProjectFile() {
             availableTags={sortTagsByDisplay(tagDefinitions)}
             onToggleTag={handleToggleTag}
             onChange={handleEditorChange}
+            onRegionSearch={handleRegionSearch}
             // preferences.md is hardcoded (REQUIRED_FILES, agent memory): renaming
             // it strands the next boot in waitForRequiredFiles. Hidden files open
             // editable in debug expanded mode, but their title strips ".hidden",

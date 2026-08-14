@@ -24,6 +24,7 @@ import {
 } from "~/domain/data-blocks/attributes/topics/selectors"
 import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
+import type { RegionSearchHandler } from "~/lib/editor/regions/plugin"
 import type { DebugOptions } from "./debug-config"
 import { cn } from "~/ui/utils"
 
@@ -43,6 +44,7 @@ interface DocumentBubbleProps {
   onToggleTag?: (tagId: string, enabled: boolean) => void
   onClick?: () => void
   onChange?: (markdown: string) => void
+  onRegionSearch?: RegionSearchHandler
   onRenameTitle?: (title: string) => void
   className?: string
 }
@@ -63,6 +65,7 @@ export const DocumentBubble = ({
   onToggleTag,
   onClick,
   onChange,
+  onRegionSearch,
   onRenameTitle,
   className,
 }: DocumentBubbleProps) => {
@@ -139,6 +142,7 @@ export const DocumentBubble = ({
                 debugOptions={debugOptions}
                 spotlight={spotlight}
                 filePath={filename}
+                onRegionSearch={onRegionSearch}
                 // JSON files are shown wrapped in a code fence (formatContent), so
                 // their serialized markdown is not the raw file — never write it back.
                 onChange={isJsonFile(filename) ? undefined : onChange}

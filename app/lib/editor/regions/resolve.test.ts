@@ -12,6 +12,7 @@ const region = (overrides: Partial<RenderableRegion> & { quote: string }): Rende
   kind: "speaker",
   kindOrder: 0,
   label: "Rutte",
+  value: "rutte",
   colour: "indigo",
   icon: "mic",
   hitSentence: 0,

@@ -11,6 +11,18 @@ export const buildFlaggedSearch = (codeId: string, title: string): NewSearchData
 
 export const escapeSqlString = (s: string): string => s.replace(/'/g, "''")
 
+export interface RegionSearchTarget {
+  kind: string
+  value: string
+  label: string
+}
+
+export const buildRegionSearch = ({ kind, value, label }: RegionSearchTarget): NewSearchData => ({
+  title: label,
+  description: `Passages where ${kind} is ${label}`,
+  sql: `SELECT file, quote AS text, startSentence, endSentence FROM regions WHERE kind = '${escapeSqlString(kind)}' AND parsed_value = '${escapeSqlString(value)}' ORDER BY file, startSentence`,
+})
+
 const buildCandidateFilename = (codeId: string): string => `${codeId}.generated.hidden.md`
 
 export const buildCandidateSearch = (codeId: string): NewSearchData => ({

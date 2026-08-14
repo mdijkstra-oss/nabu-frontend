@@ -16,13 +16,22 @@ type RawRow = Record<string, unknown>
 
 const hasFileColumn = (row: RawRow): boolean => "file" in row
 
-const toHit = (row: RawRow): SearchHit => ({
-  file: String(row.file),
-  ...(row.id !== undefined ? { id: String(row.id) } : {}),
-  ...(row.text !== undefined ? { text: String(row.text) } : {}),
-  ...(row.chunkStart !== undefined ? { chunkStart: Number(row.chunkStart) } : {}),
-  ...(row.chunkEnd !== undefined ? { chunkEnd: Number(row.chunkEnd) } : {}),
-})
+const numberColumn = (value: unknown): number | undefined =>
+  value === undefined || value === null ? undefined : Number(value)
+
+const toHit = (row: RawRow): SearchHit => {
+  const startSentence = numberColumn(row.startSentence)
+  const endSentence = numberColumn(row.endSentence)
+  return {
+    file: String(row.file),
+    ...(row.id !== undefined ? { id: String(row.id) } : {}),
+    ...(row.text !== undefined ? { text: String(row.text) } : {}),
+    ...(row.chunkStart !== undefined ? { chunkStart: Number(row.chunkStart) } : {}),
+    ...(row.chunkEnd !== undefined ? { chunkEnd: Number(row.chunkEnd) } : {}),
+    ...(startSentence !== undefined ? { startSentence } : {}),
+    ...(endSentence !== undefined ? { endSentence } : {}),
+  }
+}
 
 export const executeSearch = async (
   db: Database,

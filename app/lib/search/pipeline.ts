@@ -4,8 +4,9 @@
 //   capStage             → SearchHit[]   (Stage 2)  [skipCap]                 cap per file (limiting, not merging)
 //   mergeStage           → SearchHit[]   (Stage 3)  [skipMerge]               seed-and-grow (score-ratio gate) + reslice from source
 //   verdict              → SearchHit[]   (Stage 4)  [skipFilter]              per-batch: scout[skipScoutFilter] → semantic-filter
-//   trim                 → SearchHit[]   (Stage 5)  [skipTrim]                trim within hit.text using matchRanges
-//   extendForAnnotations → SearchHit[]   (Stage 6)  [skipAnnotationExtend]    grow byte range to swallow overlapping annotations + append `json-annotations` block to text
+//   resolveSentenceHits  → SearchHit[]   (Stage 5)                            hits carrying a sentence range (regions rows) become chunk hits with byte offsets + sliced text
+//   trim                 → SearchHit[]   (Stage 6)  [skipTrim]                trim within hit.text using matchRanges
+//   extendForAnnotations → SearchHit[]   (Stage 7)  [skipAnnotationExtend]    grow byte range to swallow overlapping annotations + append `json-annotations` block to text
 //
 // Each stage lives in its own file. Toggles short-circuit a stage to a pass-through.
 // verdict is the only async/batched/streaming step; per-batch tail (trim → extend) fires via onResults.
@@ -25,6 +26,7 @@ import { capStage } from "./cap"
 import { mergeStage } from "./merge"
 import { verdict, FILTER_ITEM_CAP } from "./verdict"
 import { trim } from "./trim"
+import { resolveSentenceHits } from "./resolve-sentences"
 import { extendRegionsForAnnotations } from "./extend-annotations"
 import { isDebugOn } from "~/lib/debug/options"
 import { yieldToBrowser } from "~/lib/utils/async"
@@ -91,7 +93,7 @@ const applyTrim = unlessDebug("skipTrim", trim)
 const applyExtend = unlessDebug("skipAnnotationExtend", extendRegionsForAnnotations)
 
 const tail = (hits: SearchHit[], files: FileStore): SearchHit[] =>
-  applyExtend(applyTrim(hits, files), files)
+  applyExtend(applyTrim(resolveSentenceHits(hits, files), files), files)
 
 const runVerdictWithTail = async (
   hits: SearchHit[],

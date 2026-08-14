@@ -31,6 +31,7 @@ const region = (index: number, quote: string, sentence: number): RenderableRegio
   kind: "speaker",
   kindOrder: 0,
   label: "rutte",
+  value: "rutte",
   colour: "indigo",
   icon: "mic",
   quote,

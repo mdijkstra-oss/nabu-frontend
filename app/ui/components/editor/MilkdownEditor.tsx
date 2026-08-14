@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core"
 import { commonmark } from "@milkdown/kit/preset/commonmark"
 import { gfm } from "@milkdown/kit/preset/gfm"
@@ -19,7 +19,11 @@ import { $prose, replaceAll } from "@milkdown/utils"
 import { Plugin, PluginKey } from "prosemirror-state"
 import { createAnnotationsPlugin, annotationsMeta } from "~/lib/editor/annotations/plugin"
 import { createSpotlightPlugin, spotlightMeta } from "~/lib/editor/spotlight/plugin"
-import { createRegionsPlugin, regionsMeta } from "~/lib/editor/regions/plugin"
+import {
+  createRegionsPlugin,
+  regionsMeta,
+  type RegionSearchHandler,
+} from "~/lib/editor/regions/plugin"
 import { createSelectionPlugin } from "~/lib/editor/selection/plugin"
 import { createHiddenBlocksPlugin } from "~/lib/editor/hidden-blocks/plugin"
 import { createPlaceholderPlugin } from "~/lib/editor/placeholder/plugin"
@@ -59,6 +63,7 @@ interface MilkdownEditorCoreProps {
   spotlight: Spotlight | Spotlight[] | null
   filePath?: string
   onChange?: (markdown: string) => void
+  onRegionSearch?: RegionSearchHandler
 }
 
 const MilkdownEditorCore = ({
@@ -68,12 +73,24 @@ const MilkdownEditorCore = ({
   spotlight,
   filePath,
   onChange,
+  onRegionSearch,
 }: MilkdownEditorCoreProps) => {
   const { files } = useFiles()
   const nodeViewFactory = useNodeViewFactory()
   const widgetViewFactory = useWidgetViewFactory()
+  const onRegionSearchRef = useRef(onRegionSearch)
+  useEffect(() => {
+    onRegionSearchRef.current = onRegionSearch
+  }, [onRegionSearch])
+  const emitRegionSearch: RegionSearchHandler = useCallback(
+    (region) => onRegionSearchRef.current?.(region),
+    []
+  )
   const annotationsPlugin = $prose(() => createAnnotationsPlugin())
-  const regionsPlugin = $prose(() => createRegionsPlugin(widgetViewFactory))
+  // eslint-disable-next-line react-hooks/refs -- the handler fires on DOM click, never during render
+  const regionsPlugin = $prose(() =>
+    createRegionsPlugin(widgetViewFactory, onRegionSearch ? emitRegionSearch : undefined)
+  )
   const spotlightPlugin = $prose(() => createSpotlightPlugin())
   const selectionPlugin = $prose(() => createSelectionPlugin(filePath ?? null))
   const hiddenBlocksPlugin = $prose(() => createHiddenBlocksPlugin())
@@ -183,6 +200,7 @@ interface MilkdownEditorProps {
   spotlight?: Spotlight | Spotlight[] | null
   filePath?: string
   onChange?: (markdown: string) => void
+  onRegionSearch?: RegionSearchHandler
 }
 
 export const MilkdownEditor = ({
@@ -193,6 +211,7 @@ export const MilkdownEditor = ({
   spotlight = null,
   filePath,
   onChange,
+  onRegionSearch,
 }: MilkdownEditorProps) => {
   const containerClass = readOnly
     ? "w-full text-default-font"
@@ -208,6 +227,7 @@ export const MilkdownEditor = ({
             spotlight={spotlight}
             filePath={filePath}
             onChange={onChange}
+            onRegionSearch={onRegionSearch}
           />
         </ProsemirrorAdapterProvider>
       </MilkdownProvider>

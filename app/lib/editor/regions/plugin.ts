@@ -50,8 +50,31 @@ const hover = (view: EditorView, index: number | null): boolean => {
   return false
 }
 
-export const createRegionsPlugin = (widgetViewFactory: WidgetViewFactory): Plugin => {
+const isIconTarget = (target: EventTarget | null): boolean =>
+  target instanceof Element && target.closest("[data-region-icon]") !== null
+
+const regionAt = (view: EditorView, index: number | null): RenderableRegion | null => {
+  if (index === null) return null
+  const input = getPluginInput<RegionsInput>(pluginKey, view.state)
+  return input?.regions.find((r) => r.index === index) ?? null
+}
+
+export type RegionSearchHandler = (region: RenderableRegion) => void
+
+export const createRegionsPlugin = (
+  widgetViewFactory: WidgetViewFactory,
+  onSearch?: RegionSearchHandler
+): Plugin => {
   const widget = widgetViewFactory({ as: "span", component: RegionIcon })
+
+  const searchClick = (view: EditorView, event: MouseEvent): boolean => {
+    if (!onSearch || !isIconTarget(event.target)) return false
+    const region = regionAt(view, regionIndexAt(event.target))
+    if (!region) return false
+    onSearch(region)
+    return true
+  }
+
   return createDecorationPlugin<RegionsInput, RegionsMessage>({
     key: pluginKey,
     initial: EMPTY_INPUT,
@@ -61,12 +84,14 @@ export const createRegionsPlugin = (widgetViewFactory: WidgetViewFactory): Plugi
         doc,
         resolveRegions(doc, input.sentences, input.regions),
         input.hovered,
-        widget
+        widget,
+        onSearch !== undefined
       ),
     props: {
       handleDOMEvents: {
         mouseover: (view, event) => hover(view, regionIndexAt(event.target)),
         mouseout: (view, event) => hover(view, regionIndexAt(event.relatedTarget)),
+        click: searchClick,
       },
     },
   })

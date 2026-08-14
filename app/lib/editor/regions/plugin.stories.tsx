@@ -68,7 +68,7 @@ const proseMirror = async (root: HTMLElement): Promise<HTMLElement> =>
   })
 
 const labelsFor = (root: HTMLElement, index: number): HTMLElement[] =>
-  Array.from(root.querySelectorAll<HTMLElement>(`[data-region-index="${index}"]`))
+  Array.from(root.querySelectorAll<HTMLElement>(`.region-label[data-region-index="${index}"]`))
 
 const labelText = (root: HTMLElement, index: number): string =>
   labelsFor(root, index)
@@ -77,7 +77,9 @@ const labelText = (root: HTMLElement, index: number): string =>
 
 const awaitLabels = async (root: HTMLElement, count: number): Promise<HTMLElement[]> =>
   waitFor(() => {
-    const labels = Array.from(root.querySelectorAll<HTMLElement>("[data-region-index]"))
+    const labels = Array.from(
+      root.querySelectorAll<HTMLElement>(".region-label[data-region-index]")
+    )
     expect(labels.length).toBe(count)
     return labels
   })
@@ -143,6 +145,39 @@ export const OneRegion: Story = {
     await userEvent.unhover(label)
     await userEvent.hover(blockOf(editor, "This is great"))
     await waitFor(() => expect(tintedText(editor)).toBe(""))
+  },
+}
+
+const searchIconIn = async (root: HTMLElement): Promise<HTMLElement> =>
+  waitFor(() => {
+    const el = root.querySelector<HTMLElement>("[data-region-search]")
+    if (!el) throw new Error("no search icon shown")
+    return el
+  })
+
+export const SearchOnHoveredIcon: Story = {
+  ...editorStory(ONE_REGION),
+  args: { ...editorStory(ONE_REGION).args, onRegionSearch: fn() },
+  play: async ({ canvasElement, args }) => {
+    const editor = await proseMirror(canvasElement)
+    await awaitLabels(editor, 1)
+
+    expect(editor.querySelector("[data-region-search]")).toBeNull()
+
+    await userEvent.hover(labelsFor(editor, 0)[0])
+    const icon = await searchIconIn(editor)
+    expect(icon.getAttribute("aria-label")).toBe("Search speaker: rutte")
+
+    await userEvent.click(icon)
+    const onRegionSearch = args.onRegionSearch as ReturnType<typeof fn>
+    await waitFor(() => expect(onRegionSearch.mock.calls.length).toBe(1))
+    const region = onRegionSearch.mock.calls[0][0]
+    expect(region.kind).toBe("speaker")
+    expect(region.value).toBe("rutte")
+
+    await userEvent.unhover(icon)
+    await userEvent.hover(blockOf(editor, "This is great"))
+    await waitFor(() => expect(editor.querySelector("[data-region-search]")).toBeNull())
   },
 }
 

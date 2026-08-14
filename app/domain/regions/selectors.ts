@@ -24,6 +24,7 @@ const toRenderable = (row: ResolvedRegionRow, index: number): RenderableRegion |
     kind: kind.id,
     kindOrder: declarationOrder.get(kind.id) ?? 0,
     label: displayValue(kind, row.parsed.value),
+    value: row.parsed.value,
     colour: kind.color,
     icon: kind.icon,
     quote: row.quote,

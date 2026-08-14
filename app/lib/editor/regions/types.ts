@@ -3,6 +3,7 @@ export interface RenderableRegion {
   kind: string
   kindOrder: number
   label: string
+  value: string
   colour: string
   icon: string
   quote: string

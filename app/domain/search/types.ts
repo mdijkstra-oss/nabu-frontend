@@ -25,6 +25,8 @@ export const SearchHitSchema = z.object({
     .optional(),
   chunkStart: z.number().int().optional(),
   chunkEnd: z.number().int().optional(),
+  startSentence: z.number().int().optional(),
+  endSentence: z.number().int().optional(),
 })
 
 export type SearchHit = z.infer<typeof SearchHitSchema>

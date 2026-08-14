@@ -58,15 +58,21 @@ const toIconDecoration = (
   resolved: ResolvedRegion,
   side: number,
   muted: boolean,
-  atBlockStart: boolean
+  atBlockStart: boolean,
+  hovered: boolean,
+  searchable: boolean
 ): Decoration =>
   widget(resolved.labelFrom, {
     side,
+    index: resolved.region.index,
     kind: resolved.region.kind,
+    label: resolved.region.label,
     icon: resolved.region.icon,
     colour: resolved.region.colour,
     muted,
     atBlockStart,
+    hovered,
+    searchable,
   })
 
 const hoveredIn = (resolved: ResolvedRegion[], hovered: number | null): ResolvedRegion[] =>
@@ -81,7 +87,8 @@ export const createRegionDecorations = (
   doc: Node,
   resolved: ResolvedRegion[],
   hovered: number | null,
-  widget: WidgetDecorationFactory
+  widget: WidgetDecorationFactory,
+  searchable: boolean
 ): DecorationSet => {
   const hoveredRegions = hoveredIn(resolved, hovered)
   const muted = resolved.map((r) => insideHovered(hoveredRegions, r))
@@ -90,7 +97,15 @@ export const createRegionDecorations = (
     ...hoveredRegions.map(toTintDecoration),
     ...resolved.map((r, i) => toLabelDecoration(r, muted[i])),
     ...resolved.map((r, i) =>
-      toIconDecoration(widget, r, sides[i], muted[i], doc.resolve(r.labelFrom).parentOffset === 0)
+      toIconDecoration(
+        widget,
+        r,
+        sides[i],
+        muted[i],
+        doc.resolve(r.labelFrom).parentOffset === 0,
+        r.region.index === hovered,
+        searchable
+      )
     ),
   ])
 }
