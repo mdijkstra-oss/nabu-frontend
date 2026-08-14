@@ -10,6 +10,7 @@ import type { TagDefinition } from "~/domain/data-blocks/settings/schema"
 import { toDisplayName } from "~/lib/files/filename"
 import { getTags } from "~/domain/data-blocks/attributes/tags/selectors"
 import { getFileDate } from "~/domain/data-blocks/attributes/date/selectors"
+import { getRenderableRegionMarks, type RenderableRegions } from "~/domain/regions/selectors"
 import { findTagDefinitionById } from "~/domain/data-blocks/settings/tags/selectors"
 import {
   spotlightFromText,
@@ -63,18 +64,26 @@ export const SearchSlicePreview = ({
   text,
   filePath,
   spotlights,
+  regions,
   debug,
   onNavigate,
 }: {
   text: string
   filePath: string
   spotlights: Spotlight[] | null
+  regions?: RenderableRegions
   debug?: SliceDebug
   onNavigate?: () => void
 }) => (
   <div className="group/hit relative w-full pr-9">
     <div className="flex min-w-0 flex-col gap-2">
-      <MilkdownEditor content={text} readOnly filePath={filePath} spotlight={spotlights} />
+      <MilkdownEditor
+        content={text}
+        readOnly
+        filePath={filePath}
+        spotlight={spotlights}
+        regions={regions}
+      />
       {debug && debug.score !== undefined && (
         <div className="px-1 text-[12px] font-mono font-bold text-neutral-700">
           score: {debug.score.toFixed(4)}
@@ -136,13 +145,24 @@ export interface RunGroupCardProps {
   tags: TagDefinition[]
   hits: SearchHit[]
   hitCount: number
+  regions?: RenderableRegions
   debug?: SliceDebug
   onOpenFile: () => void
   onNavigateHit: (hit: SearchHit) => void
 }
 
 export const RunGroupCard = memo(
-  ({ title, date, tags, hits, hitCount, debug, onOpenFile, onNavigateHit }: RunGroupCardProps) => (
+  ({
+    title,
+    date,
+    tags,
+    hits,
+    hitCount,
+    regions,
+    debug,
+    onOpenFile,
+    onNavigateHit,
+  }: RunGroupCardProps) => (
     <div className="flex w-full flex-col items-start rounded-[14px] border border-solid border-neutral-border bg-default-background">
       <FileHeader
         className="px-6 py-4"
@@ -169,6 +189,7 @@ export const RunGroupCard = memo(
                 text={hit.text}
                 filePath={hit.file}
                 spotlights={hit.matches ? matchesToSpotlights(hit.matches) : null}
+                regions={regions}
                 debug={debug && sliceDebugFor(debug, hit)}
                 onNavigate={() => onNavigateHit(hit)}
               />
@@ -199,6 +220,7 @@ export const ConnectedRunGroupCard = ({
 }: ConnectedRunGroupCardProps) => {
   const content = files[group.file] ?? ""
   const tags = useMemo(() => resolveFileTags(files, content), [files, content])
+  const regions = useMemo(() => getRenderableRegionMarks(content), [content])
   const detailHits = useMemo(() => group.hits.filter((h) => !hitIsFileOnly(h)), [group.hits])
   const onOpenFile = useCallback(
     () => onNavigate?.(buildFileUrl(projectId, group.file)),
@@ -216,6 +238,7 @@ export const ConnectedRunGroupCard = ({
       tags={tags}
       hits={detailHits}
       hitCount={detailHits.length}
+      regions={regions}
       debug={debug}
       onOpenFile={onOpenFile}
       onNavigateHit={onNavigateHit}

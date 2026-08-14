@@ -34,6 +34,20 @@ const toRenderable = (row: ResolvedRegionRow, index: number): RenderableRegion |
   }
 }
 
+// Marks only: each region collapses to its hit sentence, so hovering one in a
+// context that shows a fragment (a search snippet) never highlights a long range.
+export const getRenderableRegionMarks = (raw: string): RenderableRegions => {
+  const { regions, sentences } = getRenderableRegions(raw)
+  return {
+    regions: regions.map((r) => ({
+      ...r,
+      startSentence: r.hitSentence,
+      endSentence: r.hitSentence,
+    })),
+    sentences,
+  }
+}
+
 export const getRenderableRegions = (raw: string): RenderableRegions => {
   const { regions, sentences } = resolveDocumentRegions(raw)
   const rows = regions.filter(isResolved)

@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, waitFor } from "storybook/test"
 import { withRouter, withSeededFiles, withSize } from "../../../../.storybook/decorators"
+import { getRenderableRegionMarks } from "~/domain/regions/selectors"
+import { indexFileSentences } from "~/lib/text/halo"
 import { SearchSlicePreview } from "./cards"
 import { detailHits } from "./fixtures"
 
@@ -57,5 +59,57 @@ export const WithoutNavigate: Story = {
   },
   play: async ({ canvasElement }) => {
     expect(canvasElement.querySelector(".lucide-locate-fixed")).toBeNull()
+  },
+}
+
+const TRANSCRIPT_SNIPPET = "Rutte: yeah, it was quite the event.\n\nThe room was full of people."
+
+const TRANSCRIPT_PROSE = [
+  "# Interview transcript",
+  "",
+  TRANSCRIPT_SNIPPET,
+  "",
+  "This is great, said Rutte.",
+  "",
+].join("\n")
+
+const sentenceIndex = (needle: string): number =>
+  indexFileSentences(TRANSCRIPT_PROSE).findIndex((s) => s.text.includes(needle))
+
+const TRANSCRIPT_FILE =
+  TRANSCRIPT_PROSE +
+  [
+    "",
+    "```json-regions",
+    JSON.stringify({
+      regions: [
+        {
+          kind: "speaker",
+          parsed: { type: "string", value: "rutte" },
+          quote: "Rutte",
+          hitSentence: sentenceIndex("yeah, it was quite"),
+          startSentence: sentenceIndex("yeah, it was quite"),
+          endSentence: sentenceIndex("This is great"),
+          rangeHash: "story-speaker-rutte",
+        },
+      ],
+      scanned: {},
+    }),
+    "```",
+    "",
+  ].join("\n")
+
+export const WithRegionMarks: Story = {
+  args: {
+    text: TRANSCRIPT_SNIPPET,
+    filePath: "transcript.md",
+    regions: getRenderableRegionMarks(TRANSCRIPT_FILE),
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() =>
+      expect(canvasElement.querySelector('[data-region-icon="speaker"]')).not.toBeNull()
+    )
+    const label = canvasElement.querySelector('.region-label[data-region-kind="speaker"]')
+    expect(label?.textContent).toBe("Rutte:")
   },
 }

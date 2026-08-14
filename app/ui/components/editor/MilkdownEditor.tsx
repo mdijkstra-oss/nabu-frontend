@@ -41,7 +41,7 @@ import {
   selectVisibleAnnotations,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
-import { getRenderableRegions } from "~/domain/regions/selectors"
+import { getRenderableRegions, type RenderableRegions } from "~/domain/regions/selectors"
 import type { Spotlight } from "~/lib/editor/spotlight/types"
 import { useStableRef } from "~/ui/hooks/useStableRef"
 
@@ -62,6 +62,7 @@ interface MilkdownEditorCoreProps {
   readOnly: boolean
   spotlight: Spotlight | Spotlight[] | null
   filePath?: string
+  regionsOverride?: RenderableRegions
   onChange?: (markdown: string) => void
   onRegionSearch?: RegionSearchHandler
 }
@@ -72,6 +73,7 @@ const MilkdownEditorCore = ({
   readOnly,
   spotlight,
   filePath,
+  regionsOverride,
   onChange,
   onRegionSearch,
 }: MilkdownEditorCoreProps) => {
@@ -111,7 +113,10 @@ const MilkdownEditorCore = ({
     [files, defaultValue, selectedCodes]
   )
   const annotations = useStableRef(rawAnnotations)
-  const rawRegions = useMemo(() => getRenderableRegions(defaultValue), [defaultValue])
+  const rawRegions = useMemo(
+    () => regionsOverride ?? getRenderableRegions(defaultValue),
+    [regionsOverride, defaultValue]
+  )
   const regions = useStableRef(rawRegions)
   const spotlights = useStableRef(normalizeSpotlights(spotlight))
 
@@ -199,6 +204,7 @@ interface MilkdownEditorProps {
   readOnly?: boolean
   spotlight?: Spotlight | Spotlight[] | null
   filePath?: string
+  regions?: RenderableRegions
   onChange?: (markdown: string) => void
   onRegionSearch?: RegionSearchHandler
 }
@@ -210,6 +216,7 @@ export const MilkdownEditor = ({
   readOnly = false,
   spotlight = null,
   filePath,
+  regions,
   onChange,
   onRegionSearch,
 }: MilkdownEditorProps) => {
@@ -226,6 +233,7 @@ export const MilkdownEditor = ({
             readOnly={readOnly}
             spotlight={spotlight}
             filePath={filePath}
+            regionsOverride={regions}
             onChange={onChange}
             onRegionSearch={onRegionSearch}
           />
