@@ -14,6 +14,9 @@ A table the user writes inside a document is queryable the same way, under its o
 
 An answer can be written back as a chart block, which stores the query beside the spec for drawing it — the analysis note in [documents](01-documents.md) carries an example. Holding the query rather than a table of numbers, the figure describes the corpus as it stands rather than as it stood the day the chart was made.
 
+> [!NOTE]
+> A chart is currently a dead end: it shows a number without showing where the number came from. Clicking a bar, a point or a slice should open the rows behind it, and from a row the document and passage it was projected from. Every projected row carries its `file`, so the path back exists in the data — what is missing is a query the chart keeps for drilling down, and the UX for following it. Not implemented yet.
+
 ## Chunks
 
 The chunk is the unit of identity for the whole system: search results, embedding cache entries and analysis candidates all address content by chunk hash. That works only because exactly one function produces them, always from the file's prose with its JSON blocks stripped.
