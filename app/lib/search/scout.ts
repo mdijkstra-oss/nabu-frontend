@@ -39,7 +39,7 @@ const SCOUT_MAX_CHARS = 100_000
 const trimEnd = (chunks: Chunk[], i: number, contentLen: number): number =>
   i < chunks.length - 1 ? chunks[i + 1].chunkStart : Math.max(chunks[i].chunkEnd, contentLen)
 
-const toEntryInput = (file: string, block: ChunkBlock): EntryInput<ChunkBlock> => ({
+export const toEntryInput = (file: string, block: ChunkBlock): EntryInput<ChunkBlock> => ({
   item: block,
   file,
   content: { plain: [block.text] },
