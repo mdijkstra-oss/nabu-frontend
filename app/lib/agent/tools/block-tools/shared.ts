@@ -78,7 +78,7 @@ export const validatePatchedDoc = (language: string, doc: unknown): string | nul
   return formatZodError(result.error)
 }
 
-export const formatJson = (obj: object): string => JSON.stringify(obj, null, "\t")
+export { formatBlockJson as formatJson } from "~/lib/data-blocks/parse"
 
 export const formatBlockList = (summaries: { id: string; label: string | undefined }[]): string =>
   summaries.map((s) => (s.label ? `  ${s.id} (${s.label})` : `  ${s.id}`)).join("\n")

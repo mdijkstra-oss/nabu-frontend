@@ -52,7 +52,7 @@ export interface BlockTypeConfig<T = unknown> {
   // --- Rendering ---
 
   // Which render function to call when displaying
-  renderer: "hidden" | "callout" | "chart"
+  renderer: "hidden" | "callout" | "chart" | "table"
   // Path to the human-readable label used when listing blocks back to the agent
   labelKey?: string
   // Prefix for the generated caption below the block, e.g. "Figure"
@@ -62,6 +62,8 @@ export interface BlockTypeConfig<T = unknown> {
 
   // When true, becomes a table named after the language minus its `json-` prefix, shaped after schema
   projected?: boolean
+  // When true, each block instance gets its own table, shaped by the block's own data at sync time
+  projectedPerBlock?: boolean
   // Override table name
   tableName?: string
   // Projects this array field as the table's rows instead of the block itself

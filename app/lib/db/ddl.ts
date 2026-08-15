@@ -1,5 +1,6 @@
 import type { DuckDbType, DbColumn, TableSchema, JsonSchema } from "./types"
 import { toSnakeCase } from "./naming"
+import { isUsableIdentifier } from "./identifier"
 
 interface TableProjection {
   schemas: TableSchema[]
@@ -22,7 +23,13 @@ const isObjectArray = (prop: JsonSchema): boolean =>
 const isNestedObject = (prop: JsonSchema): boolean =>
   prop.type === "object" && prop.properties !== undefined
 
-const fileColumn: DbColumn = { name: "file", type: "VARCHAR", nullable: false }
+// Stamped on every projected row, static and per-block paths alike.
+export const fileColumn: DbColumn = { name: "file", type: "VARCHAR", nullable: false }
+
+// What a projected table may call a column: usable as a bare identifier, and not
+// the name sync already stamps — a second `file` column would be unreachable.
+export const isUsableColumnName = (name: string): boolean =>
+  name !== fileColumn.name && isUsableIdentifier(name)
 
 const buildColumns = (schema: JsonSchema, prefix = ""): DbColumn[] => {
   const properties = schema.properties ?? {}
@@ -94,6 +101,13 @@ export const tableSchemaToDescribe = (schema: TableSchema): string => {
   const columns = schema.columns.map(columnDdl).join("\n")
   return `${schema.name}\n${columns}`
 }
+
+export const escapeSqlString = (value: string): string => value.replace(/'/g, "''")
+
+export const tableCommentDdl = (tableName: string, comment: string): string =>
+  `COMMENT ON TABLE ${tableName} IS '${escapeSqlString(comment)}';`
+
+export const dropTableDdl = (tableName: string): string => `DROP TABLE IF EXISTS ${tableName};`
 
 export const projectionToDdl = (tableName: string, jsonSchema: JsonSchema): string => {
   const { schemas } = jsonSchemaToTableProjection(tableName, jsonSchema)

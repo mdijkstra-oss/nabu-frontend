@@ -28,13 +28,16 @@ const loadScenarios = (): Scenario[] =>
       return { name, input, expected, changed: hasExpected }
     })
 
+const maskGeneratedIds = (markdown: string): string =>
+  markdown.replace(/"table-[0-9a-z]+"/g, '"table-<generated>"')
+
 describe("migration scenarios", () => {
   const scenarios = loadScenarios()
 
   it.each(scenarios)("$name", ({ input, expected, changed }) => {
     const result = migrateFile(input, migrations)
     expect(result.changed).toBe(changed)
-    expect(result.markdown).toBe(expected)
+    expect(maskGeneratedIds(result.markdown)).toBe(maskGeneratedIds(expected))
   })
 
   const changedScenarios = scenarios.filter((s) => s.changed)

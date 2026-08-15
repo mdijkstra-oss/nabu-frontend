@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef } from "react"
-import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core"
+import { Editor, rootCtx, defaultValueCtx, editorViewCtx, serializerCtx } from "@milkdown/kit/core"
 import { commonmark } from "@milkdown/kit/preset/commonmark"
 import { gfm } from "@milkdown/kit/preset/gfm"
 import { history } from "@milkdown/kit/plugin/history"
@@ -28,6 +28,7 @@ import { createSelectionPlugin } from "~/lib/editor/selection/plugin"
 import { createHiddenBlocksPlugin } from "~/lib/editor/hidden-blocks/plugin"
 import { createPlaceholderPlugin } from "~/lib/editor/placeholder/plugin"
 import { createCalloutBlocksPlugin } from "~/lib/editor/callout-blocks/plugin"
+import { createTableConversionPlugin } from "~/lib/editor/table-blocks/convert-plugin"
 import { AnnotationHover } from "./AnnotationHover"
 import { FloatingToolbar } from "./FloatingToolbar"
 import { ReadOnlyProvider } from "./ReadOnlyContext"
@@ -98,6 +99,12 @@ const MilkdownEditorCore = ({
   const hiddenBlocksPlugin = $prose(() => createHiddenBlocksPlugin())
   const placeholderPlugin = $prose(() => createPlaceholderPlugin())
   const gapCursorPlugin = $prose(gapCursor)
+  // $prose runs its factory on SchemaReady, one timer before the serializer
+  // slice is filled (@milkdown/core), so the ctx read waits until a cell is
+  // actually being serialized.
+  const tableConversionPlugin = $prose((ctx) =>
+    createTableConversionPlugin((node) => ctx.get(serializerCtx)(node))
+  )
   const calloutBlocksPlugin = createCalloutBlocksPlugin(nodeViewFactory)
   const prevContentRef = useRef(defaultValue)
   // The editor is only rebuilt on debugMode/readOnly changes; a ref keeps the
@@ -158,6 +165,9 @@ const MilkdownEditorCore = ({
           .use(clipboard)
           .use(gapCursorPlugin)
           .use(placeholderPlugin)
+          // Sits in the editable branch and outside the debugMode return: no gfm
+          // table node survives into committed state under any editing view.
+          .use(tableConversionPlugin)
       }
 
       if (debugMode) return editor

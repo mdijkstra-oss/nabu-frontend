@@ -3,6 +3,7 @@ import type { TableSchema, JsonSchema, DbError } from "./types"
 import type { ProjectionConfig } from "./projection"
 import type { DbConnection } from "./query"
 import { extractRows } from "./extract"
+import { escapeSqlString } from "./ddl"
 import { ok, type Result } from "~/lib/fp/result"
 
 export interface SyncPlan {
@@ -40,8 +41,6 @@ export const batchSyncPlan = (plan: SyncPlan, batchSize: number): SyncPlan[] => 
 const isAllowedFile = (filename: string, allowedFiles?: string[]): boolean =>
   !allowedFiles || allowedFiles.includes(filename)
 
-const escapeString = (value: string): string => value.replace(/'/g, "''")
-
 const effectiveFile = (config: ProjectionConfig, filename: string): string =>
   config.fileMapper?.(filename) ?? filename
 
@@ -53,7 +52,7 @@ const isEmbeddingsProjection = (config: ProjectionConfig): boolean =>
 const buildProjectionDeleteSql = (projection: ProjectionWithSchema, filename: string): string => {
   const file = effectiveFile(projection.config, filename)
   return projection.schemas
-    .map((s) => `DELETE FROM ${s.name} WHERE file = '${escapeString(file)}';`)
+    .map((s) => `DELETE FROM ${s.name} WHERE file = '${escapeSqlString(file)}';`)
     .join("\n")
 }
 

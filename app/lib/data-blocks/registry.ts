@@ -10,6 +10,7 @@ import { jsonChart } from "~/domain/data-blocks/chart/definition"
 import { jsonUx } from "~/domain/data-blocks/ux/definition"
 import { jsonEmbeddings } from "~/domain/data-blocks/embeddings/definition"
 import { jsonRegions } from "~/domain/data-blocks/regions/definition"
+import { jsonTable } from "~/domain/data-blocks/table/definition"
 import { withInferredMeta } from "~/lib/regions/decorate/extend-config"
 
 type AnyBlockConfig = BlockTypeConfig
@@ -23,6 +24,7 @@ const declared: Record<string, AnyBlockConfig> = {
   "json-ux": jsonUx as AnyBlockConfig,
   "json-embeddings": jsonEmbeddings as AnyBlockConfig,
   "json-regions": jsonRegions as AnyBlockConfig,
+  "json-table": jsonTable as AnyBlockConfig,
 }
 
 const blockTypes: Record<string, AnyBlockConfig> = Object.fromEntries(
@@ -109,6 +111,9 @@ export const getEntityPrefixes = (): string[] => [
 
 export const getProjectedConfigs = (): [string, AnyBlockConfig][] =>
   Object.entries(blockTypes).filter(([, config]) => config.projected)
+
+export const getPerBlockProjectedConfigs = (): [string, AnyBlockConfig][] =>
+  Object.entries(blockTypes).filter(([, config]) => config.projectedPerBlock)
 
 export const getBlockSchemaDefinitions = (): BlockSchemaDefinition[] =>
   Object.entries(blockTypes).map(([language, config]) => ({

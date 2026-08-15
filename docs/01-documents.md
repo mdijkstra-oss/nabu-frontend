@@ -112,6 +112,14 @@ Table structure is derived from the block's JSON Schema. Scalars become columns,
 
 Two escape hatches exist for types whose natural table shape differs from their block shape. `rowPath` projects one array field as the table's rows — `json-annotations` holds an `annotations` array and projects one row per annotation, not one row per block. `tableName` renames, so `json-callout` becomes `callouts`.
 
+### Tables from data
+
+One block type declares its own columns, so it cannot share a table with the others: a `json-table` block is a table the user wrote in a document, and no two of them need the same shape. It projects per block instance rather than per type, and its DDL runs at sync time rather than at startup — a `CREATE OR REPLACE` from the block's current declaration each time its file changes, so a column added or retyped in the editor is reflected without diffing anything.
+
+The table is named after the block's immutable id with hyphens as underscores, so `table-3k2j9x1a` owns `table_3k2j9x1a`. The name carries no file part, which is what lets a chart query survive a rename of the document holding the table. Column types are a parsing contract over string cells — `text` is `VARCHAR`, `number` is `DOUBLE`, `date` is `DATE` — and a cell that fails its column's type lands as NULL rather than blocking the write, with the count of such cells carried in the table's SQL comment.
+
+These tables never enter the schema listing the model is shown. That listing sits in the system prompt and is cached there, and prompt caching is prefix-based, so it must read the same whether a project holds no document tables or fifty. The model finds them at query time instead, through `duckdb_tables()` and `DESCRIBE`.
+
 ### Vectors
 
 A document's prose is embedded and stored beside it, in a companion file that is itself Markdown with JSON blocks:
@@ -221,12 +229,13 @@ Every field of the config object introduced under [registering a block](#registe
 
 **SQL projection**
 
-| Field            | Purpose                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------ |
-| `projected?`     | Becomes a table named after the language minus its `json-` prefix, shaped after the schema |
-| `tableName?`     | Overrides that table name                                                                  |
-| `rowPath?`       | Projects this array field as the table's rows instead of the block itself                  |
-| `hiddenColumns?` | Columns kept in the table but hidden from the schema the model is shown                    |
+| Field                | Purpose                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `projected?`         | Becomes a table named after the language minus its `json-` prefix, shaped after the schema |
+| `projectedPerBlock?` | Each block instance becomes its own table, shaped by the block's own data at sync time     |
+| `tableName?`         | Overrides that table name                                                                  |
+| `rowPath?`           | Projects this array field as the table's rows instead of the block itself                  |
+| `hiddenColumns?`     | Columns kept in the table but hidden from the schema the model is shown                    |
 
 **Where a row sits in the document**
 

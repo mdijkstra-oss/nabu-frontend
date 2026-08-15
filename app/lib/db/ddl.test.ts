@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { jsonSchemaToTableProjection, tableSchemaToDdl, tableSchemaToDescribe } from "./ddl"
+import {
+  dropTableDdl,
+  escapeSqlString,
+  jsonSchemaToTableProjection,
+  tableCommentDdl,
+  tableSchemaToDdl,
+  tableSchemaToDescribe,
+} from "./ddl"
 import type { JsonSchema } from "./types"
 
 describe("jsonSchemaToTableProjection", () => {
@@ -393,5 +400,61 @@ describe("tableSchemaToDescribe", () => {
 
   it.each(cases)("$name", ({ schema, expected }) => {
     expect(tableSchemaToDescribe(schema)).toBe(expected)
+  })
+})
+
+describe("escapeSqlString", () => {
+  const cases = [
+    { name: "plain text is untouched", value: "Monthly expenses", expected: "Monthly expenses" },
+    { name: "a single quote doubles", value: "It's mine", expected: "It''s mine" },
+    {
+      name: "every quote doubles",
+      value: "'a' and 'b'",
+      expected: "''a'' and ''b''",
+    },
+    {
+      name: "a statement-closing fragment stays inside the literal",
+      value: "'); DROP TABLE files; --",
+      expected: "''); DROP TABLE files; --",
+    },
+    { name: "double quotes are not touched", value: 'say "hi"', expected: 'say "hi"' },
+    { name: "an empty string stays empty", value: "", expected: "" },
+  ]
+
+  it.each(cases)("$name", ({ value, expected }) => {
+    expect(escapeSqlString(value)).toBe(expected)
+  })
+})
+
+describe("tableCommentDdl", () => {
+  const cases = [
+    {
+      name: "caption and file",
+      tableName: "table_abc",
+      comment: "Monthly expenses (finance/2026.md)",
+      expected: "COMMENT ON TABLE table_abc IS 'Monthly expenses (finance/2026.md)';",
+    },
+    {
+      name: "a quoted caption is escaped",
+      tableName: "table_abc",
+      comment: "It's mine (a.md)",
+      expected: "COMMENT ON TABLE table_abc IS 'It''s mine (a.md)';",
+    },
+    {
+      name: "an empty comment is an empty literal",
+      tableName: "table_abc",
+      comment: "",
+      expected: "COMMENT ON TABLE table_abc IS '';",
+    },
+  ]
+
+  it.each(cases)("$name", ({ tableName, comment, expected }) => {
+    expect(tableCommentDdl(tableName, comment)).toBe(expected)
+  })
+})
+
+describe("dropTableDdl", () => {
+  it("drops only if the table is there", () => {
+    expect(dropTableDdl("table_abc")).toBe("DROP TABLE IF EXISTS table_abc;")
   })
 })

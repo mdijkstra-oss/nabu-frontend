@@ -10,6 +10,7 @@ import { CHART_COLOR_SHADE, type ColorContext } from "~/lib/chart/color"
 import type { ChartEntityMap } from "~/lib/chart/types"
 import { getDatabase, getSyncRevision, subscribeSyncRevision } from "~/domain/db/database"
 import { getEntityPrefixes } from "~/lib/data-blocks/registry"
+import { formatCaption } from "~/lib/data-blocks/caption"
 import { resolveRadixHex } from "~/ui/theme/radix"
 import { resolveEntityLink, type EntityIcons } from "~/lib/markdown/resolve"
 import { useIsReadOnly } from "~/ui/components/editor/ReadOnlyContext"
@@ -58,15 +59,6 @@ const buildChartEntityMap = (
     }
   }
   return map
-}
-
-const formatCaption = (
-  captionType: string | undefined,
-  captionIndex: number,
-  label: string
-): string => {
-  if (!captionType || captionIndex === 0) return label
-  return `${captionType} ${captionIndex}: ${label}`
 }
 
 export const ChartBlockView = ({

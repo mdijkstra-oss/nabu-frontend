@@ -1,5 +1,6 @@
 import type { z } from "zod"
 import { findSingletonBlock, findBlocksByLanguage } from "~/lib/data-blocks/parse"
+import { tryParseJson } from "~/lib/data-blocks/json"
 import { stripPendingRefs } from "~/lib/files/pending-refs"
 import { createCappedCache } from "~/lib/utils/cache"
 import { decorateParsed } from "~/lib/regions/decorate"
@@ -102,6 +103,18 @@ export const getBlock = <T>(raw: string, language: string, schema: z.ZodType<T>)
   if (parsed === null) return null
   return decorateParsed<T>(raw, language, parsed as T, block.start)
 }
+
+// No recovery: a block that fails its schema yields nothing rather than a
+// repaired subset. Use this where a second reader parses the same block
+// strictly, so the two cannot disagree about what the document holds.
+export const getBlocksStrict = <T>(raw: string, language: string, schema: z.ZodType<T>): T[] =>
+  findBlocksByLanguage(raw, language)
+    .map((block) => {
+      const json = tryParseJson(block.content)
+      const result = schema.safeParse(json)
+      return result.success ? result.data : null
+    })
+    .filter((b): b is T => b !== null)
 
 export const getBlocks = <T>(raw: string, language: string, schema: z.ZodType<T>): T[] =>
   findBlocksByLanguage(raw, language)

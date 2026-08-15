@@ -10,14 +10,16 @@ Consumers: the [grid](grid.md) marks invalid cells red; the [projection](project
 
 `parseCell(raw, type)` takes one raw string and one declared type and returns exactly one of three verdicts:
 
-- **empty** — the cell means "no value". A cell is empty when the key is missing from the row, or when the string's trim is `""`. Emptiness is type-independent. Empty is not a failure: it projects as NULL, is never marked red, and counts as neither a parse nor a fail during inference.
+- **empty** — the cell means "no value". A cell is empty when the key is missing from the row, or when the string's trim is `""`. Emptiness is type-independent. The trim is the same ASCII one the number grammar uses (below), not JS `String.trim()`: one rule decides emptiness and parsing, so a lone non-breaking space is content rather than absence — valid in a `text` column, invalid in `number` and `date`. Empty is not a failure: it projects as NULL, is never marked red, and counts as neither a parse nor a fail during inference.
 - **valid** — the string parses under the declared type, carrying the typed value:
   - `text` → the raw string, byte-for-byte — no trimming, text never transforms.
   - `number` → a finite JS number.
   - `date` → the canonical `YYYY-MM-DD` string (validated, not converted — no `Date` object, so no timezone drift between grid, projection, and validation).
 - **invalid** — the string does not parse under the declared type. No reason field: the consumer already holds the raw string and the declared type, which is everything any message needs (subtractive test — no consumer asked for more).
 
-Non-string cell values never reach this module; the block schema in [table-block.md](table-block.md) guards that boundary. `text` cells are never invalid — any non-empty string is a valid text value.
+`text` cells are never invalid — any non-empty string is a valid text value.
+
+Reading a cell out of a row is this module's job too, and `cellAt(row, key)` is the only way to do it. A bare `row[key]` is not what "the key is missing from the row" means: a key naming an inherited property — `constructor` is the one that fits the key charset — resolves off the prototype chain and hands a function to code expecting a string, which crashes the agent's validation loop. [table-block.md](table-block.md)'s schema now refuses such a key as well, but the two guards answer different questions and both are cheap: the schema stops the key being written, `cellAt` stops any row read from lying. Every consumer — this module, the [projection](projection.md), the [grid](grid.md) — reads through it, so there is one answer to what a cell is.
 
 ### Number format
 
@@ -47,7 +49,7 @@ The number and date grammars are disjoint (dates require hyphens, numbers forbid
 - `row` — index into the rows array; asyncValidate and any message render it as they choose.
 - `column` — the column key; joins back to the column's display name in the block if a consumer wants it (name is omitted here — subtractive test, no consumer needs it inside this module).
 
-That list serves both non-grid consumers: the projection's dirty-cell count is its length; asyncValidate names each entry. Empty cells never appear in it. The grid does not use it — per-cell validity is `parseCell` called per cell, which the grid does anyway while rendering; a second per-cell API would duplicate the first.
+Its one consumer is [table-block.md](table-block.md)'s asyncValidate, which maps each entry to a correctly-addressed validation error. Empty cells never appear in it. The grid does not use it — per-cell validity is `parseCell` called per cell, which the grid does anyway while rendering. Neither does the [projection](projection.md): it already calls `parseCell` per cell for values and counts invalid verdicts in that same loop, so handing it this list would parse every cell twice.
 
 ### Inference
 
@@ -89,6 +91,6 @@ Nothing in the repo currently parses user strings strictly; this module is new, 
 - Given a column whose non-empty cells are exactly half numbers, when inferred, then the type is `text` — exactly 50% does not clear more-than-half.
 - Given an all-empty column, when inferred, then `text`; given a single non-empty cell `"7"`, then `number` — one of one is more than half.
 - Given a column of three numbers and two dates among five non-empty cells, when inferred, then `number` — 60% clears the bar and dates cannot also clear it.
-- Given a table with two invalid cells and several empty ones, when summarized, then `tableFailures` lists exactly the two invalid cells with their row index and column key, in table order — the projection's count is the list length, asyncValidate names both.
+- Given a table with two invalid cells and several empty ones, when summarized, then `tableFailures` lists exactly the two invalid cells with their row index and column key, in table order — asyncValidate names both from these entries.
 
 **Isolation.** The module is pure, so isolation is the whole story: plain vitest, table-driven with `it.each` over case arrays exactly as `app/lib/chart/format.test.ts` does, colocated as `app/lib/cells/parse.test.ts` and `app/lib/cells/infer.test.ts`. No mocks, no fixtures beyond inline strings — every contract case above is one row in a case table, and hostile strings are just more rows.

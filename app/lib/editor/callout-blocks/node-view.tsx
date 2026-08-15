@@ -6,12 +6,15 @@ import type { DecorationSet } from "prosemirror-view"
 import type { Node as ProseMirrorNode } from "prosemirror-model"
 import { getBlockConfig, getCaptionType } from "~/lib/data-blocks/registry"
 import { tryParseJson, isObject } from "~/lib/data-blocks/json"
+import { formatBlockJson } from "~/lib/data-blocks/parse"
 import { findCaptionIndex, type CaptionEntry } from "~/lib/data-blocks/caption"
 import { parseCallout } from "~/domain/data-blocks/callout/schema"
 import { parseChart } from "~/domain/data-blocks/chart/schema"
+import { parseTable, type TableBlock } from "~/domain/data-blocks/table/schema"
 import { useIsReadOnly } from "~/ui/components/editor/ReadOnlyContext"
 import { CalloutBlockView } from "./view"
 import { ChartBlockView } from "~/lib/editor/chart-blocks/view"
+import { TableBlockView } from "~/lib/editor/table-blocks/view"
 import { applyDOMHighlights, type HighlightEntry } from "./highlight"
 
 interface BlockSpacerProps {
@@ -88,9 +91,11 @@ export const CalloutNodeView = () => {
   const renderer = config?.renderer
   const isCallout = renderer === "callout"
   const isChart = renderer === "chart"
+  const isTable = renderer === "table"
 
   const calloutData = isCallout ? parseCallout(node.textContent) : null
   const chartData = isChart ? parseChart(node.textContent) : null
+  const tableData = isTable ? parseTable(node.textContent) : null
 
   const highlights = useMemo(
     () => (isCallout ? extractHighlights(innerDecorations, node.textContent) : []),
@@ -103,8 +108,8 @@ export const CalloutNodeView = () => {
     return applyDOMHighlights(container, calloutData.id, highlights)
   }, [calloutData, highlights])
 
-  const isRendered = isCallout || isChart
-  const hasData = calloutData || chartData
+  const isRendered = isCallout || isChart || isTable
+  const hasData = calloutData || chartData || tableData
   const isInvalid = isRendered && !hasData
 
   if (isInvalid && isDraftBlock(node.textContent)) {
@@ -131,14 +136,42 @@ export const CalloutNodeView = () => {
     view.focus()
   }
 
-  if (isChart && chartData) {
-    const captionType = config?.captionType
+  // Grid edits go back as a transaction over the code block's text, not as a
+  // raw-file patch: that keeps them in the editor's undo history and lets the
+  // store's echo compare equal, so the cursor survives the round trip.
+  const handleUpdate = (next: TableBlock) => {
     const pos = getPos()
-    const captionIndex =
-      captionType && pos !== undefined
-        ? findCaptionIndex(collectCaptionEntries(view.state.doc), pos, captionType)
-        : 0
+    if (pos === undefined) return
+    const text = view.state.schema.text(formatBlockJson(next))
+    view.dispatch(view.state.tr.replaceWith(pos + 1, pos + node.nodeSize - 1, text))
+  }
 
+  const captionType = config?.captionType
+
+  const captionIndex = () => {
+    const pos = getPos()
+    if (!captionType || pos === undefined) return 0
+    return findCaptionIndex(collectCaptionEntries(view.state.doc), pos, captionType)
+  }
+
+  if (isTable && tableData) {
+    return (
+      <>
+        {!isReadOnly && <BlockSpacer onClick={handleInsertBefore} />}
+        <div contentEditable={false} data-id={tableData.id}>
+          <TableBlockView
+            data={tableData}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+            captionType={captionType}
+            captionIndex={captionIndex()}
+          />
+        </div>
+      </>
+    )
+  }
+
+  if (isChart && chartData) {
     return (
       <>
         {!isReadOnly && <BlockSpacer onClick={handleInsertBefore} />}
@@ -147,7 +180,7 @@ export const CalloutNodeView = () => {
             data={chartData}
             onDelete={handleDelete}
             captionType={captionType}
-            captionIndex={captionIndex}
+            captionIndex={captionIndex()}
           />
         </div>
       </>

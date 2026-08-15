@@ -10,6 +10,8 @@ The tables come from the block declarations, so anything written as a block is q
 
 The generated DDL travels with each request, so the model writes SQL against a schema it can see.
 
+A table the user writes inside a document is queryable the same way, under its own table name. Those tables are not in the DDL that travels with the request — they come and go with the documents, and a schema that changed on every table edit would invalidate the prompt cache each time — so the model discovers them at query time from `duckdb_tables()`, whose comment carries each table's caption, its file, and any count of cells failing their column type.
+
 An answer can be written back as a chart block, which stores the query beside the spec for drawing it — the analysis note in [documents](01-documents.md) carries an example. Holding the query rather than a table of numbers, the figure describes the corpus as it stands rather than as it stood the day the chart was made.
 
 ## Chunks

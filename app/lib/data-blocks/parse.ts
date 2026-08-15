@@ -115,6 +115,12 @@ export const isLineInsideBlock = (
   lineEnd: number
 ): boolean => blocks.some((b) => b.start <= lineStart && lineEnd <= b.end)
 
+// A backtick in a string value would otherwise close the fence the JSON is
+// written into, truncating the block for every reader. \u0060 is legal JSON and
+// parses back to the same character.
+export const formatBlockJson = (value: object): string =>
+  JSON.stringify(value, null, "\t").replace(/`/g, "\\u0060")
+
 export const formatBlock = (language: string, content: string): string =>
   `\`\`\`${language}\n${content}\n\`\`\``
 

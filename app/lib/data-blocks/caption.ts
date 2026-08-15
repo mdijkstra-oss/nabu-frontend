@@ -16,3 +16,10 @@ export const findCaptionIndex = (
   }
   return 0
 }
+
+export const formatCaption = (
+  captionType: string | undefined,
+  captionIndex: number,
+  label: string
+): string =>
+  !captionType || captionIndex === 0 ? label : `${captionType} ${captionIndex}: ${label}`

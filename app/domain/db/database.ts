@@ -10,6 +10,7 @@ import {
   filterHiddenColumns,
 } from "~/lib/db/ddl"
 import { getProjections, toJsonSchema } from "./projections"
+import { buildClaimSet, syncDocTables, type TrackedTables } from "./doc-tables"
 import type { Database, TableSchema } from "~/lib/db/types"
 
 const buildProjectionsWithSchemas = (): ProjectionWithSchema[] =>
@@ -30,6 +31,10 @@ export const waitForDatabase = (): Promise<void> => dbReadyPromise
 
 let database: Database | null = null
 let previousFiles: FileStore = {}
+// DuckDB here is in-memory and rebuilt every app start, and the first sync after
+// start treats every file as changed, so this map is rebuilt by the same pass
+// that rebuilds the tables. There is no persistence for it to drift from.
+const trackedDocTables: TrackedTables = new Map()
 let initializing = false
 let syncRevision = 0
 const syncListeners = new Set<() => void>()
@@ -60,6 +65,10 @@ const runSync = async (
   const total = plan.deleted.length + plan.changed.length
   let processed = 0
   const batches = batchSyncPlan(plan, DB_SYNC_BATCH_SIZE)
+  // Built from the whole plan before any batch runs: a rename's delete and its
+  // changed half can land in different batches, and the claim is what stops the
+  // first batch dropping a table the later one is about to create.
+  const claims = buildClaimSet(plan, currentFiles)
 
   await executeWithConnection(db.instance, async (conn) => {
     for (const batch of batches) {
@@ -68,6 +77,7 @@ const runSync = async (
         console.error("[db] sync failed:", result.error)
         return
       }
+      await syncDocTables(conn, batch, currentFiles, claims, trackedDocTables)
       processed += batchItemCount(batch)
       onProgress?.(processed, total)
     }

@@ -6,6 +6,7 @@ import {
   parseBlockJson,
   replaceBlock,
   replaceSingletonBlock,
+  formatBlockJson as formatJson,
   type CodeBlock,
 } from "~/lib/data-blocks/parse"
 import { isKnownBlockType, isSingleton, getFuzzyFields } from "~/lib/data-blocks/registry"
@@ -17,8 +18,6 @@ export type PatchResult = { ok: true; content: string } | { ok: false; error: st
 type ResolvedBlock =
   | { ok: true; json: unknown; block: CodeBlock | null }
   | { ok: false; error: string }
-
-const formatJson = (obj: object): string => JSON.stringify(obj, null, "\t")
 
 const isSingletonLanguage = (language: string): boolean =>
   !isKnownBlockType(language) || isSingleton(language)
