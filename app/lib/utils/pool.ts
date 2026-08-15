@@ -1,6 +1,6 @@
 import { getActiveSignal } from "~/lib/utils/signal"
 
-const DEFAULT_CONCURRENCY = 4
+const DEFAULT_CONCURRENCY = 5
 const MAX_CONSECUTIVE_FAILURES = 3
 
 export interface PoolFailure<T> {
