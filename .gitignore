@@ -36,3 +36,6 @@ public/jq.js
 public/jq.wasm
 .playwright-mcp/
 *.local.*
+
+.stryker-tmp/
+reports/
