@@ -31,7 +31,7 @@ const candidate = (over: Partial<OccurrenceCandidate> = {}): OccurrenceCandidate
 })
 
 const gate = (target: FindWork, occurrences: OccurrenceCandidate[]) =>
-  gateOccurrences("speaker", "string", target, occurrences)
+  gateOccurrences("person", "string", target, occurrences)
 
 describe("the numbering map-back", () => {
   const cases: { name: string; firstSentence: number; sentenceIndex: number; expected: number }[] =

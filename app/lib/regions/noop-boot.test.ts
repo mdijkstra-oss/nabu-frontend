@@ -6,7 +6,7 @@ import type { EngineDeps } from "~/lib/engine/types"
 import type { RegionsBlock } from "~/domain/data-blocks/regions/schema"
 import { zeroVector } from "~/lib/embeddings/embedding.fixtures"
 import type { FindCall, FindWork, MarkCall, MarkWork } from "./detect/types"
-import { speakerKind, transcript, answeringDetect } from "./speaker.fixtures"
+import { personKind, transcript, answeringDetect } from "./person.fixtures"
 import { readStoredRegions } from "./stored"
 import type { WriteOutcome } from "./sync-types"
 
@@ -54,7 +54,7 @@ const createProject = (initial: Record<string, string>) => {
       embeddingsUrl: "http://embeddings.test",
       fetchBatch: (texts: string[]) => Promise.resolve(ok(texts.map(() => zeroVector()))),
       classify: () => Promise.resolve(null),
-      getKinds: () => [speakerKind],
+      getKinds: () => [personKind],
       writeRegions,
       getSignificantLanguages: () => Promise.resolve([]),
       syncDescriptions: () => Promise.resolve(),
@@ -91,7 +91,7 @@ describe("a boot over an already-scanned document", () => {
     await runOnePass({ ...project.deps, detect: answeringDetect() })
 
     const stored = project.regionsIn("talk.md")
-    expect(stored.scanned[speakerKind.id].length).toBeGreaterThan(0)
+    expect(stored.scanned[personKind.id].length).toBeGreaterThan(0)
     expect(stored.regions.length).toBeGreaterThan(0)
 
     const detect = recordingDetect()

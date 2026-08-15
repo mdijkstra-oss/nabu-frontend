@@ -2,7 +2,7 @@ import { z } from "zod"
 import { fnvHash } from "~/lib/utils/hash"
 import { BLOCK_COLORS } from "~/ui/theme/colors"
 import { ICON_NAMES } from "~/ui/theme/icons"
-import { speakerKind } from "~/domain/regions/kinds/speaker/definition"
+import { personKind } from "~/domain/regions/kinds/person/definition"
 import { dateKind } from "~/domain/regions/kinds/date/definition"
 
 export const REGION_VALUE_TYPES = ["string", "datetime"] as const
@@ -48,7 +48,7 @@ export const parseKindRegistry = (raw: unknown[]): KindDescriptor[] => {
   return descriptors
 }
 
-const shipped = parseKindRegistry([speakerKind, dateKind])
+const shipped = parseKindRegistry([personKind, dateKind])
 
 export const regionKinds = (): KindDescriptor[] => shipped
 

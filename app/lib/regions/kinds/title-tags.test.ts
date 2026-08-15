@@ -5,7 +5,7 @@ describe("splitKindTags", () => {
   it.each([
     {
       name: "known kind tag becomes a kind part",
-      title: ":speaker: rutte",
+      title: ":person: rutte",
       parts: [{ type: "kind" }, { type: "text", text: " rutte" }],
     },
     {
@@ -32,14 +32,14 @@ describe("splitKindTags", () => {
   })
 
   it("resolves the tag to the registry descriptor", () => {
-    const [part] = splitKindTags(":speaker: x")
-    expect(part).toMatchObject({ type: "kind", kind: { id: "speaker", icon: "mic" } })
+    const [part] = splitKindTags(":person: x")
+    expect(part).toMatchObject({ type: "kind", kind: { id: "person", icon: "user" } })
   })
 })
 
 describe("stripKindTags", () => {
   it.each([
-    { title: ":speaker: rutte", stripped: "rutte" },
+    { title: ":person: rutte", stripped: "rutte" },
     { title: "who is :date: friday", stripped: "who is friday" },
     { title: "plain title", stripped: "plain title" },
     { title: ":nope: kept", stripped: ":nope: kept" },
@@ -50,6 +50,6 @@ describe("stripKindTags", () => {
 
 describe("kindTitle", () => {
   it("round-trips through strip", () => {
-    expect(stripKindTags(kindTitle("speaker", "rutte"))).toBe("rutte")
+    expect(stripKindTags(kindTitle("person", "rutte"))).toBe("rutte")
   })
 })

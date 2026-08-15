@@ -28,12 +28,12 @@ const SENTENCES = ["Rutte: yeah, it was quite the event.", "This is great, said 
 
 const region = (index: number, quote: string, sentence: number): RenderableRegion => ({
   index,
-  kind: "speaker",
+  kind: "person",
   kindOrder: 0,
   label: "rutte",
   value: "rutte",
   colour: "indigo",
-  icon: "mic",
+  icon: "user",
   quote,
   hitSentence: sentence,
   startSentence: sentence,

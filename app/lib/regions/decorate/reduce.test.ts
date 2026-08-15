@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest"
 import type { ResolvedRegionRow } from "~/domain/data-blocks/regions/schema"
 import { reduceByKind } from "./reduce"
 import type { InferredMeta } from "./schema"
-import { dateRegion, speakerRegion } from "./test-fixtures"
+import { dateRegion, personRegion } from "./test-fixtures"
 
-const resolved = (row: ReturnType<typeof speakerRegion>): ResolvedRegionRow =>
+const resolved = (row: ReturnType<typeof personRegion>): ResolvedRegionRow =>
   row as ResolvedRegionRow
 
 describe("reduceByKind", () => {
@@ -18,17 +18,17 @@ describe("reduceByKind", () => {
     { name: "no regions reduce to no field at all", regions: [], expected: undefined },
     {
       name: "one string region reduces to a one-value list",
-      regions: [resolved(speakerRegion("alice", 1, 2))],
-      expected: { speaker: ["alice"] },
+      regions: [resolved(personRegion("alice", 1, 2))],
+      expected: { person: ["alice"] },
     },
     {
       name: "several string regions reduce to distinct values in document order",
       regions: [
-        resolved(speakerRegion("bob", 3, 4)),
-        resolved(speakerRegion("alice", 1, 2)),
-        resolved(speakerRegion("alice", 5, 6)),
+        resolved(personRegion("bob", 3, 4)),
+        resolved(personRegion("alice", 1, 2)),
+        resolved(personRegion("alice", 5, 6)),
       ],
-      expected: { speaker: ["alice", "bob"] },
+      expected: { person: ["alice", "bob"] },
     },
     {
       name: "one datetime region reduces to a span starting, ending and happening at its value",
@@ -87,11 +87,11 @@ describe("reduceByKind", () => {
     {
       name: "kinds reduce independently of one another",
       regions: [
-        resolved(speakerRegion("alice", 1, 2)),
+        resolved(personRegion("alice", 1, 2)),
         resolved(dateRegion("2026-03-03T00:00:00Z", 0, 4)),
       ],
       expected: {
-        speaker: ["alice"],
+        person: ["alice"],
         date: {
           start: "2026-03-03T00:00:00Z",
           end: "2026-03-03T00:00:00Z",
@@ -101,7 +101,7 @@ describe("reduceByKind", () => {
     },
     {
       name: "a region of an unregistered kind contributes nothing",
-      regions: [{ ...resolved(speakerRegion("alice", 1, 2)), kind: "weather" }],
+      regions: [{ ...resolved(personRegion("alice", 1, 2)), kind: "weather" }],
       expected: undefined,
     },
   ]

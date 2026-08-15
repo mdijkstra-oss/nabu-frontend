@@ -22,7 +22,7 @@ export interface RoundsOptions<T, R> {
   concurrency: number
   onAnswered: (item: T, result: R) => void
   onAbandoned?: (item: T) => void
-  // Fires when a call settles, before the next dispatch renders; the speaker
+  // Fires when a call settles, before the next dispatch renders; the person
   // vocabulary rides on it.
   onCallAnswered?: () => void
 }

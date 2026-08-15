@@ -14,11 +14,11 @@ import {
   dateRegion,
   document,
   regionsBlock,
-  speakerRegion,
+  personRegion,
 } from "./test-fixtures"
 
 const DECORATED_COLUMNS: DbColumn[] = [
-  { name: "inferred_meta_speaker", type: "VARCHAR[]", nullable: true },
+  { name: "inferred_meta_person", type: "VARCHAR[]", nullable: true },
   { name: "inferred_meta_date_start", type: "TIMESTAMP", nullable: true },
   { name: "inferred_meta_date_end", type: "TIMESTAMP", nullable: true },
   { name: "inferred_meta_date_when", type: "TIMESTAMP", nullable: true },
@@ -56,7 +56,7 @@ describe("decorated columns", () => {
     const { schemas } = tablesFor("json-settings")
 
     expect(schemas.flatMap((s) => s.columns.map((c) => c.name))).not.toContain(
-      "inferred_meta_speaker"
+      "inferred_meta_person"
     )
   })
 
@@ -79,7 +79,7 @@ describe("decorated rows", () => {
 
   it("lands a decorated value under each flattened column name", () => {
     const raw = chartDocument(
-      regionsBlock([speakerRegion("alice", 0, 4), dateRegion("2026-03-03T00:00:00Z", 0, 4)])
+      regionsBlock([personRegion("alice", 0, 4), dateRegion("2026-03-03T00:00:00Z", 0, 4)])
     )
     const [chart] = projection.blockParser(raw)
 
@@ -87,7 +87,7 @@ describe("decorated rows", () => {
 
     expect(table).toBe("charts")
     expect(rows).toHaveLength(1)
-    expect(rows[0].inferred_meta_speaker).toEqual(["alice"])
+    expect(rows[0].inferred_meta_person).toEqual(["alice"])
     expect(coerceValue("TIMESTAMP", rows[0].inferred_meta_date_start)).toEqual(
       new Date("2026-03-03T00:00:00Z")
     )
@@ -117,7 +117,7 @@ describe("decorated rows", () => {
 
 describe("an undecorated row", () => {
   const NULL_COLUMNS = {
-    inferred_meta_speaker: null,
+    inferred_meta_person: null,
     inferred_meta_date_start: null,
     inferred_meta_date_end: null,
     inferred_meta_date_when: null,
@@ -134,12 +134,12 @@ describe("an undecorated row", () => {
     "",
     "Bob objected to the timeline. He asked for another month.",
     "",
-    regionsBlock([speakerRegion("alice", 1, 1), speakerRegion("bob", 3, 4)]),
+    regionsBlock([personRegion("alice", 1, 1), personRegion("bob", 3, 4)]),
     "",
   ].join("\n")
 
   const textIsGone = document(
-    regionsBlock([speakerRegion("alice", 0, 4)]),
+    regionsBlock([personRegion("alice", 0, 4)]),
     annotationsBlock([{ text: "Carol proposed a vote", reason: "r", color: "blue" }])
   )
 

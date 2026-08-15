@@ -13,7 +13,7 @@ import { getAttributes } from "~/domain/data-blocks/attributes/selectors"
 import { readStoredRegions } from "~/lib/regions/stored"
 import { writeRegionsBlock } from "~/domain/regions/init"
 import type { FindCall, FindWork, MarkCall, MarkWork } from "~/lib/regions/detect/types"
-import { speakerKind, transcript, hitsIn } from "~/lib/regions/speaker.fixtures"
+import { personKind, transcript, hitsIn } from "~/lib/regions/person.fixtures"
 import { zeroVector } from "~/lib/embeddings/embedding.fixtures"
 import { startEngine, ENGINE_DEBOUNCE, ENGINE_MAX_WAIT } from "./engine"
 import type { EngineDeps, EngineEvent, EngineHandle, EngineStage } from "./types"
@@ -66,7 +66,7 @@ const createDeps = (overrides: Partial<EngineDeps> = {}) => {
       seams.classifies++
       return Promise.resolve({ type: "note", subject: "meetings" })
     },
-    getKinds: () => [speakerKind],
+    getKinds: () => [personKind],
     detect: { find, mark },
     writeRegions: writeRegionsBlock,
     getSignificantLanguages: () => Promise.resolve(["eng"]),
@@ -121,7 +121,7 @@ describe("convergence over a fully processed project", () => {
     const companion = getFileRaw(companionFilename("talk.md"))
     expect(companion).not.toBe("")
     expect(getAttributes(processed)?.hash).toBeDefined()
-    expect(readStoredRegions(processed).scanned[speakerKind.id].length).toBeGreaterThan(0)
+    expect(readStoredRegions(processed).scanned[personKind.id].length).toBeGreaterThan(0)
 
     const verifier = createDeps()
     const engine = await boot(verifier)

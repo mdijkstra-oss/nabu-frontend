@@ -84,13 +84,13 @@ const TRANSCRIPT_FILE =
     JSON.stringify({
       regions: [
         {
-          kind: "speaker",
+          kind: "person",
           parsed: { type: "string", value: "rutte" },
           quote: "Rutte",
           hitSentence: sentenceIndex("yeah, it was quite"),
           startSentence: sentenceIndex("yeah, it was quite"),
           endSentence: sentenceIndex("This is great"),
-          rangeHash: "story-speaker-rutte",
+          rangeHash: "story-person-rutte",
         },
       ],
       scanned: {},
@@ -107,9 +107,9 @@ export const WithRegionMarks: Story = {
   },
   play: async ({ canvasElement }) => {
     await waitFor(() =>
-      expect(canvasElement.querySelector('[data-region-icon="speaker"]')).not.toBeNull()
+      expect(canvasElement.querySelector('[data-region-icon="person"]')).not.toBeNull()
     )
-    const label = canvasElement.querySelector('.region-label[data-region-kind="speaker"]')
+    const label = canvasElement.querySelector('.region-label[data-region-kind="person"]')
     expect(label?.textContent).toBe("Rutte:")
   },
 }

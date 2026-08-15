@@ -13,15 +13,15 @@ import {
   throwing,
 } from "./parse-call.fixture"
 
-const speaker: KindDescriptor = {
-  id: "speaker",
-  rules: "A speaker is the person whose words a passage carries.",
-  icon: "mic",
+const person: KindDescriptor = {
+  id: "person",
+  rules: "A person is the person whose words a passage carries.",
+  icon: "user",
   color: "indigo",
   valueType: "string",
 }
 
-const date: KindDescriptor = { ...speaker, id: "date", color: "amber", valueType: "datetime" }
+const date: KindDescriptor = { ...person, id: "date", color: "amber", valueType: "datetime" }
 
 const unitAt = (firstSentence: number, sentences: string[], file = "a.md"): FindWork => ({
   file,
@@ -74,7 +74,7 @@ describe("the find payload", () => {
 
   it("packs units from two documents into one call of numbered entries", async () => {
     const { parse, calls } = answering({ results: acknowledgedEmpty([1, 2]) })
-    await runFind(items, jobFor(speaker, ["rutte"]).job, parse)
+    await runFind(items, jobFor(person, ["rutte"]).job, parse)
 
     expect(calls).toHaveLength(1)
     expect(calls[0].endpoint).toBe(FIND_ENDPOINT)
@@ -87,7 +87,7 @@ describe("the find payload", () => {
     ])
 
     const text = calls[0].messages.map(textOf)
-    expect(text[0]).toBe(speaker.rules)
+    expect(text[0]).toBe(person.rules)
     expect(text[1]).toContain("rutte")
     expect(text[2]).toContain('<entry id="1" file="a.md">')
     expect(text[2]).toContain("[1.1] Rutte opened the meeting.")
@@ -99,14 +99,14 @@ describe("the find payload", () => {
 
   it("puts the prompt cache breakpoint on the rules message and nowhere else", async () => {
     const { parse, calls } = answering({ results: acknowledgedEmpty([1, 2]) })
-    await runFind(items, jobFor(speaker, ["rutte"]).job, parse)
+    await runFind(items, jobFor(person, ["rutte"]).job, parse)
 
     expect(calls[0].messages.map(hasBreakpoint)).toEqual([true, false, false, false, false])
   })
 
   it("sorts the known-value list so the rendered preamble does not shift", async () => {
     const { parse, calls } = answering({ results: acknowledgedEmpty([1, 2]) })
-    await runFind(items, jobFor(speaker, ["timmermans", "kaag", "rutte"]).job, parse)
+    await runFind(items, jobFor(person, ["timmermans", "kaag", "rutte"]).job, parse)
 
     const listed = textOf(calls[0].messages[1])
     expect(listed.indexOf("kaag")).toBeLessThan(listed.indexOf("rutte"))
@@ -115,7 +115,7 @@ describe("the find payload", () => {
 
   it("tells a vocabulary kind with no known values to infer from the text alone", async () => {
     const { parse, calls } = answering({ results: acknowledgedEmpty([1, 2]) })
-    await runFind(items, jobFor(speaker).job, parse)
+    await runFind(items, jobFor(person).job, parse)
 
     expect(textOf(calls[0].messages[1])).toMatch(/infer/i)
   })
@@ -141,16 +141,16 @@ describe("routing occurrences back", () => {
         { entry: 2, occurrences: [{ quote: "Kaag answered", ref: "2.1", value: "Kaag" }] },
       ],
     })
-    const { job, answered } = jobFor(speaker)
+    const { job, answered } = jobFor(person)
     await runFind(items, job, parse)
 
     expect(answered).toHaveLength(2)
     const byFile = new Map(answered.map(({ work, hits }) => [work.file, hits]))
     expect(byFile.get("a.md")).toEqual([
-      { kind: "speaker", quote: "Rutte opened", hitSentence: 12, value: "rutte" },
+      { kind: "person", quote: "Rutte opened", hitSentence: 12, value: "rutte" },
     ])
     expect(byFile.get("b.md")).toEqual([
-      { kind: "speaker", quote: "Kaag answered", hitSentence: 0, value: "kaag" },
+      { kind: "person", quote: "Kaag answered", hitSentence: 0, value: "kaag" },
     ])
   })
 
@@ -159,7 +159,7 @@ describe("routing occurrences back", () => {
     const { parse } = answering({
       results: [{ entry: 1, occurrences: [{ quote: "Rutte opened", ref: "1.9", value: "Rutte" }] }],
     })
-    const { job, answered, abandoned } = jobFor(speaker)
+    const { job, answered, abandoned } = jobFor(person)
     const result = await runFind(items, job, parse)
 
     expect(answered).toEqual([{ work: items[0], hits: [] }])
@@ -182,7 +182,7 @@ describe("routing occurrences back", () => {
       { results: [] },
     ]
     const { parse } = answeringEach(raws)
-    const { job, answered, abandoned } = jobFor(speaker)
+    const { job, answered, abandoned } = jobFor(person)
     await runFind(items, job, parse)
 
     expect(answered.map(({ work, hits }) => [work.file, hits])).toEqual([["a.md", []]])
@@ -197,7 +197,7 @@ describe("routing occurrences back", () => {
         { entry: 1, occurrences: [] },
       ],
     })
-    const { job, answered } = jobFor(speaker)
+    const { job, answered } = jobFor(person)
     await runFind(items, job, parse)
 
     expect(answered).toEqual([{ work: items[0], hits: [] }])
@@ -211,7 +211,7 @@ describe("routing occurrences back", () => {
         { entry: 1, occurrences: [{ quote: "at nine", ref: "1.1", value: "rutte" }] },
       ],
     })
-    const { job, answered } = jobFor(speaker)
+    const { job, answered } = jobFor(person)
     await runFind(items, job, parse)
 
     expect(answered).toHaveLength(1)
@@ -235,7 +235,7 @@ describe("acknowledgment and rounds", () => {
       { results: [] },
       { results: [] },
     ])
-    const { job, answered, abandoned } = jobFor(speaker)
+    const { job, answered, abandoned } = jobFor(person)
     const result = await runFind(items, job, parse)
 
     expect(answered.map(({ work }) => work)).toEqual(items.slice(0, 4))
@@ -263,7 +263,7 @@ describe("acknowledgment and rounds", () => {
     "records none of ten units when their one call fails with $name",
     async ({ parse }) => {
       const items = units(10)
-      const { job, answered, abandoned } = jobFor(speaker)
+      const { job, answered, abandoned } = jobFor(person)
       const result = await runFind(items, job, parse)
 
       expect(answered).toEqual([])
@@ -296,7 +296,7 @@ describe("acknowledgment and rounds", () => {
       { results: acknowledgedEmpty([1]) },
       { results: acknowledgedEmpty(items.slice(0, FIND_MAX_ITEMS).map((_, i) => i + 1)) },
     ])
-    const { job, answered } = jobFor(speaker)
+    const { job, answered } = jobFor(person)
     const result = await runFind(items, job, parse)
 
     expect(calls).toHaveLength(3)
@@ -305,7 +305,7 @@ describe("acknowledgment and rounds", () => {
   })
 })
 
-describe("the speaker vocabulary", () => {
+describe("the person vocabulary", () => {
   it("renders the value found by one call into the next call's preamble", async () => {
     const count = FIND_MAX_ITEMS + 1
     const items = Array.from({ length: count }, (_, i) =>
@@ -320,7 +320,7 @@ describe("the speaker vocabulary", () => {
       },
       { results: acknowledgedEmpty([1]) },
     ])
-    const { job, knownValues } = jobFor(speaker)
+    const { job, knownValues } = jobFor(person)
     await runFind(items, job, parse)
 
     expect(calls).toHaveLength(2)
@@ -329,12 +329,12 @@ describe("the speaker vocabulary", () => {
     expect(knownValues.has("kaag")).toBe(true)
   })
 
-  it("dispatches speaker calls one at a time", async () => {
+  it("dispatches person calls one at a time", async () => {
     const items = Array.from({ length: FIND_MAX_ITEMS + 1 }, (_, i) =>
       unitAt(i, [`Filler sentence ${i}.`])
     )
     const { parse, calls, held } = answeringWhenReleased()
-    const run = runFind(items, jobFor(speaker).job, parse)
+    const run = runFind(items, jobFor(person).job, parse)
 
     await flushMicrotasks()
     expect(calls).toHaveLength(1)

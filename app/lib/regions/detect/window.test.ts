@@ -14,7 +14,7 @@ const shortDocument = (count: number): string[] =>
 const longDocument = (count: number): string[] =>
   Array.from({ length: count }, (_, i) => `${i} ${"word ".repeat(40)}.`)
 
-const hit = (hitSentence: number, kind = "speaker", value = "rutte"): Hit => ({
+const hit = (hitSentence: number, kind = "person", value = "rutte"): Hit => ({
   kind,
   quote: "quote",
   hitSentence,
@@ -71,7 +71,7 @@ describe("the neighbour bound", () => {
   })
 
   it("bounds two hits sharing a sentence by each other", () => {
-    const shared = [hit(10, "speaker", "rutte"), hit(10, "speaker", "kaag")]
+    const shared = [hit(10, "person", "rutte"), hit(10, "person", "kaag")]
     expect(computeWindows(shared, sentences).map((w) => w.window)).toEqual([
       { start: 0, end: 10 },
       { start: 10, end: 39 },
@@ -82,13 +82,13 @@ describe("the neighbour bound", () => {
 describe("kinds do not bound each other", () => {
   it("computes each kind's windows from its own hits alone", () => {
     const sentences = shortDocument(40)
-    const hits = [hit(5, "speaker"), hit(6, "date", "2024-03-05"), hit(30, "speaker")]
+    const hits = [hit(5, "person"), hit(6, "date", "2024-03-05"), hit(30, "person")]
     const windows = computeWindows(hits, sentences)
 
-    const speaker = windows.filter((w) => w.hit.kind === "speaker").map((w) => w.window)
+    const person = windows.filter((w) => w.hit.kind === "person").map((w) => w.window)
     const date = windows.filter((w) => w.hit.kind === "date").map((w) => w.window)
 
-    expect(speaker).toEqual([
+    expect(person).toEqual([
       { start: 0, end: 30 },
       { start: 5, end: 39 },
     ])
@@ -159,7 +159,7 @@ describe("coalescing windows into stretches", () => {
   ): MarkWork => ({
     file: over.file ?? "talk.md",
     sentences,
-    hit: hit(hitSentence, over.kind ?? "speaker", over.value ?? "rutte"),
+    hit: hit(hitSentence, over.kind ?? "person", over.value ?? "rutte"),
     window,
   })
 
@@ -220,7 +220,7 @@ describe("coalescing windows into stretches", () => {
 
   it("never merges across kinds", () => {
     const stretches = coalesceStretches([
-      work(5, { start: 0, end: 10 }, { kind: "speaker" }),
+      work(5, { start: 0, end: 10 }, { kind: "person" }),
       work(6, { start: 0, end: 10 }, { kind: "date" }),
     ])
     expect(stretches).toHaveLength(2)

@@ -4,7 +4,7 @@ export type TitlePart = { type: "text"; text: string } | { type: "kind"; kind: K
 
 const TAG = /:([a-z]+):/g
 
-// A `:speaker:` tag in a stored title stands for that kind's icon; splitting keeps
+// A `:person:` tag in a stored title stands for that kind's icon; splitting keeps
 // the JSON free of markup while renderers decide how to draw the kind.
 export const splitKindTags = (title: string): TitlePart[] => {
   const parts: TitlePart[] = []

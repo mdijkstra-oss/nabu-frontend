@@ -20,7 +20,7 @@ const toEntry = (unit: ScanUnit): ScannedUnit => ({
 })
 
 const hit = (hitSentence: number, value = "rutte"): Hit => ({
-  kind: "speaker",
+  kind: "person",
   quote: "Rutte",
   hitSentence,
   value,
@@ -160,7 +160,7 @@ describe("reconcileMarks", () => {
     hitSentence: number,
     sentences: string[] = document
   ): StoredMark => ({
-    kind: "speaker",
+    kind: "person",
     quote: "Rutte",
     value: "rutte",
     hitSentence,

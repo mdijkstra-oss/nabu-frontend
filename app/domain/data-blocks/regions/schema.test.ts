@@ -23,8 +23,8 @@ const block = (body: unknown): string => "```json-regions\n" + JSON.stringify(bo
 
 const document = (body: unknown): string => `${PROSE}\n\n${block(body)}\n`
 
-const speaker = (overrides: Partial<RegionRow> = {}): Record<string, unknown> => ({
-  kind: "speaker",
+const person = (overrides: Partial<RegionRow> = {}): Record<string, unknown> => ({
+  kind: "person",
   parsed: { type: "string", value: "rutte" },
   quote: "Rutte",
   hitSentence: 0,
@@ -52,61 +52,61 @@ beforeEach(() => {
 describe("reading a stored block", () => {
   it("keeps a whole block when one entry is missing parsed", () => {
     const parsed = read(
-      document({ regions: [speaker(), { ...speaker(), parsed: undefined }], scanned: {} })
+      document({ regions: [person(), { ...person(), parsed: undefined }], scanned: {} })
     )
     expect(parsed?.regions).toHaveLength(1)
     expect(console.warn).toHaveBeenCalled()
   })
 
   it("returns null for JSON truncated mid-array, contributing no rows", () => {
-    const raw = PROSE + '\n\n```json-regions\n{"regions": [{"kind": "speaker"\n```\n'
+    const raw = PROSE + '\n\n```json-regions\n{"regions": [{"kind": "person"\n```\n'
     expect(read(raw)).toBeNull()
   })
 
   it("refuses the same content at the file store, naming the file", () => {
     setFiles({ "notes.md": PROSE })
-    const raw = PROSE + '\n\n```json-regions\n{"regions": [{"kind": "speaker"\n```\n'
+    const raw = PROSE + '\n\n```json-regions\n{"regions": [{"kind": "person"\n```\n'
     expect(() => updateFileRaw("notes.md", raw)).toThrow(FileCorruptionError)
     expect(() => updateFileRaw("notes.md", raw)).toThrow(/notes\.md/)
   })
 
   it("carries every scanned entry through unchanged", () => {
     const scanned = {
-      speaker: [
+      person: [
         { hash: "aaaa1111aaaa1111", firstSentence: 0 },
         { hash: "bbbb2222bbbb2222", firstSentence: 2 },
       ],
       date: [{ hash: "cccc3333cccc3333", firstSentence: 0 }],
     }
-    const parsed = read(document({ regions: [speaker(), { kind: "speaker" }], scanned }))
+    const parsed = read(document({ regions: [person(), { kind: "person" }], scanned }))
     expect(parsed?.scanned).toEqual(scanned)
     expect(parsed?.regions).toHaveLength(1)
   })
 
   it.each([
-    ["a kind no longer in the registry", speaker({ kind: "weather" } as Partial<RegionRow>)],
-    ["a range triple with a missing hash", { ...speaker(), rangeHash: undefined }],
-    ["an end before its start", speaker({ startSentence: 3, endSentence: 1 })],
+    ["a kind no longer in the registry", person({ kind: "weather" } as Partial<RegionRow>)],
+    ["a range triple with a missing hash", { ...person(), rangeHash: undefined }],
+    ["an end before its start", person({ startSentence: 3, endSentence: 1 })],
   ])("drops %s and keeps its siblings", (_case, bad) => {
-    const parsed = read(document({ regions: [speaker(), bad], scanned: {} }))
+    const parsed = read(document({ regions: [person(), bad], scanned: {} }))
     expect(parsed?.regions).toHaveLength(1)
   })
 
   it("yields no rows for a document of nothing but unregistered kinds, and does not throw", () => {
     const parsed = read(
-      document({ regions: [speaker({ kind: "weather" } as Partial<RegionRow>)], scanned: {} })
+      document({ regions: [person({ kind: "weather" } as Partial<RegionRow>)], scanned: {} })
     )
     expect(parsed?.regions).toEqual([])
   })
 
   it("accepts indexes past the end of the document, because staleness is not invalidity", () => {
-    const stale = speaker({ startSentence: 90, endSentence: 99, hitSentence: 90 })
+    const stale = person({ startSentence: 90, endSentence: 99, hitSentence: 90 })
     expect(read(document({ regions: [stale], scanned: {} }))?.regions).toHaveLength(1)
   })
 
   it("accepts a hit with no range at all", () => {
     const unresolved = {
-      kind: "speaker",
+      kind: "person",
       parsed: { type: "string", value: "kaag" },
       quote: "Kaag",
       hitSentence: 2,
@@ -117,14 +117,14 @@ describe("reading a stored block", () => {
   })
 
   it("indexes from zero against the real sentence array", () => {
-    const raw = document({ regions: [speaker()], scanned: {} })
+    const raw = document({ regions: [person()], scanned: {} })
     const parsed = read(raw)
     expect(parsed?.regions[0].startSentence).toBe(0)
     expect(indexFileSentences(raw)[0].text).toBe("Rutte opened the meeting.")
   })
 
   it("projects two documents holding identical blocks under their own files", () => {
-    const body = { regions: [speaker()], scanned: {} }
+    const body = { regions: [person()], scanned: {} }
     const first = read(document(body))
     const second = read(`Other prose entirely.\n\n${block(body)}\n`)
     const schema = toJsonSchema(regionsProjection())
@@ -167,10 +167,10 @@ describe("the derived table", () => {
   })
 
   it("extracts a row under its own file", () => {
-    const [rows] = extractRows("regions", toJsonSchema(regionsProjection()), speaker(), "notes.md")
+    const [rows] = extractRows("regions", toJsonSchema(regionsProjection()), person(), "notes.md")
     expect(rows.rows[0]).toMatchObject({
       file: "notes.md",
-      kind: "speaker",
+      kind: "person",
       parsed_value: "rutte",
       start_sentence: 0,
       end_sentence: 1,
@@ -179,7 +179,7 @@ describe("the derived table", () => {
 
   it("writes null columns for a hit with no range", () => {
     const unresolved = {
-      kind: "speaker",
+      kind: "person",
       parsed: { type: "string", value: "kaag" },
       quote: "Kaag",
       hitSentence: 2,
@@ -195,8 +195,8 @@ describe("the derived table", () => {
 
 describe("round-tripping through the file store", () => {
   const raw = document({
-    regions: [speaker()],
-    scanned: { speaker: [{ hash: "aaaa1111aaaa1111", firstSentence: 0 }] },
+    regions: [person()],
+    scanned: { person: [{ hash: "aaaa1111aaaa1111", firstSentence: 0 }] },
   })
 
   it("is byte-identical on a second normalization", () => {

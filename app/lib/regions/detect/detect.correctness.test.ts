@@ -9,10 +9,10 @@ import { FIND_MAX_ITEMS, runFind } from "./find"
 import { runMark } from "./mark"
 import { answering, answeringEach, textOf } from "./parse-call.fixture"
 
-const speaker: KindDescriptor = {
-  id: "speaker",
-  rules: "A speaker is the person whose words a passage carries.",
-  icon: "mic",
+const person: KindDescriptor = {
+  id: "person",
+  rules: "A person is the person whose words a passage carries.",
+  icon: "user",
   color: "indigo",
   valueType: "string",
 }
@@ -42,7 +42,7 @@ const findJob = (known: string[] = []): RecordedFindJob => {
   const abandoned: FindWork[] = []
   return {
     job: {
-      kind: speaker,
+      kind: person,
       knownValues,
       onAnswered: (work, hits) => answered.push({ work, hits }),
       onAbandoned: (work) => abandoned.push(work),
@@ -127,7 +127,7 @@ describe("cross-entry occurrences between acknowledged entries", () => {
     const byFile = new Map(answered.map(({ work, hits }) => [work.file, hits]))
     expect(byFile.get("a.md")).toEqual([])
     expect(byFile.get("b.md")).toEqual([
-      { kind: "speaker", quote: "Kaag answered", hitSentence: 5, value: "kaag" },
+      { kind: "person", quote: "Kaag answered", hitSentence: 5, value: "kaag" },
     ])
   })
 })
@@ -188,7 +188,7 @@ const markSentences = Array.from({ length: 60 }, (_, i) => `Sentence number ${i}
 const markWorkOf = (hitSentence: number, window: SentenceWindow): MarkWork => ({
   file: "talk.md",
   sentences: markSentences,
-  hit: { kind: "speaker", quote: `quote ${hitSentence}`, hitSentence, value: "rutte" },
+  hit: { kind: "person", quote: `quote ${hitSentence}`, hitSentence, value: "rutte" },
   window,
 })
 
@@ -203,7 +203,7 @@ const markJob = (): RecordedMarkJob => {
   const failed: MarkWork[] = []
   return {
     job: {
-      kind: speaker,
+      kind: person,
       onAnswered: (work, mark) => answered.push({ work, mark }),
       onFailed: (work) => failed.push(work),
     },

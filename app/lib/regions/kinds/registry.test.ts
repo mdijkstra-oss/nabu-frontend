@@ -8,9 +8,9 @@ import { REGION_KIND_IDS, getKind, parseKindRegistry, regionKinds } from "./regi
 const KINDS_DIR = join(process.cwd(), "app/domain/regions/kinds")
 
 const valid = {
-  id: "speaker",
-  rules: "prose that says what a speaker is",
-  icon: "mic",
+  id: "person",
+  rules: "prose that says what a person is",
+  icon: "user",
   color: "indigo",
   valueType: "string",
 }
@@ -40,11 +40,11 @@ describe("shipped kinds", () => {
     expect(REGION_KIND_IDS).toEqual(regionKinds().map((k) => k.id))
   })
 
-  it("resolves speaker as a list-backed kind", () => {
-    const speaker = getKind("speaker")
-    expect(speaker?.valueType).toBe("string")
-    expect(speaker?.icon).toBe("mic")
-    expect(speaker?.color).toBe("indigo")
+  it("resolves person as a list-backed kind", () => {
+    const person = getKind("person")
+    expect(person?.valueType).toBe("string")
+    expect(person?.icon).toBe("user")
+    expect(person?.color).toBe("indigo")
   })
 
   it("yields nothing for an unregistered id", () => {
@@ -58,7 +58,7 @@ describe("parse", () => {
     ["a colour with no CSS variable", { ...valid, color: "burgundy" }, "color"],
     ["an icon outside ICON_NAMES", { ...valid, icon: "megaphone-of-truth" }, "icon"],
     ["a value type with no reducer", { ...valid, valueType: "duration" }, "valueType"],
-    ["an id that is not a lowercase word", { ...valid, id: "Speaker Name" }, "id"],
+    ["an id that is not a lowercase word", { ...valid, id: "Person Name" }, "id"],
   ])("rejects %s, naming the kind and the field", (_case, entry, field) => {
     expect(() => parseKindRegistry([entry])).toThrow(new RegExp(`${entry.id}.*${field}`))
   })
@@ -70,7 +70,7 @@ describe("parse", () => {
 
   it("rejects two kinds sharing an id", () => {
     expect(() => parseKindRegistry([valid, { ...valid, color: "amber" }])).toThrow(
-      /speaker.*duplicate id/
+      /person.*duplicate id/
     )
   })
 

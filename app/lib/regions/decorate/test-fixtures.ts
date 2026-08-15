@@ -14,19 +14,19 @@ export const TRANSCRIPT_PROSE = [
   "Bob objected to the timeline. He asked for another month.",
 ].join("\n")
 
-export const speakerRegion = (
+export const personRegion = (
   value: string,
   start?: number,
   end?: number,
   hit = start ?? 0
 ): RegionRow => ({
-  kind: "speaker",
+  kind: "person",
   parsed: { type: "string", value },
   quote: value,
   hitSentence: hit,
   ...(start === undefined || end === undefined
     ? {}
-    : { startSentence: start, endSentence: end, rangeHash: `speaker-${start}-${end}` }),
+    : { startSentence: start, endSentence: end, rangeHash: `person-${start}-${end}` }),
 })
 
 export const dateRegion = (value: string, start: number, end: number): RegionRow => ({

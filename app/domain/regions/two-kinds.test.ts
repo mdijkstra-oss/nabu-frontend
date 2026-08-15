@@ -23,9 +23,9 @@ const TRANSCRIPT = [
 const DOCUMENT = `${TRANSCRIPT}\n`
 
 const HITS: Record<string, Hit[]> = {
-  speaker: [
-    { kind: "speaker", quote: "Rutte", hitSentence: 0, value: "rutte" },
-    { kind: "speaker", quote: "Kaag", hitSentence: 2, value: "kaag" },
+  person: [
+    { kind: "person", quote: "Rutte", hitSentence: 0, value: "rutte" },
+    { kind: "person", quote: "Kaag", hitSentence: 2, value: "kaag" },
   ],
   date: [
     { kind: "date", quote: "3 March 2026", hitSentence: 0, value: "2026-03-03T00:00:00.000Z" },
@@ -46,8 +46,8 @@ const find: FindCall = async (items, job) => {
 }
 
 const RANGES: Record<string, [number, number]> = {
-  "speaker:0": [0, 1],
-  "speaker:2": [2, 3],
+  "person:0": [0, 1],
+  "person:2": [2, 3],
   "date:0": [0, 3],
 }
 
@@ -104,8 +104,8 @@ describe("a two-kind document", () => {
 
     const block = getBlock(afterFirst, "json-regions", RegionsBlockSchema)
     expect(block?.regions.map((r) => [r.kind, r.parsed.value])).toEqual([
-      ["speaker", "rutte"],
-      ["speaker", "kaag"],
+      ["person", "rutte"],
+      ["person", "kaag"],
       ["date", "2026-03-03T00:00:00.000Z"],
     ])
 

@@ -21,8 +21,8 @@ const find: FindCall = async (items, job) => {
   for (const item of items) {
     job.onAnswered(
       item,
-      job.kind.id === "speaker" && item.unit.firstSentence === 0
-        ? [{ kind: "speaker", quote: "Rutte", hitSentence: 0, value: "rutte" }]
+      job.kind.id === "person" && item.unit.firstSentence === 0
+        ? [{ kind: "person", quote: "Rutte", hitSentence: 0, value: "rutte" }]
         : []
     )
   }
@@ -35,7 +35,7 @@ const mark: MarkCall = async (items, job) => {
   }
 }
 
-const speakerOnly = () => regionKinds().filter((kind) => kind.id === "speaker")
+const personOnly = () => regionKinds().filter((kind) => kind.id === "person")
 
 const zeroVector = (): number[] => new Array<number>(getEmbeddingsDimensions()).fill(0)
 
@@ -49,7 +49,7 @@ const runOnePass = async (): Promise<void> => {
     embeddingsUrl: "http://embeddings.test",
     fetchBatch: (texts) => Promise.resolve(ok(texts.map(() => zeroVector()))),
     classify: () => Promise.resolve(null),
-    getKinds: speakerOnly,
+    getKinds: personOnly,
     detect: { find, mark },
     writeRegions: writeRegionsBlock,
     getSignificantLanguages: () => Promise.resolve([]),

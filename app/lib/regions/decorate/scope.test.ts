@@ -8,7 +8,7 @@ import {
   scopeOfQuote,
   type SentenceScope,
 } from "./scope"
-import { TRANSCRIPT_PROSE, dateRegion, speakerRegion } from "./test-fixtures"
+import { TRANSCRIPT_PROSE, dateRegion, personRegion } from "./test-fixtures"
 
 const sentences: SentenceRow[] = [
   { text: "One.", start: 0, end: 4 },
@@ -106,45 +106,45 @@ describe("regionsInScope", () => {
   const cases: Case[] = [
     {
       name: "a region enclosing the scope is in scope",
-      regions: [speakerRegion("alice", 0, 4)],
+      regions: [personRegion("alice", 0, 4)],
       scope: { first: 2, last: 2 },
       expected: ["alice"],
     },
     {
       name: "a region the scope encloses is in scope",
-      regions: [speakerRegion("alice", 2, 2)],
+      regions: [personRegion("alice", 2, 2)],
       scope: { first: 0, last: 4 },
       expected: ["alice"],
     },
     {
       name: "a region straddling the scope's edge is in scope",
-      regions: [speakerRegion("alice", 3, 5)],
+      regions: [personRegion("alice", 3, 5)],
       scope: { first: 1, last: 3 },
       expected: ["alice"],
     },
     {
       name: "an adjacent but disjoint region is out of scope",
-      regions: [speakerRegion("alice", 3, 4)],
+      regions: [personRegion("alice", 3, 4)],
       scope: { first: 1, last: 2 },
       expected: [],
     },
     {
       name: "a region stale past the end of the document is out of scope",
-      regions: [speakerRegion("alice", 40, 41)],
+      regions: [personRegion("alice", 40, 41)],
       scope: { first: 0, last: 4 },
       expected: [],
     },
     {
       name: "a hit with no range encloses no text",
-      regions: [speakerRegion("alice")],
+      regions: [personRegion("alice")],
       scope: { first: 0, last: 4 },
       expected: [],
     },
     {
       name: "regions of the excluded kind never reach the scope",
-      regions: [speakerRegion("alice", 0, 4), dateRegion("2026-03-03T00:00:00Z", 0, 4)],
+      regions: [personRegion("alice", 0, 4), dateRegion("2026-03-03T00:00:00Z", 0, 4)],
       scope: { first: 1, last: 1 },
-      excludedKind: "speaker",
+      excludedKind: "person",
       expected: ["2026-03-03T00:00:00Z"],
     },
   ]

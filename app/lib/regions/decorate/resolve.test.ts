@@ -3,7 +3,7 @@ import type { z } from "zod"
 import { getBlock } from "~/lib/data-blocks/query"
 import { getBlockConfig } from "~/lib/data-blocks/registry"
 import type * as Halo from "~/lib/text/halo"
-import { annotationsBlock, document, regionsBlock, speakerRegion } from "./test-fixtures"
+import { annotationsBlock, document, regionsBlock, personRegion } from "./test-fixtures"
 
 const indexed = vi.hoisted(() => ({ count: 0 }))
 
@@ -34,7 +34,7 @@ describe("the document memo", () => {
   })
 
   it("resolves a document's regions once however often it is read", () => {
-    const raw = document(regionsBlock([speakerRegion("alice", 0, 4)]), annotations)
+    const raw = document(regionsBlock([personRegion("alice", 0, 4)]), annotations)
 
     readAnnotations(raw)
     readAnnotations(raw)
@@ -43,7 +43,7 @@ describe("the document memo", () => {
   })
 
   it("resolves again when one character of the document changed", () => {
-    const raw = document(regionsBlock([speakerRegion("carol", 0, 4)]), annotations)
+    const raw = document(regionsBlock([personRegion("carol", 0, 4)]), annotations)
 
     readAnnotations(raw)
     readAnnotations(raw.replace("# Interview", "# Interviews"))

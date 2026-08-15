@@ -10,12 +10,12 @@ const meta: Meta<typeof KindTaggedText> = {
 export default meta
 type Story = StoryObj<typeof KindTaggedText>
 
-export const SpeakerTitle: Story = {
-  args: { text: ":speaker: rutte" },
+export const PersonTitle: Story = {
+  args: { text: ":person: rutte" },
   play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByText("rutte")).toBeInTheDocument()
-    expect(canvasElement.querySelector('[aria-label="speaker"] svg')).not.toBeNull()
-    expect(canvasElement.textContent).not.toContain(":speaker:")
+    expect(canvasElement.querySelector('[aria-label="person"] svg')).not.toBeNull()
+    expect(canvasElement.textContent).not.toContain(":person:")
   },
 }
 

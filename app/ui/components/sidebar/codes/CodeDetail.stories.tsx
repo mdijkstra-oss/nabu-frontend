@@ -25,7 +25,7 @@ export const Markdown: Story = {
     const heading = canvas.getByText("Definition")
     expect(heading.tagName).toBe("SPAN")
     expect(heading.className).toContain("font-body-bold")
-    const paragraph = canvas.getByText("A speaker recognizes and names another person's feelings.")
+    const paragraph = canvas.getByText("A person recognizes and names another person's feelings.")
     expect(paragraph.tagName).toBe("SPAN")
     expect(canvas.getByText("Naming an emotion").closest("li")).not.toBeNull()
     expect(canvas.getByText("Mirroring back a concern").closest("li")).not.toBeNull()

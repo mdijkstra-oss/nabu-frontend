@@ -11,10 +11,10 @@ import {
   textOf,
 } from "./parse-call.fixture"
 
-const speaker: KindDescriptor = {
-  id: "speaker",
-  rules: "A speaker is the person whose words a passage carries.",
-  icon: "mic",
+const person: KindDescriptor = {
+  id: "person",
+  rules: "A person is the person whose words a passage carries.",
+  icon: "user",
   color: "indigo",
   valueType: "string",
 }
@@ -22,7 +22,7 @@ const speaker: KindDescriptor = {
 const sentences = Array.from({ length: 60 }, (_, i) => `Sentence number ${i}.`)
 
 const hitAt = (hitSentence: number, value = "rutte"): Hit => ({
-  kind: "speaker",
+  kind: "person",
   quote: `quote ${hitSentence}`,
   hitSentence,
   value,
@@ -46,7 +46,7 @@ const jobFor = (): RecordedJob => {
   const failed: MarkWork[] = []
   return {
     job: {
-      kind: speaker,
+      kind: person,
       onAnswered: (work, mark) => answered.push({ work, mark }),
       onFailed: (work) => failed.push(work),
     },
@@ -75,7 +75,7 @@ describe("the mark payload", () => {
     expect(calls[0].endpoint).toBe(MARK_ENDPOINT)
     expect(calls[0].messages.map((m) => m.role)).toEqual(["system", "system", "user"])
     expect(calls[0].messages.map(hasBreakpoint)).toEqual([true, false, false])
-    expect(textOf(calls[0].messages[0])).toBe(speaker.rules)
+    expect(textOf(calls[0].messages[0])).toBe(person.rules)
 
     const lines = textOf(calls[0].messages[1]).split("\n")
     expect(lines[0]).toBe('<entry id="1" file="talk.md">')

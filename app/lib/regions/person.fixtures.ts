@@ -1,10 +1,10 @@
 import type { FindCall, FindWork, Hit, MarkCall, MarkWork } from "./detect/types"
 import type { KindDescriptor } from "./kinds/registry"
 
-export const speakerKind: KindDescriptor = {
-  id: "speaker",
-  rules: "fixture rules: a speaker owns the words of their own turn",
-  icon: "mic",
+export const personKind: KindDescriptor = {
+  id: "person",
+  rules: "fixture rules: a person owns the words of their own turn",
+  icon: "user",
   color: "indigo",
   valueType: "string",
 }
@@ -20,7 +20,7 @@ export const transcript = (turns: number): string =>
 export const hitsIn = (item: FindWork): Hit[] =>
   item.sentences.flatMap((text, i) =>
     SPEAKER_NAMES.filter((name) => text.includes(name)).map((name) => ({
-      kind: speakerKind.id,
+      kind: personKind.id,
       quote: name,
       hitSentence: item.unit.firstSentence + i,
       value: name.toLowerCase(),

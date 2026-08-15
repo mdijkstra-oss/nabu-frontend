@@ -164,7 +164,7 @@ The generated DDL is handed to the model on every turn as the description of wha
 
 Annotations mark short spans. Nothing in them says _who is speaking here_ or _what date this passage is from_, so a transcript is a flat wall of coded spans with no way to ask which are Rutte's, and a diary is one document with no way to order its entries.
 
-Regions are a second layer of markup that cuts a document into stretches rather than spans. A region has a **kind** — `speaker`, `date` — and a **value** drawn from a vocabulary shared across the whole corpus, so `rutte` is one person in every file rather than four spellings.
+Regions are a second layer of markup that cuts a document into stretches rather than spans. A region has a **kind** — `person`, `date` — and a **value** drawn from a vocabulary shared across the whole corpus, so `rutte` is one person in every file rather than four spellings.
 
 Detection runs by itself, on the same debounce as embedding. One model call finds the occurrences in a stretch of the document; a second decides which sentences each occurrence owns. The result is written into the document as a `json-regions` block, so the document stays the only source of truth and reopening it re-runs no model call.
 
@@ -180,16 +180,16 @@ The payoff is at read time. Every JSON block in a document is handed the regions
   "reason": "attribution of the decision",
   "code": "callout-3kf9m2qp",
   "inferred_meta": {
-    "speaker": ["rutte"],
+    "person": ["rutte"],
     "date": { "start": "2020-03-12T00:00:00Z", "end": "2020-03-12T00:00:00Z" }
   }
 }
 ```
 
-That field is never stored. It is recomputed on every read and stripped on every write, so the file on disk holds the regions block and nothing else. What it produces is columns — `inferred_meta_speaker`, `inferred_meta_date_start`, `inferred_meta_date_end` — on every projected table, which turns two questions into ordinary SQL:
+That field is never stored. It is recomputed on every read and stripped on every write, so the file on disk holds the regions block and nothing else. What it produces is columns — `inferred_meta_person`, `inferred_meta_date_start`, `inferred_meta_date_end` — on every projected table, which turns two questions into ordinary SQL:
 
 ```sql
-SELECT * FROM annotations WHERE list_contains(inferred_meta_speaker, 'rutte');
+SELECT * FROM annotations WHERE list_contains(inferred_meta_person, 'rutte');
 SELECT * FROM charts WHERE inferred_meta_date_start >= TIMESTAMP '2020-03-01';
 ```
 

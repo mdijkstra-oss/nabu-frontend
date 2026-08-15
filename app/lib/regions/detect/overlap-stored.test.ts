@@ -8,7 +8,7 @@ const mark = (
   hitSentence: number,
   value: string
 ): Mark => ({
-  kind: "speaker",
+  kind: "person",
   quote: "q",
   hitSentence,
   value,

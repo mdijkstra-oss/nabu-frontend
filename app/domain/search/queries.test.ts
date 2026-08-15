@@ -3,11 +3,11 @@ import { validateSql } from "~/lib/search/semantic"
 import { buildRegionSearch } from "./queries"
 
 describe("buildRegionSearch", () => {
-  const search = buildRegionSearch({ kind: "speaker", value: "rutte", label: "rutte" })
+  const search = buildRegionSearch({ kind: "person", value: "rutte", label: "rutte" })
 
   it("filters the regions table on kind and value", () => {
     expect(search.sql).toBe(
-      "SELECT file, quote AS text, start_sentence, end_sentence FROM regions WHERE kind = 'speaker' AND parsed_value = 'rutte' ORDER BY file, start_sentence"
+      "SELECT file, quote AS text, start_sentence, end_sentence FROM regions WHERE kind = 'person' AND parsed_value = 'rutte' ORDER BY file, start_sentence"
     )
   })
 
@@ -22,7 +22,7 @@ describe("buildRegionSearch", () => {
   })
 
   it("escapes quotes in the value", () => {
-    const quoted = buildRegionSearch({ kind: "speaker", value: "o'brien", label: "o'brien" })
+    const quoted = buildRegionSearch({ kind: "person", value: "o'brien", label: "o'brien" })
     expect(quoted.sql).toContain("parsed_value = 'o''brien'")
   })
 

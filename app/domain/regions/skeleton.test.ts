@@ -32,18 +32,18 @@ const ANNOTATION = {
 
 const DOCUMENT = `${TRANSCRIPT}\n\n\`\`\`json-annotations\n${JSON.stringify({ annotations: [ANNOTATION] })}\n\`\`\`\n`
 
-// Two speakers, each owning two sentences: what a real find/mark pair returns for this
+// Two people, each owning two sentences: what a real find/mark pair returns for this
 // transcript, with the detectors faked at the DetectCalls seam and nothing below it.
 const HITS = [
-  { kind: "speaker", quote: "Rutte", hitSentence: 0, value: "rutte" },
-  { kind: "speaker", quote: "Kaag", hitSentence: 2, value: "kaag" },
+  { kind: "person", quote: "Rutte", hitSentence: 0, value: "rutte" },
+  { kind: "person", quote: "Kaag", hitSentence: 2, value: "kaag" },
 ]
 
 const find: FindCall = async (items, job) => {
   for (const item of items) {
     job.onAnswered(
       item,
-      job.kind.id === "speaker"
+      job.kind.id === "person"
         ? HITS.filter(
             (hit) =>
               hit.hitSentence >= item.unit.firstSentence &&
@@ -64,7 +64,7 @@ const mark: MarkCall = async (items, job) => {
   }
 }
 
-const speakerOnly = () => regionKinds().filter((kind) => kind.id === "speaker")
+const personOnly = () => regionKinds().filter((kind) => kind.id === "person")
 
 const zeroVector = (): number[] => new Array<number>(getEmbeddingsDimensions()).fill(0)
 
@@ -78,7 +78,7 @@ const runEnginePass = async (detect: DetectCalls): Promise<void> => {
     embeddingsUrl: "http://embeddings.test",
     fetchBatch: (texts) => Promise.resolve(ok(texts.map(() => zeroVector()))),
     classify: () => Promise.resolve(null),
-    getKinds: speakerOnly,
+    getKinds: personOnly,
     detect,
     writeRegions: writeRegionsBlock,
     getSignificantLanguages: () => Promise.resolve([]),
@@ -97,7 +97,7 @@ beforeEach(() => {
 })
 
 describe("the walking skeleton", () => {
-  it("writes a json-regions block holding one region per speaker", async () => {
+  it("writes a json-regions block holding one region per person", async () => {
     await runOnePass()
     const block = getBlock(getFileRaw(PATH), "json-regions", RegionsBlockSchema)
     expect(block?.regions.map((r) => r.parsed.value)).toEqual(["rutte", "kaag"])
@@ -107,15 +107,15 @@ describe("the walking skeleton", () => {
     ])
   })
 
-  it("hands the editor one renderable region per speaker, on the document's own words", async () => {
+  it("hands the editor one renderable region per person, on the document's own words", async () => {
     await runOnePass()
     const { regions, sentences } = getRenderableRegions(getFileRaw(PATH))
     expect(regions.map((r) => [r.kind, r.label, r.quote])).toEqual([
-      ["speaker", "rutte", "Rutte"],
-      ["speaker", "kaag", "Kaag"],
+      ["person", "rutte", "Rutte"],
+      ["person", "kaag", "Kaag"],
     ])
     expect(regions.every((r) => sentences[r.hitSentence].includes(r.quote))).toBe(true)
-    expect(regions.map((r) => r.icon)).toEqual(["mic", "mic"])
+    expect(regions.map((r) => r.icon)).toEqual(["user", "user"])
   })
 
   it("projects the regions as rows under the document's own path", async () => {
@@ -126,19 +126,19 @@ describe("the walking skeleton", () => {
       .blockParser(getFileRaw(PATH))
       .flatMap((row) => extractRows("regions", toJsonSchema(projection), row, PATH)[0].rows)
     expect(rows.map((r) => [r.file, r.kind, r.parsed_value])).toEqual([
-      [PATH, "speaker", "rutte"],
-      [PATH, "speaker", "kaag"],
+      [PATH, "person", "rutte"],
+      [PATH, "person", "kaag"],
     ])
     const columns = jsonSchemaToTableProjection("regions", toJsonSchema(projection)).schemas[0]
-    expect(columns.columns.map((c) => c.name)).toContain("inferred_meta_speaker")
+    expect(columns.columns.map((c) => c.name)).toContain("inferred_meta_person")
   })
 
-  it("carries the annotation's speaker in inferred_meta, and never on disk", async () => {
+  it("carries the annotation's person in inferred_meta, and never on disk", async () => {
     await runOnePass()
     const raw = getFileRaw(PATH)
     const annotations = getBlock(raw, "json-annotations", AnnotationsBlockSchema)
-    const decorated = annotations?.annotations[0] as { inferred_meta?: { speaker?: string[] } }
-    expect(decorated.inferred_meta?.speaker).toEqual(["kaag"])
+    const decorated = annotations?.annotations[0] as { inferred_meta?: { person?: string[] } }
+    expect(decorated.inferred_meta?.person).toEqual(["kaag"])
     expect(raw).not.toContain("inferred_meta")
   })
 

@@ -12,7 +12,7 @@ import { sweepUnregisteredKinds } from "./boot-sweep"
 import { hashSentences } from "./detect/units"
 import type { FindCall, FindWork, Hit, MarkCall, MarkWork } from "./detect/types"
 import type { KindDescriptor } from "./kinds/registry"
-import { speakerKind, transcript } from "./speaker.fixtures"
+import { personKind, transcript } from "./person.fixtures"
 import { readStoredRegions } from "./stored"
 import type { WriteOutcome } from "./sync-types"
 
@@ -30,8 +30,8 @@ interface Pattern {
 }
 
 const SPEAKERS: Pattern[] = [
-  { kind: "speaker", quote: "Rutte" },
-  { kind: "speaker", quote: "Kaag" },
+  { kind: "person", quote: "Rutte" },
+  { kind: "person", quote: "Kaag" },
 ]
 
 interface Range {
@@ -225,7 +225,7 @@ let engines: EngineHandle[] = []
 const startSync = (
   project: Project,
   detect: Detect,
-  kinds: KindDescriptor[] = [speakerKind]
+  kinds: KindDescriptor[] = [personKind]
 ): EngineHandle => {
   const engine = startEngine({
     ...project.deps,
@@ -256,7 +256,7 @@ const MARKDOWN_NOTES = [
   "",
   "See [the agenda](https://example.org/agenda) for the order of business.",
   "",
-  "| Speaker | Turn |",
+  "| Person | Turn |",
   "| --- | --- |",
   "| Rutte | 1 |",
   "",
@@ -426,7 +426,7 @@ describe("the units a document becomes", () => {
 
     expect(detect.finds).toHaveLength(1)
     expect(detect.finds[0].sentences).toEqual(sentencesOf(ONE_PARAGRAPH))
-    expect(project.regionsIn("short.md").scanned.speaker).toHaveLength(1)
+    expect(project.regionsIn("short.md").scanned.person).toHaveLength(1)
   })
 })
 
@@ -445,14 +445,14 @@ describe("a unit whose answer was lost", () => {
     await sync.ready
 
     const firstUnit = 0
-    const scanned = project.regionsIn("talk.md").scanned.speaker
+    const scanned = project.regionsIn("talk.md").scanned.person
     expect(scanned.some((unit) => unit.firstSentence === firstUnit)).toBe(false)
 
     const findsBefore = detect.finds.length
     await sync.tick()
 
     expect(detect.finds.slice(findsBefore).map((f) => f.firstSentence)).toContain(firstUnit)
-    const retried = project.regionsIn("talk.md").scanned.speaker
+    const retried = project.regionsIn("talk.md").scanned.person
     expect(retried.some((unit) => unit.firstSentence === firstUnit)).toBe(true)
   })
 
@@ -465,7 +465,7 @@ describe("a unit whose answer was lost", () => {
     const sync = startSync(project, detect)
     await sync.ready
 
-    expect(project.regionsIn("talk.md").scanned.speaker).toEqual([])
+    expect(project.regionsIn("talk.md").scanned.person).toEqual([])
     expect(project.regionsIn("talk.md").regions).toEqual([])
 
     const offeredFirstPass = detect.finds.length
@@ -477,7 +477,7 @@ describe("a unit whose answer was lost", () => {
     expect(detect.finds.slice(offeredFirstPass).map((f) => f.firstSentence)).toEqual(
       detect.finds.slice(0, offeredFirstPass).map((f) => f.firstSentence)
     )
-    expect(project.regionsIn("talk.md").scanned.speaker).toHaveLength(offeredFirstPass)
+    expect(project.regionsIn("talk.md").scanned.person).toHaveLength(offeredFirstPass)
   })
 })
 
@@ -490,7 +490,7 @@ describe("hit and unit invalidation", () => {
     await sync.ready
 
     const before = project.regionsIn("talk.md")
-    const scannedBefore = before.scanned.speaker
+    const scannedBefore = before.scanned.person
     expect(scannedBefore.length).toBeGreaterThan(3)
 
     const findsBefore = detect.finds.length
@@ -517,11 +517,11 @@ describe("hit and unit invalidation", () => {
       )
 
     expect(fresh.map((f) => f.firstSentence)).toEqual([changedUnit.first])
-    expect(after.scanned.speaker.map((u) => u.firstSentence)).toEqual(
+    expect(after.scanned.person.map((u) => u.firstSentence)).toEqual(
       scannedBefore.map((u) => u.firstSentence)
     )
-    expect(after.scanned.speaker[1].hash).not.toBe(scannedBefore[1].hash)
-    expect(after.scanned.speaker[0].hash).toBe(scannedBefore[0].hash)
+    expect(after.scanned.person[1].hash).not.toBe(scannedBefore[1].hash)
+    expect(after.scanned.person[0].hash).toBe(scannedBefore[0].hash)
     expect(outsideChangedUnit(after)).toEqual(outsideChangedUnit(before))
     expect(
       detect.marks
@@ -540,7 +540,7 @@ describe("hit and unit invalidation", () => {
     await sync.ready
 
     const before = project.regionsIn("talk.md")
-    const scannedBefore = before.scanned.speaker
+    const scannedBefore = before.scanned.person
     expect(scannedBefore.length).toBeGreaterThan(2)
 
     const findsBefore = detect.finds.length
@@ -552,9 +552,9 @@ describe("hit and unit invalidation", () => {
 
     const after = project.regionsIn("talk.md")
     const storedHashes = new Set(scannedBefore.map((unit) => unit.hash))
-    const survivors = after.scanned.speaker.filter((unit) => storedHashes.has(unit.hash))
+    const survivors = after.scanned.person.filter((unit) => storedHashes.has(unit.hash))
     const survivingHashes = new Set(survivors.map((unit) => unit.hash))
-    const refound = after.scanned.speaker.filter((unit) => !survivingHashes.has(unit.hash))
+    const refound = after.scanned.person.filter((unit) => !survivingHashes.has(unit.hash))
     const firstSurvivor = survivors[0].firstSentence
 
     expect(survivors.length).toBeGreaterThan(refound.length)
@@ -592,12 +592,12 @@ describe("hit and unit invalidation", () => {
     first.stop()
 
     const fresh = project.regionsIn("notes.md")
-    expect(fresh.scanned.speaker.length).toBeGreaterThan(1)
+    expect(fresh.scanned.person.length).toBeGreaterThan(1)
     expect(fresh.regions.filter(isResolved).length).toBeGreaterThan(1)
 
     project.deps.writeRegions(
       "notes.md",
-      underPreviousRecipe(fresh, sentencesOf(project.files["notes.md"]), speakerKind.id)
+      underPreviousRecipe(fresh, sentencesOf(project.files["notes.md"]), personKind.id)
     )
 
     const again = createDetect()
@@ -605,7 +605,7 @@ describe("hit and unit invalidation", () => {
     await second.ready
 
     expect(again.finds.map((f) => f.firstSentence)).toEqual(
-      fresh.scanned.speaker.map((unit) => unit.firstSentence)
+      fresh.scanned.person.map((unit) => unit.firstSentence)
     )
     expect(again.marks).toHaveLength(scratch.marks.length)
     expect(project.regionsIn("notes.md")).toEqual(fresh)
@@ -642,8 +642,8 @@ describe("hit and unit invalidation", () => {
     const sync = startSync(project, detect)
     await sync.ready
 
-    const scannedA = project.regionsIn("a.md").scanned.speaker
-    const scannedB = project.regionsIn("b.md").scanned.speaker
+    const scannedA = project.regionsIn("a.md").scanned.person
+    const scannedB = project.regionsIn("b.md").scanned.person
     expect(scannedA.length).toBeGreaterThan(1)
 
     const findsBefore = detect.finds.length
@@ -660,7 +660,7 @@ describe("hit and unit invalidation", () => {
     expect(offered.length).toBeGreaterThan(0)
     expect(offered.every((f) => f.file === "a.md")).toBe(true)
     expect(offered.length).toBeLessThan(scannedA.length)
-    expect(project.regionsIn("b.md").scanned.speaker).toEqual(scannedB)
+    expect(project.regionsIn("b.md").scanned.person).toEqual(scannedB)
   })
 
   it("hands dedupe the kept marks as well as the fresh ones", async () => {
@@ -693,7 +693,7 @@ describe("hit and unit invalidation", () => {
 })
 
 describe("the seam and the shared vocabulary", () => {
-  const twoKinds = [speakerKind, dateKind]
+  const twoKinds = [personKind, dateKind]
 
   const twoKindPatterns: Pattern[] = [
     ...SPEAKERS,
@@ -711,13 +711,8 @@ describe("the seam and the shared vocabulary", () => {
     const sync = startSync(project, detect, twoKinds)
     await sync.ready
 
-    expect(detect.findCalls.map((c) => c.kind).sort()).toEqual([
-      "date",
-      "date",
-      "speaker",
-      "speaker",
-    ])
-    for (const kind of ["date", "speaker"]) {
+    expect(detect.findCalls.map((c) => c.kind).sort()).toEqual(["date", "date", "person", "person"])
+    for (const kind of ["date", "person"]) {
       const calls = detect.findCalls.filter((c) => c.kind === kind)
       expect(calls.flatMap((c) => c.files).sort()).toEqual(["a.md", "b.md"])
       expect(calls[0].knownValues).toEqual([])
@@ -759,7 +754,7 @@ describe("the seam and the shared vocabulary", () => {
     await sync.tick()
 
     const later = detect.findCalls.slice(callsBefore)
-    expect(later.map((c) => c.kind)).toEqual(["speaker"])
+    expect(later.map((c) => c.kind)).toEqual(["person"])
     expect(later[0].knownValues).toEqual(["kaag-2", "rutte-1"])
   })
 })
@@ -974,7 +969,7 @@ describe("idle passes and empty documents", () => {
       patterns: [...SPEAKERS, { kind: "date", quote: "considered" }],
     })
 
-    const sync = startSync(project, detect, [speakerKind, dateKind])
+    const sync = startSync(project, detect, [personKind, dateKind])
     await sync.ready
 
     const findsAfterBoot = detect.finds.length
@@ -1002,7 +997,7 @@ describe("idle passes and empty documents", () => {
 
     const block = project.regionsIn("quiet.md")
     expect(block.regions).toEqual([])
-    expect(block.scanned.speaker.length).toBeGreaterThan(0)
+    expect(block.scanned.person.length).toBeGreaterThan(0)
 
     const findsAfterBoot = detect.finds.length
     await sync.tick()
@@ -1017,8 +1012,8 @@ describe("idle passes and empty documents", () => {
     await first.ready
     first.stop()
 
-    const scannedBefore = project.regionsIn("talk.md").scanned.speaker
-    const improved = { ...speakerKind, rules: `${speakerKind.rules}, restated more precisely` }
+    const scannedBefore = project.regionsIn("talk.md").scanned.person
+    const improved = { ...personKind, rules: `${personKind.rules}, restated more precisely` }
     const revised = createDetect()
 
     sweepUnregisteredKinds({
@@ -1033,7 +1028,7 @@ describe("idle passes and empty documents", () => {
     expect(revised.finds.map((f) => f.firstSentence)).toEqual(
       scannedBefore.map((unit) => unit.firstSentence)
     )
-    const scannedAfter = project.regionsIn("talk.md").scanned.speaker
+    const scannedAfter = project.regionsIn("talk.md").scanned.person
     expect(scannedAfter.map((unit) => unit.rules)).not.toContain(scannedBefore[0].rules)
   })
 })
@@ -1070,15 +1065,15 @@ describe("the boot sweep", () => {
     const withDates = startSync(
       twoKinds,
       createDetect({ patterns: [...SPEAKERS, { kind: "date", quote: "considered" }] }),
-      [speakerKind, dateKind]
+      [personKind, dateKind]
     )
     await withDates.ready
     withDates.stop()
 
     const oneKind = createProject({ "one.md": transcript(6) })
-    const speakersOnly = startSync(oneKind, createDetect(), [speakerKind])
-    await speakersOnly.ready
-    speakersOnly.stop()
+    const peopleOnly = startSync(oneKind, createDetect(), [personKind])
+    await peopleOnly.ready
+    peopleOnly.stop()
 
     const project = createProject({
       "both.md": twoKinds.files["both.md"],
@@ -1088,13 +1083,13 @@ describe("the boot sweep", () => {
 
     sweepUnregisteredKinds({
       getFiles: () => project.files,
-      getKinds: () => [speakerKind],
+      getKinds: () => [personKind],
       writeRegions: project.deps.writeRegions,
     })
 
     const swept = project.regionsIn("both.md")
-    expect(swept.regions.every((row) => row.kind === "speaker")).toBe(true)
-    expect(Object.keys(swept.scanned)).toEqual(["speaker"])
+    expect(swept.regions.every((row) => row.kind === "person")).toBe(true)
+    expect(Object.keys(swept.scanned)).toEqual(["person"])
     expect(project.writes.map((w) => w.path)).toEqual(["both.md"])
   })
 })

@@ -12,7 +12,7 @@ import { startEngine } from "~/lib/engine/engine"
 import type { EngineEvent } from "~/lib/engine/types"
 import { isResolved, type RegionsBlock } from "~/domain/data-blocks/regions/schema"
 import type { FindCall, FindWork, MarkCall } from "./detect/types"
-import { speakerKind, transcript } from "./speaker.fixtures"
+import { personKind, transcript } from "./person.fixtures"
 import { readStoredRegions } from "./stored"
 import type { WriteOutcome } from "./sync-types"
 
@@ -44,7 +44,7 @@ const createProject = (initial: Record<string, string>) => {
         Reflect.deleteProperty(files, path)
       },
       subscribe: () => () => undefined,
-      getKinds: () => [speakerKind],
+      getKinds: () => [personKind],
       writeRegions,
     },
   }
@@ -69,7 +69,7 @@ const findWith =
         item.sentences[0].includes("Rutte")
           ? [
               {
-                kind: "speaker",
+                kind: "person",
                 quote: "Rutte",
                 hitSentence: item.unit.firstSentence,
                 value: "rutte",
@@ -187,7 +187,7 @@ describe("what enters scanned", () => {
     await handle.ready
 
     const abandonedFirstSentence = offered[0][0]
-    const scanned = project.regionsIn("talk.md").scanned.speaker
+    const scanned = project.regionsIn("talk.md").scanned.person
     expect(offered[0].length).toBeGreaterThan(1)
     expect(scanned.map((unit) => unit.firstSentence)).not.toContain(abandonedFirstSentence)
     expect(scanned).toHaveLength(offered[0].length - 1)
@@ -197,7 +197,7 @@ describe("what enters scanned", () => {
     handle.stop()
 
     expect(offered.at(-1)).toEqual([abandonedFirstSentence])
-    const rescanned = project.regionsIn("talk.md").scanned.speaker
+    const rescanned = project.regionsIn("talk.md").scanned.person
     expect(rescanned.map((unit) => unit.firstSentence)).toContain(abandonedFirstSentence)
   })
 
@@ -213,7 +213,7 @@ describe("what enters scanned", () => {
     }
     await runOnePass(project, find)
 
-    const scanned = project.regionsIn("talk.md").scanned.speaker
+    const scanned = project.regionsIn("talk.md").scanned.person
     expect(offered.length).toBeGreaterThan(1)
     expect(scanned.map((unit) => unit.firstSentence)).not.toContain(offered[0])
     expect(scanned).toHaveLength(offered.length - 1)

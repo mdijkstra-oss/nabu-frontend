@@ -5,5 +5,5 @@ export const sampleCode: Code = {
   name: "Empathy",
   color: "blue",
   detail:
-    "# Definition\n\nA speaker recognizes and names another person's feelings.\n\n- Naming an emotion\n- Mirroring back a concern",
+    "# Definition\n\nA person recognizes and names another person's feelings.\n\n- Naming an emotion\n- Mirroring back a concern",
 }

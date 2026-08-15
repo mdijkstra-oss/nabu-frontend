@@ -16,7 +16,7 @@ const KindGlyph = ({ kind }: { kind: KindDescriptor }) => (
   </span>
 )
 
-// Renders a title that may carry `:kind:` tags (e.g. ":speaker: rutte"), drawing
+// Renders a title that may carry `:kind:` tags (e.g. ":person: rutte"), drawing
 // each tag as the kind's icon the way the editor marks it.
 export const KindTaggedText = ({ text }: { text: string }) => (
   <>

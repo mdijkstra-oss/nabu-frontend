@@ -12,7 +12,7 @@ import {
   dateRegion,
   document,
   regionsBlock,
-  speakerRegion,
+  personRegion,
 } from "./test-fixtures"
 
 type Decorated = Record<string, unknown> & { inferred_meta?: InferredMeta }
@@ -42,21 +42,21 @@ const ABSENT = "Carol proposed a vote on the merger"
 describe("decorated read path", () => {
   it("gives each document its own regions behind the shared parse cache", () => {
     const annotations = annotationsBlock([annotation(ALICE_SPOKE, "a1")])
-    const spokenByAlice = document(regionsBlock([speakerRegion("alice", 0, 4)]), annotations)
-    const spokenByBob = document(regionsBlock([speakerRegion("bob", 0, 4)]), annotations)
+    const spokenByAlice = document(regionsBlock([personRegion("alice", 0, 4)]), annotations)
+    const spokenByBob = document(regionsBlock([personRegion("bob", 0, 4)]), annotations)
 
     const first = readRows(spokenByAlice, "json-annotations", "annotations")[0]
     const second = readRows(spokenByBob, "json-annotations", "annotations")[0]
     const firstAgain = readRows(spokenByAlice, "json-annotations", "annotations")[0]
 
-    expect(first.inferred_meta).toEqual({ speaker: ["alice"] })
-    expect(second.inferred_meta).toEqual({ speaker: ["bob"] })
-    expect(firstAgain.inferred_meta).toEqual({ speaker: ["alice"] })
+    expect(first.inferred_meta).toEqual({ person: ["alice"] })
+    expect(second.inferred_meta).toEqual({ person: ["bob"] })
+    expect(firstAgain.inferred_meta).toEqual({ person: ["alice"] })
   })
 
   it("scopes each annotation row to its own span, not to the block's position", () => {
     const raw = document(
-      regionsBlock([speakerRegion("alice", 1, 2), speakerRegion("bob", 3, 4)]),
+      regionsBlock([personRegion("alice", 1, 2), personRegion("bob", 3, 4)]),
       annotationsBlock([
         annotation(ALICE_SPOKE, "a1"),
         annotation(ACROSS_SPEAKERS, "a2"),
@@ -67,22 +67,22 @@ describe("decorated read path", () => {
     const rows = readRows(raw, "json-annotations", "annotations")
 
     expect(rows.map((r) => r.inferred_meta)).toEqual([
-      { speaker: ["alice"] },
-      { speaker: ["alice", "bob"] },
-      { speaker: ["bob"] },
+      { person: ["alice"] },
+      { person: ["alice", "bob"] },
+      { person: ["bob"] },
     ])
   })
 
   it("leaves an annotation whose text is gone undecorated, and its neighbours alone", () => {
     const raw = document(
-      regionsBlock([speakerRegion("alice", 0, 4)]),
+      regionsBlock([personRegion("alice", 0, 4)]),
       annotationsBlock([annotation(ABSENT, "a1"), annotation(ALICE_SPOKE, "a2")])
     )
 
     const rows = readRows(raw, "json-annotations", "annotations")
 
     expect(rows[0].inferred_meta).toBeUndefined()
-    expect(rows[1].inferred_meta).toEqual({ speaker: ["alice"] })
+    expect(rows[1].inferred_meta).toEqual({ person: ["alice"] })
   })
 
   it("leaves a block sitting in a gap between regions undecorated", () => {
@@ -97,7 +97,7 @@ describe("decorated read path", () => {
       "",
       "Bob objected to the timeline. He asked for another month.",
       "",
-      regionsBlock([speakerRegion("alice", 1, 1), speakerRegion("bob", 3, 4)]),
+      regionsBlock([personRegion("alice", 1, 1), personRegion("bob", 3, 4)]),
       "",
     ].join("\n")
 
@@ -147,17 +147,17 @@ describe("decorated read path", () => {
   })
 
   it("omits the key of a kind with no region in scope", () => {
-    const raw = document(regionsBlock([speakerRegion("alice", 0, 4)]), attributesBlock())
+    const raw = document(regionsBlock([personRegion("alice", 0, 4)]), attributesBlock())
 
     const meta = readSingleton(raw, "json-attributes").inferred_meta
 
-    expect(meta).toEqual({ speaker: ["alice"] })
+    expect(meta).toEqual({ person: ["alice"] })
     expect(meta).not.toHaveProperty("date")
   })
 
   it("ignores a stale region and a hit with no range", () => {
     const raw = document(
-      regionsBlock([speakerRegion("alice", 40, 41), speakerRegion("bob")]),
+      regionsBlock([personRegion("alice", 40, 41), personRegion("bob")]),
       annotationsBlock([annotation(ALICE_SPOKE, "a1")])
     )
 
@@ -168,13 +168,13 @@ describe("decorated read path", () => {
 
   it("decorates a region row across kinds and never with its own kind", () => {
     const raw = document(
-      regionsBlock([speakerRegion("alice", 1, 2), dateRegion("2026-03-03T00:00:00Z", 0, 4)])
+      regionsBlock([personRegion("alice", 1, 2), dateRegion("2026-03-03T00:00:00Z", 0, 4)])
     )
 
     const rows = readRows(raw, "json-regions", "regions")
-    const speakerRow = rows.find((r) => r.kind === "speaker")
+    const personRow = rows.find((r) => r.kind === "person")
 
-    expect(speakerRow?.inferred_meta).toEqual({
+    expect(personRow?.inferred_meta).toEqual({
       date: {
         start: "2026-03-03T00:00:00Z",
         end: "2026-03-03T00:00:00Z",
@@ -197,21 +197,21 @@ describe("decorated read path", () => {
       "",
       calloutBlock("callout-1"),
       "",
-      regionsBlock([speakerRegion("alice", 1, 1), speakerRegion("bob", 3, 4)]),
+      regionsBlock([personRegion("alice", 1, 1), personRegion("bob", 3, 4)]),
       "",
     ].join("\n")
 
     const callouts = getBlocks(raw, "json-callout", schemaOf("json-callout"))
 
     expect(callouts.map((c) => c.inferred_meta)).toEqual([
-      { speaker: ["alice"] },
-      { speaker: ["bob"] },
+      { person: ["alice"] },
+      { person: ["bob"] },
     ])
   })
 
   it("hands a block read twice the same decorated value", () => {
     const raw = document(
-      regionsBlock([speakerRegion("alice", 0, 4)]),
+      regionsBlock([personRegion("alice", 0, 4)]),
       annotationsBlock([annotation(ALICE_SPOKE, "a1")])
     )
 

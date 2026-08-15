@@ -6,7 +6,7 @@ import { stripMarkdown } from "~/lib/text/strip"
 import { MilkdownEditor } from "~/ui/components/editor/MilkdownEditor"
 
 interface RegionSpec {
-  kind: "speaker" | "date"
+  kind: "person" | "date"
   value: string
   quote: string
   hit: string | number
@@ -48,8 +48,8 @@ const TRANSCRIPT = [
   "",
 ].join("\n")
 
-const speaker = (overrides: Partial<RegionSpec>): RegionSpec => ({
-  kind: "speaker",
+const person = (overrides: Partial<RegionSpec>): RegionSpec => ({
+  kind: "person",
   value: "rutte",
   quote: "Rutte",
   hit: "yeah, it was quite",
@@ -117,7 +117,7 @@ const editorStory = (content: string): Story => ({
   ],
 })
 
-const ONE_REGION = withRegions(TRANSCRIPT, [speaker({})])
+const ONE_REGION = withRegions(TRANSCRIPT, [person({})])
 
 export const OneRegion: Story = {
   ...editorStory(ONE_REGION),
@@ -126,10 +126,10 @@ export const OneRegion: Story = {
     await awaitLabels(editor, 1)
 
     const [label] = labelsFor(editor, 0)
-    expect(label.getAttribute("data-region-kind")).toBe("speaker")
-    expect(label.getAttribute("aria-label")).toBe("speaker: rutte")
+    expect(label.getAttribute("data-region-kind")).toBe("person")
+    expect(label.getAttribute("aria-label")).toBe("person: rutte")
     expect(labelText(editor, 0)).toBe("Rutte:")
-    expect(editor.querySelector('[data-region-icon="speaker"]')).not.toBeNull()
+    expect(editor.querySelector('[data-region-icon="person"]')).not.toBeNull()
 
     expect(blockOf(editor, "quite the event").textContent).toBe(
       "Rutte: yeah, it was quite the event."
@@ -166,13 +166,13 @@ export const SearchOnHoveredIcon: Story = {
 
     await userEvent.hover(labelsFor(editor, 0)[0])
     const icon = await searchIconIn(editor)
-    expect(icon.getAttribute("aria-label")).toBe("Search speaker: rutte")
+    expect(icon.getAttribute("aria-label")).toBe("Search person: rutte")
 
     await userEvent.click(icon)
     const onRegionSearch = args.onRegionSearch as ReturnType<typeof fn>
     await waitFor(() => expect(onRegionSearch.mock.calls.length).toBe(1))
     const region = onRegionSearch.mock.calls[0][0]
-    expect(region.kind).toBe("speaker")
+    expect(region.kind).toBe("person")
     expect(region.value).toBe("rutte")
 
     await userEvent.unhover(icon)
@@ -193,7 +193,7 @@ const ONE_SENTENCE = [
 export const TwoLabelsInOneSentence: Story = {
   ...editorStory(
     withRegions(ONE_SENTENCE, [
-      speaker({
+      person({
         value: "john",
         quote: "John",
         hit: "Friday 2nd",
@@ -214,11 +214,11 @@ export const TwoLabelsInOneSentence: Story = {
     const editor = await proseMirror(canvasElement)
     const labels = await awaitLabels(editor, 2)
 
-    expect(labels.map((el) => el.getAttribute("data-region-kind"))).toEqual(["speaker", "date"])
+    expect(labels.map((el) => el.getAttribute("data-region-kind"))).toEqual(["person", "date"])
     expect(labelText(editor, 0)).toBe("John")
     expect(labelText(editor, 1)).toBe("Friday 2nd")
     expect(labels[1].getAttribute("aria-label")).toContain("date: ")
-    expect(editor.querySelector('[data-region-icon="speaker"]')).not.toBeNull()
+    expect(editor.querySelector('[data-region-icon="person"]')).not.toBeNull()
     expect(editor.querySelector('[data-region-icon="date"]')).not.toBeNull()
     expect(blockOf(editor, "Friday 2nd").textContent).toBe(
       "John on Friday 2nd said the room was ready."
@@ -229,7 +229,7 @@ export const TwoLabelsInOneSentence: Story = {
 export const TrailingAttribution: Story = {
   ...editorStory(
     withRegions(TRANSCRIPT, [
-      speaker({
+      person({
         quote: "said Rutte",
         hit: "This is great",
         start: "room was full",
@@ -262,9 +262,7 @@ const BOLD_PROSE = [
 
 export const QuoteInsideBold: Story = {
   ...editorStory(
-    withRegions(BOLD_PROSE, [
-      speaker({ hit: "said Rutte", start: "said Rutte", end: "said Rutte" }),
-    ])
+    withRegions(BOLD_PROSE, [person({ hit: "said Rutte", start: "said Rutte", end: "said Rutte" })])
   ),
   play: async ({ canvasElement }) => {
     const editor = await proseMirror(canvasElement)
@@ -280,7 +278,7 @@ export const QuoteInsideBold: Story = {
 export const OverlappingKinds: Story = {
   ...editorStory(
     withRegions(TRANSCRIPT, [
-      speaker({ end: "This is great" }),
+      person({ end: "This is great" }),
       {
         kind: "date",
         value: "2026-08-02",
@@ -317,8 +315,8 @@ export const OverlappingKinds: Story = {
 export const StaleRegion: Story = {
   ...editorStory(
     withRegions(TRANSCRIPT, [
-      speaker({ quote: "Wilders", hit: 40, start: 40, end: 41 }),
-      speaker({
+      person({ quote: "Wilders", hit: 40, start: 40, end: 41 }),
+      person({
         quote: "said Rutte",
         hit: "This is great",
         start: "This is great",
@@ -344,14 +342,14 @@ const ANNOTATED =
   })
 
 export const LabelBesideAnnotationMarker: Story = {
-  ...editorStory(withRegions(ANNOTATED, [speaker({})])),
+  ...editorStory(withRegions(ANNOTATED, [person({})])),
   play: async ({ canvasElement }) => {
     const editor = await proseMirror(canvasElement)
     await awaitLabels(editor, 1)
 
     const { icon, lock } = await waitFor(() => {
       const found = {
-        icon: editor.querySelector<HTMLElement>('[data-region-icon="speaker"]'),
+        icon: editor.querySelector<HTMLElement>('[data-region-icon="person"]'),
         lock: editor.querySelector<HTMLElement>('[aria-label="Locked annotation"]'),
       }
       if (!found.icon || !found.lock) throw new Error("markers not drawn yet")

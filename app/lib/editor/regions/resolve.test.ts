@@ -9,12 +9,12 @@ import type { RenderableRegion } from "./types"
 
 const region = (overrides: Partial<RenderableRegion> & { quote: string }): RenderableRegion => ({
   index: 0,
-  kind: "speaker",
+  kind: "person",
   kindOrder: 0,
   label: "Rutte",
   value: "rutte",
   colour: "indigo",
-  icon: "mic",
+  icon: "user",
   hitSentence: 0,
   startSentence: 0,
   endSentence: 0,

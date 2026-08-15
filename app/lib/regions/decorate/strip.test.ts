@@ -2,13 +2,13 @@ import { describe, it, expect, afterEach } from "vitest"
 import { setFiles, updateFileRaw, getFileRaw, normalizeAsStored } from "~/lib/files/store"
 import { INFERRED_META } from "./schema"
 import { stripInferredMeta, stripInferredMetaBlocks } from "./strip"
-import { annotationsBlock, document, regionsBlock, speakerRegion } from "./test-fixtures"
+import { annotationsBlock, document, regionsBlock, personRegion } from "./test-fixtures"
 
 const decoratedAnnotation = {
   text: "the funding was approved",
   reason: "r",
   color: "blue",
-  [INFERRED_META]: { speaker: ["alice"] },
+  [INFERRED_META]: { person: ["alice"] },
 }
 
 describe("stripInferredMeta", () => {
@@ -22,7 +22,7 @@ describe("stripInferredMeta", () => {
   const cases: Case[] = [
     {
       name: "removes the field at the root",
-      value: { tags: ["a"], [INFERRED_META]: { speaker: ["alice"] } },
+      value: { tags: ["a"], [INFERRED_META]: { person: ["alice"] } },
       expected: { tags: ["a"] },
     },
     {
@@ -38,7 +38,7 @@ describe("stripInferredMeta", () => {
     },
     {
       name: "removes the field at the root and inside rows together",
-      value: { regions: [decoratedAnnotation], [INFERRED_META]: { speaker: ["alice"] } },
+      value: { regions: [decoratedAnnotation], [INFERRED_META]: { person: ["alice"] } },
       rowPath: "regions",
       expected: { regions: [{ text: "the funding was approved", reason: "r", color: "blue" }] },
     },
@@ -58,7 +58,7 @@ describe("stripInferredMeta", () => {
 describe("stripInferredMetaBlocks", () => {
   it("removes the field from a block that carries it", () => {
     const raw = document(
-      regionsBlock([speakerRegion("alice", 0, 4)]),
+      regionsBlock([personRegion("alice", 0, 4)]),
       "```json-annotations\n" + JSON.stringify({ annotations: [decoratedAnnotation] }) + "\n```"
     )
 
@@ -70,7 +70,7 @@ describe("stripInferredMetaBlocks", () => {
 
   it("returns a document that never carried the field unchanged", () => {
     const raw = document(
-      regionsBlock([speakerRegion("alice", 0, 4)]),
+      regionsBlock([personRegion("alice", 0, 4)]),
       annotationsBlock([{ text: "the funding was approved", reason: "r", color: "blue" }])
     )
 
@@ -82,12 +82,12 @@ describe("the write path", () => {
   afterEach(() => setFiles({}))
 
   const decorated = document(
-    regionsBlock([speakerRegion("alice", 0, 4)]),
+    regionsBlock([personRegion("alice", 0, 4)]),
     "```json-annotations\n" + JSON.stringify({ annotations: [decoratedAnnotation] }) + "\n```"
   )
 
   const plain = document(
-    regionsBlock([speakerRegion("alice", 0, 4)]),
+    regionsBlock([personRegion("alice", 0, 4)]),
     annotationsBlock([{ text: "the funding was approved", reason: "r", color: "blue" }])
   )
 

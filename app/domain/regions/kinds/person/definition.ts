@@ -1,9 +1,9 @@
 import rules from "./rules.md?raw"
 
-export const speakerKind = {
-  id: "speaker",
+export const personKind = {
+  id: "person",
   rules,
-  icon: "mic",
+  icon: "user",
   color: "indigo",
   valueType: "string",
 }

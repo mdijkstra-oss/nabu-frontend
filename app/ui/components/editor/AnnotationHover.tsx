@@ -56,7 +56,7 @@ const releaseActiveInstance = (dismissOther: () => void): void => {
 const isDecoration = (el: HTMLElement): boolean =>
   el.style.background !== "" && el.style.background !== "none"
 
-// A region mark's text (a speaker, a date) repeats across the document, so a tooltip
+// A region mark's text (a person, a date) repeats across the document, so a tooltip
 // matched on it would list every annotation containing that text.
 const isRegionMark = (el: HTMLElement): boolean =>
   el.closest("[data-region-kind], [data-region-icon]") !== null

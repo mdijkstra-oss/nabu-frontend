@@ -10,10 +10,10 @@ const item: FindWork = {
   sentences: ["Rutte opened the meeting."],
 }
 
-const speaker = {
-  id: "speaker",
-  rules: "A speaker is the person whose words a passage carries.",
-  icon: "mic" as const,
+const person = {
+  id: "person",
+  rules: "A person is the person whose words a passage carries.",
+  icon: "user" as const,
   color: "indigo",
   valueType: "string" as const,
 }
@@ -40,7 +40,7 @@ describe("the retry reaches the transport", () => {
 
     const answered: FindWork[] = []
     const result = await runFind([item], {
-      kind: speaker,
+      kind: person,
       knownValues: new Set(),
       onAnswered: (work) => answered.push(work),
     })

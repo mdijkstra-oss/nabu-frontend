@@ -8,7 +8,7 @@ const mark = (
   hitSentence: number,
   over: Partial<Mark> = {}
 ): Mark => ({
-  kind: "speaker",
+  kind: "person",
   quote: `quote ${hitSentence}`,
   hitSentence,
   value: `value-${hitSentence}`,
@@ -78,10 +78,10 @@ describe("dedupeMarks", () => {
   })
 
   it("keeps equal ranges across kinds", () => {
-    const speaker = mark(0, 20, 0)
+    const person = mark(0, 20, 0)
     const date = mark(0, 20, 0, { kind: "date", value: "2024-03-05" })
 
-    expect(ranges(dedupeMarks([speaker, date]))).toEqual([
+    expect(ranges(dedupeMarks([person, date]))).toEqual([
       [0, 20],
       [0, 20],
     ])
