@@ -18,9 +18,7 @@ An answer can be written back as a chart block, which stores the query beside th
 
 The chunk is the unit of identity for the whole system: search results, embedding cache entries and analysis candidates all address content by chunk hash. That works only because exactly one function produces them, always from the file's prose with its JSON blocks stripped.
 
-Chunks are 250 tokens with 20% overlap, and their boundaries are adjusted twice when querying: back to the nearest whitespace so words stay whole, then out to the nearest sentence boundary when one lies within 300 characters. Each chunk is identified by a content hash of its final text.
-
-Because identity is content-derived, editing one paragraph invalidates the two or three chunks overlapping it and leaves the document's other vectors untouched.
+Chunks aim at 250 tokens and carry 20% overlap, so a passage crossing a boundary is still caught by a vector either side. Each chunk is identified by a content hash of its text, and where the cut falls is decided in [documents](01-documents.md#vectors).
 
 ## Keeping vectors current
 

@@ -21,18 +21,18 @@ const labelStory = (progress: number, statusLabel: string): Story => ({
 
 export const LoadingFiles: Story = labelStory(22, "Loading files...")
 
-export const ReadingDocuments: Story = labelStory(74, "Reading your documents...")
+export const ReadingLines: Story = labelStory(74, "Reading between the lines...")
 
-export const FindingPeople: Story = labelStory(94, "Finding people and dates...")
+export const StructuringChaos: Story = labelStory(94, "Structuring chaos...")
 
 export const Finalizing: Story = labelStory(100, "Finalizing...")
 
 // One line at a time: a step never renders beside another.
 export const OneLineOnly: Story = {
-  args: { progress: 74, statusLabel: "Reading your documents..." },
+  args: { progress: 74, statusLabel: "Reading between the lines..." },
   play: async ({ canvas, canvasElement }) => {
-    expect(canvas.getByText("Reading your documents...")).toBeInTheDocument()
-    expect(canvas.queryByText("Tagging documents...")).toBeNull()
+    expect(canvas.getByText("Reading between the lines...")).toBeInTheDocument()
+    expect(canvas.queryByText("Sorting the pile...")).toBeNull()
     expect(canvasElement.querySelectorAll("span")).toHaveLength(3)
   },
 }
@@ -42,6 +42,6 @@ export const NoLabel: Story = {
   args: { progress: 70, statusLabel: "" },
   play: async ({ canvas }) => {
     expect(canvas.getByText("Welcome back")).toBeInTheDocument()
-    expect(canvas.queryByText("Reading your documents...")).toBeNull()
+    expect(canvas.queryByText("Reading between the lines...")).toBeNull()
   },
 }

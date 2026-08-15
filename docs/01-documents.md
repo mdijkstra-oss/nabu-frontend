@@ -131,6 +131,9 @@ A document's prose is embedded and stored beside it, in a companion file that is
 
 The companion holds one block per chunk of the document's prose, each carrying the chunk's hash, text, character offsets and vector. Keeping vectors in files rather than in a separate store means they version, back up and restore with the corpus.
 
+> [!NOTE]
+> **Content-defined chunking** — a boundary comes from a hash of the text just before it, as in sync and backup tools. An edit does not cascade into the chunks below it, so only what it touches is re-checked.
+
 Embedding is its own pass over the store, running once the edits settle:
 
 ```mermaid
@@ -186,7 +189,7 @@ The payoff is at read time. Every JSON block in a document is handed the regions
 }
 ```
 
-That field is never stored. It is recomputed on every read and stripped on every write, so the file on disk holds the regions block and nothing else. What it produces is columns — `inferred_meta_person`, `inferred_meta_date_start`, `inferred_meta_date_end` — on every projected table, which turns two questions into ordinary SQL:
+The field is a decoration applied as a block is read, so the file on disk holds the regions block and nothing else. It becomes columns — `inferred_meta_person`, `inferred_meta_date_start`, `inferred_meta_date_end` — on every projected table, which turns two questions into ordinary SQL:
 
 ```sql
 SELECT * FROM annotations WHERE list_contains(inferred_meta_person, 'rutte');

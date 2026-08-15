@@ -14,9 +14,9 @@ export const BOOT_WEIGHTS = {
 const ENGINE_START = BOOT_WEIGHTS.file + BOOT_WEIGHTS.db
 
 const STEPS = [
-  { label: "Reading your documents...", weight: BOOT_WEIGHTS.embed },
-  { label: "Tagging documents...", weight: BOOT_WEIGHTS.classify },
-  { label: "Finding people and dates...", weight: BOOT_WEIGHTS.regions },
+  { label: "Reading between the lines...", weight: BOOT_WEIGHTS.embed },
+  { label: "Sorting the pile...", weight: BOOT_WEIGHTS.classify },
+  { label: "Structuring chaos...", weight: BOOT_WEIGHTS.regions },
 ].map((step, index, steps) => ({
   label: step.label,
   ceiling: steps.slice(0, index + 1).reduce((sum, s) => sum + s.weight, ENGINE_START),

@@ -42,6 +42,22 @@ With files as the source of truth, another page can be taken out of programmings
 
 That lets the LLM query history and report change over time, and it lets other researchers see which paths were taken instead of only the final output. Time travel and reversion follow from the same place.
 
+### Regions
+
+Prose carries information that cannot be queried. A transcript knows who said each line and a diary knows what day each entry describes, but only as text, so no question can be put to it.
+
+Regions extract it. An LLM reads each document and marks the stretches that belong to a person, a date, or whatever else a kind describes. When relevant, the LLM gets earlier found markers so it does not keep inventing new ones (eg allows attribution to same person across corpus).
+
+| Kind     | Marks                                                                 | Queryable as                                                        |
+| -------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `person` | what a document records as one person's — their words, act or account | `inferred_meta_person`, a list of identifiers                       |
+| `date`   | what a document places on one point in time                           | `inferred_meta_date_start` and `inferred_meta_date_end`, timestamps |
+
+What happened on 3 March, and what John said about the budget, are then ordinary SQL. [Documents](docs/01-documents.md#regions) has the detail.
+
+> [!NOTE]
+> **Future investigation** — finding a mention and attributing a passage to it are two different steps, and only the second needs a model's judgment. Whether a rule-based date extractor such as duckling, or a small NER model, can run in the browser and hand the LLM candidates rather than whole documents is unexplored.
+
 ### Multimodal consensus
 
 Nabu uses focused prompts across different tasks, and for high-value tasks lets multiple models from different providers weigh in.
@@ -50,7 +66,7 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 
 ## Technical implementations
 
-- [Documents](docs/01-documents.md) — the file format, block declarations, and what they project into
+- [Documents](docs/01-documents.md) — the file format, block declarations, regions, and what they all project into
 - [Querying](docs/02-querying.md) — SQL over the tables, HyDE and rank fusion over the vectors, and the filtering cascade
 - [Grounded answers](docs/03-grounded-answers.md) — identifiers resolved to names, quoted prose matched back to its passage
 - [Consensus](docs/04-consensus.md) — two models judging independently, a third deciding the splits, and flags where a definition is ambiguous

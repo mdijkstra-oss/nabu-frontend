@@ -12,27 +12,27 @@ describe("boot label", () => {
     {
       name: "names the first step the moment the engine window opens",
       progress: 70,
-      expected: "Reading your documents...",
+      expected: "Reading between the lines...",
     },
     {
       name: "holds the first step through its slice",
       progress: 79,
-      expected: "Reading your documents...",
+      expected: "Reading between the lines...",
     },
     {
       name: "moves to the second step at its boundary",
       progress: 80,
-      expected: "Tagging documents...",
+      expected: "Sorting the pile...",
     },
     {
       name: "moves to the third step at its boundary",
       progress: 90,
-      expected: "Finding people and dates...",
+      expected: "Structuring chaos...",
     },
     {
       name: "holds the third step to the last point below full",
       progress: 99,
-      expected: "Finding people and dates...",
+      expected: "Structuring chaos...",
     },
     {
       name: "falls silent at full, leaving the closing phase text to speak",
