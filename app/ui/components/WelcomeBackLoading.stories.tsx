@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect } from "storybook/test"
 import { withSize } from "../../../.storybook/decorators"
 import { WelcomeBackLoading } from "./WelcomeBackLoading"
-import type { StageCounterMap } from "~/lib/engine/stage-counters"
 
 const meta: Meta<typeof WelcomeBackLoading> = {
   title: "Custom/Primitives/WelcomeBackLoading",
@@ -13,66 +12,36 @@ const meta: Meta<typeof WelcomeBackLoading> = {
 export default meta
 type Story = StoryObj<typeof WelcomeBackLoading>
 
-const stageMap = (
-  embed: [number, number],
-  classify: [number, number],
-  regions: [number, number]
-): StageCounterMap => ({
-  embed: { settled: embed[0], total: embed[1] },
-  classify: { settled: classify[0], total: classify[1] },
-  regions: { settled: regions[0], total: regions[1] },
-})
-
-const ROW_LABELS = [
-  "Understanding your content...",
-  "Classifying documents...",
-  "Finding regions...",
-]
-
-const assertStageRows = (canvasElement: HTMLElement, stages: StageCounterMap) => {
-  const rowTexts = ROW_LABELS.map((label) => {
-    const labelSpan = [...canvasElement.querySelectorAll("span")].find(
-      (span) => span.textContent === label
-    )
-    if (!labelSpan) throw new globalThis.Error(`no stage row renders "${label}"`)
-    return labelSpan.parentElement?.textContent ?? ""
-  })
-
-  const counters = [stages.embed, stages.classify, stages.regions]
-  rowTexts.forEach((text, i) => {
-    expect(text).toContain(`${counters[i].settled}/${counters[i].total}`)
-  })
-}
-
-const stageStory = (progress: number, statusLabel: string, stages: StageCounterMap): Story => ({
-  args: { progress, statusLabel, stages },
-  play: async ({ canvasElement }) => {
-    assertStageRows(canvasElement, stages)
-  },
-})
-
-export const MidProgress: Story = {
-  args: { progress: 60, statusLabel: "Loading documents..." },
+const labelStory = (progress: number, statusLabel: string): Story => ({
+  args: { progress, statusLabel },
   play: async ({ canvas }) => {
-    expect(canvas.getByText("Loading documents...")).toBeInTheDocument()
-    for (const label of ROW_LABELS) {
-      expect(canvas.queryByText(label)).toBeNull()
-    }
+    expect(canvas.getByText(statusLabel)).toBeInTheDocument()
   },
-}
+})
 
-export const StagesEmpty: Story = stageStory(70, "", stageMap([0, 0], [0, 0], [0, 0]))
+export const LoadingFiles: Story = labelStory(22, "Loading files...")
 
-export const StagesMidFlight: Story = stageStory(85, "", stageMap([9, 14], [4, 14], [11, 12]))
+export const ReadingDocuments: Story = labelStory(74, "Reading your documents...")
 
-export const StagesComplete: Story = {
-  ...stageStory(100, "Finalizing...", stageMap([14, 14], [14, 14], [12, 12])),
+export const FindingPeople: Story = labelStory(94, "Finding people and dates...")
+
+export const Finalizing: Story = labelStory(100, "Finalizing...")
+
+// One line at a time: a step never renders beside another.
+export const OneLineOnly: Story = {
+  args: { progress: 74, statusLabel: "Reading your documents..." },
   play: async ({ canvas, canvasElement }) => {
-    assertStageRows(canvasElement, stageMap([14, 14], [14, 14], [12, 12]))
-    expect(canvas.getByText("Finalizing...")).toBeInTheDocument()
+    expect(canvas.getByText("Reading your documents...")).toBeInTheDocument()
+    expect(canvas.queryByText("Tagging documents...")).toBeNull()
+    expect(canvasElement.querySelectorAll("span")).toHaveLength(3)
   },
 }
 
-// A row whose settled count includes a failed file renders as plain progress,
-// never as an error state.
-export const StagesOneFailed: Story = stageStory(92, "", stageMap([14, 14], [8, 14], [10, 12]))
+// An empty label leaves the bar alone rather than reserving a blank line.
+export const NoLabel: Story = {
+  args: { progress: 70, statusLabel: "" },
+  play: async ({ canvas }) => {
+    expect(canvas.getByText("Welcome back")).toBeInTheDocument()
+    expect(canvas.queryByText("Reading your documents...")).toBeNull()
+  },
+}

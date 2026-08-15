@@ -61,6 +61,7 @@ import { startBm25 } from "~/domain/search/bm25-init"
 import { sweepRemovedKinds } from "~/domain/regions/init"
 import { startProjectEngine, stopProjectEngine, subscribeEngineEvents } from "~/domain/engine/init"
 import { createStageCounterFold, type StageCounterMap } from "~/lib/engine/stage-counters"
+import { BOOT_WEIGHTS, bootLabel } from "~/lib/boot/progress"
 import { WelcomeBackLoading } from "~/ui/components/WelcomeBackLoading"
 import {
   getAnnotationCount,
@@ -134,16 +135,10 @@ const isSyncMetaCommand = (command: Command): command is Command & { fileCount: 
 
 const isFileReceivedCommand = (command: Command): boolean => command.action === "WriteFile"
 
-const FILE_WEIGHT = 35
-const DB_WEIGHT = 35
-const EMBEDDING_WEIGHT = 10
-const TOPIC_WEIGHT = 10
-const REGION_WEIGHT = 10
-
 const computeFileProgress = (loaded: number, total: number): number => {
   if (loaded === 0) return 0
-  if (total === 0) return Math.min(FILE_WEIGHT - 5, loaded * 2)
-  return Math.round((loaded / total) * FILE_WEIGHT)
+  if (total === 0) return Math.min(BOOT_WEIGHTS.file - 5, loaded * 2)
+  return Math.round((loaded / total) * BOOT_WEIGHTS.file)
 }
 
 const formatCodeFilesLabel = (count: number): string =>
@@ -298,6 +293,7 @@ export default function ProjectLayout() {
       if (cancelled) return
       setEngineSettled(true)
 
+      setStatusLabel("Indexing for search...")
       await startBm25()
       if (cancelled) return
 
@@ -786,10 +782,10 @@ export default function ProjectLayout() {
         : computeWeightedProgress(counters.settled, counters.total, weight)
 
   const fileProgress = computeFileProgress(fileCount, totalFiles)
-  const dbProgress = computeWeightedProgress(dbSyncProcessed, dbSyncTotal, DB_WEIGHT)
-  const embeddingsProgress = stageProgress(stageCounters?.embed, EMBEDDING_WEIGHT)
-  const topicsProgress = stageProgress(stageCounters?.classify, TOPIC_WEIGHT)
-  const regionsProgress = stageProgress(stageCounters?.regions, REGION_WEIGHT)
+  const dbProgress = computeWeightedProgress(dbSyncProcessed, dbSyncTotal, BOOT_WEIGHTS.db)
+  const embeddingsProgress = stageProgress(stageCounters?.embed, BOOT_WEIGHTS.embed)
+  const topicsProgress = stageProgress(stageCounters?.classify, BOOT_WEIGHTS.classify)
+  const regionsProgress = stageProgress(stageCounters?.regions, BOOT_WEIGHTS.regions)
   const totalProgress =
     fileProgress + dbProgress + embeddingsProgress + topicsProgress + regionsProgress
 
@@ -799,8 +795,7 @@ export default function ProjectLayout() {
         <div className="fixed inset-0 z-[100]">
           <WelcomeBackLoading
             progress={totalProgress}
-            statusLabel={statusLabel}
-            stages={stageCounters ?? undefined}
+            statusLabel={statusLabel || bootLabel(totalProgress)}
           />
         </div>
       )}
