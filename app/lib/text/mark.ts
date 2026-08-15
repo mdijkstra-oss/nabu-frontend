@@ -20,6 +20,17 @@ const TABLE_PIPE = /^\|(.+)\|$/dgm
 const NUMBERED_LIST = /^\d+\.\s+/dgm
 const BLOCKQUOTE = /^>\s?/dgm
 
+// A period inside a name is not a sentence end, but the segmenter breaks on any period
+// followed by a capital, which cuts "Dr. J. Doe" into three sentences and leaves the name
+// unquotable from any one of them. Only the period is masked, so the reader still sees it.
+// A closed list of titles, because a general "short capitalised word" rule would also join
+// "He spoke to Bell. She replied."
+const TITLE = /\b(Mr|Mrs|Ms|Dr|Prof|Rev|Hon|Sgt|Lt|Capt|Col|Gen|Fr|Sr|Jr|St)\.(?=\s)/dg
+const INITIAL = /\b([A-Z])\.(?=\s+[A-Z])/dg
+const DOTTED = /\b([A-Za-z])\.(?=[A-Za-z]\.)/dg
+
+const ABBREVIATIONS = [TITLE, INITIAL, DOTTED]
+
 // A table's pipes and separator rule delimit a row rather than sit inside a sentence, so a
 // row that took them back would read with a pipe on each edge. Every other construct the
 // segmenter's trim eats belongs to the sentence it was taken from and is recovered.
@@ -39,6 +50,8 @@ const RECOVERABLE = [
 ]
 
 const CONSTRUCTS = [...RECOVERABLE.filter((c) => c !== HEADING), ...ROW_DELIMITERS]
+
+const RECOVERS = new Set([...RECOVERABLE, ...ABBREVIATIONS])
 
 const constructsFor = (options: MarkdownOptions): RegExp[] =>
   options.keepHeadings ? CONSTRUCTS : [...CONSTRUCTS, HEADING]
@@ -104,9 +117,9 @@ export const neutralizeForSplitting = (source: string): NeutralizedText => {
   const markup = new Array<boolean>(guarded.length).fill(false)
   const recoverable = new Array<boolean>(guarded.length).fill(false)
 
-  for (const construct of constructsFor({})) {
+  for (const construct of [...constructsFor({}), ...ABBREVIATIONS]) {
     markConstruct(guarded, construct, markup)
-    if (RECOVERABLE.includes(construct)) markConstruct(guarded, construct, recoverable)
+    if (RECOVERS.has(construct)) markConstruct(guarded, construct, recoverable)
   }
 
   let text = ""

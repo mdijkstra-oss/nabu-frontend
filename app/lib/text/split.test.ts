@@ -399,3 +399,54 @@ describe("splitMarkdownBySentences — a table with unpadded cells", () => {
     }
   })
 })
+
+describe("splitMarkdownBySentences — periods that do not end a sentence", () => {
+  const split = splitMarkdownBySentences()
+  const textsOf = (input: string): string[] => split(input).map((s) => s.text)
+
+  const cases: { name: string; input: string; expected: string[] }[] = [
+    {
+      name: "a title and an initial",
+      input: "Dr. J. Doe reported a metallic taste. The case closed on 02/09.",
+      expected: ["Dr. J. Doe reported a metallic taste.", "The case closed on 02/09."],
+    },
+    {
+      name: "an initial alone",
+      input: "F. Hanley complained about brown water. Closed 05/09.",
+      expected: ["F. Hanley complained about brown water.", "Closed 05/09."],
+    },
+    {
+      name: "a title before a surname",
+      input: "Mrs. Okafor seconded the motion. Carried.",
+      expected: ["Mrs. Okafor seconded the motion.", "Carried."],
+    },
+    {
+      name: "a run of initials",
+      input: "J. R. R. Tolkien wrote it.",
+      expected: ["J. R. R. Tolkien wrote it."],
+    },
+    {
+      name: "a dotted abbreviation",
+      input: "The U.S. team arrived. It was late.",
+      expected: ["The U.S. team arrived.", "It was late."],
+    },
+    {
+      name: "a surname ending a sentence still ends it",
+      input: "He spoke to Bell. She replied.",
+      expected: ["He spoke to Bell.", "She replied."],
+    },
+    {
+      name: "a capitalised word after a full stop still opens a sentence",
+      input: "She went to the shop. Doe arrived.",
+      expected: ["She went to the shop.", "Doe arrived."],
+    },
+  ]
+
+  it.each(cases)("$name", ({ input, expected }) => {
+    expect(textsOf(input)).toEqual(expected)
+  })
+
+  it("keeps a title's period when it falls at the end of a block", () => {
+    expect(textsOf("Seconded by Dr.\n\nCarried.")).toEqual(["Seconded by Dr.", "Carried."])
+  })
+})
