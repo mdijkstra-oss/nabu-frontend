@@ -28,7 +28,6 @@ interface DefaultPageLayoutProps {
   activeNav?: ActiveNav
   showCodes?: boolean
   showExhibits?: boolean
-  showSearch?: boolean
   annotationCount?: number
   onNavChange?: (nav: ActiveNav) => void
   dismissSidebarRef?: MutableRefObject<(() => void) | null>
@@ -41,7 +40,6 @@ const buildNavItems = (
   hoveredNav: ActiveNav | null,
   showCodes: boolean,
   showExhibits: boolean,
-  showSearch: boolean,
   annotationCount?: number
 ): NavItem[][] => {
   const items: NavItem[] = [
@@ -74,16 +72,12 @@ const buildNavItems = (
           },
         ]
       : []),
-    ...(showSearch
-      ? [
-          {
-            id: "search",
-            icon: <Search />,
-            label: "Search",
-            selected: hoveredNav === "search",
-          },
-        ]
-      : []),
+    {
+      id: "search",
+      icon: <Search />,
+      label: "Search",
+      selected: hoveredNav === "search",
+    },
   ]
 
   return [items]
@@ -109,7 +103,6 @@ export const DefaultPageLayout = ({
   activeNav: _activeNav = "documents",
   showCodes = false,
   showExhibits = false,
-  showSearch = false,
   annotationCount,
   onNavChange,
   dismissSidebarRef,
@@ -173,13 +166,7 @@ export const DefaultPageLayout = ({
       <div className="relative z-50 flex h-full flex-none" onMouseLeave={() => setHoveredNav(null)}>
         <div className="relative z-30">
           <MainSidebar
-            navItemGroups={buildNavItems(
-              hoveredNav,
-              showCodes,
-              showExhibits,
-              showSearch,
-              annotationCount
-            )}
+            navItemGroups={buildNavItems(hoveredNav, showCodes, showExhibits, annotationCount)}
             footerExtra={sidebarFooterExtra}
             onNavItemClick={onNavChange ? (id) => onNavChange(id as ActiveNav) : undefined}
             onNavItemHover={(id) => setHoveredNav(id as ActiveNav)}

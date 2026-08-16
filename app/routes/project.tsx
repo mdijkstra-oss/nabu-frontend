@@ -8,7 +8,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react"
-import { Outlet, useNavigate, useParams, useOutletContext } from "react-router"
+import { Outlet, useNavigate, useParams, useMatch, useOutletContext } from "react-router"
 // NEVER use Sparkles icon
 import { Eraser, FileText, Pencil } from "lucide-react"
 import { DefaultPageLayout, type ActiveNav } from "~/ui/layouts/DefaultPageLayout"
@@ -173,6 +173,7 @@ const formatSelectionTitle = (count: number, singleName?: string): string =>
 
 export default function ProjectLayout() {
   const params = useParams<{ projectId: string; fileId?: string; searchId?: string }>()
+  const onBlankSearch = !!useMatch("/project/:projectId/search")
   const navigate = useNavigate()
   const dismissSidebarRef = useRef<(() => void) | null>(null)
   const [activeNav, setActiveNav] = useState<ActiveNav>("documents")
@@ -341,6 +342,11 @@ export default function ProjectLayout() {
   useEffect(() => {
     if (loading) return
 
+    if (onBlankSearch) {
+      if (currentFile) setCurrentFile(null)
+      return
+    }
+
     if (params.searchId) {
       const searchExists = !!findSearchById(files, params.searchId)
       if (searchExists) {
@@ -372,6 +378,7 @@ export default function ProjectLayout() {
     navigateToFirstFile()
   }, [
     loading,
+    onBlankSearch,
     params.fileId,
     params.searchId,
     params.projectId,
@@ -415,7 +422,8 @@ export default function ProjectLayout() {
     (nav: ActiveNav) => {
       if (nav === "search") {
         dismissSidebarRef.current?.()
-        if (latestSearch) navigate(`/project/${params.projectId}/search/${latestSearch.id}`)
+        const base = `/project/${params.projectId}/search`
+        navigate(latestSearch ? `${base}/${latestSearch.id}` : base)
         return
       }
       setActiveNav(nav)
@@ -804,7 +812,6 @@ export default function ProjectLayout() {
           activeNav={activeNav}
           showCodes={!!codebook}
           showExhibits={exhibits.length > 0}
-          showSearch={!!latestSearch}
           annotationCount={fileAnnotationCount}
           onNavChange={handleNavChange}
           dismissSidebarRef={dismissSidebarRef}

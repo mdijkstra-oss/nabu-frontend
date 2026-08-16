@@ -193,7 +193,7 @@ export default function ProjectSearch() {
     [debugOptions]
   )
 
-  if (!params.projectId || !params.searchId) {
+  if (!params.projectId) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <span className="text-subtext-color">Invalid search URL</span>
@@ -201,7 +201,7 @@ export default function ProjectSearch() {
     )
   }
 
-  if (!search) {
+  if (params.searchId && !search) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <span className="text-subtext-color">Search not found</span>
@@ -254,7 +254,7 @@ export default function ProjectSearch() {
             })}
           </div>
         )}
-        {showDebugSql && (
+        {showDebugSql && search && (
           <pre className="w-full rounded-md bg-default-background px-4 py-3 text-caption font-caption text-subtext-color whitespace-pre-wrap break-words">
             {formatDebugSql(search.sql)}
             {hydes.length > 0 && `\n\n${formatHydeDebug(hydes, keywords)}`}
@@ -263,9 +263,11 @@ export default function ProjectSearch() {
       </div>
 
       <div className="mt-6 flex min-h-0 flex-1 gap-2">
-        {isDone && groups.length === 0 ? (
+        {!search || (isDone && groups.length === 0) ? (
           <div className="flex w-full items-center justify-center py-16">
-            <span className="text-body font-body text-subtext-color">No results found</span>
+            <span className="text-body font-body text-subtext-color">
+              {search ? "No results found" : "Type what you are looking for to search the corpus."}
+            </span>
           </div>
         ) : (
           <>
