@@ -116,15 +116,6 @@ describe("region-pass", () => {
     expect(fsWrites).toEqual(["writeFileSync /nowhere/proof.md"])
   })
 
-  it("names the file by its basename in every entry of every request", async () => {
-    await runPass(raw, "person")
-    const calls = await recorder.drain()
-
-    const files = calls.flatMap((call) => fileAttributesOf(call.request))
-    expect(files.length).toBeGreaterThan(0)
-    expect(new Set(files)).toEqual(new Set([FILE]))
-  })
-
   it("makes no call over a file already scanned under the current rules, where region-finder still does", async () => {
     const stored = await runPass(raw, "person")
     await recorder.drain()

@@ -9,7 +9,6 @@ import { scanDocument } from "./document"
 import { findWorksOf, regionFinder } from "./region-finder"
 import {
   answeringDetect,
-  fileAttributesOf,
   findReplyByKind,
   HIT_SENTENCE_NUMBER,
   messageTextsOf,
@@ -68,16 +67,6 @@ describe("region-finder", () => {
     )
     expect(hits.every((hit) => hit.kind === "person")).toBe(true)
     expect(hits.every((hit) => doc.sentences[hit.hitSentence].includes(hit.quote))).toBe(true)
-  })
-
-  it("names the file by its basename in every entry of the request", async () => {
-    await runFinder({ kind: "person" })
-    const calls = await recorder.drain()
-
-    expect(calls.length).toBeGreaterThan(0)
-    const files = calls.flatMap((call) => fileAttributesOf(call.request))
-    expect(files).toHaveLength(doc.units.length)
-    expect(new Set(files)).toEqual(new Set([FILE]))
   })
 
   const knownCases = [

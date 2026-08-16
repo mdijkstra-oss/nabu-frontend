@@ -5,7 +5,7 @@
   "vitest": {
     "configFile": "vitest.mutation.config.ts"
   },
-  "reporters": ["html", "clear-text", "progress"],
+  "reporters": ["html", "json", "clear-text", "progress"],
   "coverageAnalysis": "perTest",
   "concurrency": 4,
   "incremental": true,
@@ -14,5 +14,9 @@
     "app/lib/utils/storage-cache.ts",
     "!**/*.test.ts",
     "!**/*.fixture.ts"
-  ]
+  ],
+  "disableBail": true,
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  }
 }

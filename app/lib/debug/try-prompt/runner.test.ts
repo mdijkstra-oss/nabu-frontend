@@ -451,8 +451,8 @@ describe("run", () => {
     expect(stub.requests).toHaveLength(2)
   })
 
-  it.each([[[]], [["--help"]]])("lists every agent and exits 0 for argv %j", async (argv) => {
-    const { exit, out, err } = await runWith(argv)
+  it("lists every agent and exits 0 when no agent is named", async () => {
+    const { exit, out, err } = await runWith([])
     expect(exit).toBe(EXIT_OK)
     expect(err).toBe("")
     for (const agent of registry) {

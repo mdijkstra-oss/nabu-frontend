@@ -8,17 +8,13 @@ describe("storage cache without a browser", () => {
     withoutIndexedDb()
   })
 
-  it("tryGet resolves undefined and opens no database while skipping", async () => {
+  it.each([
+    { name: "tryGet", call: () => tryGet("llm", "k") },
+    { name: "tryPut", call: () => tryPut("llm", "k", { a: 1 }) },
+  ])("$name resolves undefined and opens no database while skipping", async ({ call }) => {
     const opened = openTracker()
     setCacheSkipped(true)
-    await expect(tryGet("llm", "k")).resolves.toBeUndefined()
-    expect(opened).toEqual([])
-  })
-
-  it("tryPut resolves and opens no database while skipping", async () => {
-    const opened = openTracker()
-    setCacheSkipped(true)
-    await expect(tryPut("llm", "k", { a: 1 })).resolves.toBeUndefined()
+    await expect(call()).resolves.toBeUndefined()
     expect(opened).toEqual([])
   })
 

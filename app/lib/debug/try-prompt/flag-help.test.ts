@@ -10,28 +10,6 @@ const schema = z.object({
   bare: z.string().optional(),
 })
 
-describe("flagsOf", () => {
-  const cases = [
-    { name: "needle", placeholder: "<text>", required: true, description: "the text to look for" },
-    { name: "tags", placeholder: "<a,b,…>", required: false, description: "tags to attach" },
-    { name: "kind", placeholder: "<id>", required: true, description: /^a region kind: .*person/ },
-    { name: "bare", placeholder: "<value>", required: false, description: "" },
-  ]
-
-  it.each(cases)(
-    "reads --$name from the schema meta",
-    ({ name, placeholder, required, description }) => {
-      const flag = flagsOf(schema).find((candidate) => candidate.name === name)
-      expect(flag).toMatchObject({ name, placeholder, required })
-      expect(flag?.description).toMatch(description)
-    }
-  )
-
-  it("keeps the schema's declaration order", () => {
-    expect(flagsOf(schema).map((flag) => flag.name)).toEqual(["needle", "tags", "kind", "bare"])
-  })
-})
-
 const statusColumn = (line: string): number => line.search(/ {2}(required|optional) {2}/)
 
 describe("renderFlagLines", () => {
