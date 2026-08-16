@@ -1,8 +1,7 @@
-// Adversarial correctness review of the search caller (spec:
-// docs/specs/2026-08-12-04-batched-model-calls/search.md).
+// Adversarial correctness review of the search caller.
 //
-// Every test here pins a spec clause; the ones that began life as review
-// findings guard the fixes that closed them.
+// Every test here pins a specified behavior; the ones that began life as
+// review findings guard the fixes that closed them.
 
 import { describe, it, expect, vi, afterEach } from "vitest"
 import type { z } from "zod"

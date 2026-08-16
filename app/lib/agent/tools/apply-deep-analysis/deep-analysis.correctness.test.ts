@@ -8,10 +8,9 @@ import { assignIds, renderEntry } from "~/lib/calls/entry"
 import { renderedEntriesIn, respondingWith, textOf } from "./parse-call.fixture"
 import { ENVELOPES_PER_CALL, MAX_CHARS_PER_CALL } from "./def"
 
-// Adversarial correctness suite for the deep-analysis caller component
-// (docs/specs/2026-08-12-04-batched-model-calls/deep-analysis.md). Each test
-// pins a behavior the review hunted; the first two suites guard fixes that
-// closed review findings.
+// Adversarial correctness suite for the deep-analysis caller component. Each
+// test pins a behavior the review hunted; the first two suites guard fixes
+// that closed review findings.
 
 const mkEnv = (id: string, over: Partial<Envelope> = {}): Envelope => ({
   id,

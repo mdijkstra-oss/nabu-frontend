@@ -46,7 +46,7 @@ Any "no" means it belongs lower. The bar is this high because e2e tests are slow
 - `app/ui` — components, hooks, layouts, theme.
 - `app/domain` — nabu-specific logic (corpus, documents, data blocks, embeddings, search).
 - `app/lib` — generic building blocks the domain layer composes.
-- `docs/` — outward-facing concept docs (numbered); `docs/specs/` holds dated working specs.
+- `docs/` — outward-facing concept docs (numbered).
 
 ## Audience
 
