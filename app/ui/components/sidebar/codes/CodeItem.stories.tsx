@@ -61,15 +61,19 @@ export const CompactReviewDanger: Story = {
   },
 }
 
+const showingRatio =
+  (ratio: string): Story["play"] =>
+  async ({ canvasElement }) => {
+    expect(within(canvasElement).getByText(ratio)).toBeInTheDocument()
+  }
+
 export const DebugReviewNormal: Story = {
   args: {
     code: sampleCode,
     debugReview: true,
     reviewStat: { ratio: 0.12, severity: "normal" },
   },
-  play: async ({ canvasElement }) => {
-    expect(within(canvasElement).getByText("0.12")).toBeInTheDocument()
-  },
+  play: showingRatio("0.12"),
 }
 
 export const DebugReviewWarning: Story = {
@@ -78,9 +82,7 @@ export const DebugReviewWarning: Story = {
     debugReview: true,
     reviewStat: { ratio: 0.34, severity: "warning" },
   },
-  play: async ({ canvasElement }) => {
-    expect(within(canvasElement).getByText("0.34")).toBeInTheDocument()
-  },
+  play: showingRatio("0.34"),
 }
 
 export const DebugReviewDanger: Story = {
@@ -89,9 +91,7 @@ export const DebugReviewDanger: Story = {
     debugReview: true,
     reviewStat: { ratio: 0.71, severity: "danger" },
   },
-  play: async ({ canvasElement }) => {
-    expect(within(canvasElement).getByText("0.71")).toBeInTheDocument()
-  },
+  play: showingRatio("0.71"),
 }
 
 export const LongName: Story = {

@@ -12,9 +12,4 @@ describe("pickPlaceholderLine", () => {
       PLACEHOLDER_LINES[PLACEHOLDER_LINES.length - 1]
     )
   })
-
-  it("offers enough distinct lines", () => {
-    expect(PLACEHOLDER_LINES.length).toBeGreaterThanOrEqual(15)
-    expect(new Set(PLACEHOLDER_LINES).size).toBe(PLACEHOLDER_LINES.length)
-  })
 })

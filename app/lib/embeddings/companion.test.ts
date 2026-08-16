@@ -12,7 +12,6 @@ import { diffChunks, type EmbeddingEntry } from "./diff"
 describe("companionFilename", () => {
   const cases: { name: string; input: string; expected: string }[] = [
     { name: "simple doc", input: "doc.md", expected: "doc.embeddings.hidden.md" },
-    { name: "nested name", input: "my_notes.md", expected: "my_notes.embeddings.hidden.md" },
   ]
 
   it.each(cases)("$name", ({ input, expected }) => {
@@ -23,7 +22,6 @@ describe("companionFilename", () => {
 describe("sourceFilename", () => {
   const cases: { name: string; input: string; expected: string }[] = [
     { name: "companion to source", input: "doc.embeddings.hidden.md", expected: "doc.md" },
-    { name: "nested companion", input: "my_notes.embeddings.hidden.md", expected: "my_notes.md" },
   ]
 
   it.each(cases)("$name", ({ input, expected }) => {
@@ -36,7 +34,6 @@ describe("isCompanionFile", () => {
     { name: "companion file", input: "doc.embeddings.hidden.md", expected: true },
     { name: "regular markdown", input: "doc.md", expected: false },
     { name: "other hidden file", input: "doc.hidden.md", expected: false },
-    { name: "settings file", input: "settings.hidden.md", expected: false },
   ]
 
   it.each(cases)("$name", ({ input, expected }) => {

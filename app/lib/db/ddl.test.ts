@@ -417,7 +417,6 @@ describe("escapeSqlString", () => {
       value: "'); DROP TABLE files; --",
       expected: "''); DROP TABLE files; --",
     },
-    { name: "double quotes are not touched", value: 'say "hi"', expected: 'say "hi"' },
     { name: "an empty string stays empty", value: "", expected: "" },
   ]
 

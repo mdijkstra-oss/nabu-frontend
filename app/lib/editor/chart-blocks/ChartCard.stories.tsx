@@ -24,29 +24,33 @@ const readyState: ChartCardState = {
 
 const sampleQuery = "SELECT month, count, region FROM visits"
 
+const placeholderFilling = (canvasElement: HTMLElement, text: string, height = CHART_HEIGHT) => {
+  const placeholder = within(canvasElement).getByText(text)
+  expect(placeholder.getBoundingClientRect().height).toBe(height)
+  return placeholder
+}
+
 export const Loading: Story = {
   args: { state: { status: "loading" } },
   play: async ({ canvasElement }) => {
-    const placeholder = within(canvasElement).getByText("Loading...")
-    expect(placeholder.getBoundingClientRect().height).toBe(CHART_HEIGHT)
+    placeholderFilling(canvasElement, "Loading...")
   },
 }
 
 export const Empty: Story = {
   args: { state: { status: "empty" } },
   play: async ({ canvasElement }) => {
-    const placeholder = within(canvasElement).getByText("No data")
-    expect(placeholder.getBoundingClientRect().height).toBe(CHART_HEIGHT)
+    placeholderFilling(canvasElement, "No data")
   },
 }
 
 export const ErrorState: Story = {
   args: { state: { status: "error", message: "Catalog Error: Table 'visits' does not exist" } },
   play: async ({ canvasElement }) => {
-    const placeholder = within(canvasElement).getByText(
+    const placeholder = placeholderFilling(
+      canvasElement,
       "Catalog Error: Table 'visits' does not exist"
     )
-    expect(placeholder.getBoundingClientRect().height).toBe(CHART_HEIGHT)
     expect(placeholder.classList.contains("text-error-700")).toBe(true)
   },
 }
@@ -112,7 +116,6 @@ export const CustomHeight: Story = {
     height: 180,
   },
   play: async ({ canvasElement }) => {
-    const placeholder = within(canvasElement).getByText("Loading...")
-    expect(placeholder.getBoundingClientRect().height).toBe(180)
+    placeholderFilling(canvasElement, "Loading...", 180)
   },
 }

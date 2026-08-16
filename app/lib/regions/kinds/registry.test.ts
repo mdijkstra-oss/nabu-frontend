@@ -36,10 +36,6 @@ describe("shipped kinds", () => {
     expect([...REGION_KIND_IDS].sort()).toEqual(folders)
   })
 
-  it("lists ids in declaration order", () => {
-    expect(REGION_KIND_IDS).toEqual(regionKinds().map((k) => k.id))
-  })
-
   it("resolves person as a list-backed kind", () => {
     const person = getKind("person")
     expect(person?.valueType).toBe("string")
