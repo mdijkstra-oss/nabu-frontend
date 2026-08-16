@@ -5,6 +5,7 @@ import type { GutterMark } from "~/lib/editor/gutter/types"
 import { calculateGutterMarks } from "~/lib/editor/gutter/calculate"
 import { measureAnnotationSpans } from "~/lib/editor/gutter/measure"
 import { solidBackground } from "~/ui/theme/radix"
+import { DIMMED_COLOR } from "~/lib/editor/annotations/decorations"
 
 interface ScrollGutterProps {
   contentRef: RefObject<HTMLElement | null>
@@ -26,7 +27,14 @@ const updateGutterMarks = ({ contentRef, scrollContainerRef }: Refs): GutterMark
   return calculateGutterMarks(measurements, scrollHeight)
 }
 
-const createMarkBackground = (colors: string[]): string => solidBackground(colors[0] ?? "gray")
+// Hidden codes sit behind the selected ones, so their mark is quieter than a
+// coloured one rather than another solid bar.
+const DIMMED_BACKGROUND = "var(--gray-6)"
+
+const createMarkBackground = (colors: string[]): string => {
+  const color = colors[0] ?? "gray"
+  return color === DIMMED_COLOR ? DIMMED_BACKGROUND : solidBackground(color)
+}
 
 const GutterMarkElement = ({ mark }: { mark: GutterMark }) => (
   <div

@@ -1,7 +1,10 @@
 import { PluginKey, type Plugin } from "prosemirror-state"
 import type { DecorationSet } from "prosemirror-view"
 import type { Node } from "prosemirror-model"
-import { hasReview, type Annotation } from "~/domain/data-blocks/attributes/annotations/selectors"
+import {
+  hasReview,
+  type DimmableAnnotation,
+} from "~/domain/data-blocks/attributes/annotations/selectors"
 import type { ResolvedAnnotation } from "./types"
 import { segmentByOverlap } from "./overlap"
 import { createDecorationSet, createMarkerDecorations } from "./decorations"
@@ -13,7 +16,7 @@ const pluginKey = new PluginKey("annotations")
 export const annotationsMeta = pluginKey
 
 const toResolvedAnnotation = (
-  a: Annotation,
+  a: DimmableAnnotation,
   doc: Node,
   docText: string,
   index: number
@@ -29,10 +32,11 @@ const toResolvedAnnotation = (
   if (a.id) resolved.id = a.id
   if (a.locked) resolved.locked = true
   if (hasReview(a)) resolved.review = true
+  if (a.dimmed) resolved.dimmed = true
   return resolved
 }
 
-const resolveAnnotations = (doc: Node, annotations: Annotation[]): ResolvedAnnotation[] => {
+const resolveAnnotations = (doc: Node, annotations: DimmableAnnotation[]): ResolvedAnnotation[] => {
   const docText = proseTextContent(doc)
   let index = 0
   return annotations.flatMap((a) => {
@@ -42,7 +46,7 @@ const resolveAnnotations = (doc: Node, annotations: Annotation[]): ResolvedAnnot
   })
 }
 
-const computeDecorations = (doc: Node, annotations: Annotation[]): DecorationSet => {
+const computeDecorations = (doc: Node, annotations: DimmableAnnotation[]): DecorationSet => {
   const resolved = resolveAnnotations(doc, annotations)
   const segments = segmentByOverlap(resolved)
   const markers = createMarkerDecorations(resolved)
@@ -50,7 +54,7 @@ const computeDecorations = (doc: Node, annotations: Annotation[]): DecorationSet
 }
 
 export const createAnnotationsPlugin = (): Plugin =>
-  createDecorationPlugin<Annotation[], Annotation[]>({
+  createDecorationPlugin<DimmableAnnotation[], DimmableAnnotation[]>({
     key: pluginKey,
     initial: [],
     reduce: replaceInput,

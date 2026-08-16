@@ -87,6 +87,23 @@ export const selectVisibleAnnotations = <T extends { code?: string }>(
   selected: Set<string>
 ): T[] => annotations.filter((a) => isAnnotationVisible(selected, a))
 
+export interface DimmableAnnotation extends Annotation {
+  dimmed?: boolean
+}
+
+// A code selection narrows what the document highlights, and dropping the rest
+// outright leaves no sign that the passage carries any coding at all. Marking
+// them instead keeps them in the gutter, greyed, so the reader can see there is
+// more here than the selection shows.
+export const dimHiddenAnnotations = (
+  annotations: Annotation[],
+  selected: Set<string>
+): DimmableAnnotation[] =>
+  annotations.map((a) => (isAnnotationVisible(selected, a) ? a : { ...a, dimmed: true }))
+
+export const selectUndimmed = (annotations: DimmableAnnotation[]): Annotation[] =>
+  annotations.filter((a) => a.dimmed !== true)
+
 const hasStoredReview = (a: StoredAnnotation): boolean => a.vote?.review !== undefined
 
 export type ReviewSeverity = "normal" | "warning" | "danger"

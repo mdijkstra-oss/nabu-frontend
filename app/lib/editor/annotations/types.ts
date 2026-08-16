@@ -6,10 +6,12 @@ export interface ResolvedAnnotation {
   color: string
   locked?: boolean
   review?: boolean
+  dimmed?: boolean
 }
 
 export interface OverlapSegment {
   from: number
   to: number
   colors: string[]
+  dimmed?: boolean
 }

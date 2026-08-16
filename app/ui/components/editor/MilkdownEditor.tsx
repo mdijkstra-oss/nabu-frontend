@@ -39,7 +39,8 @@ import { useFiles } from "~/ui/hooks/useFiles"
 import { normalizeAsStored } from "~/lib/files/store"
 import {
   getAnnotations,
-  selectVisibleAnnotations,
+  dimHiddenAnnotations,
+  selectUndimmed,
 } from "~/domain/data-blocks/attributes/annotations/selectors"
 import { getSelectedCodes } from "~/domain/data-blocks/ux/selectors"
 import { getRenderableRegions, type RenderableRegions } from "~/domain/regions/selectors"
@@ -116,10 +117,12 @@ const MilkdownEditorCore = ({
   const [loading, getEditor] = useInstance()
   const selectedCodes = useMemo(() => getSelectedCodes(files), [files])
   const rawAnnotations = useMemo(
-    () => selectVisibleAnnotations(getAnnotations(files, defaultValue), selectedCodes),
+    () => dimHiddenAnnotations(getAnnotations(files, defaultValue), selectedCodes),
     [files, defaultValue, selectedCodes]
   )
   const annotations = useStableRef(rawAnnotations)
+  const rawShownAnnotations = useMemo(() => selectUndimmed(rawAnnotations), [rawAnnotations])
+  const shownAnnotations = useStableRef(rawShownAnnotations)
   const rawRegions = useMemo(
     () => regionsOverride ?? getRenderableRegions(defaultValue),
     [regionsOverride, defaultValue]
@@ -200,7 +203,7 @@ const MilkdownEditorCore = ({
 
   return (
     <FloatingToolbar>
-      <AnnotationHover annotations={annotations} filePath={filePath}>
+      <AnnotationHover annotations={shownAnnotations} filePath={filePath}>
         <Milkdown />
       </AnnotationHover>
     </FloatingToolbar>

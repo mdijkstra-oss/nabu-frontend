@@ -7,12 +7,25 @@ const toRadixVar = (color: string): string => `var(--${color}-3)`
 
 const toBackgroundColors = (colors: string[]): string[] => colors.map(toRadixVar)
 
+// What a span contributes to the gutter when its code is not selected. Not a
+// radix colour name: the gutter maps it to its own grey, and a real grey-coded
+// annotation has to stay distinguishable from a hidden one.
+export const DIMMED_COLOR = "dimmed"
+
+const gutterColors = (segment: OverlapSegment): string[] =>
+  segment.dimmed === true ? [...segment.colors, DIMMED_COLOR] : segment.colors
+
+// A span the selection hides paints no background, so the prose reads
+// unmarked, but keeps the attribute the gutter measures.
 const createDecorationAttrs = (segment: OverlapSegment) => {
-  const bgColors = toBackgroundColors(segment.colors)
-  return {
-    style: `background: ${createBackground(bgColors)}; border-radius: 2px;`,
-    "data-annotation-colors": segment.colors.join(","),
+  const attrs: Record<string, string> = {
+    "data-annotation-colors": gutterColors(segment).join(","),
   }
+  if (segment.colors.length > 0) {
+    const bgColors = toBackgroundColors(segment.colors)
+    attrs.style = `background: ${createBackground(bgColors)}; border-radius: 2px;`
+  }
+  return attrs
 }
 
 const hasId = (a: ResolvedAnnotation): a is ResolvedAnnotation & { id: string } =>
@@ -63,11 +76,16 @@ const hasLockedFlag = (a: ResolvedAnnotation): boolean => a.locked === true
 const toLockedDecoration = (a: ResolvedAnnotation): Decoration =>
   Decoration.widget(a.from, () => createLockedWidget(a.color), { side: -1 })
 
-export const createMarkerDecorations = (resolved: ResolvedAnnotation[]): Decoration[] => [
-  ...resolved.filter(hasId).map(toMarkerDecoration),
-  ...resolved.filter(hasLockedFlag).map(toLockedDecoration),
-  ...resolved.filter(hasReviewFlag).map(toReviewDecoration),
-]
+const isShown = (a: ResolvedAnnotation): boolean => a.dimmed !== true
+
+export const createMarkerDecorations = (resolved: ResolvedAnnotation[]): Decoration[] => {
+  const shown = resolved.filter(isShown)
+  return [
+    ...shown.filter(hasId).map(toMarkerDecoration),
+    ...shown.filter(hasLockedFlag).map(toLockedDecoration),
+    ...shown.filter(hasReviewFlag).map(toReviewDecoration),
+  ]
+}
 
 export const createDecorationSet = (
   doc: Node,

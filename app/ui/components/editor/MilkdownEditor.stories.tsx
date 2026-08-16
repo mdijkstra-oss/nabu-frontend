@@ -214,3 +214,92 @@ export const TableBlock: Story = {
     })
   },
 }
+
+// A code selection narrows what the prose highlights. Dropping the hidden
+// annotations entirely left no trace of them anywhere, which reads as coding
+// that failed to render; they stay in the gutter instead.
+const codesPath = "codes.md"
+const notesPath = "notes.md"
+
+const codeBlock = (id: string, title: string, color: string) =>
+  [
+    "```json-callout",
+    JSON.stringify({ id, type: "codebook-code", title, content: "", color, collapsed: false }),
+    "```",
+    "",
+  ].join("\n")
+
+const codesContent = ["# Codes", "", codeBlock("callout-shown", "Shown", "sky")]
+  .concat(codeBlock("callout-hidden", "Hidden", "amber"))
+  .join("\n")
+
+const notesContent = [
+  "# Notes",
+  "",
+  "The first sentence carries the selected code.",
+  "",
+  "The second sentence carries the code the selection hides.",
+  "",
+  "```json-annotations",
+  JSON.stringify({
+    annotations: [
+      {
+        id: "annotation-shown",
+        text: "The first sentence carries the selected code.",
+        reason: "",
+        code: "callout-shown",
+      },
+      {
+        id: "annotation-hidden",
+        text: "The second sentence carries the code the selection hides.",
+        reason: "",
+        code: "callout-hidden",
+      },
+    ],
+  }),
+  "```",
+  "",
+].join("\n")
+
+const settingsContent = [
+  "# Settings",
+  "",
+  "```json-ux",
+  JSON.stringify({ selectedCodes: ["callout-shown"] }),
+  "```",
+  "",
+].join("\n")
+
+const markOf = (canvasElement: HTMLElement, text: string): HTMLElement | null => {
+  const spans = [...canvasElement.querySelectorAll<HTMLElement>("[data-annotation-colors]")]
+  return spans.find((s) => s.textContent?.includes(text)) ?? null
+}
+
+export const HiddenCodeStaysInGutter: Story = {
+  args: {
+    content: notesContent,
+    filePath: notesPath,
+    onChange: fn(),
+  },
+  decorators: [
+    withSeededFiles({
+      [notesPath]: notesContent,
+      [codesPath]: codesContent,
+      "settings.hidden.md": settingsContent,
+    }),
+    withRouter(`/project/demo-project/file/${notesPath}`),
+  ],
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      const shown = markOf(canvasElement, "carries the selected code")
+      expect(shown).not.toBeNull()
+      expect(shown?.getAttribute("data-annotation-colors")).toBe("sky")
+      expect(shown?.style.background).not.toBe("")
+    })
+
+    const hidden = markOf(canvasElement, "the selection hides")
+    expect(hidden).not.toBeNull()
+    expect(hidden?.getAttribute("data-annotation-colors")).toBe("dimmed")
+    expect(hidden?.style.background).toBe("")
+  },
+}
