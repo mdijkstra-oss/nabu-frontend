@@ -37,6 +37,16 @@ occurrence, never two.
 - A description of a person. A biography names its subject on every page, and the
   subject owns none of it — the words are the biographer's. What someone said, did or
   reported is theirs; an account of them written by somebody else is not.
+- A description standing in for a name, where it owns nothing. "my brother", "the
+  caretaker", "the driver" describe somebody without naming them, and a description
+  appearing inside somebody else's sentence takes nothing with it: "the caretaker called
+  to say it had happened again" is the writer's sentence and the caretaker's region does
+  not exist. A description is an occurrence where the document does hand it a passage —
+  a `Complainant:` field, a transcript labelling its turns `Q:` and `A:`, or an account
+  the document attributes to it and then carries on in its voice, as a clinical note
+  does with "The patient reports…".
+- A group. "the duty staff", "the committee", "the night shift" is not a person, however
+  plainly the document names it.
 
 ## The value
 
@@ -44,7 +54,10 @@ The value is one person, in a form short enough to be an identifier: lowercase, 
 titles, no punctuation. `rutte`, not `President Rutte` or `Mr. Rutte`. Keep the rest
 of what the document gives, initials included — `f hanley`, so that a later
 `j hanley` stays a different person. A person the document never names takes the role
-it gives them: `interviewer`, `respondent`, `complainant`.
+the document gives them — `interviewer`, `respondent`, `complainant` — and only where
+the document hands a passage to that role. A role named in passing does not become a
+person: "the caretaker called to say it had happened again" is the writer's sentence,
+and the caretaker owns none of it.
 
 The same person must get the same value everywhere, so reuse a value from the list
 you are given whenever the occurrence is that person, even when the document spells
@@ -71,6 +84,27 @@ Regions of two people may overlap. An act or a brief interjection inside someone
 turn belongs to its own person without ending the surrounding region, and a passage
 the document gives to two people jointly — "Mr. and Mrs. Given reported…" — sits in a
 region of each.
+
+That allowance covers a passage the document visibly resumes — "As I was saying" — and
+not the ordinary back and forth of a labelled transcript. Where a document labels its
+turns, a turn ends where the next label begins, and a speaker who comes back later comes
+back as a new occurrence.
+
+A sentence that carries on without naming anybody new continues the passage before it,
+whether it does so with a pronoun or with no subject at all. "Seconded by Ms. Delgado.
+Carried." is two sentences and both are Delgado's.
+
+Many documents have an unnamed writer — a duty log, a register, a set of notes, a
+clinical record. What that writer did, saw or decided is the writer's, and sits outside
+the region of whoever is named beside it. In "09:00 Ms. Okafor reported water coming
+through the ceiling. 09:15 Attended flat 12. Isolated the circuit.", Okafor owns the
+first sentence and nothing after it.
+
+Those two pull against each other, and this is how they settle. A sentence carrying on
+what the person said, did or reported is theirs. A sentence recording what the
+document's own writer then did is the writer's. Where the same person is named again
+further down, that naming is a second occurrence with a region of its own, not one
+region stretched across everything in between.
 
 Stage directions, timestamps and notes that sit inside a passage stay inside it. A
 heading that introduces a new section does not belong to the person before it.
