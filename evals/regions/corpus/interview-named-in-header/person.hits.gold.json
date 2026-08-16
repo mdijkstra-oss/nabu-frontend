@@ -1,0 +1,74 @@
+[
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 3,
+    "value": "interviewer"
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 4,
+    "value": "okafor"
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 7,
+    "value": "interviewer"
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 8,
+    "value": "okafor"
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 10,
+    "value": "interviewer"
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 11,
+    "value": "okafor"
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 14,
+    "value": "interviewer"
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 15,
+    "value": "okafor"
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 17,
+    "value": "interviewer"
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 18,
+    "value": "okafor"
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 20,
+    "value": "interviewer"
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 21,
+    "value": "okafor"
+  }
+]

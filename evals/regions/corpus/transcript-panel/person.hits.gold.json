@@ -1,0 +1,62 @@
+[
+  {
+    "kind": "person",
+    "quote": "Chair:",
+    "hitSentence": 1,
+    "value": "chair"
+  },
+  {
+    "kind": "person",
+    "quote": "Bell:",
+    "hitSentence": 4,
+    "value": "bell"
+  },
+  {
+    "kind": "person",
+    "quote": "Chair:",
+    "hitSentence": 5,
+    "value": "chair"
+  },
+  {
+    "kind": "person",
+    "quote": "Okafor:",
+    "hitSentence": 6,
+    "value": "okafor"
+  },
+  {
+    "kind": "person",
+    "quote": "Bell:",
+    "hitSentence": 8,
+    "value": "bell"
+  },
+  {
+    "kind": "person",
+    "quote": "Okafor:",
+    "hitSentence": 9,
+    "value": "okafor"
+  },
+  {
+    "kind": "person",
+    "quote": "Mrs. Sharma:",
+    "hitSentence": 12,
+    "value": "sharma"
+  },
+  {
+    "kind": "person",
+    "quote": "Chair:",
+    "hitSentence": 15,
+    "value": "chair"
+  },
+  {
+    "kind": "person",
+    "quote": "Bell:",
+    "hitSentence": 18,
+    "value": "bell"
+  },
+  {
+    "kind": "person",
+    "quote": "Chair:",
+    "hitSentence": 19,
+    "value": "chair"
+  }
+]

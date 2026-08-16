@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "person",
+    "quote": "The patient",
+    "hitSentence": 3,
+    "value": "patient",
+    "startSentence": 3,
+    "endSentence": 7
+  },
+  {
+    "kind": "person",
+    "quote": "The patient",
+    "hitSentence": 15,
+    "value": "patient",
+    "startSentence": 15,
+    "endSentence": 16
+  }
+]

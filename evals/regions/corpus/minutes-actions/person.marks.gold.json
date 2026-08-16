@@ -1,0 +1,42 @@
+[
+  {
+    "kind": "person",
+    "quote": "The chair",
+    "hitSentence": 5,
+    "value": "sharma",
+    "startSentence": 5,
+    "endSentence": 8
+  },
+  {
+    "kind": "person",
+    "quote": "Ms. Okafor",
+    "hitSentence": 9,
+    "value": "okafor",
+    "startSentence": 9,
+    "endSentence": 11
+  },
+  {
+    "kind": "person",
+    "quote": "Ms. Delgado.",
+    "hitSentence": 16,
+    "value": "delgado",
+    "startSentence": 16,
+    "endSentence": 17
+  },
+  {
+    "kind": "person",
+    "quote": "F. Hanley",
+    "hitSentence": 21,
+    "value": "f hanley",
+    "startSentence": 21,
+    "endSentence": 22
+  },
+  {
+    "kind": "person",
+    "quote": "J. Hanley",
+    "hitSentence": 23,
+    "value": "j hanley",
+    "startSentence": 23,
+    "endSentence": 23
+  }
+]

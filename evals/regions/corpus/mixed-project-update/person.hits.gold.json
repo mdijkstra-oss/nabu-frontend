@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "person",
+    "quote": "Mrs. Sharma:",
+    "hitSentence": 11,
+    "value": "sharma"
+  },
+  {
+    "kind": "person",
+    "quote": "Bell:",
+    "hitSentence": 13,
+    "value": "bell"
+  },
+  {
+    "kind": "person",
+    "quote": "Mrs. Sharma:",
+    "hitSentence": 14,
+    "value": "sharma"
+  },
+  {
+    "kind": "person",
+    "quote": "Ms. Okafor",
+    "hitSentence": 16,
+    "value": "okafor"
+  }
+]

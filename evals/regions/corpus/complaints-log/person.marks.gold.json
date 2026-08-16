@@ -1,0 +1,50 @@
+[
+  {
+    "kind": "person",
+    "quote": "Mrs. Sharma",
+    "hitSentence": 3,
+    "value": "sharma",
+    "startSentence": 2,
+    "endSentence": 11
+  },
+  {
+    "kind": "person",
+    "quote": "F. Hanley",
+    "hitSentence": 4,
+    "value": "f hanley",
+    "startSentence": 4,
+    "endSentence": 4
+  },
+  {
+    "kind": "person",
+    "quote": "F. Hanley",
+    "hitSentence": 14,
+    "value": "f hanley",
+    "startSentence": 13,
+    "endSentence": 21
+  },
+  {
+    "kind": "person",
+    "quote": "J. Hanley",
+    "hitSentence": 15,
+    "value": "j hanley",
+    "startSentence": 15,
+    "endSentence": 15
+  },
+  {
+    "kind": "person",
+    "quote": "Complainant:",
+    "hitSentence": 24,
+    "value": "complainant",
+    "startSentence": 24,
+    "endSentence": 24
+  },
+  {
+    "kind": "person",
+    "quote": "F. Hanley",
+    "hitSentence": 25,
+    "value": "f hanley",
+    "startSentence": 25,
+    "endSentence": 25
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "kind": "date",
+    "quote": "16 January 2026",
+    "hitSentence": 0,
+    "value": "2026-01-16T00:00:00.000Z",
+    "startSentence": 0,
+    "endSentence": 0
+  },
+  {
+    "kind": "date",
+    "quote": "07:45",
+    "hitSentence": 1,
+    "value": "2026-01-16T07:45:00.000Z",
+    "startSentence": 1,
+    "endSentence": 2
+  },
+  {
+    "kind": "date",
+    "quote": "08:10",
+    "hitSentence": 3,
+    "value": "2026-01-16T08:10:00.000Z",
+    "startSentence": 3,
+    "endSentence": 4
+  },
+  {
+    "kind": "date",
+    "quote": "08:35",
+    "hitSentence": 5,
+    "value": "2026-01-16T08:35:00.000Z",
+    "startSentence": 5,
+    "endSentence": 5
+  },
+  {
+    "kind": "date",
+    "quote": "09:00",
+    "hitSentence": 6,
+    "value": "2026-01-16T09:00:00.000Z",
+    "startSentence": 6,
+    "endSentence": 6
+  },
+  {
+    "kind": "date",
+    "quote": "09:15",
+    "hitSentence": 7,
+    "value": "2026-01-16T09:15:00.000Z",
+    "startSentence": 7,
+    "endSentence": 10
+  },
+  {
+    "kind": "date",
+    "quote": "09:40",
+    "hitSentence": 11,
+    "value": "2026-01-16T09:40:00.000Z",
+    "startSentence": 11,
+    "endSentence": 12
+  },
+  {
+    "kind": "date",
+    "quote": "10:05",
+    "hitSentence": 13,
+    "value": "2026-01-16T10:05:00.000Z",
+    "startSentence": 13,
+    "endSentence": 14
+  },
+  {
+    "kind": "date",
+    "quote": "10:30",
+    "hitSentence": 15,
+    "value": "2026-01-16T10:30:00.000Z",
+    "startSentence": 15,
+    "endSentence": 16
+  },
+  {
+    "kind": "date",
+    "quote": "11:00",
+    "hitSentence": 17,
+    "value": "2026-01-16T11:00:00.000Z",
+    "startSentence": 17,
+    "endSentence": 19
+  },
+  {
+    "kind": "date",
+    "quote": "11:20",
+    "hitSentence": 19,
+    "value": "2026-01-16T11:20:00.000Z",
+    "startSentence": 19,
+    "endSentence": 20
+  },
+  {
+    "kind": "date",
+    "quote": "12:00",
+    "hitSentence": 21,
+    "value": "2026-01-16T12:00:00.000Z",
+    "startSentence": 21,
+    "endSentence": 22
+  },
+  {
+    "kind": "date",
+    "quote": "13:15",
+    "hitSentence": 23,
+    "value": "2026-01-16T13:15:00.000Z",
+    "startSentence": 23,
+    "endSentence": 23
+  },
+  {
+    "kind": "date",
+    "quote": "13:50",
+    "hitSentence": 24,
+    "value": "2026-01-16T13:50:00.000Z",
+    "startSentence": 24,
+    "endSentence": 25
+  },
+  {
+    "kind": "date",
+    "quote": "14:30",
+    "hitSentence": 26,
+    "value": "2026-01-16T14:30:00.000Z",
+    "startSentence": 26,
+    "endSentence": 27
+  },
+  {
+    "kind": "date",
+    "quote": "15:10",
+    "hitSentence": 28,
+    "value": "2026-01-16T15:10:00.000Z",
+    "startSentence": 28,
+    "endSentence": 28
+  },
+  {
+    "kind": "date",
+    "quote": "16:00",
+    "hitSentence": 29,
+    "value": "2026-01-16T16:00:00.000Z",
+    "startSentence": 29,
+    "endSentence": 30
+  },
+  {
+    "kind": "date",
+    "quote": "16:30",
+    "hitSentence": 31,
+    "value": "2026-01-16T16:30:00.000Z",
+    "startSentence": 31,
+    "endSentence": 31
+  }
+]

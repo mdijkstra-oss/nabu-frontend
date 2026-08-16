@@ -1,0 +1,82 @@
+[
+  {
+    "kind": "person",
+    "quote": "Chair:",
+    "hitSentence": 1,
+    "value": "chair",
+    "startSentence": 1,
+    "endSentence": 3
+  },
+  {
+    "kind": "person",
+    "quote": "Bell:",
+    "hitSentence": 4,
+    "value": "bell",
+    "startSentence": 4,
+    "endSentence": 4
+  },
+  {
+    "kind": "person",
+    "quote": "Chair:",
+    "hitSentence": 5,
+    "value": "chair",
+    "startSentence": 5,
+    "endSentence": 5
+  },
+  {
+    "kind": "person",
+    "quote": "Okafor:",
+    "hitSentence": 6,
+    "value": "okafor",
+    "startSentence": 6,
+    "endSentence": 7
+  },
+  {
+    "kind": "person",
+    "quote": "Bell:",
+    "hitSentence": 8,
+    "value": "bell",
+    "startSentence": 8,
+    "endSentence": 8
+  },
+  {
+    "kind": "person",
+    "quote": "Okafor:",
+    "hitSentence": 9,
+    "value": "okafor",
+    "startSentence": 9,
+    "endSentence": 11
+  },
+  {
+    "kind": "person",
+    "quote": "Mrs. Sharma:",
+    "hitSentence": 12,
+    "value": "sharma",
+    "startSentence": 12,
+    "endSentence": 14
+  },
+  {
+    "kind": "person",
+    "quote": "Chair:",
+    "hitSentence": 15,
+    "value": "chair",
+    "startSentence": 15,
+    "endSentence": 17
+  },
+  {
+    "kind": "person",
+    "quote": "Bell:",
+    "hitSentence": 18,
+    "value": "bell",
+    "startSentence": 18,
+    "endSentence": 18
+  },
+  {
+    "kind": "person",
+    "quote": "Chair:",
+    "hitSentence": 19,
+    "value": "chair",
+    "startSentence": 19,
+    "endSentence": 19
+  }
+]

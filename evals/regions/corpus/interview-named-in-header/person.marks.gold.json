@@ -1,0 +1,98 @@
+[
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 3,
+    "value": "interviewer",
+    "startSentence": 3,
+    "endSentence": 3
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 4,
+    "value": "okafor",
+    "startSentence": 4,
+    "endSentence": 6
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 7,
+    "value": "interviewer",
+    "startSentence": 7,
+    "endSentence": 7
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 8,
+    "value": "okafor",
+    "startSentence": 8,
+    "endSentence": 9
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 10,
+    "value": "interviewer",
+    "startSentence": 10,
+    "endSentence": 10
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 11,
+    "value": "okafor",
+    "startSentence": 11,
+    "endSentence": 13
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 14,
+    "value": "interviewer",
+    "startSentence": 14,
+    "endSentence": 14
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 15,
+    "value": "okafor",
+    "startSentence": 15,
+    "endSentence": 16
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 17,
+    "value": "interviewer",
+    "startSentence": 17,
+    "endSentence": 17
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 18,
+    "value": "okafor",
+    "startSentence": 18,
+    "endSentence": 19
+  },
+  {
+    "kind": "person",
+    "quote": "Q:",
+    "hitSentence": 20,
+    "value": "interviewer",
+    "startSentence": 20,
+    "endSentence": 20
+  },
+  {
+    "kind": "person",
+    "quote": "A:",
+    "hitSentence": 21,
+    "value": "okafor",
+    "startSentence": 21,
+    "endSentence": 22
+  }
+]
