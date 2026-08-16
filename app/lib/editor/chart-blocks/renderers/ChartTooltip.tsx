@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm"
 import { allowFileProtocol } from "~/ui/components/nabu/MessageContent"
 import { createEntityLinkComponents } from "~/ui/components/markdown/createEntityLinkComponents"
 import type { FileStore } from "~/lib/files/store"
+import { formatValue } from "~/lib/chart/format"
 import { resolveTemplateToMarkdown } from "~/lib/chart/template"
 import type { ChartEntityMap, TemplateNode } from "~/lib/chart/types"
 
@@ -38,6 +39,7 @@ export type RechartsTooltipContent = (props: RechartsTooltipContentProps) => Rea
 
 export interface ChartTooltipProps extends RechartsTooltipContentProps {
   context: ChartTooltipContext
+  labelFormat?: string
 }
 
 const remarkPlugins = [remarkGfm]
@@ -48,11 +50,16 @@ const extractDatum = (payload: RechartsPayloadItem[] | undefined): TooltipDatum 
 const formatFallbackValue = (value: number | string | undefined): string =>
   value === undefined || value === null ? "" : String(value)
 
+const formatLabel = (label: string | number, labelFormat: string | undefined): string =>
+  labelFormat ? formatValue(label, labelFormat) : String(label)
+
 const buildFallbackContent = (
   payload: RechartsPayloadItem[],
-  label: string | number | undefined
+  label: string | number | undefined,
+  labelFormat: string | undefined
 ): string => {
-  const header = label !== undefined && label !== "" ? `**${label}**\n\n` : ""
+  const header =
+    label !== undefined && label !== "" ? `**${formatLabel(label, labelFormat)}**\n\n` : ""
   const lines = payload
     .map((item) => `- ${item.name ?? ""}: ${formatFallbackValue(item.value)}`)
     .join("\n")
@@ -62,11 +69,12 @@ const buildFallbackContent = (
 const buildTooltipMarkdown = (
   payload: RechartsPayloadItem[],
   label: string | number | undefined,
+  labelFormat: string | undefined,
   datum: TooltipDatum,
   entityMap: ChartEntityMap
 ): string => {
   if (!datum._tooltipNodes || datum._tooltipNodes.length === 0) {
-    return buildFallbackContent(payload, label)
+    return buildFallbackContent(payload, label, labelFormat)
   }
   return resolveTemplateToMarkdown(datum._tooltipNodes, {
     row: datum._raw,
@@ -74,7 +82,13 @@ const buildTooltipMarkdown = (
   })
 }
 
-export const ChartTooltip = ({ context, active, payload, label }: ChartTooltipProps) => {
+export const ChartTooltip = ({
+  context,
+  active,
+  payload,
+  label,
+  labelFormat,
+}: ChartTooltipProps) => {
   if (!active || !payload || payload.length === 0) return null
   const datum = extractDatum(payload)
   if (!datum) return null
@@ -84,7 +98,7 @@ export const ChartTooltip = ({ context, active, payload, label }: ChartTooltipPr
     projectId: context.projectId,
     navigate: context.navigate,
   })
-  const markdown = buildTooltipMarkdown(payload, label, datum, context.entityMap)
+  const markdown = buildTooltipMarkdown(payload, label, labelFormat, datum, context.entityMap)
 
   return (
     <div className="rounded border border-solid border-neutral-border bg-default-background px-3 py-2 text-xs shadow-md">
@@ -100,5 +114,5 @@ export const ChartTooltip = ({ context, active, payload, label }: ChartTooltipPr
 }
 
 export const buildChartTooltipContent =
-  (context: ChartTooltipContext): RechartsTooltipContent =>
-  (props) => <ChartTooltip context={context} {...props} />
+  (context: ChartTooltipContext, labelFormat?: string): RechartsTooltipContent =>
+  (props) => <ChartTooltip context={context} labelFormat={labelFormat} {...props} />

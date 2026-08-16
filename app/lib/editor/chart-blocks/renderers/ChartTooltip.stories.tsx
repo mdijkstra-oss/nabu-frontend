@@ -69,6 +69,20 @@ export const Fallback: Story = {
   },
 }
 
+export const FormattedLabel: Story = {
+  args: {
+    context: sampleTooltipContext(),
+    active: true,
+    label: 1711929600000,
+    labelFormat: "%b %Y",
+    payload: sampleTooltipPayload({ name: "count", value: 12 }),
+  },
+  play: async ({ canvasElement }) => {
+    const header = canvasElement.querySelector("strong")
+    expect(header?.textContent).toBe("Apr 2024")
+  },
+}
+
 export const Inactive: Story = {
   args: {
     context: sampleTooltipContext(),

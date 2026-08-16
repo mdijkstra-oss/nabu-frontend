@@ -1,5 +1,5 @@
 import { format as d3Format } from "d3-format"
-import { timeFormat as d3TimeFormat } from "d3-time-format"
+import { utcFormat as d3UtcFormat } from "d3-time-format"
 
 const TIME_DIRECTIVE = /%[a-zA-Z]/
 
@@ -28,10 +28,13 @@ export const toNumber = (value: unknown): number | null => {
   return null
 }
 
+// Formatted in UTC, because that is the zone the values are in: region detection
+// normalizes to a Z-suffixed instant and a DATE column arrives as UTC midnight.
+// Reading those in local time moves a first-of-month bucket into the month before.
 const formatTime = (value: unknown, pattern: string): string => {
   const date = toDate(value)
   if (!date) return ""
-  return d3TimeFormat(pattern)(date)
+  return d3UtcFormat(pattern)(date)
 }
 
 const formatNumber = (value: unknown, pattern: string): string => {

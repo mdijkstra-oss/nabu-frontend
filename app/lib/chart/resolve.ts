@@ -6,6 +6,7 @@ import {
   bindingField,
   bindingFormat,
   bindingLabel,
+  bindingScale,
   isAxisSpec,
   isMatrixSpec,
   isPartSpec,
@@ -13,9 +14,11 @@ import {
   type AxisRenderable,
   type AxisRow,
   type AxisSide,
+  type ChartBand,
   type ChartEntityMap,
   type ChartLayer,
   type ChartSpec,
+  type Curve,
   type MatrixCell,
   type MatrixChartSpec,
   type MatrixRenderable,
@@ -25,6 +28,7 @@ import {
   type RenderableChart,
   type SeriesDescriptor,
   type TemplateNode,
+  type XScale,
 } from "./types"
 
 export interface ResolveOptions {
@@ -68,7 +72,17 @@ interface GroupedRows {
   rows: Record<string, unknown>[]
 }
 
-const groupRowsByX = (rows: Record<string, unknown>[], xField: string): GroupedRows[] => {
+// A category axis draws groups in the order the query returned them, which is the
+// author's ordering and has to survive. A time axis draws them where their instant
+// falls, so out-of-order rows would double the line back on itself.
+const orderGroups = (groups: GroupedRows[], xScale: XScale): GroupedRows[] =>
+  xScale === "time" ? [...groups].sort((a, b) => Number(a.key) - Number(b.key)) : groups
+
+const groupRowsByX = (
+  rows: Record<string, unknown>[],
+  xField: string,
+  xScale: XScale
+): GroupedRows[] => {
   const result: GroupedRows[] = []
   const index = new Map<string | number, GroupedRows>()
   for (const row of rows) {
@@ -82,14 +96,62 @@ const groupRowsByX = (rows: Record<string, unknown>[], xField: string): GroupedR
       result.push(group)
     }
   }
-  return result
+  return orderGroups(result, xScale)
 }
+
+// A DATE column arrives from DuckDB as epoch milliseconds, while a band edge is
+// written as a date string, so the two never match on identity. Both sides
+// reduce to a number here, and the edge then snaps to a category the axis
+// actually draws — Recharts drops a ReferenceArea whose bound is not one.
+const toComparable = (value: string | number): number | null => {
+  if (typeof value === "number") return value
+  const asNumber = Number(value)
+  if (value.trim() !== "" && !isNaN(asNumber)) return asNumber
+  const time = Date.parse(value)
+  return isNaN(time) ? null : time
+}
+
+const snapEdge = (
+  edge: string | number,
+  keys: (string | number)[],
+  side: "from" | "to"
+): string | number | undefined => {
+  const exact = toKey(edge)
+  if (keys.includes(exact)) return exact
+
+  const target = toComparable(edge)
+  if (target === null) return undefined
+
+  let best: { key: string | number; value: number } | undefined
+  for (const key of keys) {
+    const value = toComparable(key)
+    if (value === null) continue
+    if (side === "from" ? value < target : value > target) continue
+    if (!best || (side === "from" ? value < best.value : value > best.value)) {
+      best = { key, value }
+    }
+  }
+  return best?.key
+}
+
+const resolveBands = (bands: ChartBand[], keys: (string | number)[]): ChartBand[] =>
+  bands.flatMap((band) => {
+    const from = snapEdge(band.from, keys, "from")
+    const to = snapEdge(band.to, keys, "to")
+    if (from === undefined || to === undefined) return []
+    if (keys.indexOf(from) > keys.indexOf(to)) return []
+    return [{ ...band, from, to }]
+  })
 
 const layerStacks = (layer: ChartLayer): boolean =>
   (layer.mark === "bar" || layer.mark === "area") && layer.stack
 
 const stackIdFor = (layer: ChartLayer): string | undefined =>
   layerStacks(layer) ? `${layer.mark}-${layer.axis}` : undefined
+
+// Only line and area travel between points; a bar or a dot has nothing to curve.
+const curveFor = (layer: ChartLayer): Curve =>
+  layer.mark === "line" || layer.mark === "area" ? layer.curve : "linear"
 
 const axisFormat = (layers: ChartLayer[], side: AxisSide): string | undefined => {
   for (const layer of layers) {
@@ -107,8 +169,9 @@ const resolveAxis = (
   colorContext: ColorContext
 ): AxisRenderable => {
   const xField = bindingField(spec.x)
+  const xScale = bindingScale(spec.x)
   const tooltipNodes = parseTooltip(spec.tooltip)
-  const groups = groupRowsByX(rows, xField)
+  const groups = groupRowsByX(rows, xField, xScale)
 
   const axisRows: AxisRow[] = groups.map(({ key, rows: groupRows }) => ({
     x: key,
@@ -125,6 +188,7 @@ const resolveAxis = (
     const seriesField = layer.series ? bindingField(layer.series) : undefined
     const colorNodes = parseTemplate(layer.color)
     const stackId = stackIdFor(layer)
+    const curve = curveFor(layer)
     const layerDescriptors = new Map<string | number, SeriesDescriptor>()
 
     // Deduped by the series value, not its label: two entities sharing a
@@ -138,6 +202,7 @@ const resolveAxis = (
         name: seriesField ? toLabel(seriesValue, entityMap) : (bindingLabel(layer.y) ?? yField),
         mark: layer.mark,
         color: "",
+        curve,
         stackId,
         axis: layer.axis,
       }
@@ -165,12 +230,16 @@ const resolveAxis = (
   return {
     kind: "axis",
     orientation: spec.orientation,
+    xScale,
     xFormat: bindingFormat(spec.x),
     leftAxisFormat: axisFormat(spec.layers, "left"),
     rightAxisFormat: axisFormat(spec.layers, "right"),
     series,
     rows: axisRows,
-    bands: spec.bands ?? [],
+    bands: resolveBands(
+      spec.bands ?? [],
+      axisRows.map((row) => row.x)
+    ),
   }
 }
 

@@ -55,6 +55,19 @@ const FieldBindingSchema = z
   .union([z.string().min(1), FieldBindingObjectSchema])
   .describe("Column name shorthand or { field, label?, format? } object")
 
+const XScaleSchema = z
+  .enum(["category", "time"])
+  .default("category")
+  .describe(
+    "How the independent axis spaces its values. 'category' (default): one evenly sized slot per distinct value, in the order the query returns them — right for names, wrong for dates, because four months and one month between two rows become the same gap. 'time': values are instants placed by how far apart they are, so absent periods stay visibly absent and a band covers real dates rather than snapping to rows that happen to exist. Requires a DATE or TIMESTAMP column."
+  )
+
+const AxisXBindingSchema = z
+  .union([z.string().min(1), FieldBindingObjectSchema.extend({ scale: XScaleSchema })])
+  .describe(
+    "Column for the independent axis. The string shorthand is a category axis; pass the object form with scale: 'time' for a date column."
+  )
+
 const OrientationSchema = z
   .enum(["vertical", "horizontal"])
   .describe(
@@ -88,7 +101,7 @@ const BandsSchema = z
   .array(BandSchema)
   .optional()
   .describe(
-    "Shaded x-axis regions marking context the data does not carry. Edges snap to whole categories on a category axis."
+    "Shaded x-axis regions marking context the data does not carry. On a time axis the edges are the dates you write. On a category axis they snap to whole categories, so a band can only reach values the query returned."
   )
 
 const LayerYSchema = FieldBindingSchema.describe(
@@ -106,6 +119,13 @@ const StackSchema = z
     "Stack this layer's series (and other stacked layers of the same mark and axis side) instead of drawing them side by side or overlapping. Stacking is always said, never implied."
   )
 
+const CurveSchema = z
+  .enum(["linear", "step", "monotone"])
+  .default("linear")
+  .describe(
+    "How the mark travels between points. 'linear' (default): straight segments, so every drawn height is one the data contains. 'step': holds each value until the next point, right for a quantity that changes at a moment rather than continuously. 'monotone': a smoothed spline — it draws heights between the points that no row has, so keep it for genuinely continuous measures and never for counts."
+  )
+
 const layerFields = {
   y: LayerYSchema,
   series: LayerSeriesSchema,
@@ -121,14 +141,14 @@ const unstackableLayerSchema = <M extends string>(mark: M) =>
 
 export const ChartLayerSchema = z.discriminatedUnion("mark", [
   stackableLayerSchema("bar"),
-  unstackableLayerSchema("line"),
-  stackableLayerSchema("area"),
+  unstackableLayerSchema("line").extend({ curve: CurveSchema }),
+  stackableLayerSchema("area").extend({ curve: CurveSchema }),
   unstackableLayerSchema("scatter"),
 ])
 
 export const AxisChartSpecSchema = z.object({
   type: z.literal("axis"),
-  x: FieldBindingSchema.describe(
+  x: AxisXBindingSchema.describe(
     "Column for the independent axis — the category or time dimension every layer shares. Always x, whichever direction the bars run."
   ),
   orientation: OrientationSchema.default("vertical"),

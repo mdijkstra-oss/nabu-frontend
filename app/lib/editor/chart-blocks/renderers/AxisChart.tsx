@@ -17,6 +17,12 @@ import {
   YAxis,
 } from "recharts"
 import { formatValue } from "~/lib/chart/format"
+import {
+  allValuesAreIntegers,
+  timeAxisDomain,
+  timeAxisTicks,
+  wholeNumberTickCount,
+} from "~/lib/chart/ticks"
 import type { AxisRenderable, ChartBand, SeriesDescriptor } from "~/lib/chart/types"
 import { exhaustive } from "~/lib/utils/exhaustive"
 import {
@@ -101,20 +107,23 @@ const renderMark = (
       return (
         <Line
           key={descriptor.key}
-          type="monotone"
+          type={descriptor.curve}
           dataKey={descriptor.key}
           name={descriptor.name}
           yAxisId={yAxisId}
           stroke={descriptor.color || FALLBACK_COLOR}
           strokeWidth={CHART_LINE_WIDTH}
           dot={{ r: CHART_DOT_RADIUS, fill: descriptor.color || FALLBACK_COLOR }}
+          // Recharts withholds dots until its entry animation reports finished, and a
+          // chart that re-renders while that runs never gets them.
+          isAnimationActive={false}
         />
       )
     case "area":
       return (
         <Area
           key={descriptor.key}
-          type="monotone"
+          type={descriptor.curve}
           dataKey={descriptor.key}
           name={descriptor.name}
           yAxisId={yAxisId}
@@ -160,6 +169,15 @@ const renderChart = (
       : renderable.leftAxisFormat
   )
   const rightTick = tickFormatterFor(renderable.rightAxisFormat)
+  // Horizontal puts the categories on the y-axis, which Recharts only scales as a
+  // band, so a time axis stays vertical.
+  const isTime = renderable.xScale === "time" && !isHorizontal
+  const xValues = renderable.rows.map((row) => row.x)
+  const seriesKeys = renderable.series.map((descriptor) => descriptor.key)
+  const wholeNumbers = allValuesAreIntegers(renderable.rows, seriesKeys)
+  const valueTickCount = wholeNumbers
+    ? wholeNumberTickCount(renderable.rows, seriesKeys)
+    : undefined
 
   // Recharts scans direct chart children for axes and marks; a fragment hides
   // them, because its bundled react-is 18 does not recognize React 19 fragment
@@ -174,6 +192,17 @@ const renderChart = (
       {renderBands(renderable.bands, isHorizontal)}
       {isHorizontal ? (
         <XAxis type="number" tickFormatter={leftTick} axisLine={false} tickLine={false} />
+      ) : isTime ? (
+        <XAxis
+          dataKey="x"
+          type="number"
+          scale="time"
+          domain={timeAxisDomain(xValues) ?? ["dataMin", "dataMax"]}
+          ticks={timeAxisTicks(xValues)}
+          tickFormatter={categoryTick}
+          axisLine={false}
+          tickLine={false}
+        />
       ) : (
         <XAxis dataKey="x" tickFormatter={categoryTick} axisLine={false} tickLine={false} />
       )}
@@ -187,13 +216,21 @@ const renderChart = (
           tickLine={false}
         />
       ) : (
-        <YAxis yAxisId="left" tickFormatter={leftTick} axisLine={false} tickLine={false} />
+        <YAxis
+          yAxisId="left"
+          tickFormatter={leftTick}
+          allowDecimals={!wholeNumbers}
+          tickCount={valueTickCount}
+          axisLine={false}
+          tickLine={false}
+        />
       )}
       {hasRight ? (
         <YAxis
           yAxisId="right"
           orientation="right"
           tickFormatter={rightTick}
+          allowDecimals={!wholeNumbers}
           axisLine={false}
           tickLine={false}
         />
@@ -213,7 +250,7 @@ export const AxisChart = ({
   onDatumClick,
   height = CHART_HEIGHT,
 }: AxisChartProps) => {
-  const tooltipContent = buildChartTooltipContent(tooltipContext)
+  const tooltipContent = buildChartTooltipContent(tooltipContext, renderable.xFormat)
 
   return (
     <ResponsiveContainer className="nabu-chart" width="100%" height={height}>

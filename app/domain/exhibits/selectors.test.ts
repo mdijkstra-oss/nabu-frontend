@@ -3,10 +3,13 @@ import { inferChartSubtype, collectExhibits, groupByKind } from "./selectors"
 import type { ChartLayer, ChartSpec, LayerMark } from "~/lib/chart/types"
 import type { ChartSubtype, ExhibitItem, ExhibitKind } from "./types"
 
-const axisLayer = (mark: LayerMark): ChartLayer =>
-  mark === "line" || mark === "scatter"
-    ? { mark, y: "count", color: "blue", axis: "left" }
-    : { mark, y: "count", color: "blue", stack: false, axis: "left" }
+const axisLayer = (mark: LayerMark): ChartLayer => {
+  const shared = { y: "count", color: "blue", axis: "left" } as const
+  if (mark === "line") return { mark, ...shared, curve: "linear" }
+  if (mark === "area") return { mark, ...shared, curve: "linear", stack: false }
+  if (mark === "scatter") return { mark, ...shared }
+  return { mark, ...shared, stack: false }
+}
 
 const axisSpec = (mark: LayerMark): ChartSpec => ({
   type: "axis",

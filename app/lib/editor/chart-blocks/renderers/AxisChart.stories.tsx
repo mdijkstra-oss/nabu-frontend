@@ -44,7 +44,15 @@ const descriptor = (
   name: string,
   mark: SeriesDescriptor["mark"],
   overrides: Partial<SeriesDescriptor> = {}
-): SeriesDescriptor => ({ key, name, mark, color: INDIGO, axis: "left", ...overrides })
+): SeriesDescriptor => ({
+  key,
+  name,
+  mark,
+  color: INDIGO,
+  curve: "linear",
+  axis: "left",
+  ...overrides,
+})
 
 const monthRows = (
   values: Record<string, [number, number, number]>,
@@ -65,6 +73,7 @@ const axisRenderable = (
 ): AxisRenderable => ({
   kind: "axis",
   orientation: "vertical",
+  xScale: "category",
   series,
   rows,
   bands: [],
@@ -104,6 +113,84 @@ const legendEntryTexts = (canvasElement: HTMLElement): string[] =>
   [...canvasElement.querySelectorAll(".nabu-chart-legend-item")].map(
     (item) => item.textContent ?? ""
   )
+
+const UTC_MONTHS = [Date.UTC(2023, 1, 1), Date.UTC(2023, 5, 1), Date.UTC(2025, 1, 1)]
+
+const curveXs = (canvasElement: HTMLElement): number[] =>
+  [
+    ...(mustFind(canvasElement, "svg .recharts-line-curve").getAttribute("d") ?? "").matchAll(
+      /[ML](-?[\d.]+),/g
+    ),
+  ].map((match) => Number(match[1]))
+
+const timeRenderable = (): AxisRenderable =>
+  axisRenderable(
+    [descriptor("l0s0", "Annotations", "line")],
+    UTC_MONTHS.map((month, i) => ({
+      x: month,
+      _raw: { month },
+      _colors: {},
+      l0s0: [1, 2, 1][i],
+    })),
+    { xScale: "time", xFormat: "%b %Y" }
+  )
+
+// Feb 2023 → Jun 2023 is four months and Jun 2023 → Feb 2025 is twenty. A category
+// axis draws those two gaps the same width, which is the lie this story guards.
+export const TimeAxisSpacesByInstant: Story = {
+  args: { renderable: timeRenderable() },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      const xs = curveXs(canvasElement)
+      expect(xs).toHaveLength(3)
+      const firstGap = xs[1] - xs[0]
+      const secondGap = xs[2] - xs[1]
+      expect(secondGap).toBeGreaterThan(firstGap * 3)
+    })
+  },
+}
+
+export const TimeAxisTicksAreMonthBoundaries: Story = {
+  args: { renderable: timeRenderable() },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      const ticks = tickTexts(canvasElement.querySelector(".recharts-xAxis"))
+      expect(ticks.length).toBeGreaterThan(3)
+      // Formatted in UTC, so a first-of-month instant reports its own month.
+      ticks.forEach((tick) => expect(tick).toMatch(/^[A-Z][a-z]{2} 20\d{2}$/))
+    })
+  },
+}
+
+export const LineDotsSurviveWithoutAnimation: Story = {
+  args: { renderable: timeRenderable() },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      expect(canvasElement.querySelectorAll("svg .recharts-line-dot")).toHaveLength(3)
+    })
+  },
+}
+
+export const WholeCountsGetWholeTicks: Story = {
+  args: { renderable: timeRenderable() },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      // Values run 1..2, so the axis stops at 2 rather than reaching for a fifth tick.
+      expect(tickTexts(yAxes(canvasElement)[0])).toEqual(["0", "1", "2"])
+    })
+  },
+}
+
+export const LinearCurveDrawsStraightSegments: Story = {
+  args: { renderable: timeRenderable() },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      const curve = mustFind(canvasElement, "svg .recharts-line-curve")
+      // A spline emits cubic segments; straight segments only ever emit L commands.
+      expect(curve.getAttribute("d") ?? "").not.toMatch(/C/)
+    })
+  },
+}
 
 export const ScatterSeriesKeepOwnValues: Story = {
   args: {

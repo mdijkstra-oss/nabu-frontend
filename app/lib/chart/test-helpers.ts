@@ -86,7 +86,14 @@ const fixtures = {
       x: "month",
       orientation: "vertical",
       layers: [
-        { mark: "line", y: "count", series: "region", color: "{region:color}", axis: "left" },
+        {
+          mark: "line",
+          curve: "linear",
+          y: "count",
+          series: "region",
+          color: "{region:color}",
+          axis: "left",
+        },
       ],
     },
     rows: monthlyRows,
@@ -99,6 +106,7 @@ const fixtures = {
       layers: [
         {
           mark: "area",
+          curve: "linear",
           y: "count",
           series: "region",
           color: "{region:color}",
@@ -201,7 +209,7 @@ const fixtures = {
       orientation: "vertical",
       layers: [
         { mark: "bar", y: "count", color: "blue", stack: false, axis: "left" },
-        { mark: "line", y: "ratio", color: "amber", axis: "right" },
+        { mark: "line", curve: "linear", y: "ratio", color: "amber", axis: "right" },
       ],
     },
     rows: wideRows,
@@ -240,7 +248,18 @@ const singleSeriesAxisRenderable = (
 ): AxisRenderable => ({
   kind: "axis",
   orientation: "vertical",
-  series: [{ key: "l0s0", name: "count", mark, color: SAMPLE_SERIES_COLOR, stackId, axis: "left" }],
+  xScale: "category",
+  series: [
+    {
+      key: "l0s0",
+      name: "count",
+      mark,
+      color: SAMPLE_SERIES_COLOR,
+      curve: "linear",
+      stackId,
+      axis: "left",
+    },
+  ],
   rows: axisRows("l0s0", { Jan: 19, Feb: 23, Mar: 16 }, SAMPLE_SERIES_COLOR),
   bands: [],
 })

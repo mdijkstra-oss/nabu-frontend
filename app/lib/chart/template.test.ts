@@ -227,7 +227,14 @@ describe("collectReferencedFields", () => {
             stack: false,
             axis: "left",
           },
-          { mark: "line", y: "ratio", series: "cohort", color: "{palette}", axis: "right" },
+          {
+            mark: "line",
+            curve: "linear",
+            y: "ratio",
+            series: "cohort",
+            color: "{palette}",
+            axis: "right",
+          },
         ],
       },
       expected: ["month", "count", "region", "ratio", "cohort", "palette"],
@@ -236,7 +243,7 @@ describe("collectReferencedFields", () => {
       name: "axis with object bindings",
       spec: {
         type: "axis",
-        x: { field: "date", label: "Date", format: "%b %Y" },
+        x: { field: "date", label: "Date", format: "%b %Y", scale: "category" },
         orientation: "vertical",
         layers: [
           {
@@ -278,7 +285,7 @@ describe("collectReferencedFields", () => {
         type: "axis",
         x: "date",
         orientation: "vertical",
-        layers: [{ mark: "line", y: "value", color: "blue", axis: "left" }],
+        layers: [{ mark: "line", curve: "linear", y: "value", color: "blue", axis: "left" }],
         tooltip: "{label}: {value} ({pct:.0%})",
       },
       expected: ["date", "value", "label", "pct"],

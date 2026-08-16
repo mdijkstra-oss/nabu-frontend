@@ -101,6 +101,63 @@ describe("parseChart — defaults materialize", () => {
     expect(layer.stack).toBe(false)
     expect(layer.axis).toBe("left")
   })
+
+  it("a line curve defaults to straight segments", () => {
+    const block = parseChart(
+      chartJson(axisSpec({ layers: [{ mark: "line", y: "count", color: "blue" }] }))
+    )
+    if (block?.spec.type !== "axis") throw new Error("expected axis spec")
+    const layer = block.spec.layers[0]
+    if (layer.mark !== "line") throw new Error("expected line layer")
+    expect(layer.curve).toBe("linear")
+  })
+
+  it("an x binding object defaults to a category axis", () => {
+    const block = parseChart(chartJson(axisSpec({ x: { field: "month", format: "%b %Y" } })))
+    if (block?.spec.type !== "axis") throw new Error("expected axis spec")
+    if (typeof block.spec.x === "string") throw new Error("expected object binding")
+    expect(block.spec.x.scale).toBe("category")
+  })
+
+  it("a time axis is taken as written", () => {
+    const block = parseChart(chartJson(axisSpec({ x: { field: "month", scale: "time" } })))
+    if (block?.spec.type !== "axis") throw new Error("expected axis spec")
+    if (typeof block.spec.x === "string") throw new Error("expected object binding")
+    expect(block.spec.x.scale).toBe("time")
+  })
+})
+
+describe("parseChart — rejected scale and curve values", () => {
+  const cases: { name: string; spec: unknown }[] = [
+    {
+      name: "unknown x scale",
+      spec: {
+        type: "axis",
+        x: { field: "m", scale: "log" },
+        layers: [{ mark: "bar", y: "c", color: "blue" }],
+      },
+    },
+    {
+      name: "unknown curve",
+      spec: {
+        type: "axis",
+        x: "m",
+        layers: [{ mark: "line", y: "c", color: "blue", curve: "wiggly" }],
+      },
+    },
+    {
+      name: "curve on a bar",
+      spec: {
+        type: "axis",
+        x: "m",
+        layers: [{ mark: "bar", y: "c", color: "blue", curve: "linear" }],
+      },
+    },
+  ]
+
+  it.each(cases)("$name → null", ({ spec }) => {
+    expect(parseChart(chartJson(spec))).toBeNull()
+  })
 })
 
 describe("parseChart — color forms", () => {

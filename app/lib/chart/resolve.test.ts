@@ -49,7 +49,7 @@ describe("resolveChartData — axis charts", () => {
         orientation: "vertical",
         layers: [
           { mark: "bar", y: "count", color: "blue", stack: false, axis: "left" },
-          { mark: "line", y: "count", color: "amber", axis: "left" },
+          { mark: "line", curve: "linear", y: "count", color: "amber", axis: "left" },
         ],
       },
       rows: [
@@ -75,7 +75,13 @@ describe("resolveChartData — axis charts", () => {
         orientation: "vertical",
         layers: [
           { mark: "bar", y: "count", color: "blue", stack: false, axis: "left" },
-          { mark: "line", y: { field: "ratio", label: "count" }, color: "amber", axis: "left" },
+          {
+            mark: "line",
+            curve: "linear",
+            y: { field: "ratio", label: "count" },
+            color: "amber",
+            axis: "left",
+          },
         ],
       },
       rows: [{ month: "Jan", count: 5, ratio: 0.5 }],
@@ -129,7 +135,7 @@ describe("resolveChartData — axis charts", () => {
             stack: false,
             axis: "left",
           },
-          { mark: "line", y: "ratio", color: "amber", axis: "right" },
+          { mark: "line", curve: "linear", y: "ratio", color: "amber", axis: "right" },
         ],
       },
       rows: [
@@ -166,7 +172,7 @@ describe("resolveChartData — axis charts", () => {
         layers: [
           { mark: "bar", y: "count", color: "blue", stack: true, axis: "left" },
           { mark: "bar", y: "ratio", color: "amber", stack: false, axis: "left" },
-          { mark: "line", y: "other", color: "green", axis: "left" },
+          { mark: "line", curve: "linear", y: "other", color: "green", axis: "left" },
         ],
       },
       rows: [{ month: "Jan", count: 1, ratio: 2, other: 3 }],
@@ -184,7 +190,7 @@ describe("resolveChartData — axis charts", () => {
         orientation: "vertical",
         layers: [
           { mark: "bar", y: "count", color: "blue", stack: true, axis: "left" },
-          { mark: "area", y: "ratio", color: "amber", stack: true, axis: "left" },
+          { mark: "area", curve: "linear", y: "ratio", color: "amber", stack: true, axis: "left" },
         ],
       },
       rows: [{ month: "Jan", count: 1, ratio: 2 }],
@@ -300,12 +306,24 @@ describe("resolveChartData — axis charts", () => {
       name: "axis formats come from the first layer on each side whose y binding declares one",
       spec: {
         type: "axis",
-        x: { field: "month", format: "%b" },
+        x: { field: "month", format: "%b", scale: "category" },
         orientation: "vertical",
         layers: [
           { mark: "bar", y: "count", color: "blue", stack: false, axis: "left" },
-          { mark: "line", y: { field: "ratio", format: ".1%" }, color: "amber", axis: "left" },
-          { mark: "line", y: { field: "other", format: ",.0f" }, color: "green", axis: "right" },
+          {
+            mark: "line",
+            curve: "linear",
+            y: { field: "ratio", format: ".1%" },
+            color: "amber",
+            axis: "left",
+          },
+          {
+            mark: "line",
+            curve: "linear",
+            y: { field: "other", format: ",.0f" },
+            color: "green",
+            axis: "right",
+          },
         ],
       },
       rows: [{ month: "Jan", count: 1, ratio: 0.5, other: 100 }],
@@ -323,7 +341,14 @@ describe("resolveChartData — axis charts", () => {
         orientation: "vertical",
         layers: [
           { mark: "bar", y: "count", color: "blue", stack: false, axis: "left" },
-          { mark: "line", y: "count", series: "region", color: "{region:color}", axis: "left" },
+          {
+            mark: "line",
+            curve: "linear",
+            y: "count",
+            series: "region",
+            color: "{region:color}",
+            axis: "left",
+          },
         ],
       },
       rows: [],
@@ -366,7 +391,13 @@ describe("resolveChartData — axis charts", () => {
             stack: false,
             axis: "left",
           },
-          { mark: "line", y: { field: "ratio", format: ",.0f" }, color: "amber", axis: "left" },
+          {
+            mark: "line",
+            curve: "linear",
+            y: { field: "ratio", format: ",.0f" },
+            color: "amber",
+            axis: "left",
+          },
         ],
       },
       rows: [{ month: "Jan", count: 1, ratio: 2 }],
@@ -394,6 +425,67 @@ describe("resolveChartData — axis charts", () => {
       },
     },
     {
+      name: "a band written as dates snaps onto epoch-millisecond categories",
+      spec: {
+        type: "axis",
+        x: { field: "month", format: "%b %Y", scale: "category" },
+        orientation: "vertical",
+        layers: [{ mark: "line", curve: "linear", y: "count", color: "blue", axis: "left" }],
+        bands: [{ from: "2024-02-01", to: "2024-06-01", label: "Construction" }],
+      },
+      rows: [
+        { month: 1706745600000, count: 1 },
+        { month: 1709251200000, count: 2 },
+        { month: 1717200000000, count: 3 },
+      ],
+      expect: (chart) => {
+        expect(chart.bands).toEqual([
+          { from: 1706745600000, to: 1717200000000, label: "Construction" },
+        ])
+      },
+    },
+    {
+      name: "a band edge between two categories widens outward to the categories either side",
+      spec: {
+        type: "axis",
+        x: "month",
+        orientation: "vertical",
+        layers: [{ mark: "line", curve: "linear", y: "count", color: "blue", axis: "left" }],
+        bands: [{ from: "2024-01-15", to: "2024-07-01", label: "Construction" }],
+      },
+      rows: [
+        { month: 1706745600000, count: 1 },
+        { month: 1709251200000, count: 2 },
+        { month: 1717200000000, count: 3 },
+      ],
+      expect: (chart) => {
+        expect(chart.bands).toEqual([
+          { from: 1706745600000, to: 1717200000000, label: "Construction" },
+        ])
+      },
+    },
+    {
+      name: "a band no category falls inside is dropped rather than drawn empty",
+      spec: {
+        type: "axis",
+        x: "month",
+        orientation: "vertical",
+        layers: [{ mark: "line", curve: "linear", y: "count", color: "blue", axis: "left" }],
+        bands: [{ from: "2025-01-01", to: "2025-03-01", label: "Later" }],
+      },
+      rows: [{ month: 1706745600000, count: 1 }],
+      expect: (chart) => {
+        expect(chart.bands).toEqual([])
+      },
+    },
+    {
+      name: "band edges naming categories exactly are left alone",
+      ...chartFixture("banded"),
+      expect: (chart) => {
+        expect(chart.bands).toEqual([{ from: "Feb", to: "Mar", label: "Polar night" }])
+      },
+    },
+    {
       name: "skeleton combo: bar and right-axis line resolve to one row set with both keys",
       ...chartFixture("combo"),
       expect: (chart) => {
@@ -410,6 +502,76 @@ describe("resolveChartData — axis charts", () => {
   it.each(cases)("$name", ({ spec, rows, entityMap, expect: assertFn }) => {
     const chart = resolveChartData(buildOptions(spec, rows, entityMap))
     assertFn(narrowRenderable(chart, "axis"))
+  })
+})
+
+describe("resolveChartData — time axis", () => {
+  const FEB_2023 = Date.UTC(2023, 1, 1)
+  const JUN_2023 = Date.UTC(2023, 5, 1)
+  const FEB_2025 = Date.UTC(2025, 1, 1)
+
+  const timeSpec = (curve: "linear" | "step" | "monotone" = "linear"): ChartSpec => ({
+    type: "axis",
+    x: { field: "month", format: "%b %Y", scale: "time" },
+    orientation: "vertical",
+    layers: [{ mark: "line", y: "count", series: "code", color: "blue", curve, axis: "left" }],
+  })
+
+  const shuffled = [
+    { month: FEB_2025, code: "support", count: 2 },
+    { month: FEB_2023, code: "support", count: 1 },
+    { month: JUN_2023, code: "support", count: 3 },
+  ]
+
+  it("carries the scale through to the renderable", () => {
+    const chart = narrowRenderable(resolveChartData(buildOptions(timeSpec(), shuffled)), "axis")
+    expect(chart.xScale).toBe("time")
+  })
+
+  it("orders rows by instant regardless of the order the query returned them", () => {
+    const chart = narrowRenderable(resolveChartData(buildOptions(timeSpec(), shuffled)), "axis")
+    expect(chart.rows.map((row) => row.x)).toEqual([FEB_2023, JUN_2023, FEB_2025])
+  })
+
+  it("leaves a category axis in the query's order", () => {
+    const spec: ChartSpec = {
+      type: "axis",
+      x: "month",
+      orientation: "vertical",
+      layers: [{ mark: "line", y: "count", color: "blue", curve: "linear", axis: "left" }],
+    }
+    const chart = narrowRenderable(
+      resolveChartData(
+        buildOptions(spec, [
+          { month: "Mar", count: 1 },
+          { month: "Jan", count: 2 },
+        ])
+      ),
+      "axis"
+    )
+    expect(chart.rows.map((row) => row.x)).toEqual(["Mar", "Jan"])
+  })
+
+  it("gives each line series the curve its layer asked for", () => {
+    const chart = narrowRenderable(
+      resolveChartData(buildOptions(timeSpec("step"), shuffled)),
+      "axis"
+    )
+    expect(chart.series.map((series) => series.curve)).toEqual(["step"])
+  })
+
+  it("a bar has nothing to curve and reports linear", () => {
+    const spec: ChartSpec = {
+      type: "axis",
+      x: "month",
+      orientation: "vertical",
+      layers: [{ mark: "bar", y: "count", color: "blue", stack: false, axis: "left" }],
+    }
+    const chart = narrowRenderable(
+      resolveChartData(buildOptions(spec, [{ month: "Jan", count: 1 }])),
+      "axis"
+    )
+    expect(chart.series[0].curve).toBe("linear")
   })
 })
 

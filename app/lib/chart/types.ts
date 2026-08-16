@@ -16,7 +16,10 @@ export type MatrixChartSpec = Extract<ChartSpec, { type: "heatmap" }>
 export type LayerMark = ChartLayer["mark"]
 export type Orientation = AxisChartSpec["orientation"]
 export type AxisSide = ChartLayer["axis"]
-export type FieldBinding = AxisChartSpec["x"]
+export type FieldBinding = ChartLayer["y"]
+export type AxisXBinding = AxisChartSpec["x"]
+export type XScale = "category" | "time"
+export type Curve = "linear" | "step" | "monotone"
 export type ChartBand = NonNullable<AxisChartSpec["bands"]>[number]
 
 export interface TemplateLiteralNode {
@@ -51,6 +54,7 @@ export interface SeriesDescriptor {
   name: string
   mark: LayerMark
   color: string
+  curve: Curve
   stackId?: string
   axis: AxisSide
 }
@@ -67,6 +71,7 @@ export interface AxisRow {
 export interface AxisRenderable {
   kind: "axis"
   orientation: Orientation
+  xScale: XScale
   xFormat?: string
   leftAxisFormat?: string
   rightAxisFormat?: string
@@ -112,16 +117,22 @@ export interface MatrixRenderable {
 
 export type RenderableChart = AxisRenderable | PartRenderable | MatrixRenderable
 
-export const bindingField = (binding: FieldBinding): string =>
+export const bindingField = (binding: FieldBinding | AxisXBinding): string =>
   typeof binding === "string" ? binding : binding.field
 
-export const bindingFormat = (binding: FieldBinding | undefined): string | undefined => {
+export const bindingFormat = (
+  binding: FieldBinding | AxisXBinding | undefined
+): string | undefined => {
   if (binding === undefined) return undefined
   return typeof binding === "string" ? undefined : binding.format
 }
 
 export const bindingLabel = (binding: FieldBinding): string | undefined =>
   typeof binding === "string" ? undefined : binding.label
+
+// The string shorthand carries no scale, and a name axis is what it means.
+export const bindingScale = (binding: AxisXBinding): XScale =>
+  typeof binding === "string" ? "category" : binding.scale
 
 export const isAxisSpec = (spec: ChartSpec): spec is AxisChartSpec => spec.type === "axis"
 

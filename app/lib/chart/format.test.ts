@@ -35,6 +35,18 @@ describe("formatValue", () => {
       format: "%Y",
       expected: "2024",
     },
+    {
+      name: "month bucket keeps its month west of UTC",
+      value: new Date("2024-02-01T00:00:00Z").getTime(),
+      format: "%b %Y",
+      expected: "Feb 2024",
+    },
+    {
+      name: "day boundary keeps its day west of UTC",
+      value: "2024-01-01T00:00:00Z",
+      format: "%d %b %Y",
+      expected: "01 Jan 2024",
+    },
     { name: "invalid date", value: "not a date", format: "%Y", expected: "" },
     { name: "NaN number", value: NaN, format: ",", expected: "" },
   ]
