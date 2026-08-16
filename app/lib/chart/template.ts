@@ -43,6 +43,14 @@ const parseRef = (inner: string): TemplateNode => {
   return { type: "ref", field, op: refOpFromTail(tail) }
 }
 
+// A template is written inside a JSON string, so an author asking for a line
+// break types \n and JSON hands back the two characters rather than a newline.
+// The result renders as markdown, where a bare newline is a soft break and
+// collapses to a space, so the escape resolves to a hard break instead.
+const MARKDOWN_HARD_BREAK = "  \n"
+
+const unescapeLiteral = (value: string): string => value.replaceAll("\\n", MARKDOWN_HARD_BREAK)
+
 export const parseTemplate = (input: string): TemplateNode[] => {
   const nodes: TemplateNode[] = []
   let lastIndex = 0
@@ -50,13 +58,13 @@ export const parseTemplate = (input: string): TemplateNode[] => {
   let match: RegExpExecArray | null
   while ((match = TEMPLATE_PATTERN.exec(input)) !== null) {
     if (match.index > lastIndex) {
-      nodes.push({ type: "literal", value: input.slice(lastIndex, match.index) })
+      nodes.push({ type: "literal", value: unescapeLiteral(input.slice(lastIndex, match.index)) })
     }
     nodes.push(parseRef(match[1]))
     lastIndex = match.index + match[0].length
   }
   if (lastIndex < input.length) {
-    nodes.push({ type: "literal", value: input.slice(lastIndex) })
+    nodes.push({ type: "literal", value: unescapeLiteral(input.slice(lastIndex)) })
   }
   return nodes
 }

@@ -68,6 +68,27 @@ describe("parseTemplate", () => {
       input: "{pct:.0%}",
       expected: [{ type: "ref", field: "pct", op: { kind: "format", format: ".0%" } }],
     },
+    {
+      // Authors write the break as \\n inside the JSON string; markdown needs
+      // trailing spaces before the newline or the line does not wrap.
+      name: "escaped newline becomes a markdown hard break",
+      input: "**{code}**\\n{count} codings",
+      expected: [
+        { type: "literal", value: "**" },
+        { type: "ref", field: "code", op: { kind: "raw" } },
+        { type: "literal", value: "**  \n" },
+        { type: "ref", field: "count", op: { kind: "raw" } },
+        { type: "literal", value: " codings" },
+      ],
+    },
+    {
+      name: "escaped newline in a trailing literal",
+      input: "{count} codings\\nthis quarter",
+      expected: [
+        { type: "ref", field: "count", op: { kind: "raw" } },
+        { type: "literal", value: " codings  \nthis quarter" },
+      ],
+    },
   ]
 
   it.each(cases)("$name", ({ input, expected }) => {
