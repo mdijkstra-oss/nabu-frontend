@@ -17,7 +17,9 @@ import {
   expandDimensions,
   extractDimensionIds,
   validateFrameworkNoCallouts,
+  type ScopedSources,
 } from "./messages"
+import { isStubEnabled, runStubAnalysis, type Analysis } from "./stub"
 import { clearAnnotationsOnSection } from "./step-clear"
 import { runAnalysisPipeline } from "./pipeline"
 import { runFind, type SearchCtx } from "./step-find"
@@ -305,6 +307,41 @@ const degradeWithWarnings = (
   }
 }
 
+const runLiveAnalysis = async (
+  targets: Target[],
+  scoped: ScopedSources,
+  scope: string
+): Promise<Analysis> => {
+  const expanded = expandDimensions(scoped, getFileView)
+
+  const db = getDatabase()
+  if (!db) return { envelopes: [], errors: [], error: "Database not ready. Try again shortly." }
+
+  const semCtx = await buildSemanticContext(db, getEmbeddingsUrl())
+  const frameworkText = scoped.framework
+    .map((p) => getFileView(p))
+    .filter((s): s is string => typeof s === "string" && s.length > 0)
+    .join("\n\n")
+  const searchCtx: SearchCtx = {
+    ctx: semCtx,
+    files: getFiles(),
+    framework: frameworkText,
+    resolveFile: getFileView,
+  }
+
+  const tracer = createTracer()
+  tracer.setTarget(scope)
+
+  think(STARTING)
+  think(READING_FRAMEWORK)
+
+  const find = await runFind(targets, expanded.dimension, searchCtx, tracer)
+  const pipeline = await runAnalysisPipeline(find.envelopes, scoped, getFileView, scope, tracer)
+  tracer.flush()
+
+  return { envelopes: pipeline.envelopes, errors: [...find.errors, ...pipeline.errors] }
+}
+
 const appendSynthesisDirective = (
   result: HandlerResult<string>,
   flat: readonly TargetResult[],
@@ -362,47 +399,19 @@ registerTool(
         if (mismatch) return { status: "error", output: mismatch, mutations: [] }
       }
 
-      const expanded = expandDimensions(scoped, getFileView)
-
-      const db = getDatabase()
-      if (!db)
-        return { status: "error", output: "Database not ready. Try again shortly.", mutations: [] }
-      const semCtx = await buildSemanticContext(db, getEmbeddingsUrl())
-      const frameworkText = scoped.framework
-        .map((p) => getFileView(p))
-        .filter((s): s is string => typeof s === "string" && s.length > 0)
-        .join("\n\n")
-      const searchCtx: SearchCtx = {
-        ctx: semCtx,
-        files: getFiles(),
-        framework: frameworkText,
-        resolveFile: getFileView,
-      }
-
       const scope = targets[0]?.path ?? "target"
-      const tracer = createTracer()
-      tracer.setTarget(scope)
-
-      think(STARTING)
-      think(READING_FRAMEWORK)
-
-      const find = await runFind(targets, expanded.dimension, searchCtx, tracer)
-
       const analyzedCodes = new Set(extractDimensionIds([scoped], getFileView))
 
-      const pipelineResult = await runAnalysisPipeline(
-        find.envelopes,
-        scoped,
-        getFileView,
-        scope,
-        tracer
-      )
-      tracer.flush()
+      const analysis = isStubEnabled()
+        ? await runStubAnalysis(targets, analyzedCodes, getFileView)
+        : await runLiveAnalysis(targets, scoped, scope)
 
-      const warnings = [...find.errors, ...pipelineResult.errors]
+      if (analysis.error) return { status: "error", output: analysis.error, mutations: [] }
+
+      const warnings = analysis.errors
       if (warnings.length > 0) console.warn("[deep-analysis] degraded sub-calls:", warnings)
 
-      if (pipelineResult.envelopes.length === 0 && warnings.length > 0) {
+      if (analysis.envelopes.length === 0 && warnings.length > 0) {
         return {
           status: "error",
           output: `Deep analysis failed — no spans produced:\n${warnings.map((w) => `- ${w}`).join("\n")}`,
@@ -412,7 +421,7 @@ registerTool(
 
       think(WRITING)
 
-      const grouped = groupEnvelopesByTarget(pipelineResult.envelopes, targets)
+      const grouped = groupEnvelopesByTarget(analysis.envelopes, targets)
       const enqueue = createKeyedQueue()
 
       const flat: TargetResult[] = []
