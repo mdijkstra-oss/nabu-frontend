@@ -12,6 +12,9 @@ export default defineConfig({
       ...configDefaults.exclude,
       // Red before this config existed; a red baseline stops Stryker from starting.
       "app/domain/data-blocks/migrations/scenarios/scenarios.test.ts",
+      // Re-imports the duckdb-wasm module graph through vi.resetModules(); the worker
+      // it spawns has no workerData under Stryker's runner, so the file is red there.
+      "app/domain/db/schema-stability.test.ts",
     ],
   },
 })

@@ -7,13 +7,20 @@
   },
   "reporters": ["html", "json", "clear-text", "progress"],
   "coverageAnalysis": "perTest",
-  "concurrency": 4,
+  "concurrency": 5,
   "incremental": true,
+  "ignoreStatic": true,
+  "timeoutMS": 20000,
   "mutate": [
-    "app/lib/debug/try-prompt/**/*.ts",
-    "app/lib/utils/storage-cache.ts",
+    "app/lib/**/*.ts",
+    "app/domain/**/*.ts",
+    "app/ui/components/nabu/*.ts",
+    "app/ui/hooks/*.ts",
     "!**/*.test.ts",
-    "!**/*.fixture.ts"
+    "!**/*.test.tsx",
+    "!**/*.fixture.ts",
+    "!**/*.stories.ts",
+    "!**/*.stories.tsx"
   ],
   "disableBail": true,
   "jsonReporter": {
