@@ -16,6 +16,14 @@ export const HEATMAP_MIN_CELL = 36
 
 export const CHART_MARGIN = { top: 20, right: 12, bottom: 4, left: 4 }
 
+// How far a band rises above the plot. A stack drawn to full height covers the
+// part of the band behind it, so the band has to show somewhere the marks
+// cannot reach.
+export const CHART_BAND_OVERHANG = 20
+
+// Clearance between the top of a raised band and its label.
+export const CHART_BAND_LABEL_GAP = 10
+
 interface PayloadWithEntityUrl {
   _entityUrl?: string
 }

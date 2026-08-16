@@ -38,6 +38,8 @@ import {
   CHART_HEIGHT,
   CHART_LINE_WIDTH,
   CHART_MARGIN,
+  CHART_BAND_OVERHANG,
+  CHART_BAND_LABEL_GAP,
   FALLBACK_COLOR,
   STACKED_BAR_CLASS,
   buildDatumClickHandler,
@@ -53,6 +55,31 @@ interface AxisChartProps {
 const tickFormatterFor = (format: string | undefined): ((value: unknown) => string) =>
   format ? (value) => formatValue(value, format) : (value) => String(value ?? "")
 
+interface BandShapeProps {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+}
+
+// Recharts draws a band exactly over the plot, where a stack running to full
+// height hides it. Raising the top edge leaves a tab of the band standing above
+// the tallest mark, which is the only part guaranteed to stay visible.
+const bandShape = ({
+  x = 0,
+  y = 0,
+  width = 0,
+  height = 0,
+}: BandShapeProps): ReactElement<SVGElement> => (
+  <rect
+    x={x}
+    y={y - CHART_BAND_OVERHANG}
+    width={width}
+    height={height + CHART_BAND_OVERHANG}
+    className="recharts-reference-area-rect"
+  />
+)
+
 // Bands mark category ranges, so they bind to whichever screen axis carries
 // the category binding.
 const renderBands = (bands: ChartBand[], isHorizontal: boolean): ReactElement[] =>
@@ -61,7 +88,12 @@ const renderBands = (bands: ChartBand[], isHorizontal: boolean): ReactElement[] 
       key={`${band.from}-${band.to}`}
       yAxisId="left"
       {...(isHorizontal ? { y1: band.from, y2: band.to } : { x1: band.from, x2: band.to })}
-      label={{ value: band.label, position: isHorizontal ? "insideRight" : "top" }}
+      shape={isHorizontal ? undefined : bandShape}
+      label={{
+        value: band.label,
+        position: isHorizontal ? "insideRight" : "top",
+        offset: isHorizontal ? undefined : CHART_BAND_OVERHANG + CHART_BAND_LABEL_GAP,
+      }}
     />
   ))
 
@@ -186,7 +218,14 @@ const renderChart = (
     <ComposedChart
       data={renderable.rows}
       layout={isHorizontal ? "vertical" : "horizontal"}
-      margin={CHART_MARGIN}
+      margin={
+        renderable.bands.length > 0
+          ? {
+              ...CHART_MARGIN,
+              top: CHART_MARGIN.top + CHART_BAND_OVERHANG + CHART_BAND_LABEL_GAP,
+            }
+          : CHART_MARGIN
+      }
     >
       <CartesianGrid vertical={isHorizontal} horizontal={!isHorizontal} />
       {renderBands(renderable.bands, isHorizontal)}
