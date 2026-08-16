@@ -3,7 +3,19 @@ import type { Envelope } from "./envelope"
 import type { ContentResolver } from "./messages"
 import { STUB_ANNOTATIONS } from "./stub-fixture"
 import { getEnv } from "~/lib/utils/env"
-import { think, STARTING, READING_FRAMEWORK, FINDING, CONSENSUS, FILTERING } from "./thoughts"
+import {
+  think,
+  thinkWithName,
+  STARTING,
+  READING_FRAMEWORK,
+  PICKING_UP,
+  FINDING,
+  CONSENSUS,
+  REVISITING,
+  FILTERING,
+  ADJUDICATING,
+} from "./thoughts"
+import { toDisplayName } from "~/lib/files/filename"
 
 const TOGGLE_KEY = "nabu-stub-deep-analysis"
 
@@ -25,11 +37,23 @@ export const isStubEnabled = (): boolean =>
 
 // The live pass spends its time on network calls. Without them the tool would
 // return before the progress line rendered, which reads as nothing happening.
-const STEP_MS = 700
+const STEP_MS = 900
 
-const STEPS = [STARTING, READING_FRAMEWORK, FINDING, CONSENSUS, FILTERING] as const
+const OPENING = [STARTING, READING_FRAMEWORK] as const
+const PER_FILE = [FINDING, CONSENSUS] as const
+const CLOSING = [REVISITING, FILTERING, ADJUDICATING] as const
 
 const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+const step = async (thoughts: readonly string[]): Promise<void> => {
+  think(thoughts)
+  await pause(STEP_MS)
+}
+
+const namedStep = async (thoughts: readonly string[], name: string): Promise<void> => {
+  thinkWithName(thoughts, name)
+  await pause(STEP_MS)
+}
 
 const uniqueFiles = (targets: readonly Target[]): string[] => [
   ...new Set(targets.map((t) => t.path)),
@@ -69,15 +93,15 @@ export const runStubAnalysis = async (
   analyzedCodes: ReadonlySet<string>,
   resolve: ContentResolver
 ): Promise<Analysis> => {
-  for (const step of STEPS) {
-    think(step)
-    await pause(STEP_MS)
-  }
+  for (const thoughts of OPENING) await step(thoughts)
 
-  const files = new Set(uniqueFiles(targets))
+  const files = uniqueFiles(targets)
   const envelopes: Envelope[] = []
 
   for (const file of files) {
+    await namedStep(PICKING_UP, toDisplayName(file))
+    for (const thoughts of PER_FILE) await step(thoughts)
+
     const content = resolve(file)
     if (content === undefined) continue
     const rows = STUB_ANNOTATIONS.filter((r) => r.file === file && analyzedCodes.has(r.code))
@@ -86,6 +110,8 @@ export const runStubAnalysis = async (
       if (envelope) envelopes.push(envelope)
     })
   }
+
+  for (const thoughts of CLOSING) await step(thoughts)
 
   return { envelopes, errors: [] }
 }
