@@ -56,7 +56,7 @@ Regions extract it. An LLM reads each document and marks the stretches that belo
 What happened on 3 March, and what John said about the budget, are then ordinary SQL. [Documents](docs/01-documents.md#regions) has the detail.
 
 > [!NOTE]
-> **Future investigation** — finding a mention and attributing a passage to it are two different steps, and only the second needs a model's judgment. Whether a rule-based date extractor such as duckling, or a small NER model, can run in the browser and hand the LLM candidates rather than whole documents is unexplored.
+> **Future investigation** — finding a mention and attributing a passage to it are two different steps, and only the second needs a model's judgment. Whether a rule-based date extractor such as duckling, or a small NER model, can run in the browser is unexplored.
 
 ### Multimodal consensus
 
