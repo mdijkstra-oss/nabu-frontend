@@ -4,8 +4,9 @@
 
 Nabu is an IRE — an Integrated Research Environment — applying the machinery of agentic IDEs to a world where prose documents are the source of truth.
 
-> [!NOTE]
-> A walkthrough video is in progress and will sit here.
+https://github.com/user-attachments/assets/efde28d8-d6db-4e77-a4bc-72b3e676131c
+
+
 
 Researchers are generally not as tech-oriented as the software engineers IDEs are built for, so, many abstractions hide the machinery underlying the system. It has to be easy to use and still have powerful capabilities, and LLMs are what make that gap bridgeable.
 
