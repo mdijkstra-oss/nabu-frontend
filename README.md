@@ -90,11 +90,10 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 - [nabu-embeddings](https://github.com/mdijkstra-oss/nabu-embeddings) — the `/embeddings` route behind `VITE_EMBEDDINGS_URL`, holding the provider key a browser cannot
 - [nabu-e2e](https://github.com/mdijkstra-oss/nabu-e2e) — the end-to-end suite: every behavior claim in these docs, run against the self-hosted stack in Chromium
 
+## Running it
 
 > [!WARNING]
-> No authentication or authorization in any way or shape - run locally against your own API keys
-
-## Running it
+> No authentication or authorization in any way or shape - run locally against your own API keys and personal projects
 
 ```bash
 npm install
