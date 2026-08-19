@@ -4,9 +4,11 @@
 
 Nabu is an IRE — an Integrated Research Environment — applying the machinery of agentic IDEs to a world where prose documents are the source of truth.
 
+Researchers are generally not as tech-oriented as the software engineers IDEs are built for, so, many abstractions hide the machinery underlying the system. It has to be easy to use and still have powerful capabilities, and LLMs are what make that gap bridgeable.
+
+The first area of research targeted is qualitative coding so phrasing as of now in this document may reflect that, though in theory it extends to other domains.
+
 https://github.com/user-attachments/assets/efde28d8-d6db-4e77-a4bc-72b3e676131c
-
-
 
 Researchers are generally not as tech-oriented as the software engineers IDEs are built for, so, many abstractions hide the machinery underlying the system. It has to be easy to use and still have powerful capabilities, and LLMs are what make that gap bridgeable.
 
@@ -18,9 +20,7 @@ The first area of research targeted is [qualitative coding](https://gradcoach.co
 
 All information lives in documents a user or an LLM can edit and manipulate. The format of choice is Markdown with JSON code blocks, edited in a block-based WYSIWYG editor hiding technicalities.
 
-Everything queryable is either in the document, or projected from it for easier retrieval. Projections are derived, so every change happens by changing the content of a document and there are no database writes.
-
-That keeps queried data from going stale, and matches what models are trained to do for agentic programming: manipulate text files.
+Everything queryable is either in the document, or projected from it for easier retrieval. Projections are derived, so every change happens by changing the content of a document and there are no separate database writes. This keeps queried data from going stale, and matches what models are trained to do for agentic programming: manipulate text files.
 
 Systems are in place to ensure the information in the documents stays valid against its spec.
 
@@ -32,7 +32,7 @@ The first part of the projection is embeddings, which let the LLM use [RAG](docs
 
 Structured data is embedded in the document as code blocks, and the renderer hides the block itself — what the user sees is a table or a graph. Document-wide information is stored the same way: what is annotated, tags and more.
 
-This data is projected into a [DuckDB-WASM instance](docs/02-querying.md), so anything that turns on counting is answerable directly: how often an code appears across a corpus, which documents carry none, how the balance shifted month by month. An answer can be written back into a document as a chart, which stores the query rather than the numbers and so keeps describing the corpus as it grows.
+This data is projected into a [DuckDB-WASM instance](docs/02-querying.md), so anything that turns on counting is answerable directly: how often an code appears across a corpus, which documents carry none, how the balance shifted month by month. An answer can be written back into a document as a chart, which stores the query rather than the numbers and so keeps describing the corpus as it grows. Tables in the document are automatically projected into the database too as their own tables.
 
 #### Full history of change
 
@@ -90,11 +90,9 @@ Where they disagree, the case [escalates to a third model](docs/04-consensus.md)
 - [nabu-embeddings](https://github.com/mdijkstra-oss/nabu-embeddings) — the `/embeddings` route behind `VITE_EMBEDDINGS_URL`, holding the provider key a browser cannot
 - [nabu-e2e](https://github.com/mdijkstra-oss/nabu-e2e) — the end-to-end suite: every behavior claim in these docs, run against the self-hosted stack in Chromium
 
-## Known gaps
 
-- **No authentication** — local-first and single-user for now
-- **No component tests** — Vitest unit suites cover the agent, block parsing, search and text handling well, and the projection and file-store layers thinly; nabu-e2e covers the documented behavior end-to-end in a browser. Component-level suites remain absent.
-- **Barely any project management** — an empty install offers to create a first project, and that is the whole of it: no renaming, no deleting, no switching between projects from inside the app.
+> [!WARNING]
+> No authentication or authorization in any way or shape - run locally against your own API keys
 
 ## Running it
 
