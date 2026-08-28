@@ -82,13 +82,11 @@ export const ADJUDICATE_ENDPOINT = "/deep-analysis-adjudicate"
 // One route suffix per voter. The gateway resolves a model from the path, so a
 // voter that is not a suffix here is not a voter.
 export const FILTER_VOTERS = ["voter-one", "voter-two"] as const
-export const FILTER_RUNS = FILTER_VOTERS.length
-export const SPAN_STEP_CONTEXT_SENTENCES = 6
+export type FilterVoter = (typeof FILTER_VOTERS)[number]
 export const ENVELOPES_PER_CALL = 20
 export const MAX_CODES_PER_MIXED_CALL = 3
 export const MAX_CHARS_PER_CALL = ENVELOPES_PER_CALL * UNIT_CEILING_CHARS
 export const BRANCH_CONCURRENCY = 10
-export const PER_DIM_TARGET = 50
 export const POST_FIND_CONCURRENCY = 5
 
 export const applyDeepAnalysisTool: AnyTool = {

@@ -11,6 +11,7 @@ import { getCallouts } from "~/domain/data-blocks/callout/selectors"
 import { GENERATED_SUFFIX } from "~/lib/files/filename"
 import { markCacheBreakpoint, type Message } from "~/lib/calls/messages"
 import type { CallShape } from "~/lib/calls/entry"
+import { refString } from "~/lib/calls/entry"
 export type { ParseCall } from "../../client/call-parse"
 
 export { markCacheBreakpoint, type Message }
@@ -138,19 +139,19 @@ export const buildCodeSourceMessages = (
 }
 
 export const FILTER_CTA =
-  "For each coded section, judge whether the passage satisfies the code definitions. Return your judgment as JSON."
+  'Independently code the numbered chunks. Return { results: [{ code, start, end, reason }, ...] } where start and end are inclusive sentence refs like "1.2". Return no result when a chunk contains no qualifying span.'
 
 export const ADJUDICATE_CTA =
-  "For each contested passage, render a verdict: keep, reject, or inconsistent. Return your verdicts as JSON."
+  "For each candidate selected by only one coder, use the complete numbered chunk and the explicit selected/not-selected provenance to render a verdict: keep, reject, or inconsistent. Return your verdicts as JSON."
 
 // `results` wrapper — some providers reject a top-level JSON array as structured output.
 export const buildFilterSchema = (validCodes: string[]) =>
   z.object({
     results: z.array(
       z.object({
-        id: z.number().int().min(1),
         code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
-        judgment: z.enum(["remove", "keep"]),
+        start: refString(),
+        end: refString(),
         reason: z.string(),
       })
     ),

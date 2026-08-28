@@ -19,18 +19,15 @@ import {
   validateFrameworkNoCallouts,
 } from "./messages"
 import { clearAnnotationsOnSection } from "./step-clear"
-import { runAnalysisPipeline } from "./pipeline"
-import { runFind, type SearchCtx } from "./step-find"
+import type { CodingSearchCtx } from "./coding-candidates"
+import { runCodingPipeline, type CodingPipelineDeps } from "./coding-pipeline"
+import { DEFAULT_CODING_CONFIG, type CodingConfig } from "./coding-config"
 import { createKeyedQueue } from "~/lib/utils/keyed-queue"
 import { writeFileTracked } from "~/lib/files/write-tracked"
 import { finalizeContent } from "~/lib/patch/apply"
 import { think, STARTING, READING_FRAMEWORK, WRITING } from "./thoughts"
-import { getDatabase } from "~/domain/db/database"
 import { getEmbeddingsUrl } from "~/lib/embeddings/env"
-import { buildSemanticContext } from "~/domain/corpus/init"
-import { executeSearchById } from "~/domain/search/execute"
 import type { SearchHit } from "~/domain/search/types"
-import { createTracer } from "./trace"
 import type { Envelope } from "./envelope"
 
 const SEARCH_RESOLVE_TARGET = 200
@@ -317,131 +314,146 @@ const appendSynthesisDirective = (
   return { ...result, output: `${result.output}${directive}` }
 }
 
+export const executeDeepAnalysis = async (
+  {
+    targets: inputTargets,
+    search_id,
+    source_files,
+    post_action,
+    synthesize,
+  }: ApplyDeepAnalysisArgs,
+  config: CodingConfig = DEFAULT_CODING_CONFIG,
+  pipelineDeps: Partial<CodingPipelineDeps> = {}
+): Promise<HandlerResult<string>> => {
+  let targets: Target[]
+  if (search_id) {
+    const { executeSearchById } = await import("~/domain/search/execute")
+    const hits = await executeSearchById(search_id, SEARCH_RESOLVE_TARGET)
+    if (!hits.ok)
+      return {
+        status: "error",
+        output: `Failed to resolve search "${search_id}": ${hits.error}`,
+        mutations: [],
+      }
+    targets = hits.value.map(hitToTarget).filter((t): t is Target => t !== null)
+    if (targets.length === 0)
+      return {
+        status: "error",
+        output: `No usable hits returned for search "${search_id}"`,
+        mutations: [],
+      }
+  } else {
+    targets = inputTargets ?? []
+  }
+
+  if (targets.length === 0)
+    return {
+      status: "error",
+      output: "Provide either targets or search_id",
+      mutations: [],
+    }
+
+  const validationError = validateTargets(targets, source_files)
+  if (validationError) return validationError
+
+  const scoped = partitionSources(source_files)
+
+  if (post_action === "annotate_as_code") {
+    const mismatch = validateFrameworkNoCallouts(scoped.framework, getFileView)
+    if (mismatch) return { status: "error", output: mismatch, mutations: [] }
+  }
+
+  const expanded = expandDimensions(scoped, getFileView)
+
+  let searchCtx: CodingSearchCtx | undefined
+  if (!config.passthrough.has("retrieval")) {
+    const [{ getDatabase }, { buildSemanticContext }] = await Promise.all([
+      import("~/domain/db/database"),
+      import("~/domain/corpus/init"),
+    ])
+    const db = getDatabase()
+    if (!db)
+      return { status: "error", output: "Database not ready. Try again shortly.", mutations: [] }
+    const semCtx = await buildSemanticContext(db, getEmbeddingsUrl())
+    const frameworkText = scoped.framework
+      .map((p) => getFileView(p))
+      .filter((s): s is string => typeof s === "string" && s.length > 0)
+      .join("\n\n")
+    searchCtx = {
+      ctx: semCtx,
+      files: getFiles(),
+      framework: frameworkText,
+      resolveFile: getFileView,
+    }
+  }
+
+  think(STARTING)
+  think(READING_FRAMEWORK)
+
+  const analyzedCodes = new Set(extractDimensionIds([scoped], getFileView))
+
+  const pipelineResult = await runCodingPipeline(
+    {
+      targets,
+      dimensionPaths: expanded.dimension,
+      sources: scoped,
+      files: getFiles(),
+      resolve: getFileView,
+      search: searchCtx,
+      config,
+    },
+    pipelineDeps
+  )
+
+  const warnings = pipelineResult.errors
+  if (warnings.length > 0) console.warn("[deep-analysis] degraded sub-calls:", warnings)
+
+  if (pipelineResult.envelopes.length === 0 && warnings.length > 0) {
+    return {
+      status: "error",
+      output: `Deep analysis failed — no spans produced:\n${warnings.map((w) => `- ${w}`).join("\n")}`,
+      mutations: [],
+    }
+  }
+
+  think(WRITING)
+
+  const grouped = groupEnvelopesByTarget(pipelineResult.envelopes, targets)
+  const enqueue = createKeyedQueue()
+
+  const flat: TargetResult[] = []
+  for (const target of targets) {
+    const envs = grouped.get(target) ?? []
+    const mapped = envs.map(envelopeToMapped)
+    const lines = resolveTargetLines(target)
+
+    let result: HandlerResult<string>
+    if (post_action === "return") {
+      result = {
+        status: "ok",
+        output: formatReturnOutput(mapped, lines.start, lines.end),
+        mutations: [],
+      }
+    } else {
+      result = await writeAnnotationsForTarget(target, mapped, {
+        enqueue,
+        action: post_action,
+        analyzedCodes,
+      })
+    }
+    const { confirmed, reviewed } = countConfidence(mapped)
+    flat.push({ target, result, confirmed, reviewed })
+  }
+
+  const merged = flat.length === 1 ? flat[0].result : mergeTargetResults(flat)
+  const degraded = degradeWithWarnings(merged, warnings)
+  return appendSynthesisDirective(degraded, flat, synthesize === true)
+}
+
 registerTool(
   tool({
     ...applyDeepAnalysisTool,
     schema: ApplyDeepAnalysisArgs,
-    handler: async (
-      _files,
-      { targets: inputTargets, search_id, source_files, post_action, synthesize }
-    ) => {
-      let targets: Target[]
-      if (search_id) {
-        const hits = await executeSearchById(search_id, SEARCH_RESOLVE_TARGET)
-        if (!hits.ok)
-          return {
-            status: "error",
-            output: `Failed to resolve search "${search_id}": ${hits.error}`,
-            mutations: [],
-          }
-        targets = hits.value.map(hitToTarget).filter((t): t is Target => t !== null)
-        if (targets.length === 0)
-          return {
-            status: "error",
-            output: `No usable hits returned for search "${search_id}"`,
-            mutations: [],
-          }
-      } else {
-        targets = inputTargets ?? []
-      }
-
-      if (targets.length === 0)
-        return {
-          status: "error",
-          output: "Provide either targets or search_id",
-          mutations: [],
-        }
-
-      const validationError = validateTargets(targets, source_files)
-      if (validationError) return validationError
-
-      const scoped = partitionSources(source_files)
-
-      if (post_action === "annotate_as_code") {
-        const mismatch = validateFrameworkNoCallouts(scoped.framework, getFileView)
-        if (mismatch) return { status: "error", output: mismatch, mutations: [] }
-      }
-
-      const expanded = expandDimensions(scoped, getFileView)
-
-      const db = getDatabase()
-      if (!db)
-        return { status: "error", output: "Database not ready. Try again shortly.", mutations: [] }
-      const semCtx = await buildSemanticContext(db, getEmbeddingsUrl())
-      const frameworkText = scoped.framework
-        .map((p) => getFileView(p))
-        .filter((s): s is string => typeof s === "string" && s.length > 0)
-        .join("\n\n")
-      const searchCtx: SearchCtx = {
-        ctx: semCtx,
-        files: getFiles(),
-        framework: frameworkText,
-        resolveFile: getFileView,
-      }
-
-      const scope = targets[0]?.path ?? "target"
-      const tracer = createTracer()
-      tracer.setTarget(scope)
-
-      think(STARTING)
-      think(READING_FRAMEWORK)
-
-      const find = await runFind(targets, expanded.dimension, searchCtx, tracer)
-
-      const analyzedCodes = new Set(extractDimensionIds([scoped], getFileView))
-
-      const pipelineResult = await runAnalysisPipeline(
-        find.envelopes,
-        scoped,
-        getFileView,
-        scope,
-        tracer
-      )
-      tracer.flush()
-
-      const warnings = [...find.errors, ...pipelineResult.errors]
-      if (warnings.length > 0) console.warn("[deep-analysis] degraded sub-calls:", warnings)
-
-      if (pipelineResult.envelopes.length === 0 && warnings.length > 0) {
-        return {
-          status: "error",
-          output: `Deep analysis failed — no spans produced:\n${warnings.map((w) => `- ${w}`).join("\n")}`,
-          mutations: [],
-        }
-      }
-
-      think(WRITING)
-
-      const grouped = groupEnvelopesByTarget(pipelineResult.envelopes, targets)
-      const enqueue = createKeyedQueue()
-
-      const flat: TargetResult[] = []
-      for (const target of targets) {
-        const envs = grouped.get(target) ?? []
-        const mapped = envs.map(envelopeToMapped)
-        const lines = resolveTargetLines(target)
-
-        let result: HandlerResult<string>
-        if (post_action === "return") {
-          result = {
-            status: "ok",
-            output: formatReturnOutput(mapped, lines.start, lines.end),
-            mutations: [],
-          }
-        } else {
-          result = await writeAnnotationsForTarget(target, mapped, {
-            enqueue,
-            action: post_action,
-            analyzedCodes,
-          })
-        }
-        const { confirmed, reviewed } = countConfidence(mapped)
-        flat.push({ target, result, confirmed, reviewed })
-      }
-
-      const merged = flat.length === 1 ? flat[0].result : mergeTargetResults(flat)
-      const degraded = degradeWithWarnings(merged, warnings)
-      return appendSynthesisDirective(degraded, flat, synthesize === true)
-    },
+    handler: async (_files, args) => executeDeepAnalysis(args),
   })
 )
