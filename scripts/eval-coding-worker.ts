@@ -4,10 +4,10 @@ import mri from "mri"
 import { setLlmHostForProcess } from "~/lib/agent/env"
 import { stripBlocksByLanguage } from "~/lib/data-blocks/parse"
 import { loadCodingEvalDataset } from "~/lib/debug/coding-eval-dataset"
-import { runCodingDocument, type CodingDocumentResult } from "~/lib/debug/coding-eval"
+import { runCodingCorpus, type CodingCorpusResult } from "~/lib/debug/coding-eval"
 
 const args = mri(process.argv.slice(2), {
-  string: ["gold-dir", "document", "gateway", "result"],
+  string: ["gold-dir", "gateway", "result"],
 })
 const required = (name: string): string => {
   const value = args[name]
@@ -16,17 +16,16 @@ const required = (name: string): string => {
 }
 
 const resultPath = resolve(required("result"))
-let fallbackMarkdown = ""
+let fallbackDocuments: { path: string; markdown: string }[] = []
 try {
   const dataset = loadCodingEvalDataset(required("gold-dir"))
-  const documentName = required("document")
-  const document = dataset.documents.find((item) => item.name === documentName)
-  if (!document) throw new Error(`Dataset has no document named ${documentName}`)
-  fallbackMarkdown = stripBlocksByLanguage(document.markdown, "json-annotations")
+  fallbackDocuments = dataset.documents.map((document) => ({
+    path: document.name,
+    markdown: stripBlocksByLanguage(document.markdown, "json-annotations"),
+  }))
   setLlmHostForProcess(required("gateway"))
-  const result = await runCodingDocument({
-    inputPath: document.name,
-    inputMarkdown: fallbackMarkdown,
+  const result = await runCodingCorpus({
+    documents: fallbackDocuments,
     frameworkPath: "codebook.framework.md",
     frameworkMarkdown: dataset.frameworkMarkdown,
     dimensions: dataset.dimensions.map((dimension) => ({
@@ -36,15 +35,19 @@ try {
   })
   writeFileSync(resultPath, JSON.stringify(result))
 } catch (error) {
-  const result: CodingDocumentResult = {
-    status: "failed",
-    generatedMarkdown: fallbackMarkdown,
-    annotationCount: null,
+  const message = error instanceof Error ? error.message : String(error)
+  const result: CodingCorpusResult = {
+    documents: fallbackDocuments.map((document) => ({
+      path: document.path,
+      status: "failed",
+      generatedMarkdown: document.markdown,
+      annotationCount: null,
+      warnings: [],
+      failures: [message],
+    })),
     latencyMs: 0,
     requests: [],
     retries: 0,
-    warnings: [],
-    failures: [error instanceof Error ? error.message : String(error)],
   }
   writeFileSync(resultPath, JSON.stringify(result))
   process.exitCode = 1

@@ -95,6 +95,13 @@ export interface CodingDocumentInput {
   dimensions: { path: string; markdown: string }[]
 }
 
+export interface CodingCorpusInput {
+  documents: { path: string; markdown: string }[]
+  frameworkPath: string
+  frameworkMarkdown: string
+  dimensions: { path: string; markdown: string }[]
+}
+
 export type CodingDocumentStatus = "success" | "empty" | "partial" | "failed" | "malformed"
 
 export interface CodingRequestMetadata {
@@ -105,15 +112,26 @@ export interface CodingRequestMetadata {
   providerMetadata: Record<string, string>
 }
 
-export interface CodingDocumentResult {
+export interface CodingFileResult {
+  path: string
   status: CodingDocumentStatus
   generatedMarkdown: string
   annotationCount: number | null
+  warnings: string[]
+  failures: string[]
+}
+
+export interface CodingCorpusResult {
+  documents: CodingFileResult[]
   latencyMs: number
   requests: CodingRequestMetadata[]
   retries: number
-  warnings: string[]
-  failures: string[]
+}
+
+export interface CodingDocumentResult extends Omit<CodingFileResult, "path"> {
+  latencyMs: number
+  requests: CodingRequestMetadata[]
+  retries: number
 }
 
 const annotationBlock = (markdown: string, label: string) => {
@@ -178,16 +196,18 @@ const requestMetadata = (): { requests: CodingRequestMetadata[]; retries: number
   }
 }
 
-export const runCodingDocument = async (
-  input: CodingDocumentInput
-): Promise<CodingDocumentResult> => {
+export const runCodingCorpus = async (
+  input: CodingCorpusInput,
+  pipelineDeps: Parameters<typeof executeDeepAnalysis>[2] = {}
+): Promise<CodingCorpusResult> => {
+  if (input.documents.length === 0) throw new Error("No coding documents supplied")
   if (input.dimensions.length === 0) throw new Error("No coding dimensions supplied")
   installNodeShims()
   setPersistEnabled(false)
   setCacheSkipped(true)
   clearRawCalls()
   setFiles({
-    [input.inputPath]: input.inputMarkdown,
+    ...Object.fromEntries(input.documents.map((document) => [document.path, document.markdown])),
     [input.frameworkPath]: input.frameworkMarkdown,
     ...Object.fromEntries(
       input.dimensions.map((dimension) => [dimension.path, dimension.markdown])
@@ -196,7 +216,7 @@ export const runCodingDocument = async (
   const started = performance.now()
   const pipeline = await executeDeepAnalysis(
     {
-      targets: [{ path: input.inputPath }],
+      targets: input.documents.map((document) => ({ path: document.path })),
       source_files: [
         { path: input.frameworkPath, scope: "framework" },
         ...input.dimensions.map((dimension) => ({
@@ -210,25 +230,53 @@ export const runCodingDocument = async (
       passthrough: new Set(["retrieval", "semantic-filter"]),
       coders: ["voter-one"],
       adjudicate: false,
-    }
+    },
+    pipelineDeps
   )
-  let generatedMarkdown = getFileRaw(input.inputPath)
-  if (
-    pipeline.status === "ok" &&
-    findBlocksByLanguage(generatedMarkdown, "json-annotations").length === 0
-  ) {
-    generatedMarkdown = replaceSingletonBlock(
+  const documents = input.documents.map((document): CodingFileResult => {
+    let generatedMarkdown = getFileRaw(document.path)
+    if (
+      pipeline.status === "ok" &&
+      findBlocksByLanguage(generatedMarkdown, "json-annotations").length === 0
+    ) {
+      generatedMarkdown = replaceSingletonBlock(
+        generatedMarkdown,
+        "json-annotations",
+        formatBlockJson({ annotations: [] })
+      )
+    }
+    return {
+      path: document.path,
       generatedMarkdown,
-      "json-annotations",
-      formatBlockJson({ annotations: [] })
-    )
-  }
-  const classified = classifyCodingOutput(pipeline, generatedMarkdown)
+      ...classifyCodingOutput(pipeline, generatedMarkdown),
+    }
+  })
   return {
-    ...classified,
-    generatedMarkdown,
+    documents,
     latencyMs: Math.round(performance.now() - started),
     ...requestMetadata(),
+  }
+}
+
+export const runCodingDocument = async (
+  input: CodingDocumentInput
+): Promise<CodingDocumentResult> => {
+  const result = await runCodingCorpus({
+    documents: [{ path: input.inputPath, markdown: input.inputMarkdown }],
+    frameworkPath: input.frameworkPath,
+    frameworkMarkdown: input.frameworkMarkdown,
+    dimensions: input.dimensions,
+  })
+  const document = result.documents[0]
+  return {
+    status: document.status,
+    generatedMarkdown: document.generatedMarkdown,
+    annotationCount: document.annotationCount,
+    warnings: document.warnings,
+    failures: document.failures,
+    latencyMs: result.latencyMs,
+    requests: result.requests,
+    retries: result.retries,
   }
 }
 

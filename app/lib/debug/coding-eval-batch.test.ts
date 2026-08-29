@@ -2,8 +2,9 @@ import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { resolve } from "node:path"
 import { describe, expect, it, vi } from "vitest"
+import { respondingWith, textOf } from "~/lib/calls/parse.fixture"
 import { stripBlocksByLanguage } from "~/lib/data-blocks/parse"
-import { classifyCodingOutput } from "./coding-eval"
+import { classifyCodingOutput, runCodingCorpus } from "./coding-eval"
 import { parseCodingBatchArgs, preflightCodingGateway } from "./coding-eval-batch"
 import { compareCodingDocuments } from "./coding-eval-comparison"
 import { loadCodingEvalDataset } from "./coding-eval-dataset"
@@ -19,13 +20,15 @@ describe("coding batch contracts", () => {
     expect(parseCodingBatchArgs(["--output", "run"])).toMatchObject({
       goldDir: resolve(homedir(), "Desktop/ptc-gold-small"),
       output: "run",
-      documentsInFlight: 1,
       gateway: "http://localhost:8081",
     })
     vi.stubEnv("VITE_LLM_HOST", "https://gateway.example.com")
     expect(parseCodingBatchArgs(["--output", "run"])).toMatchObject({
       gateway: "https://gateway.example.com",
     })
+    expect(() => parseCodingBatchArgs(["--output", "run", "--documents-in-flight", "2"])).toThrow(
+      "one pipeline invocation"
+    )
     vi.unstubAllEnvs()
   })
 
@@ -77,6 +80,54 @@ describe("coding batch contracts", () => {
       )
     ).toMatchObject({ status: "failed", failures: ["requests exhausted"] })
   })
+
+  it("passes every corpus document through one multi-target pipeline invocation", async () => {
+    const { parse, calls } = respondingWith(() => ({
+      results: [
+        { code: "code-a", start: "1.1", end: "1.1", reason: "alpha" },
+        { code: "code-a", start: "2.1", end: "2.1", reason: "beta" },
+      ],
+    }))
+    const code = [
+      "```json-callout",
+      JSON.stringify({
+        id: "code-a",
+        type: "codebook-code",
+        title: "Code A",
+        content: "Apply this code.",
+        color: "blue",
+        collapsed: false,
+      }),
+      "```",
+    ].join("\n")
+
+    const result = await runCodingCorpus(
+      {
+        documents: [
+          { path: "alpha.md", markdown: "Alpha sentence." },
+          { path: "beta.md", markdown: "Beta sentence." },
+        ],
+        frameworkPath: "framework.md",
+        frameworkMarkdown: "Apply every supplied code.",
+        dimensions: [{ path: "code-a.md", markdown: code }],
+      },
+      { parse }
+    )
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].messages.map(textOf).join("\n")).toContain('<entry id="1" file="alpha.md">')
+    expect(calls[0].messages.map(textOf).join("\n")).toContain('<entry id="2" file="beta.md">')
+    expect(
+      result.documents.map(({ path, status, annotationCount }) => ({
+        path,
+        status,
+        annotationCount,
+      }))
+    ).toEqual([
+      { path: "alpha.md", status: "success", annotationCount: 1 },
+      { path: "beta.md", status: "success", annotationCount: 1 },
+    ])
+  })
 })
 
 describe("coding dataset and file-level report fixture", () => {
@@ -90,9 +141,6 @@ describe("coding dataset and file-level report fixture", () => {
         name: document.name,
         status: "success" as const,
         annotationCount: 1,
-        latencyMs: 10,
-        requests: [],
-        retries: 0,
         warnings: [],
         failures: [],
         comparison: compareCodingDocuments(prediction, document.markdown),

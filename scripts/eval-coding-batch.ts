@@ -14,17 +14,16 @@ import {
   formatCodingSummary,
   type CodingDocumentOutcome,
 } from "~/lib/debug/coding-eval-report"
-import type { CodingDocumentResult } from "~/lib/debug/coding-eval"
+import type { CodingCorpusResult, CodingFileResult } from "~/lib/debug/coding-eval"
 
 const writeJson = (path: string, value: unknown): void =>
   writeFileSync(path, JSON.stringify(value, null, 2) + "\n")
 
 const runWorker = (
   goldDir: string,
-  document: string,
   gateway: string,
   resultPath: string
-): Promise<{ result: CodingDocumentResult; diagnostics: string }> =>
+): Promise<{ result: CodingCorpusResult; diagnostics: string }> =>
   new Promise((finish) => {
     const started = performance.now()
     const cli = resolve("node_modules/vite-node/vite-node.mjs")
@@ -34,8 +33,6 @@ const runWorker = (
       worker,
       "--gold-dir",
       goldDir,
-      "--document",
-      document,
       "--gateway",
       gateway,
       "--result",
@@ -47,22 +44,18 @@ const runWorker = (
     child.on("error", (error) => (diagnostics += error.message))
     child.on("close", () => {
       if (existsSync(resultPath)) {
-        const result = JSON.parse(readFileSync(resultPath, "utf8")) as CodingDocumentResult
+        const result = JSON.parse(readFileSync(resultPath, "utf8")) as CodingCorpusResult
         finish({ result, diagnostics: diagnostics.trim() })
         return
       }
       finish({
         result: {
-          status: "failed",
-          generatedMarkdown: "",
-          annotationCount: null,
+          documents: [],
           latencyMs: Math.round(performance.now() - started),
           requests: [],
           retries: 0,
-          warnings: [],
-          failures: [diagnostics.trim() || "Worker exited without a result"],
         },
-        diagnostics: diagnostics.trim(),
+        diagnostics: diagnostics.trim() || "Worker exited without a result",
       })
     })
   })
@@ -82,60 +75,61 @@ const main = async (): Promise<void> => {
   mkdirSync(workerDir)
   writeJson(resolve(output, "run.json"), buildCodingRunManifest(dataset, parsed))
 
-  const outcomes: CodingDocumentOutcome[] = []
-  let next = 0
-  const consume = async (): Promise<void> => {
-    while (next < dataset.documents.length) {
-      const index = next++
-      const document = dataset.documents[index]
-      const stem = basename(document.name, ".md")
-      const workerResultPath = resolve(workerDir, `${stem}.json`)
-      const { result, diagnostics } = await runWorker(
-        dataset.root,
-        document.name,
-        parsed.gateway,
-        workerResultPath
-      )
-      let status = result.status
-      let comparison
-      const failures = [...result.failures]
-      if (status === "success" || status === "empty") {
-        try {
-          comparison = compareCodingDocuments(result.generatedMarkdown, document.markdown)
-        } catch (error) {
-          status = "malformed"
-          failures.push(error instanceof Error ? error.message : String(error))
-        }
+  const workerResultPath = resolve(workerDir, "corpus.json")
+  const { result, diagnostics } = await runWorker(dataset.root, parsed.gateway, workerResultPath)
+  const resultByPath = new Map(result.documents.map((document) => [document.path, document]))
+  const missingResult = (path: string): CodingFileResult => ({
+    path,
+    status: "failed",
+    generatedMarkdown: "",
+    annotationCount: null,
+    warnings: [],
+    failures: [diagnostics || `Worker returned no result for ${path}`],
+  })
+  const outcomes: CodingDocumentOutcome[] = dataset.documents.map((document, index) => {
+    const generated = resultByPath.get(document.name) ?? missingResult(document.name)
+    let status = generated.status
+    let comparison
+    const failures = [...generated.failures]
+    if (status === "success" || status === "empty") {
+      try {
+        comparison = compareCodingDocuments(generated.generatedMarkdown, document.markdown)
+      } catch (error) {
+        status = "malformed"
+        failures.push(error instanceof Error ? error.message : String(error))
       }
-      const outcome: CodingDocumentOutcome = {
-        name: document.name,
-        status,
-        annotationCount: result.annotationCount,
-        latencyMs: result.latencyMs,
-        requests: result.requests,
-        retries: result.retries,
-        warnings: [...result.warnings, ...(diagnostics ? [diagnostics] : [])],
-        failures,
-        ...(comparison ? { comparison } : {}),
-      }
-      outcomes[index] = outcome
-      writeFileSync(resolve(output, `${stem}.generated.md`), result.generatedMarkdown)
-      writeJson(resolve(output, `${stem}.outcome.json`), {
-        ...outcome,
-        comparison: undefined,
-      })
-      writeJson(
-        resolve(output, `${stem}.items.json`),
-        comparison ?? { matches: [], errors: [...outcome.warnings, ...outcome.failures] }
-      )
-      console.log(`[${index + 1}/${dataset.documents.length}] ${document.name}: ${status}`)
     }
-  }
-  await Promise.all(Array.from({ length: parsed.documentsInFlight }, () => consume()))
+    const outcome: CodingDocumentOutcome = {
+      name: document.name,
+      status,
+      annotationCount: generated.annotationCount,
+      warnings: [...generated.warnings],
+      failures,
+      ...(comparison ? { comparison } : {}),
+    }
+    const stem = basename(document.name, ".md")
+    writeFileSync(resolve(output, `${stem}.generated.md`), generated.generatedMarkdown)
+    writeJson(resolve(output, `${stem}.outcome.json`), {
+      ...outcome,
+      comparison: undefined,
+    })
+    writeJson(
+      resolve(output, `${stem}.items.json`),
+      comparison ?? { matches: [], errors: [...outcome.warnings, ...outcome.failures] }
+    )
+    console.log(`[${index + 1}/${dataset.documents.length}] ${document.name}: ${status}`)
+    return outcome
+  })
   rmSync(workerDir, { recursive: true })
   const results = aggregateCodingResults(
     outcomes,
-    dataset.dimensions.map((dimension) => dimension.id)
+    dataset.dimensions.map((dimension) => dimension.id),
+    {
+      latencyMs: result.latencyMs,
+      requests: result.requests,
+      retries: result.retries,
+      diagnostics: diagnostics ? [diagnostics] : [],
+    }
   )
   writeJson(resolve(output, "results.json"), results)
   console.log(formatCodingSummary(results))

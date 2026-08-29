@@ -2,16 +2,31 @@ import type { SemanticContextBase } from "~/domain/corpus/init"
 import type { SearchHit } from "~/domain/search/types"
 import type { FileStore } from "~/lib/files/store"
 import type { Result } from "~/lib/fp/result"
-import { verdict } from "~/lib/search/verdict"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
 import { stripGeneratedSuffix } from "~/lib/files/filename"
-import { BRANCH_CONCURRENCY } from "./def"
+import { BRANCH_CONCURRENCY, POST_FIND_CONCURRENCY, SEMANTIC_GATE_ENDPOINT } from "./def"
 import type { CodingChunk } from "./coding-chunk"
 import { withScore } from "./coding-chunk"
-import type { CodingCandidate } from "./step-code"
-import type { ContentResolver } from "./messages"
+import {
+  batchCodeIds,
+  codingEntry,
+  groupCodingCandidates,
+  packCodingChunks,
+  type CodingCandidate,
+  type CodingChunkCandidates,
+} from "./step-code"
+import {
+  buildAnalysisCallShape,
+  SEMANTIC_GATE_CTA,
+  SemanticGateSchema,
+  type ContentResolver,
+  type ParseCall,
+  type ScopedSources,
+} from "./messages"
+import { callAndParse } from "../../client/call-parse"
+import { assignIds, buildEntryMessages } from "~/lib/calls/entry"
 
 export interface CodingSearchCtx {
   ctx: SemanticContextBase
@@ -22,6 +37,16 @@ export interface CodingSearchCtx {
 
 export interface CandidateStageResult {
   candidates: CodingCandidate[]
+  errors: string[]
+}
+
+interface RetrievalBranchResult {
+  matched: CodingChunk[]
+  errors: string[]
+}
+
+interface SemanticGateBatchResult {
+  keptChunkIds: string[]
   errors: string[]
 }
 
@@ -71,12 +96,12 @@ export const retrieveCodingCandidates = async (
 ): Promise<CandidateStageResult> => {
   if (chunks.length === 0) return { candidates: [], errors: [] }
   const branches = dimensionPaths.map((dimensionPath) => ({ dimensionPath }))
-  const pool = await processPool<{ dimensionPath: string }, CandidateStageResult>(
+  const pool = await processPool<{ dimensionPath: string }, RetrievalBranchResult>(
     branches,
     async ({ dimensionPath }) => {
       const rawDimension = search.resolveFile(dimensionPath)
       if (!rawDimension)
-        return [{ candidates: [], errors: [`dimension file unavailable: ${dimensionPath}`] }]
+        return [{ matched: [], errors: [`dimension file unavailable: ${dimensionPath}`] }]
       const result = await retrieve(
         buildCandidateSql(dimensionPath, chunks),
         search.ctx,
@@ -85,25 +110,35 @@ export const retrieveCodingCandidates = async (
       if (!result.ok)
         return [
           {
-            candidates: [],
+            matched: [],
             errors: [`retrieval failed for dimension ${dimensionPath}: ${result.error.message}`],
           },
         ]
-      const code = stripGeneratedSuffix(dimensionPath)
-      const candidates = chunks.flatMap<CodingCandidate>((chunk) => {
+      const matched = chunks.flatMap((chunk) => {
         const hit = result.value.find((candidate) => chunkMatchesHit(chunk, candidate))
-        return hit ? [{ code, dimensionPath, chunk: withScore(chunk, hit.score) }] : []
+        return hit ? [withScore(chunk, hit.score)] : []
       })
-      return [{ candidates, errors: [] }]
+      return [{ matched, errors: [] }]
     },
     noop,
     { concurrency: BRANCH_CONCURRENCY }
   )
 
-  const candidates = pool.results.flatMap((result) => result.candidates)
   const errors = pool.results.flatMap((result) => result.errors)
   for (const failure of pool.failures) errors.push(errorMessage(failure.error))
-  return { candidates, errors }
+
+  // A chunk any dimension retrieved is offered to every code; branches only
+  // decide membership, so all that survives them is the best score seen.
+  const scores = new Map<string, number | undefined>()
+  for (const chunk of pool.results.flatMap((result) => result.matched)) {
+    const current = scores.get(chunk.id)
+    if (current === undefined || (chunk.score !== undefined && chunk.score > current))
+      scores.set(chunk.id, chunk.score)
+  }
+  const matchedChunks = chunks.flatMap((chunk) =>
+    scores.has(chunk.id) ? [withScore(chunk, scores.get(chunk.id))] : []
+  )
+  return { candidates: passthroughCodingCandidates(matchedChunks, dimensionPaths), errors }
 }
 
 export const passthroughCodingCandidates = (
@@ -117,52 +152,49 @@ export const passthroughCodingCandidates = (
 
 export const semanticGateCodingCandidates = async (
   candidates: readonly CodingCandidate[],
-  files: FileStore,
+  sources: ScopedSources,
   resolve: ContentResolver,
-  runVerdict: typeof verdict = verdict
+  parse: ParseCall = callAndParse
 ): Promise<CandidateStageResult> => {
-  const byDimension = new Map<string, CodingCandidate[]>()
-  for (const candidate of candidates) {
-    const group = byDimension.get(candidate.dimensionPath) ?? []
-    group.push(candidate)
-    byDimension.set(candidate.dimensionPath, group)
-  }
-
-  const pool = await processPool<[string, CodingCandidate[]], CandidateStageResult>(
-    [...byDimension],
-    async ([dimensionPath, group]) => {
-      const intent = resolve(dimensionPath)
-      if (!intent)
-        return [{ candidates: [], errors: [`dimension file unavailable: ${dimensionPath}`] }]
-      const hits: SearchHit[] = group.map((candidate) => ({
-        id: `${candidate.code}\0${candidate.chunk.id}`,
-        file: candidate.chunk.file,
-        hash: candidate.chunk.hash,
-        text: candidate.chunk.text,
-        chunkStart: candidate.chunk.chunkStart,
-        chunkEnd: candidate.chunk.chunkEnd,
-        score: candidate.chunk.score,
-      }))
-      const result = await runVerdict(hits, intent, "", files, noop)
-      const errors = result.failures.map((failure) => errorMessage(failure.error))
-      if (result.rawRemaining.length > 0)
-        errors.push(`${result.rawRemaining.length} semantic-filter candidate(s) were not processed`)
-      if (errors.length > 0) return [{ candidates: [], errors }]
-      const kept = new Set(result.results.map((hit) => hit.id))
+  const groups = groupCodingCandidates(candidates)
+  if (groups.length === 0) return { candidates: [], errors: [] }
+  const chunkBatches = packCodingChunks(groups)
+  const batches = batchCodeIds(candidates.map((candidate) => candidate.code)).flatMap((codes) =>
+    chunkBatches.map((groups) => ({ codes, groups }))
+  )
+  const pool = await processPool<
+    { codes: ReadonlySet<string>; groups: CodingChunkCandidates[] },
+    SemanticGateBatchResult
+  >(
+    batches,
+    async ({ codes, groups }) => {
+      const entries = assignIds(groups.map(codingEntry))
+      const result = await parse(
+        SEMANTIC_GATE_ENDPOINT,
+        buildEntryMessages(
+          buildAnalysisCallShape(codes, sources, resolve, SEMANTIC_GATE_CTA),
+          entries
+        ),
+        SemanticGateSchema
+      )
+      if (!result.ok)
+        return [{ keptChunkIds: [], errors: [`${SEMANTIC_GATE_ENDPOINT}: ${result.error}`] }]
+      const kept = new Set(result.data.results.map(({ id }) => id))
       return [
         {
-          candidates: group.filter((candidate) =>
-            kept.has(`${candidate.code}\0${candidate.chunk.id}`)
+          keptChunkIds: entries.flatMap((entry) =>
+            kept.has(entry.id) ? [entry.item.chunk.id] : []
           ),
           errors: [],
         },
       ]
     },
     noop,
-    { concurrency: BRANCH_CONCURRENCY }
+    { concurrency: POST_FIND_CONCURRENCY }
   )
 
-  const kept = pool.results.flatMap((result) => result.candidates)
+  const keptChunkIds = new Set(pool.results.flatMap((result) => result.keptChunkIds))
+  const kept = groups.flatMap((group) => (keptChunkIds.has(group.chunk.id) ? group.candidates : []))
   const errors = pool.results.flatMap((result) => result.errors)
   for (const failure of pool.failures) errors.push(errorMessage(failure.error))
   return { candidates: kept, errors }

@@ -6,12 +6,16 @@ export interface CodingDocumentOutcome {
   name: string
   status: CodingDocumentStatus
   annotationCount: number | null
-  latencyMs: number
-  requests: CodingRequestMetadata[]
-  retries: number
   warnings: string[]
   failures: string[]
   comparison?: CodingDocumentComparison
+}
+
+export interface CodingRunOutcome {
+  latencyMs: number
+  requests: CodingRequestMetadata[]
+  retries: number
+  diagnostics: string[]
 }
 
 export interface CountSummary {
@@ -30,8 +34,10 @@ export interface CodingEvalResults {
   duplicates: CountSummary
   ambiguous: CountSummary
   unresolved: CountSummary
-  latencyMs: { total: number; mean: number; min: number; max: number }
+  latencyMs: { run: number; requestMean: number; requestMin: number; requestMax: number }
+  requests: CodingRequestMetadata[]
   retries: number
+  diagnostics: string[]
   endpoints: string[]
 }
 
@@ -52,7 +58,8 @@ const sumTotals = (
 
 export const aggregateCodingResults = (
   documents: readonly CodingDocumentOutcome[],
-  codeIds: readonly string[]
+  codeIds: readonly string[],
+  run: CodingRunOutcome = { latencyMs: 0, requests: [], retries: 0, diagnostics: [] }
 ): CodingEvalResults => {
   const outcomes: Record<CodingDocumentStatus, number> = {
     success: 0,
@@ -88,8 +95,9 @@ export const aggregateCodingResults = (
     documents: documents.filter((document) => count(document) > 0).length,
     findings: documents.reduce((sum, document) => sum + count(document), 0),
   })
-  const latencies = documents.map((document) => document.latencyMs)
-  const totalLatency = latencies.reduce((sum, value) => sum + value, 0)
+  const requestLatencies = run.requests.flatMap((request) =>
+    request.durationMs === null ? [] : [request.durationMs]
+  )
   return {
     documents: [...documents],
     outcomes,
@@ -118,17 +126,18 @@ export const aggregateCodingResults = (
         document.comparison?.errors.filter((error) => error.type !== "ambiguous").length ?? 0
     ),
     latencyMs: {
-      total: totalLatency,
-      mean: latencies.length === 0 ? 0 : totalLatency / latencies.length,
-      min: latencies.length === 0 ? 0 : Math.min(...latencies),
-      max: latencies.length === 0 ? 0 : Math.max(...latencies),
+      run: run.latencyMs,
+      requestMean:
+        requestLatencies.length === 0
+          ? 0
+          : requestLatencies.reduce((sum, value) => sum + value, 0) / requestLatencies.length,
+      requestMin: requestLatencies.length === 0 ? 0 : Math.min(...requestLatencies),
+      requestMax: requestLatencies.length === 0 ? 0 : Math.max(...requestLatencies),
     },
-    retries: documents.reduce((sum, document) => sum + document.retries, 0),
-    endpoints: [
-      ...new Set(
-        documents.flatMap((document) => document.requests.map((request) => request.endpoint))
-      ),
-    ].sort(),
+    requests: [...run.requests],
+    retries: run.retries,
+    diagnostics: [...run.diagnostics],
+    endpoints: [...new Set(run.requests.map((request) => request.endpoint))].sort(),
   }
 }
 
@@ -144,6 +153,7 @@ export const formatCodingSummary = (results: CodingEvalResults): string => {
     `Exact: P ${percent(results.exact.precision)} R ${percent(results.exact.recall)} F1 ${percent(results.exact.f1)}`,
     `Mean matched IoU: ${results.meanIoU === null ? "n/a" : results.meanIoU.toFixed(3)}`,
     `Empty-gold false positives: ${results.falsePositivesOnEmptyGold}`,
+    `Requests: ${results.requests.length}`,
     `Endpoints: ${results.endpoints.join(", ") || "none"}`,
   ].join("\n")
 }

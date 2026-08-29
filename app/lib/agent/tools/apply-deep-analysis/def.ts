@@ -78,14 +78,15 @@ export const ApplyDeepAnalysisArgs = z
 export type ApplyDeepAnalysisArgs = z.infer<typeof ApplyDeepAnalysisArgs>
 
 export const FILTER_ENDPOINT = "/deep-analysis-filter"
+export const SEMANTIC_GATE_ENDPOINT = "/deep-analysis-semantic-filter"
 export const ADJUDICATE_ENDPOINT = "/deep-analysis-adjudicate"
 // One route suffix per voter. The gateway resolves a model from the path, so a
 // voter that is not a suffix here is not a voter.
 export const FILTER_VOTERS = ["voter-one", "voter-two"] as const
 export type FilterVoter = (typeof FILTER_VOTERS)[number]
-export const ENVELOPES_PER_CALL = 20
-export const MAX_CODES_PER_MIXED_CALL = 3
-export const MAX_CHARS_PER_CALL = ENVELOPES_PER_CALL * UNIT_CEILING_CHARS
+export const CHUNKS_PER_CALL = 20
+export const MAX_CODES_PER_CALL = 3
+export const MAX_CHARS_PER_CALL = CHUNKS_PER_CALL * UNIT_CEILING_CHARS
 export const BRANCH_CONCURRENCY = 10
 export const POST_FIND_CONCURRENCY = 5
 

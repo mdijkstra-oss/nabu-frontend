@@ -43,8 +43,9 @@ export interface CodingPipelineDeps {
   retrieve: RetrievalCall
   semanticGate: (
     candidates: readonly CodingCandidate[],
-    files: FileStore,
-    resolve: ContentResolver
+    sources: ScopedSources,
+    resolve: ContentResolver,
+    parse: ParseCall
   ) => Promise<CandidateStageResult>
 }
 
@@ -114,7 +115,12 @@ export const runCodingPipeline = async (
   let candidates = candidateResult.candidates
   if (!input.config.passthrough.has("semantic-filter")) {
     const gate = deps.semanticGate ?? defaultDeps.semanticGate
-    const gated = await gate(candidates, input.files, input.resolve)
+    const gated = await gate(
+      candidates,
+      input.sources,
+      input.resolve,
+      deps.parse ?? defaultDeps.parse
+    )
     candidates = gated.candidates
     errors.push(...gated.errors)
   }

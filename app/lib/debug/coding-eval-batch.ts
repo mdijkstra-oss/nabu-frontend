@@ -13,7 +13,6 @@ export const CODING_ENDPOINT = "/deep-analysis-filter.voter-one"
 export interface CodingBatchArgs {
   goldDir: string
   output: string
-  documentsInFlight: number
   gateway: string
 }
 
@@ -22,12 +21,12 @@ export const CODING_BATCH_HELP = `Usage: npm run eval:coding:batch -- [options]
 Options:
   --gold-dir <path>             Gold dataset (default: ${DEFAULT_CODING_GOLD_DIR})
   --output <path>               New output directory (required; never overwritten)
-  --documents-in-flight <n>     Isolated document processes (default: 1)
+  --documents-in-flight <n>     Compatibility flag; only 1 is accepted
   --gateway <url>               Gateway (default: VITE_LLM_HOST, then ${DEFAULT_CODING_GATEWAY})
   --help                        Show this help
 
-Each document may issue up to five coder requests concurrently. Increasing
---documents-in-flight multiplies possible provider concurrency by five.`
+All corpus documents enter one pipeline invocation. The pipeline may pack
+chunks from different files into the same model request.`
 
 export const parseCodingBatchArgs = (argv: string[]): CodingBatchArgs | { help: true } => {
   const args = mri(argv, {
@@ -40,8 +39,10 @@ export const parseCodingBatchArgs = (argv: string[]): CodingBatchArgs | { help: 
     throw new Error("Missing --output\n\n" + CODING_BATCH_HELP)
   const rawInFlight = args["documents-in-flight"] ?? "1"
   const documentsInFlight = Number(rawInFlight)
-  if (!Number.isInteger(documentsInFlight) || documentsInFlight < 1)
-    throw new Error("--documents-in-flight must be a positive integer")
+  if (documentsInFlight !== 1)
+    throw new Error(
+      "--documents-in-flight must be 1 because the corpus uses one pipeline invocation"
+    )
   const gateway =
     (typeof args.gateway === "string" && args.gateway) ||
     process.env.VITE_LLM_HOST ||
@@ -49,7 +50,6 @@ export const parseCodingBatchArgs = (argv: string[]): CodingBatchArgs | { help: 
   return {
     goldDir: typeof args["gold-dir"] === "string" ? args["gold-dir"] : DEFAULT_CODING_GOLD_DIR,
     output: args.output,
-    documentsInFlight,
     gateway: gateway.replace(/\/$/, ""),
   }
 }
@@ -139,7 +139,7 @@ export const buildCodingRunManifest = (
     passthrough: ["retrieval", "semantic-filter"],
     coders: ["voter-one"],
     adjudicate: false,
-    documentProcesses: args.documentsInFlight,
-    coderRequestsPerDocument: 5,
+    pipelineInvocations: 1,
+    targetDocuments: dataset.documents.length,
   },
 })

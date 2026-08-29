@@ -139,10 +139,13 @@ export const buildCodeSourceMessages = (
 }
 
 export const FILTER_CTA =
-  'Independently code the numbered chunks. Return { results: [{ code, start, end, reason }, ...] } where start and end are inclusive sentence refs like "1.2". Return no result when a chunk contains no qualifying span.'
+  'Independently apply every supplied code to every numbered chunk. Return { results: [{ code, start, end, reason }, ...] } where start and end are inclusive sentence refs like "1.2". Return no result when a chunk contains no qualifying span for any code.'
+
+export const SEMANTIC_GATE_CTA =
+  "Return the entries that could contain at least one qualifying passage for any supplied code as { results: [{ id, reason }, ...] }. Err toward retention; return no result only when the complete chunk is irrelevant to every code."
 
 export const ADJUDICATE_CTA =
-  "For each candidate selected by only one coder, use the complete numbered chunk and the explicit selected/not-selected provenance to render a verdict: keep, reject, or inconsistent. Return your verdicts as JSON."
+  "For every <dispute>, use the shared complete numbered chunk and its selected/not-selected provenance to render a verdict: keep, reject, or inconsistent. Return { results: [{ id, dispute, code, judgment, reason }, ...] }, echoing the entry and dispute ids."
 
 // `results` wrapper — some providers reject a top-level JSON array as structured output.
 export const buildFilterSchema = (validCodes: string[]) =>
@@ -157,12 +160,22 @@ export const buildFilterSchema = (validCodes: string[]) =>
     ),
   })
 
+export const SemanticGateSchema = z.object({
+  results: z.array(
+    z.object({
+      id: z.number().int().min(1),
+      reason: z.string(),
+    })
+  ),
+})
+
 // `results` wrapper — some providers reject a top-level JSON array as structured output.
 export const buildAdjudicateSchema = (validCodes: string[]) =>
   z.object({
     results: z.array(
       z.object({
         id: z.number().int().min(1),
+        dispute: z.number().int().min(1),
         code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
         judgment: z.enum(["keep", "reject", "inconsistent"]),
         reason: z.string(),
