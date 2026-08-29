@@ -57,7 +57,7 @@ export const toDisplayName = (filename: string): string =>
   filename
     .replace(/\.hidden\.md$/, ".md")
     .replace(/\.md$/, "")
-    .replace(/_/g, " ")
+    .replace(/[_\-\u2013\u2014]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
 
 // Verbatim, not display-cased: an unresolvable filename is a visible

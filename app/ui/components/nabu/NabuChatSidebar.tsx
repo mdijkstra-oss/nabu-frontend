@@ -14,11 +14,12 @@ import { toGroupedMessages, weaveEditGroups } from "./group"
 import { toKeyedSegments, injectContinuePrompt, collapsePendingTail } from "./collapse"
 import { isWaitingForAsk } from "./messages"
 import { getSpinnerLabels } from "./spinnerLabel"
-import { pickGreeting } from "./greetings"
 import { deriveChatButtonMode } from "./ChatSendButton"
 import { ChatTimeline } from "./ChatTimeline"
 import { ChatComposer } from "./ChatComposer"
 import type { ChatEntityContext } from "./MessageContent"
+
+const BOOT_GREETING = "Let's dive in."
 
 interface NabuChatSidebarProps {
   appReady: boolean
@@ -66,7 +67,7 @@ export const NabuChatSidebar = ({ appReady }: NabuChatSidebarProps) => {
       didAutoSend.current = true
       pushBlocks([
         ...buildFileContextBlocks(files),
-        { type: "user", content: pickGreeting() },
+        { type: "user", content: BOOT_GREETING },
         { type: "system", content: autoGreetingDirective(new Date().toLocaleString()) },
       ])
       runChat(getDeps())
