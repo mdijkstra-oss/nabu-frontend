@@ -1,7 +1,14 @@
 import { getEnv } from "~/lib/utils/env"
 import { getProjectId } from "~/lib/files/store"
 
-export const getLlmHost = (): string => getEnv("VITE_LLM_HOST", "http://localhost:8081")
+let hostOverride: string | undefined
+
+export const setLlmHostForProcess = (host: string | undefined): void => {
+  hostOverride = host?.replace(/\/$/, "")
+}
+
+export const getLlmHost = (): string =>
+  hostOverride ?? getEnv("VITE_LLM_HOST", "http://localhost:8081")
 
 export const getLlmUrl = (path: string): string => `${getLlmHost()}${path}`
 

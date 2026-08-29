@@ -1,8 +1,13 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import mri from "mri"
-import { stripBlocksByLanguage } from "~/lib/data-blocks/parse"
-import { getBlock } from "~/lib/data-blocks/query"
+import { getBlock, getBlocksStrict } from "~/lib/data-blocks/query"
+import {
+  findBlocksByLanguage,
+  formatBlockJson,
+  replaceSingletonBlock,
+  stripBlocksByLanguage,
+} from "~/lib/data-blocks/parse"
 import { AnnotationsBlockSchema } from "~/domain/data-blocks/annotations/schema"
 import { getFileRaw, setFiles, setPersistEnabled } from "~/lib/files/store"
 import { setCacheSkipped } from "~/lib/utils/storage-cache"
@@ -12,6 +17,7 @@ import type {
 } from "~/lib/agent/tools/apply-deep-analysis/coding-config"
 import type { FilterVoter } from "~/lib/agent/tools/apply-deep-analysis/def"
 import { executeDeepAnalysis } from "~/lib/agent/tools/apply-deep-analysis/handler"
+import { clearRawCalls, getRawCalls } from "~/lib/agent/client/raw-store"
 import "~/lib/agent/tools/block-tools/register"
 
 export interface CodingEvalArgs {
@@ -81,10 +87,149 @@ const installNodeShims = (): void => {
   }
 }
 
+export interface CodingDocumentInput {
+  inputPath: string
+  inputMarkdown: string
+  frameworkPath: string
+  frameworkMarkdown: string
+  dimensions: { path: string; markdown: string }[]
+}
+
+export type CodingDocumentStatus = "success" | "empty" | "partial" | "failed" | "malformed"
+
+export interface CodingRequestMetadata {
+  endpoint: string
+  durationMs: number | null
+  attempts: number
+  retryReasons: string[]
+  providerMetadata: Record<string, string>
+}
+
+export interface CodingDocumentResult {
+  status: CodingDocumentStatus
+  generatedMarkdown: string
+  annotationCount: number | null
+  latencyMs: number
+  requests: CodingRequestMetadata[]
+  retries: number
+  warnings: string[]
+  failures: string[]
+}
+
 const annotationBlock = (markdown: string, label: string) => {
   const block = getBlock(markdown, "json-annotations", AnnotationsBlockSchema)
   if (!block) throw new Error(`${label} has no schema-valid json-annotations block`)
   return block
+}
+
+export const classifyCodingOutput = (
+  pipeline: Awaited<ReturnType<typeof executeDeepAnalysis>>,
+  generatedMarkdown: string
+): Pick<CodingDocumentResult, "status" | "annotationCount" | "warnings" | "failures"> => {
+  if (pipeline.status === "error")
+    return {
+      status: "failed",
+      annotationCount: null,
+      warnings: [],
+      failures: [String(pipeline.output)],
+    }
+  if (pipeline.status === "partial")
+    return {
+      status: "partial",
+      annotationCount: null,
+      warnings: [pipeline.message ?? String(pipeline.output)],
+      failures: [],
+    }
+  const blocks = findBlocksByLanguage(generatedMarkdown, "json-annotations")
+  const parsed = getBlocksStrict(generatedMarkdown, "json-annotations", AnnotationsBlockSchema)
+  if (blocks.length !== 1 || parsed.length !== 1)
+    return {
+      status: "malformed",
+      annotationCount: null,
+      warnings: [],
+      failures: ["Generated document has no single schema-valid json-annotations block"],
+    }
+  return {
+    status: parsed[0].annotations.length === 0 ? "empty" : "success",
+    annotationCount: parsed[0].annotations.length,
+    warnings: [],
+    failures: [],
+  }
+}
+
+const requestMetadata = (): { requests: CodingRequestMetadata[]; retries: number } => {
+  const raw = getRawCalls()
+  const repeated = new Map<string, number>()
+  for (const call of raw) {
+    const key = `${call.endpoint}\0${call.requestBody}`
+    repeated.set(key, (repeated.get(key) ?? 0) + 1)
+  }
+  return {
+    requests: raw.map((call) => ({
+      endpoint: call.endpoint,
+      durationMs: call.duration,
+      attempts: call.attempts,
+      retryReasons: call.retryReasons,
+      providerMetadata: call.providerMetadata,
+    })),
+    retries:
+      raw.reduce((total, call) => total + call.retryReasons.length, 0) +
+      [...repeated.values()].reduce((total, count) => total + Math.max(0, count - 1), 0),
+  }
+}
+
+export const runCodingDocument = async (
+  input: CodingDocumentInput
+): Promise<CodingDocumentResult> => {
+  if (input.dimensions.length === 0) throw new Error("No coding dimensions supplied")
+  installNodeShims()
+  setPersistEnabled(false)
+  setCacheSkipped(true)
+  clearRawCalls()
+  setFiles({
+    [input.inputPath]: input.inputMarkdown,
+    [input.frameworkPath]: input.frameworkMarkdown,
+    ...Object.fromEntries(
+      input.dimensions.map((dimension) => [dimension.path, dimension.markdown])
+    ),
+  })
+  const started = performance.now()
+  const pipeline = await executeDeepAnalysis(
+    {
+      targets: [{ path: input.inputPath }],
+      source_files: [
+        { path: input.frameworkPath, scope: "framework" },
+        ...input.dimensions.map((dimension) => ({
+          path: dimension.path,
+          scope: "dimension" as const,
+        })),
+      ],
+      post_action: "annotate_as_code",
+    },
+    {
+      passthrough: new Set(["retrieval", "semantic-filter"]),
+      coders: ["voter-one"],
+      adjudicate: false,
+    }
+  )
+  let generatedMarkdown = getFileRaw(input.inputPath)
+  if (
+    pipeline.status === "ok" &&
+    findBlocksByLanguage(generatedMarkdown, "json-annotations").length === 0
+  ) {
+    generatedMarkdown = replaceSingletonBlock(
+      generatedMarkdown,
+      "json-annotations",
+      formatBlockJson({ annotations: [] })
+    )
+  }
+  const classified = classifyCodingOutput(pipeline, generatedMarkdown)
+  return {
+    ...classified,
+    generatedMarkdown,
+    latencyMs: Math.round(performance.now() - started),
+    ...requestMetadata(),
+  }
 }
 
 export const runCodingEval = async (args: CodingEvalArgs): Promise<number> => {
@@ -99,13 +244,13 @@ export const runCodingEval = async (args: CodingEvalArgs): Promise<number> => {
     .sort((a, b) => a.localeCompare(b))
   if (dimensionPaths.length === 0) throw new Error("--dimensions contains no Markdown files")
 
-  const files = Object.fromEntries(
-    [input, framework, ...dimensionPaths].map((path) => [path, readFileSync(path, "utf8")])
-  )
   installNodeShims()
   setPersistEnabled(false)
-  setFiles(files)
-
+  setFiles(
+    Object.fromEntries(
+      [input, framework, ...dimensionPaths].map((path) => [path, readFileSync(path, "utf8")])
+    )
+  )
   const result = await executeDeepAnalysis(
     {
       targets: [{ path: input }],
@@ -117,8 +262,7 @@ export const runCodingEval = async (args: CodingEvalArgs): Promise<number> => {
     },
     args.config
   )
-  if (result.status === "error") throw new Error(String(result.output))
-
+  if (result.status !== "ok") throw new Error(String(result.output))
   const generated = getFileRaw(input)
   const block = annotationBlock(generated, "Generated document")
   if (block.annotations.length === 0)
