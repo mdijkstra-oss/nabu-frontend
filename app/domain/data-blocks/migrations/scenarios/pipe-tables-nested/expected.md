@@ -30,7 +30,7 @@
   ```
 
 > And a blockquote holds another:
-
+>
 ```json-table
 {
 	"id": "table-1a2b3c4d",
@@ -57,7 +57,7 @@
 	]
 }
 ```
-
+>
 > And the quote resumes after it.
 
 Closing line.

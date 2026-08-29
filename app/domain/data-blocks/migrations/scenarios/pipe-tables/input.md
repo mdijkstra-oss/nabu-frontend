@@ -3,7 +3,7 @@
 Revenue by region.
 
 | Region | Revenue | Started    |
-| :----- | ------: | ---------- | ------- |
+| :----- | ------: | ---------- |
 | North  |    1200 | 2026-01-05 |
 | South  |   950.5 | 2026-02-11 |
 | East   |     n/a | 2026-03-01 | dropped |

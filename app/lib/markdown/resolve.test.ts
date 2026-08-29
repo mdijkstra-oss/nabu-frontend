@@ -127,7 +127,7 @@ describe("resolveEntityLink", () => {
           backgroundHover: "var(--color-brand-200)",
         },
         url: "/project/proj1/file/my-doc",
-        label: "My-Doc",
+        label: "My Doc",
       },
     },
     {

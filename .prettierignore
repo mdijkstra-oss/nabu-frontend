@@ -8,3 +8,4 @@ app/lib/diff/scenarios
 app/lib/diff/json-block/scenarios
 app/lib/files/scenarios
 app/lib/text/scenarios
+app/domain/data-blocks/migrations/scenarios

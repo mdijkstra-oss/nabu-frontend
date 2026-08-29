@@ -120,7 +120,10 @@ const CODES: Record<string, Code> = {
 const calloutId = (label: string): string => {
   const hex = createHash("sha256").update(`ptc:${label}`).digest("hex")
   const digit = String(parseInt(hex.slice(0, 2), 16) % 10)
-  const rest = BigInt(`0x${hex.slice(2, 16)}`).toString(36).padStart(7, "0").slice(0, 7)
+  const rest = BigInt(`0x${hex.slice(2, 16)}`)
+    .toString(36)
+    .padStart(7, "0")
+    .slice(0, 7)
   return `callout-${digit}${rest}`
 }
 
@@ -212,16 +215,19 @@ for (const line of labelLines) {
   const text = articles.get(article)
   if (!text) throw new Error(`labels reference missing article ${article}`)
   if (!(label in CODES)) throw new Error(`unknown gold label ${label}`)
-  const map = offsetMaps.get(article)!
+  const map = offsetMaps.get(article)
+  if (!map) throw new Error(`missing offset map for article ${article}`)
   const start = map[Number(startRaw)]
   const end = map[Number(endRaw)]
   if (start === undefined || end === undefined)
     throw new Error(`offset out of range in article ${article}: ${startRaw}-${endRaw}`)
   const span = text.slice(start, end)
   if (span.trim().length === 0) badSlices++
-  const rows = sentenceIndex.get(article)!
+  const rows = sentenceIndex.get(article)
+  if (!rows) throw new Error(`missing sentence index for article ${article}`)
   const range = findOverlappingRange(rows, start, end)
-  if (!range) throw new Error(`gold span outside any sentence in article ${article} at ${start}-${end}`)
+  if (!range)
+    throw new Error(`gold span outside any sentence in article ${article} at ${start}-${end}`)
   const sentenceStart = rows[range.firstIdx].start
   const sentenceEnd = rows[range.lastIdx].end
   const sentenceText = text.slice(sentenceStart, sentenceEnd)
@@ -229,7 +235,8 @@ for (const line of labelLines) {
   spans.push({ label, spanText: span, sentenceStart, sentenceEnd, sentenceText })
   goldByArticle.set(article, spans)
 }
-if (badSlices > 0) throw new Error(`${badSlices} gold spans sliced to empty text — offsets misaligned`)
+if (badSlices > 0)
+  throw new Error(`${badSlices} gold spans sliced to empty text — offsets misaligned`)
 
 for (const [id, text] of articles) {
   const title = text.split("\n", 1)[0].trim()
@@ -268,5 +275,5 @@ for (const [id, text] of articles) {
 }
 
 console.log(
-  `codebook: ${callouts.length} codes; corpus: ${articles.size} articles; gold spans: ${labelLines.length}`,
+  `codebook: ${callouts.length} codes; corpus: ${articles.size} articles; gold spans: ${labelLines.length}`
 )
