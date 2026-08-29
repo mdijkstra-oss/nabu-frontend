@@ -2,6 +2,7 @@ import type { z } from "zod"
 import { createLimiter, MODEL_CALL_LIMIT } from "~/lib/calls/limiter"
 import { callLlm } from "./fetch"
 import { extractText, toResponseFormat } from "./convert"
+import type { Block } from "./blocks"
 import type { Message } from "~/lib/calls/messages"
 
 const limiter = createLimiter(MODEL_CALL_LIMIT)
@@ -26,6 +27,19 @@ export const tryParseJson = (text: string): unknown | undefined => {
 }
 
 const PARSE_RETRIES = 1
+const STRUCTURED_OUTPUT_TOOL = "StructuredOutput"
+
+export const extractSchemaResponse = (blocks: Block[]): string => {
+  const text = extractText(blocks)
+  if (text) return text
+
+  const structuredOutput = blocks
+    .flatMap((block) => (block.type === "tool_call" ? block.calls : []))
+    .filter((call) => call.name === STRUCTURED_OUTPUT_TOOL)
+    .at(-1)
+
+  return structuredOutput ? JSON.stringify(structuredOutput.args) : ""
+}
 
 const attemptParse = <T>(text: string, schema: z.ZodType<T>): CallResult<T> => {
   const raw = tryParseJson(text)
@@ -47,7 +61,7 @@ export const callAndParse = async <T>(
 
   for (let attempt = 0; attempt <= PARSE_RETRIES; attempt++) {
     const blocks = await limiter.run(() => callLlm({ endpoint, messages, responseFormat }))
-    const text = extractText(blocks)
+    const text = extractSchemaResponse(blocks)
     if (!text) return { ok: false, error: "LLM returned no text response" }
 
     const result = attemptParse(text, schema)
