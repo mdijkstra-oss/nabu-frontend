@@ -7,6 +7,7 @@ import {
   numberSectionWithPositions,
   mapResults,
   toAnnotationOps,
+  toAnalysisResults,
   formatReturnOutput,
   formatAnnotateOutput,
   isAnnotateAction,
@@ -600,6 +601,27 @@ describe("vote pass-through", () => {
   const sentences = ["First.", "Second.", "Third."]
 
   const voteCases = [
+    {
+      name: "toAnalysisResults attaches vote from map",
+      fn: () => {
+        const spans = [{ start: 1, end: 2, analysis_source_id: "X" }]
+        const reasons = new Map([["1-2-X", "reason"]])
+        const votes = new Map([["1-2-X", vote2of3]])
+        const results = toAnalysisResults(spans, reasons, votes)
+        return results[0].vote
+      },
+      expected: vote2of3,
+    },
+    {
+      name: "toAnalysisResults omits vote when map not provided",
+      fn: () => {
+        const spans = [{ start: 1, end: 2, analysis_source_id: "X" }]
+        const reasons = new Map([["1-2-X", "reason"]])
+        const results = toAnalysisResults(spans, reasons)
+        return results[0].vote
+      },
+      expected: undefined,
+    },
     {
       name: "mapResults passes vote through",
       fn: () => {

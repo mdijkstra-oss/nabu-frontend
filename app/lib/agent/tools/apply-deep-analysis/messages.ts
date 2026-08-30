@@ -11,7 +11,6 @@ import { getCallouts } from "~/domain/data-blocks/callout/selectors"
 import { GENERATED_SUFFIX } from "~/lib/files/filename"
 import { markCacheBreakpoint, type Message } from "~/lib/calls/messages"
 import type { CallShape } from "~/lib/calls/entry"
-import { refString } from "~/lib/calls/entry"
 export type { ParseCall } from "../../client/call-parse"
 
 export { markCacheBreakpoint, type Message }
@@ -139,35 +138,23 @@ export const buildCodeSourceMessages = (
 }
 
 export const FILTER_CTA =
-  'Independently apply every supplied code to every numbered chunk. Return { results: [{ code, start, end, reason }, ...] } where start and end are inclusive sentence refs like "1.2". Return no result when a chunk contains no qualifying span for any code.'
-
-export const SEMANTIC_GATE_CTA =
-  "Return the entries that could contain at least one qualifying passage for any supplied code as { results: [{ id, reason }, ...] }. Err toward retention; return no result only when the complete chunk is irrelevant to every code."
+  "For each coded section, judge whether the passage satisfies the code definitions. Return your judgment as JSON."
 
 export const ADJUDICATE_CTA =
-  "For every <dispute>, use the shared complete numbered chunk and its selected/not-selected provenance to render a verdict: keep, reject, or inconsistent. Return { results: [{ id, dispute, code, judgment, reason }, ...] }, echoing the entry and dispute ids."
+  "For each contested passage, render a verdict: keep, reject, or inconsistent. Return your verdicts as JSON."
 
 // `results` wrapper — some providers reject a top-level JSON array as structured output.
 export const buildFilterSchema = (validCodes: string[]) =>
   z.object({
     results: z.array(
       z.object({
+        id: z.number().int().min(1),
         code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
-        start: refString(),
-        end: refString(),
+        judgment: z.enum(["remove", "keep"]),
         reason: z.string(),
       })
     ),
   })
-
-export const SemanticGateSchema = z.object({
-  results: z.array(
-    z.object({
-      id: z.number().int().min(1),
-      reason: z.string(),
-    })
-  ),
-})
 
 // `results` wrapper — some providers reject a top-level JSON array as structured output.
 export const buildAdjudicateSchema = (validCodes: string[]) =>
@@ -175,7 +162,6 @@ export const buildAdjudicateSchema = (validCodes: string[]) =>
     results: z.array(
       z.object({
         id: z.number().int().min(1),
-        dispute: z.number().int().min(1),
         code: validCodes.length > 0 ? z.enum(validCodes as [string, ...string[]]) : z.string(),
         judgment: z.enum(["keep", "reject", "inconsistent"]),
         reason: z.string(),

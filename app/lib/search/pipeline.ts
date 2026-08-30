@@ -238,24 +238,6 @@ export const runSearchPipeline = async (
   })
 }
 
-// Deep coding needs retrieval to choose canonical document chunks, while semantic
-// filtering is a later gate. Keep the same resolution, probe, cap, and merge stages
-// without letting the search pipeline's match trimming reshape those chunks.
-export const runRetrievalPipeline = async (
-  sql: string,
-  ctx: SemanticContext,
-  files: FileStore
-): Promise<Result<SearchHit[], PipelineError>> => {
-  const resolved = await resolveSemanticSql(sql, ctx)
-  if (!resolved.ok) return err({ message: resolved.error.message })
-  const probed = await probe(resolved.value, ctx.db, files)
-  if (!probed.ok) return err(probed.error)
-  await yieldToBrowser()
-  const capped = applyCap(probed.value.rawHits, files)
-  await yieldToBrowser()
-  return ok(sortByScore(applyMerge(capped, files)))
-}
-
 export const executeResolvedSearch = async (
   resolved: ResolvedQuery,
   sql: string,
