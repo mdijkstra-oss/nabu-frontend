@@ -33,7 +33,7 @@ const required = (value: unknown, flag: string): string => {
   return value
 }
 
-const parsePassthrough = (value: string): ReadonlySet<CodingPassthroughStage> => {
+export const parsePassthrough = (value: string): ReadonlySet<CodingPassthroughStage> => {
   if (value === "") return new Set()
   const stages = value.split(",")
   const valid = new Set(["retrieval", "semantic-filter"])
@@ -42,7 +42,7 @@ const parsePassthrough = (value: string): ReadonlySet<CodingPassthroughStage> =>
   return new Set(stages as CodingPassthroughStage[])
 }
 
-const parseCoders = (value: string): CodingConfig["coders"] => {
+export const parseCoders = (value: string): CodingConfig["coders"] => {
   const coders = value.split(",") as FilterVoter[]
   if (coders.length === 1 && coders[0] === "voter-one") return ["voter-one"]
   if (coders.length === 2 && coders[0] === "voter-one" && coders[1] === "voter-two")
@@ -50,7 +50,7 @@ const parseCoders = (value: string): CodingConfig["coders"] => {
   throw new Error('--coders must be "voter-one" or "voter-one,voter-two"')
 }
 
-const parseBoolean = (value: string, flag: string): boolean => {
+export const parseBoolean = (value: string, flag: string): boolean => {
   if (value === "true") return true
   if (value === "false") return false
   throw new Error(`--${flag} must be true or false`)
@@ -198,7 +198,12 @@ const requestMetadata = (): { requests: CodingRequestMetadata[]; retries: number
 
 export const runCodingCorpus = async (
   input: CodingCorpusInput,
-  pipelineDeps: Parameters<typeof executeDeepAnalysis>[2] = {}
+  pipelineDeps: Parameters<typeof executeDeepAnalysis>[2] = {},
+  config: CodingConfig = {
+    passthrough: new Set(["retrieval", "semantic-filter"]),
+    coders: ["voter-one"],
+    adjudicate: false,
+  }
 ): Promise<CodingCorpusResult> => {
   if (input.documents.length === 0) throw new Error("No coding documents supplied")
   if (input.dimensions.length === 0) throw new Error("No coding dimensions supplied")
@@ -226,11 +231,7 @@ export const runCodingCorpus = async (
       ],
       post_action: "annotate_as_code",
     },
-    {
-      passthrough: new Set(["retrieval", "semantic-filter"]),
-      coders: ["voter-one"],
-      adjudicate: false,
-    },
+    config,
     pipelineDeps
   )
   const documents = input.documents.map((document): CodingFileResult => {

@@ -70,17 +70,18 @@ describe("coding sentence-range comparison", () => {
     ).toMatchObject({ tp: 0, fp: 1, fn: 1 })
   })
 
-  it("collapses only same-code canonical-range duplicates", () => {
+  it("retains same-code canonical-range duplicates as multiset instances", () => {
     const prose = "One. Two."
     const comparison = compareCodingDocuments(
       markdown(prose, [finding("One.")]),
       markdown(prose, [finding("One."), finding("One."), finding("One.", "code-b")])
     )
     expect(comparison.duplicateGold).toBe(1)
-    expect(comparison.relaxed).toMatchObject({ tp: 1, fp: 0, fn: 1 })
+    expect(comparison.soft).toMatchObject({ tp: 1, fp: 0, fn: 2 })
+    expect(comparison.relaxed).toMatchObject({ tp: 1, fp: 0, fn: 2 })
   })
 
-  it("resolves multiline anchors and reports repeated-text ambiguity", () => {
+  it("resolves multiline and repeated anchors by monotone occurrence", () => {
     const multiline = "Opening line\ncontinues here. Closing."
     expect(
       compareCodingDocuments(
@@ -90,12 +91,18 @@ describe("coding sentence-range comparison", () => {
     ).toMatchObject({ tp: 1, fp: 0, fn: 0 })
 
     const repeated = "Echo. Other. Echo."
-    const ambiguous = compareCodingDocuments(
+    const repeatedComparison = compareCodingDocuments(
       markdown(repeated, [finding("Echo.")]),
       markdown(repeated, [finding("Echo.")])
     )
-    expect(ambiguous.errors.map((error) => error.type)).toEqual(["ambiguous", "ambiguous"])
-    expect(ambiguous.relaxed).toMatchObject({ tp: 0, fp: 1, fn: 1 })
+    expect(repeatedComparison.errors).toEqual([])
+    expect(repeatedComparison.relaxed).toMatchObject({ tp: 1, fp: 0, fn: 0 })
+
+    const separateCodes = compareCodingDocuments(
+      markdown(repeated, [finding("Echo.", "code-a"), finding("Echo.", "code-b")]),
+      markdown(repeated, [finding("Echo.", "code-a"), finding("Echo.", "code-b")])
+    )
+    expect(separateCodes.matches.map((match) => match.prediction.range.start)).toEqual([0, 0])
   })
 
   it("uses maximum-weight one-to-one matching", () => {
@@ -106,6 +113,17 @@ describe("coding sentence-range comparison", () => {
     )
     expect(comparison.relaxed).toMatchObject({ tp: 2, fp: 0, fn: 0 })
     expect(comparison.matches.map((match) => match.iou).sort()).toEqual([2 / 3, 1])
+  })
+
+  it("gives partial soft credit below the relaxed threshold and penalizes wide spans", () => {
+    const prose = "One. Two. Three. Four. Five."
+    const comparison = compareCodingDocuments(
+      markdown(prose, [finding(prose)]),
+      markdown(prose, [finding("One. Two.")])
+    )
+    expect(comparison.soft).toMatchObject({ tp: 0.4, fp: 0.6, fn: 0.6 })
+    expect(comparison.soft.f1).toBeCloseTo(0.4)
+    expect(comparison.relaxed).toMatchObject({ tp: 0, fp: 1, fn: 1 })
   })
 
   it("accepts successful empty prediction and gold blocks", () => {

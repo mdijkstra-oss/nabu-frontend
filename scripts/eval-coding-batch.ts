@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { basename, resolve } from "node:path"
 import {
   buildCodingRunManifest,
+  assertCodingWorkerResult,
   CODING_BATCH_HELP,
   parseCodingBatchArgs,
   preflightCodingGateway,
@@ -15,6 +16,7 @@ import {
   type CodingDocumentOutcome,
 } from "~/lib/debug/coding-eval-report"
 import type { CodingCorpusResult, CodingFileResult } from "~/lib/debug/coding-eval"
+import type { CodingConfig } from "~/lib/agent/tools/apply-deep-analysis/coding-config"
 
 const writeJson = (path: string, value: unknown): void =>
   writeFileSync(path, JSON.stringify(value, null, 2) + "\n")
@@ -22,8 +24,9 @@ const writeJson = (path: string, value: unknown): void =>
 const runWorker = (
   goldDir: string,
   gateway: string,
-  resultPath: string
-): Promise<{ result: CodingCorpusResult; diagnostics: string }> =>
+  resultPath: string,
+  config: CodingConfig
+): Promise<{ result: CodingCorpusResult; diagnostics: string; exitCode: number | null }> =>
   new Promise((finish) => {
     const started = performance.now()
     const cli = resolve("node_modules/vite-node/vite-node.mjs")
@@ -37,15 +40,21 @@ const runWorker = (
       gateway,
       "--result",
       resultPath,
+      "--passthrough",
+      [...config.passthrough].join(","),
+      "--coders",
+      config.coders.join(","),
+      "--adjudicate",
+      String(config.adjudicate),
     ])
     let diagnostics = ""
     child.stdout.on("data", (chunk) => (diagnostics += String(chunk)))
     child.stderr.on("data", (chunk) => (diagnostics += String(chunk)))
     child.on("error", (error) => (diagnostics += error.message))
-    child.on("close", () => {
+    child.on("close", (exitCode) => {
       if (existsSync(resultPath)) {
         const result = JSON.parse(readFileSync(resultPath, "utf8")) as CodingCorpusResult
-        finish({ result, diagnostics: diagnostics.trim() })
+        finish({ result, diagnostics: diagnostics.trim(), exitCode })
         return
       }
       finish({
@@ -56,6 +65,7 @@ const runWorker = (
           retries: 0,
         },
         diagnostics: diagnostics.trim() || "Worker exited without a result",
+        exitCode,
       })
     })
   })
@@ -76,7 +86,15 @@ const main = async (): Promise<void> => {
   writeJson(resolve(output, "run.json"), buildCodingRunManifest(dataset, parsed))
 
   const workerResultPath = resolve(workerDir, "corpus.json")
-  const { result, diagnostics } = await runWorker(dataset.root, parsed.gateway, workerResultPath)
+  const { result, diagnostics, exitCode } = await runWorker(
+    dataset.root,
+    parsed.gateway,
+    workerResultPath,
+    parsed.config
+  )
+  const returnedPaths = result.documents.map((document) => document.path)
+  const expectedPaths = dataset.documents.map((document) => document.name)
+  assertCodingWorkerResult(exitCode, returnedPaths, expectedPaths, diagnostics)
   const resultByPath = new Map(result.documents.map((document) => [document.path, document]))
   const missingResult = (path: string): CodingFileResult => ({
     path,
@@ -103,6 +121,7 @@ const main = async (): Promise<void> => {
       name: document.name,
       status,
       annotationCount: generated.annotationCount,
+      goldAnnotationCount: document.annotations.length,
       warnings: [...generated.warnings],
       failures,
       ...(comparison ? { comparison } : {}),

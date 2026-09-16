@@ -52,6 +52,7 @@ export interface CodingDocumentComparison {
   errors: FindingError[]
   duplicatePredictions: number
   duplicateGold: number
+  soft: ScoreTotals
   relaxed: ScoreTotals
   exact: ScoreTotals
   meanIoU: number | null
@@ -83,6 +84,7 @@ const resolveAnnotations = (
   const rows = indexFileSentences(markdown)
   const findings: ResolvedFinding[] = []
   const errors: FindingError[] = []
+  const nextOccurrence = new Map<string, number>()
 
   annotations.forEach((annotation, index) => {
     if (!annotation.code) {
@@ -101,28 +103,32 @@ const resolveAnnotations = (
       return overlap ? [{ start: overlap.firstIdx, end: overlap.lastIdx }] : []
     })
     const unique = [...new Map(ranges.map((range) => [rangeKey(range), range])).values()]
-    if (unique.length !== 1) {
+    if (unique.length === 0) {
       errors.push({
         side,
         index,
         code: annotation.code,
-        type: unique.length === 0 ? "unresolved" : "ambiguous",
+        type: "unresolved",
         text: annotation.text,
         candidateRanges: unique,
       })
       return
     }
-    findings.push({ index, code: annotation.code, text: annotation.text, range: unique[0] })
+    const occurrenceKey = `${annotation.code}\0${annotation.text}`
+    const occurrenceIndex = nextOccurrence.get(occurrenceKey) ?? 0
+    const range = unique[Math.min(occurrenceIndex, unique.length - 1)]
+    nextOccurrence.set(occurrenceKey, occurrenceIndex + 1)
+    findings.push({ index, code: annotation.code, text: annotation.text, range })
   })
 
   const seen = new Set<string>()
-  const deduplicated = findings.filter((finding) => {
+  const duplicates = findings.filter((finding) => {
     const key = `${finding.code}:${rangeKey(finding.range)}`
-    if (seen.has(key)) return false
+    if (seen.has(key)) return true
     seen.add(key)
-    return true
-  })
-  return { findings: deduplicated, errors, duplicates: findings.length - deduplicated.length }
+    return false
+  }).length
+  return { findings, errors, duplicates }
 }
 
 export const sentenceIoU = (a: SentenceRange, b: SentenceRange): number => {
@@ -175,7 +181,7 @@ const maximumWeightMatches = (
   predictions.forEach((prediction, predictionIndex) => {
     gold.forEach((expected, goldIndex) => {
       const iou = sentenceIoU(prediction.range, expected.range)
-      if (iou >= threshold)
+      if ((threshold === 0 && iou > 0) || (threshold > 0 && iou >= threshold))
         addEdge(graph, predictionStart + predictionIndex, goldStart + goldIndex, 1, -iou, {
           prediction: predictionIndex,
           gold: goldIndex,
@@ -279,6 +285,13 @@ export const compareCodingDocuments = (
     maximumWeightMatches(
       prediction.findings.filter((item) => item.code === code),
       gold.findings.filter((item) => item.code === code),
+      0
+    )
+  )
+  const relaxedMatches = codes.flatMap((code) =>
+    maximumWeightMatches(
+      prediction.findings.filter((item) => item.code === code),
+      gold.findings.filter((item) => item.code === code),
       0.5
     )
   )
@@ -295,10 +308,14 @@ export const compareCodingDocuments = (
   const falseNegatives = gold.findings.filter((item) => !matchedGold.has(item.index))
   const predictionErrors = prediction.errors.length
   const goldErrors = gold.errors.length
+  const softTp = matches.reduce((sum, match) => sum + match.iou, 0)
+  const predictionCount = prediction.findings.length + predictionErrors
+  const goldCount = gold.findings.length + goldErrors
+  const soft = scoreTotals(softTp, predictionCount - softTp, goldCount - softTp)
   const relaxed = scoreTotals(
-    matches.length,
-    falsePositives.length + predictionErrors,
-    falseNegatives.length + goldErrors
+    relaxedMatches.length,
+    predictionCount - relaxedMatches.length,
+    goldCount - relaxedMatches.length
   )
   const exact = scoreTotals(
     exactMatches.length,
@@ -306,13 +323,17 @@ export const compareCodingDocuments = (
     gold.findings.length + goldErrors - exactMatches.length
   )
   const perCode = codes.map((code) => {
-    const tp = matches.filter((match) => match.prediction.code === code).length
-    const fp =
-      falsePositives.filter((item) => item.code === code).length +
+    const tp = matches
+      .filter((match) => match.prediction.code === code)
+      .reduce((sum, match) => sum + match.iou, 0)
+    const predicted =
+      prediction.findings.filter((item) => item.code === code).length +
       prediction.errors.filter((error) => error.code === code).length
-    const fn =
-      falseNegatives.filter((item) => item.code === code).length +
+    const expected =
+      gold.findings.filter((item) => item.code === code).length +
       gold.errors.filter((error) => error.code === code).length
+    const fp = predicted - tp
+    const fn = expected - tp
     return { code, ...scoreTotals(tp, fp, fn) }
   })
   return {
@@ -322,6 +343,7 @@ export const compareCodingDocuments = (
     errors: [...prediction.errors, ...gold.errors],
     duplicatePredictions: prediction.duplicates,
     duplicateGold: gold.duplicates,
+    soft,
     relaxed,
     exact,
     meanIoU:

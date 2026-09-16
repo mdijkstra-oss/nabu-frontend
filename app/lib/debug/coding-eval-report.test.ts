@@ -21,6 +21,9 @@ const outcome = (
   name,
   status,
   annotationCount: status === "empty" ? 0 : status === "success" ? 1 : null,
+  goldAnnotationCount: comparison
+    ? comparison.matches.length + comparison.falseNegatives.length
+    : 1,
   warnings: [],
   failures: [],
   ...(comparison ? { comparison } : {}),
@@ -80,14 +83,16 @@ describe("coding evaluation aggregates", () => {
       failed: 1,
       malformed: 1,
     })
-    expect(report.relaxed).toMatchObject({ tp: 1, fp: 3, fn: 2 })
-    expect(report.exact).toMatchObject({ tp: 1, fp: 3, fn: 2 })
+    expect(report.complete).toBe(false)
+    expect(report.soft.f1).toBe(0)
+    expect(report.relaxed.f1).toBe(0)
+    expect(report.exact.f1).toBe(0)
     expect(report.meanIoU).toBe(1)
     expect(report.perCode).toHaveLength(1)
-    expect(report.perCode[0]).toMatchObject({ code: "code-a", tp: 1, fp: 3, fn: 2 })
+    expect(report.perCode[0]).toMatchObject({ code: "code-a", tp: 2, fp: 2, fn: 2 })
     expect(report.falsePositivesOnEmptyGold).toBe(1)
     expect(report.duplicates).toEqual({ documents: 1, findings: 1 })
-    expect(report.ambiguous).toEqual({ documents: 1, findings: 2 })
+    expect(report.ambiguous).toEqual({ documents: 0, findings: 0 })
     expect(report.unresolved).toEqual({ documents: 1, findings: 2 })
     expect(report.latencyMs).toEqual({ run: 80, requestMean: 5, requestMin: 5, requestMax: 5 })
     expect(report.requests).toHaveLength(1)

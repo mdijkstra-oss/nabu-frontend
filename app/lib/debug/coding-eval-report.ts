@@ -6,6 +6,7 @@ export interface CodingDocumentOutcome {
   name: string
   status: CodingDocumentStatus
   annotationCount: number | null
+  goldAnnotationCount: number
   warnings: string[]
   failures: string[]
   comparison?: CodingDocumentComparison
@@ -26,6 +27,8 @@ export interface CountSummary {
 export interface CodingEvalResults {
   documents: CodingDocumentOutcome[]
   outcomes: Record<CodingDocumentStatus, number>
+  complete: boolean
+  soft: ScoreTotals
   relaxed: ScoreTotals
   exact: ScoreTotals
   meanIoU: number | null
@@ -43,7 +46,7 @@ export interface CodingEvalResults {
 
 const sumTotals = (
   documents: readonly CodingDocumentOutcome[],
-  key: "relaxed" | "exact"
+  key: "soft" | "relaxed" | "exact"
 ): ScoreTotals => {
   const totals = documents.reduce(
     (sum, document) => ({
@@ -69,8 +72,21 @@ export const aggregateCodingResults = (
     malformed: 0,
   }
   documents.forEach((document) => outcomes[document.status]++)
-  const relaxed = sumTotals(documents, "relaxed")
-  const exact = sumTotals(documents, "exact")
+  const complete = documents.every(
+    (document) => document.status === "success" || document.status === "empty"
+  )
+  const invalidScore = (): ScoreTotals =>
+    scoreTotals(
+      0,
+      0,
+      Math.max(
+        1,
+        documents.reduce((sum, document) => sum + document.goldAnnotationCount, 0)
+      )
+    )
+  const soft = complete ? sumTotals(documents, "soft") : invalidScore()
+  const relaxed = complete ? sumTotals(documents, "relaxed") : invalidScore()
+  const exact = complete ? sumTotals(documents, "exact") : invalidScore()
   const matchedIoUs = documents.flatMap(
     (document) => document.comparison?.matches.map((match) => match.iou) ?? []
   )
@@ -101,6 +117,8 @@ export const aggregateCodingResults = (
   return {
     documents: [...documents],
     outcomes,
+    complete,
+    soft,
     relaxed,
     exact,
     meanIoU:
@@ -149,6 +167,7 @@ export const formatCodingSummary = (results: CodingEvalResults): string => {
     .join(" ")
   return [
     `Documents: ${results.documents.length} (${terminal})`,
+    `Soft: P ${percent(results.soft.precision)} R ${percent(results.soft.recall)} F1 ${percent(results.soft.f1)} (${results.soft.tp.toFixed(3)} soft TP)`,
     `Relaxed: P ${percent(results.relaxed.precision)} R ${percent(results.relaxed.recall)} F1 ${percent(results.relaxed.f1)} (${results.relaxed.tp} TP, ${results.relaxed.fp} FP, ${results.relaxed.fn} FN)`,
     `Exact: P ${percent(results.exact.precision)} R ${percent(results.exact.recall)} F1 ${percent(results.exact.f1)}`,
     `Mean matched IoU: ${results.meanIoU === null ? "n/a" : results.meanIoU.toFixed(3)}`,

@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto"
 import { homedir } from "node:os"
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs"
-import { basename, dirname, resolve } from "node:path"
+import { basename, resolve } from "node:path"
 import { execFileSync } from "node:child_process"
 import mri from "mri"
 import type { CodingEvalDataset } from "./coding-eval-dataset"
+import type { CodingConfig } from "~/lib/agent/tools/apply-deep-analysis/coding-config"
+import { parseBoolean, parseCoders, parsePassthrough } from "./coding-eval"
 
 export const DEFAULT_CODING_GOLD_DIR = resolve(homedir(), "Desktop/ptc-gold-small")
 export const DEFAULT_CODING_GATEWAY = "http://localhost:8081"
@@ -14,6 +16,9 @@ export interface CodingBatchArgs {
   goldDir: string
   output: string
   gateway: string
+  config: CodingConfig
+  promptRoot: string | null
+  promptHash: string | null
 }
 
 export const CODING_BATCH_HELP = `Usage: npm run eval:coding:batch -- [options]
@@ -23,6 +28,11 @@ Options:
   --output <path>               New output directory (required; never overwritten)
   --documents-in-flight <n>     Compatibility flag; only 1 is accepted
   --gateway <url>               Gateway (default: VITE_LLM_HOST, then ${DEFAULT_CODING_GATEWAY})
+  --passthrough <stages>        Comma-separated retrieval,semantic-filter (default: both)
+  --coders <coders>             voter-one or voter-one,voter-two (default: voter-one)
+  --adjudicate <boolean>        Whether to adjudicate two voters (default: false)
+  --prompt-root <path>          Explicit immutable candidate prompt root
+  --prompt-hash <sha256>        Candidate guidance hash recorded in the manifest
   --help                        Show this help
 
 All corpus documents enter one pipeline invocation. The pipeline may pack
@@ -30,7 +40,17 @@ chunks from different files into the same model request.`
 
 export const parseCodingBatchArgs = (argv: string[]): CodingBatchArgs | { help: true } => {
   const args = mri(argv, {
-    string: ["gold-dir", "output", "documents-in-flight", "gateway"],
+    string: [
+      "gold-dir",
+      "output",
+      "documents-in-flight",
+      "gateway",
+      "passthrough",
+      "coders",
+      "adjudicate",
+      "prompt-root",
+      "prompt-hash",
+    ],
     boolean: ["help"],
   })
   if (args.help) return { help: true }
@@ -51,6 +71,13 @@ export const parseCodingBatchArgs = (argv: string[]): CodingBatchArgs | { help: 
     goldDir: typeof args["gold-dir"] === "string" ? args["gold-dir"] : DEFAULT_CODING_GOLD_DIR,
     output: args.output,
     gateway: gateway.replace(/\/$/, ""),
+    config: {
+      passthrough: parsePassthrough(args.passthrough ?? "retrieval,semantic-filter"),
+      coders: parseCoders(args.coders ?? "voter-one"),
+      adjudicate: parseBoolean(args.adjudicate ?? "false", "adjudicate"),
+    },
+    promptRoot: typeof args["prompt-root"] === "string" ? resolve(args["prompt-root"]) : null,
+    promptHash: typeof args["prompt-hash"] === "string" ? args["prompt-hash"] : null,
   }
 }
 
@@ -76,6 +103,21 @@ export const preflightCodingGateway = async (
     )
 }
 
+export const assertCodingWorkerResult = (
+  exitCode: number | null,
+  returnedPaths: readonly string[],
+  expectedPaths: readonly string[],
+  diagnostics: string
+): void => {
+  if (exitCode !== 0) throw new Error(diagnostics || `Coding worker exited with status ${exitCode}`)
+  if (
+    returnedPaths.length !== new Set(returnedPaths).size ||
+    returnedPaths.length !== expectedPaths.length ||
+    expectedPaths.some((path) => !returnedPaths.includes(path))
+  )
+    throw new Error("Coding worker returned an incomplete or unexpected document set")
+}
+
 const hashFiles = (paths: readonly string[]): string | null => {
   if (paths.length === 0) return null
   const hash = createHash("sha256")
@@ -91,19 +133,21 @@ const filesBelow = (path: string): string[] => {
     .sort()
 }
 
-const promptsMetadata = (): {
+const promptsMetadata = (
+  args: CodingBatchArgs
+): {
+  root: string | null
   promptHash: string | null
   modelTable: string | null
   modelTableHash: string | null
 } => {
-  const frontendRoot = process.env.CONDUCTOR_ROOT_PATH ?? process.cwd()
-  const promptsRoot = resolve(dirname(frontendRoot), "nabu-prompts")
-  const envPath = resolve(promptsRoot, ".env")
-  const envRaw = existsSync(envPath) ? readFileSync(envPath, "utf8") : ""
-  const configured = /^MODELS=(.+)$/m.exec(envRaw)?.[1].trim() || "models.openai.yaml"
-  const modelTable = resolve(promptsRoot, "config", configured)
+  if (!args.promptRoot)
+    return { root: null, promptHash: args.promptHash, modelTable: null, modelTableHash: null }
+  const modelTable = resolve(args.promptRoot, "models.claude-cli.yaml")
   return {
-    promptHash: hashFiles(filesBelow(resolve(promptsRoot, "config/deep-analysis-filter"))),
+    root: args.promptRoot,
+    promptHash:
+      args.promptHash ?? hashFiles(filesBelow(resolve(args.promptRoot, "deep-analysis-filter"))),
     modelTable: existsSync(modelTable) ? modelTable : null,
     modelTableHash: hashFiles(filesBelow(modelTable)),
   }
@@ -132,13 +176,13 @@ export const buildCodingRunManifest = (
     })),
   },
   frontendRevision: frontendRevision(),
-  prompts: promptsMetadata(),
+  prompts: promptsMetadata(args),
   gateway: args.gateway,
   endpoint: CODING_ENDPOINT,
   pipeline: {
-    passthrough: ["retrieval", "semantic-filter"],
-    coders: ["voter-one"],
-    adjudicate: false,
+    passthrough: [...args.config.passthrough].sort(),
+    coders: args.config.coders,
+    adjudicate: args.config.adjudicate,
     pipelineInvocations: 1,
     targetDocuments: dataset.documents.length,
   },

@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from "vitest"
 import { respondingWith, textOf } from "~/lib/calls/parse.fixture"
 import { stripBlocksByLanguage } from "~/lib/data-blocks/parse"
 import { classifyCodingOutput, runCodingCorpus } from "./coding-eval"
-import { parseCodingBatchArgs, preflightCodingGateway } from "./coding-eval-batch"
+import {
+  assertCodingWorkerResult,
+  parseCodingBatchArgs,
+  preflightCodingGateway,
+} from "./coding-eval-batch"
 import { compareCodingDocuments } from "./coding-eval-comparison"
 import { loadCodingEvalDataset } from "./coding-eval-dataset"
 import { aggregateCodingResults } from "./coding-eval-report"
@@ -21,6 +25,11 @@ describe("coding batch contracts", () => {
       goldDir: resolve(homedir(), "Desktop/ptc-gold-small"),
       output: "run",
       gateway: "http://localhost:8081",
+      config: {
+        passthrough: new Set(["retrieval", "semantic-filter"]),
+        coders: ["voter-one"],
+        adjudicate: false,
+      },
     })
     vi.stubEnv("VITE_LLM_HOST", "https://gateway.example.com")
     expect(parseCodingBatchArgs(["--output", "run"])).toMatchObject({
@@ -29,6 +38,26 @@ describe("coding batch contracts", () => {
     expect(() => parseCodingBatchArgs(["--output", "run", "--documents-in-flight", "2"])).toThrow(
       "one pipeline invocation"
     )
+    expect(
+      parseCodingBatchArgs([
+        "--output",
+        "run",
+        "--passthrough",
+        "retrieval,semantic-filter",
+        "--coders",
+        "voter-one",
+        "--adjudicate",
+        "false",
+        "--prompt-root",
+        "/tmp/candidate",
+        "--prompt-hash",
+        "abc123",
+      ])
+    ).toMatchObject({
+      promptRoot: "/tmp/candidate",
+      promptHash: "abc123",
+      config: { coders: ["voter-one"], adjudicate: false },
+    })
     vi.unstubAllEnvs()
   })
 
@@ -45,6 +74,19 @@ describe("coding batch contracts", () => {
         vi.fn(async () => new Response("no", { status: 503 }))
       )
     ).rejects.toThrow("docker compose up -d chancery")
+  })
+
+  it("rejects total worker failure and incomplete document sets", () => {
+    expect(() => assertCodingWorkerResult(1, [], ["a.md"], "worker failed")).toThrow(
+      "worker failed"
+    )
+    expect(() => assertCodingWorkerResult(0, ["a.md"], ["a.md", "b.md"], "")).toThrow(
+      "incomplete or unexpected"
+    )
+    expect(() => assertCodingWorkerResult(0, ["a.md", "a.md"], ["a.md"], "")).toThrow(
+      "incomplete or unexpected"
+    )
+    expect(() => assertCodingWorkerResult(0, ["a.md", "b.md"], ["b.md", "a.md"], "")).not.toThrow()
   })
 
   it("classifies annotations, empty output, malformed output, and partial failure", () => {
@@ -141,6 +183,7 @@ describe("coding dataset and file-level report fixture", () => {
         name: document.name,
         status: "success" as const,
         annotationCount: 1,
+        goldAnnotationCount: document.annotations.length,
         warnings: [],
         failures: [],
         comparison: compareCodingDocuments(prediction, document.markdown),
