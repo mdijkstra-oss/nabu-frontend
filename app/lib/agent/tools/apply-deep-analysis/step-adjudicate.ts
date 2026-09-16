@@ -1,145 +1,156 @@
-import type { Envelope } from "./envelope"
 import type { ScopedSources, ContentResolver, ParseCall } from "./messages"
 import { callAndParse } from "../../client/call-parse"
 import { buildAnalysisCallShape, ADJUDICATE_CTA, buildAdjudicateSchema } from "./messages"
-import { buildEntryMessages } from "~/lib/calls/entry"
-import { envelopeEntries, findEnvelope, packEnvelopes } from "./triplet"
-import { collectCodeIds, isContestedEnvelope } from "./envelope"
-import { ADJUDICATE_ENDPOINT, POST_FIND_CONCURRENCY } from "./def"
+import {
+  ADJUDICATE_ENDPOINT,
+  CHUNKS_PER_CALL,
+  MAX_CHARS_PER_CALL,
+  POST_FIND_CONCURRENCY,
+} from "./def"
 import { processPool } from "~/lib/utils/pool"
 import { noop } from "~/lib/utils/noop"
 import { errorMessage } from "~/lib/utils/error"
-import type { Tracer, AdjudEntry } from "./trace"
-
-export interface AdjudCounts {
-  kept: number
-  rejected: number
-  ambig: number
-}
-
-export type AdjudStats = Map<string, AdjudCounts>
-
-export interface AdjudicateStepResult {
-  envelopes: Envelope[]
-  errors: string[]
-  stats: AdjudStats
-}
+import { batchCodeIds, type CoderSelection } from "./step-code"
+import type { CodingChunk } from "./coding-chunk"
+import type { CodingDecision } from "./consensus"
+import { dedupCodingDecisions } from "./consensus"
+import {
+  assignIds,
+  buildEntryMessages,
+  entrySize,
+  type Entry,
+  type EntryInput,
+} from "~/lib/calls/entry"
+import { pack } from "~/lib/calls/pack"
+import { groupBy } from "~/lib/utils/group"
 
 export interface Verdict {
   judgment: "keep" | "reject" | "inconsistent"
   reason: string
 }
 
-export const applyVerdict = (e: Envelope, v: Verdict): Envelope | null => {
-  switch (v.judgment) {
-    case "reject":
-      return null
-    case "keep":
-      return { ...e, review: undefined }
-    case "inconsistent":
-      return { ...e, review: v.reason }
-    default:
-      throw new Error(`unknown adjudicate judgment: ${v.judgment}`)
-  }
+export interface ContestedChunk {
+  chunk: CodingChunk
+  disputes: CoderSelection[]
 }
 
-export const adjudicateEnvelopes = async (
-  allSurvivors: Envelope[],
-  sources: ScopedSources,
-  resolve: ContentResolver,
-  tracer?: Tracer,
-  parse: ParseCall = callAndParse
-): Promise<AdjudicateStepResult> => {
-  const contested = allSurvivors.filter(isContestedEnvelope)
-  if (contested.length === 0) return { envelopes: allSurvivors, errors: [], stats: new Map() }
-
-  const { results } = await processPool(
-    packEnvelopes(contested),
-    async (batch) => [await adjudicateBatch(batch, sources, resolve, parse)],
-    noop,
-    { concurrency: POST_FIND_CONCURRENCY }
+export const groupContestedSelections = (selections: readonly CoderSelection[]): ContestedChunk[] =>
+  [...groupBy(selections, (selection) => selection.candidate.chunk.id).values()].map(
+    (disputes) => ({ chunk: disputes[0].candidate.chunk, disputes })
   )
 
-  const verdicts = new Map<string, Verdict>()
-  const errors: string[] = []
-  for (const batch of results) {
-    for (const [envelopeId, verdict] of batch.verdicts) verdicts.set(envelopeId, verdict)
-    errors.push(...batch.errors)
-  }
+export const contestedEntry = (group: ContestedChunk): EntryInput<ContestedChunk> => ({
+  item: group,
+  file: group.chunk.file,
+  children: group.disputes.map((selection, index) => ({
+    tag: "dispute",
+    attributes: {
+      id: String(index + 1),
+      code: selection.candidate.code,
+      start: String(selection.start),
+      end: String(selection.end),
+      "voter-one": selection.coder === "voter-one" ? "selected" : "not-selected",
+      "voter-two": selection.coder === "voter-two" ? "selected" : "not-selected",
+    },
+    body: selection.reason,
+  })),
+  content: { numbered: group.chunk.sentences.map((sentence) => sentence.text) },
+})
 
-  const stats: AdjudStats = new Map()
-  const bump = (code: string, key: keyof AdjudCounts): void => {
-    const entry = stats.get(code) ?? { kept: 0, rejected: 0, ambig: 0 }
-    entry[key] += 1
-    stats.set(code, entry)
-  }
+const packContested = (groups: readonly ContestedChunk[]): ContestedChunk[][] =>
+  pack(groups, {
+    sizeOf: (group) => entrySize(contestedEntry(group)),
+    maxChars: MAX_CHARS_PER_CALL,
+    maxItems: CHUNKS_PER_CALL,
+  })
 
-  const final: Envelope[] = []
-  for (const env of allSurvivors) {
-    if (!isContestedEnvelope(env)) {
-      final.push(env)
-      continue
-    }
-    const v = verdicts.get(env.id)
-    if (!v) {
-      bump(env.code, "ambig")
-      final.push(env)
-      tracer?.pushAdjud(env.code, adjudEntry(env, ambigVerdict(env)))
-      continue
-    }
-    const applied = applyVerdict(env, v)
-    if (applied) final.push(applied)
-    if (v.judgment === "keep") bump(env.code, "kept")
-    else if (v.judgment === "reject") bump(env.code, "rejected")
-    else if (v.judgment === "inconsistent") bump(env.code, "ambig")
-    tracer?.pushAdjud(env.code, adjudEntry(env, v))
+const decisionFromAdjudication = (
+  selection: CoderSelection,
+  verdict: Verdict
+): CodingDecision | null => {
+  if (verdict.judgment === "reject") return null
+  return {
+    candidate: selection.candidate,
+    start: selection.start,
+    end: selection.end,
+    reason: selection.reason,
+    findVotes: selection.coder === "voter-one" ? [true, false] : [false, true],
+    ...(verdict.judgment === "inconsistent" ? { review: verdict.reason } : {}),
   }
-
-  return { envelopes: final, errors, stats }
 }
 
-interface BatchVerdicts {
-  verdicts: Map<string, Verdict>
+interface CodingAdjudicationResult {
+  accepted: CodingDecision[]
   errors: string[]
 }
 
-const adjudicateBatch = async (
-  batch: Envelope[],
+const adjudicateContestedBatch = async (
+  batch: ContestedChunk[],
+  codes: ReadonlySet<string>,
   sources: ScopedSources,
   resolve: ContentResolver,
   parse: ParseCall
-): Promise<BatchVerdicts> => {
-  const codeIds = collectCodeIds(batch)
-  const entries = envelopeEntries(batch)
-  const shape = buildAnalysisCallShape(codeIds, sources, resolve, ADJUDICATE_CTA)
-  const messages = buildEntryMessages(shape, entries)
+): Promise<CodingAdjudicationResult> => {
+  const entries = assignIds(batch.map(contestedEntry))
+  const shape = buildAnalysisCallShape(codes, sources, resolve, ADJUDICATE_CTA)
+  const result = await parse(
+    ADJUDICATE_ENDPOINT,
+    buildEntryMessages(shape, entries),
+    buildAdjudicateSchema([...codes])
+  )
+  if (!result.ok) return { accepted: [], errors: [result.error] }
 
-  try {
-    const result = await parse(ADJUDICATE_ENDPOINT, messages, buildAdjudicateSchema([...codeIds]))
-    if (!result.ok) return { verdicts: new Map(), errors: [result.error] }
-
-    const verdicts = new Map<string, Verdict>()
-    for (const r of result.data.results) {
-      const envelope = findEnvelope(entries, r.id)
-      if (!envelope) continue
-      verdicts.set(envelope.id, { judgment: r.judgment, reason: r.reason })
-    }
-    return { verdicts, errors: [] }
-  } catch (e) {
-    return { verdicts: new Map(), errors: [errorMessage(e)] }
+  const verdicts = new Map<CoderSelection, Verdict>()
+  for (const raw of result.data.results) {
+    const entry: Entry<ContestedChunk> | undefined = entries.find(
+      (candidate) => candidate.id === raw.id
+    )
+    const selection = entry?.item.disputes[raw.dispute - 1]
+    if (!selection || raw.code !== selection.candidate.code) continue
+    verdicts.set(selection, { judgment: raw.judgment, reason: raw.reason })
   }
+
+  const accepted: CodingDecision[] = []
+  const errors: string[] = []
+  for (const selection of batch.flatMap((group) => group.disputes)) {
+    const verdict = verdicts.get(selection)
+    if (!verdict) {
+      errors.push(
+        `adjudicator returned no verdict for ${selection.candidate.code} in ${selection.candidate.chunk.id}`
+      )
+      continue
+    }
+    const decision = decisionFromAdjudication(selection, verdict)
+    if (decision) accepted.push(decision)
+  }
+  return { accepted, errors }
 }
 
-const adjudEntry = (e: Envelope, verdict: Verdict): AdjudEntry => ({
-  code: e.code,
-  start: e.markedStart,
-  end: e.markedEnd,
-  text: e.markedText,
-  verdict: verdict.judgment,
-  reason: verdict.reason,
-})
-
-const ambigVerdict = (e: Envelope): Verdict => ({
-  judgment: "inconsistent",
-  reason: e.review ?? "no verdict returned",
-})
+export const adjudicateContestedSelections = async (
+  selections: CoderSelection[],
+  sources: ScopedSources,
+  resolve: ContentResolver,
+  parse: ParseCall = callAndParse
+): Promise<CodingAdjudicationResult> => {
+  if (selections.length === 0) return { accepted: [], errors: [] }
+  const batches = batchCodeIds(selections.map((selection) => selection.candidate.code)).flatMap(
+    (codes) => {
+      const groups = groupContestedSelections(
+        selections.filter((selection) => codes.has(selection.candidate.code))
+      )
+      return packContested(groups).map((groups) => ({ codes, groups }))
+    }
+  )
+  const pool = await processPool(
+    batches,
+    async ({ codes, groups }) => [
+      await adjudicateContestedBatch(groups, codes, sources, resolve, parse),
+    ],
+    noop,
+    { concurrency: POST_FIND_CONCURRENCY }
+  )
+  const accepted = pool.results.flatMap((result) => result.accepted)
+  const errors = pool.results.flatMap((result) => result.errors)
+  for (const failure of pool.failures) errors.push(errorMessage(failure.error))
+  return { accepted: dedupCodingDecisions(accepted), errors }
+}

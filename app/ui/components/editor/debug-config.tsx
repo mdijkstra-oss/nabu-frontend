@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Bug, Cloud, Code, Activity, Bot, Filter, Table, TriangleAlert } from "lucide-react"
+import { Bug, Cloud, Code, Activity, Filter, Table, TriangleAlert } from "lucide-react"
 import type { DebugOptions } from "~/lib/debug/options"
 
 interface DebugToggle {
@@ -61,13 +61,6 @@ export const DEBUG_TOGGLES: DebugToggle[] = [
     label: "Review stats",
     description: "Show per-model agreement stats on reviewed annotations.",
     icon: <TriangleAlert />,
-    defaultValue: false,
-  },
-  {
-    key: "showModelIndex",
-    label: "Model index in review",
-    description: "Show the model index alongside each reviewer pick.",
-    icon: <Bot />,
     defaultValue: false,
   },
   {

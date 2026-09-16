@@ -17,6 +17,9 @@
     "lint:fix": "eslint app/ --fix",
     "format": "prettier --write 'app/**/*.{ts,tsx,json,css,md}'",
     "format:check": "prettier --check 'app/**/*.{ts,tsx,json,css,md}'",
+    "eval:coding": "vite-node scripts/eval-coding.ts",
+    "eval:coding:batch": "vite-node scripts/eval-coding-batch.ts",
+    "eval:coding:compare": "vite-node scripts/compare-coding.ts",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -123,6 +126,7 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.57.1",
     "vite": "^7.1.7",
+    "vite-node": "^3.2.4",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.0.16"
   }

@@ -7,6 +7,9 @@ export interface RawLlmCall {
   startedAt: number
   timestamp: number
   duration: number | null
+  attempts: number
+  retryReasons: string[]
+  providerMetadata: Record<string, string>
 }
 
 let calls: RawLlmCall[] = []
@@ -38,10 +41,28 @@ export const startRawCall = (endpoint: string, requestBody: string): number => {
       startedAt: now,
       timestamp: now,
       duration: null,
+      attempts: 0,
+      retryReasons: [],
+      providerMetadata: {},
     },
   ]
   notify()
   return id
+}
+
+export const recordRawCallAttempt = (id: number): void => {
+  calls = calls.map((c) => (c.id === id ? { ...c, attempts: c.attempts + 1 } : c))
+}
+
+export const recordRawCallRetry = (id: number, reason: string): void => {
+  calls = calls.map((c) => (c.id === id ? { ...c, retryReasons: [...c.retryReasons, reason] } : c))
+}
+
+export const recordRawCallProviderMetadata = (
+  id: number,
+  metadata: Record<string, string>
+): void => {
+  calls = calls.map((c) => (c.id === id ? { ...c, providerMetadata: metadata } : c))
 }
 
 export const updateRawCallStream = (id: number, content: string): void => {

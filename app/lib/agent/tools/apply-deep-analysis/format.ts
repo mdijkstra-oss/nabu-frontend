@@ -2,7 +2,6 @@ import { splitBySentences } from "~/lib/text/split"
 import { extractProse } from "~/lib/data-blocks/parse"
 import { stripMarkdown } from "~/lib/text/strip"
 import type { PostAction } from "./def"
-import type { FindResult } from "./consensus"
 import type { Annotation } from "./types"
 
 const splitSentenceTexts = splitBySentences()
@@ -201,9 +200,6 @@ export const isAnnotateAction = (
 ): action is "annotate_as_code" | "annotate_as_comment" =>
   action === "annotate_as_code" || action === "annotate_as_comment"
 
-export const spanKey = (start: number, end: number, code: string): string =>
-  `${start}-${end}-${code}`
-
 export const countConfidence = (
   results: readonly MappedResult[]
 ): { confirmed: number; reviewed: number } => {
@@ -267,20 +263,4 @@ export const mapAnnotations = (sentences: string[], annotations: Annotation[]): 
         vote: annotationToVoteRecord(a),
       },
     ]
-  })
-
-export const toAnalysisResults = (
-  spans: FindResult[],
-  reasons: Map<string, string>,
-  votes?: Map<string, VoteRecord>
-): AnalysisResult[] =>
-  spans.map((s) => {
-    const key = spanKey(s.start, s.end, s.analysis_source_id)
-    return {
-      start: s.start,
-      end: s.end,
-      analysis_source_id: s.analysis_source_id,
-      reason: reasons.get(key) ?? "",
-      vote: votes?.get(key),
-    }
   })

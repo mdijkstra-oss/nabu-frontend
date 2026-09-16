@@ -6,7 +6,14 @@ import { getActiveSignal } from "~/lib/utils/signal"
 import { initialParseState, processLine, stateToBlocks, type ParseCallbacks } from "./parse"
 import { toSystem } from "./convert"
 import type { InputItem, ResponseFormat } from "./convert"
-import { startRawCall, completeRawCall, updateRawCallStream } from "./raw-store"
+import {
+  startRawCall,
+  completeRawCall,
+  updateRawCallStream,
+  recordRawCallAttempt,
+  recordRawCallProviderMetadata,
+  recordRawCallRetry,
+} from "./raw-store"
 import { buildKey, tryGet, tryPut } from "~/lib/utils/storage-cache"
 
 const MAX_FILTER_RETRIES = 2
@@ -182,11 +189,19 @@ const executeLlmCall = async (
   body: string,
   rawId: number
 ): Promise<Block[]> => {
+  recordRawCallAttempt(rawId)
   const response = await fetchOnce({
     url: buildUrl(options.endpoint),
     body,
     signal: options.signal,
   })
+  const providerMetadata = Object.fromEntries(
+    ["x-model", "x-provider", "x-request-id", "server-timing"].flatMap((name) => {
+      const value = response.headers.get(name)
+      return value ? [[name, value]] : []
+    })
+  )
+  recordRawCallProviderMetadata(rawId, providerMetadata)
   const callbacks = withStreamSnapshot(options.callbacks ?? {}, rawId)
   return streamToBlocks(response, callbacks)
 }
@@ -221,6 +236,7 @@ export const callLlm = async (options: CallLlmOptions): Promise<Block[]> => {
     console.warn(
       `[LLM ${options.endpoint}] content filter (${retryable.errorType}), retry ${attempt + 1}`
     )
+    recordRawCallRetry(rawId, retryable.errorType ?? "content filter")
   }
 
   const duration = Math.round(performance.now() - t0)
