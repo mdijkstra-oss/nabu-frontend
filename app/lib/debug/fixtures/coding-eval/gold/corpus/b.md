@@ -1,7 +1,0 @@
-Quiet.
-
-```json-annotations
-{
-  "annotations": []
-}
-```
