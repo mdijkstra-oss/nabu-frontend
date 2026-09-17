@@ -6,6 +6,7 @@ export interface CodingConfig {
   passthrough: ReadonlySet<CodingPassthroughStage>
   coders: readonly ["voter-one"] | readonly ["voter-one", "voter-two"]
   adjudicate: boolean
+  maxCodesPerCall?: number
 }
 
 export const DEFAULT_CODING_CONFIG: CodingConfig = {
@@ -18,6 +19,11 @@ export const validateCodingConfig = (config: CodingConfig): string | null => {
   const validStages = new Set<CodingPassthroughStage>(["retrieval", "semantic-filter"])
   const unknown = [...config.passthrough].filter((stage) => !validStages.has(stage))
   if (unknown.length > 0) return `Unknown passthrough stage(s): ${unknown.join(", ")}`
+  if (
+    config.maxCodesPerCall !== undefined &&
+    (!Number.isInteger(config.maxCodesPerCall) || config.maxCodesPerCall < 1)
+  )
+    return "maxCodesPerCall must be a positive integer"
 
   const coders: readonly FilterVoter[] = config.coders
   if (coders.length === 1 && coders[0] === "voter-one" && !config.adjudicate) return null

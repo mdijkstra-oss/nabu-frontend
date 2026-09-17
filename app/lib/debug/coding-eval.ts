@@ -12,6 +12,7 @@ import type {
   CodingPassthroughStage,
 } from "~/lib/agent/tools/apply-deep-analysis/coding-config"
 import type { FilterVoter } from "~/lib/agent/tools/apply-deep-analysis/def"
+import type { CodingPipelineStage } from "~/lib/agent/tools/apply-deep-analysis/coding-pipeline"
 import { executeDeepAnalysis } from "~/lib/agent/tools/apply-deep-analysis/handler"
 import { clearRawCalls, getRawCalls } from "~/lib/agent/client/raw-store"
 import "~/lib/agent/tools/block-tools/register"
@@ -37,6 +38,13 @@ export const parseBoolean = (value: string, flag: string): boolean => {
   if (value === "true") return true
   if (value === "false") return false
   throw new Error(`--${flag} must be true or false`)
+}
+
+export const parsePositiveInteger = (value: string, flag: string): number => {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 1)
+    throw new Error(`--${flag} must be a positive integer`)
+  return parsed
 }
 
 const installNodeShims = (): void => {
@@ -79,6 +87,7 @@ export interface CodingCorpusResult {
   latencyMs: number
   requests: CodingRequestMetadata[]
   retries: number
+  stages: CodingPipelineStage[]
 }
 
 export const classifyCodingOutput = (
@@ -160,6 +169,7 @@ export const runCodingCorpus = async (
     ),
   })
   const started = performance.now()
+  const stages: CodingPipelineStage[] = []
   const pipeline = await executeDeepAnalysis(
     {
       targets: input.documents.map((document) => ({ path: document.path })),
@@ -173,7 +183,13 @@ export const runCodingCorpus = async (
       post_action: "annotate_as_code",
     },
     config,
-    pipelineDeps
+    {
+      ...pipelineDeps,
+      report: (stage) => {
+        stages.push(stage)
+        pipelineDeps.report?.(stage)
+      },
+    }
   )
   const documents = input.documents.map((document): CodingFileResult => {
     let generatedMarkdown = getFileRaw(document.path)
@@ -196,6 +212,7 @@ export const runCodingCorpus = async (
   return {
     documents,
     latencyMs: Math.round(performance.now() - started),
+    stages,
     ...requestMetadata(),
   }
 }

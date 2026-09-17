@@ -6,12 +6,21 @@ import {
   parseBoolean,
   parseCoders,
   parsePassthrough,
+  parsePositiveInteger,
   runCodingCorpus,
 } from "~/lib/debug/coding-eval"
 import { parseCodingCorpusJob } from "~/lib/debug/coding-corpus-job"
 
 const args = mri(process.argv.slice(2), {
-  string: ["input", "output", "gateway", "passthrough", "coders", "adjudicate"],
+  string: [
+    "input",
+    "output",
+    "gateway",
+    "passthrough",
+    "coders",
+    "adjudicate",
+    "max-codes-per-call",
+  ],
 })
 
 const required = (name: string): string => {
@@ -31,6 +40,14 @@ const main = async (): Promise<void> => {
       passthrough: parsePassthrough(required("passthrough")),
       coders: parseCoders(required("coders")),
       adjudicate: parseBoolean(required("adjudicate"), "adjudicate"),
+      ...(typeof args["max-codes-per-call"] === "string"
+        ? {
+            maxCodesPerCall: parsePositiveInteger(
+              args["max-codes-per-call"],
+              "max-codes-per-call"
+            ),
+          }
+        : {}),
     }
   )
   mkdirSync(dirname(output), { recursive: true })

@@ -71,11 +71,14 @@ export const packCodingChunks = (
     maxItems: CHUNKS_PER_CALL,
   })
 
-export const batchCodeIds = (codes: Iterable<string>): ReadonlySet<string>[] =>
+export const batchCodeIds = (
+  codes: Iterable<string>,
+  maxCodesPerCall = MAX_CODES_PER_CALL
+): ReadonlySet<string>[] =>
   pack([...new Set(codes)], {
     sizeOf: () => 0,
     maxChars: Infinity,
-    maxItems: MAX_CODES_PER_CALL,
+    maxItems: maxCodesPerCall,
   }).map((batch) => new Set(batch))
 
 const resolveSelection = (
@@ -158,13 +161,15 @@ export const runCoders = async (
   coders: readonly FilterVoter[],
   sources: ScopedSources,
   resolve: ContentResolver,
-  parse: ParseCall = callAndParse
+  parse: ParseCall = callAndParse,
+  maxCodesPerCall = MAX_CODES_PER_CALL
 ): Promise<CoderResult> => {
   const groups = groupCodingCandidates(candidates)
   const chunkBatches = packCodingChunks(groups)
-  const batches = batchCodeIds(candidates.map((candidate) => candidate.code)).flatMap((codes) =>
-    chunkBatches.map((groups) => ({ codes, groups }))
-  )
+  const batches = batchCodeIds(
+    candidates.map((candidate) => candidate.code),
+    maxCodesPerCall
+  ).flatMap((codes) => chunkBatches.map((groups) => ({ codes, groups })))
   const pool = await processPool(
     batches,
     async ({ codes, groups }) => [await codeBatch(groups, codes, coders, sources, resolve, parse)],

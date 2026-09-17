@@ -1,11 +1,12 @@
 import type { FileStore } from "~/lib/files/store"
-import type { Target } from "./def"
+import type { FilterVoter, Target } from "./def"
 import type { Envelope } from "./envelope"
 import type { ContentResolver, ParseCall, ScopedSources } from "./messages"
 import { callAndParse } from "../../client/call-parse"
 import { buildCodingChunks, sentencesInRange } from "./coding-chunk"
 import type { CodingConfig } from "./coding-config"
 import { validateCodingConfig } from "./coding-config"
+import { MAX_CODES_PER_CALL } from "./def"
 import {
   passthroughCodingCandidates,
   retrieveCodingCandidates,
@@ -38,6 +39,17 @@ export interface CodingPipelineResult {
   errors: string[]
 }
 
+export type CodingPipelineStage =
+  | { stage: "candidates"; chunks: number; candidates: number }
+  | {
+      stage: "voters"
+      selections: Partial<Record<FilterVoter, number>>
+      errors: number
+    }
+  | { stage: "consensus"; accepted: number; contested: number }
+  | { stage: "adjudication"; contested: number; accepted: number; errors: number }
+  | { stage: "decisions"; decisions: number }
+
 export interface CodingPipelineDeps {
   parse: ParseCall
   retrieve: RetrievalCall
@@ -47,6 +59,7 @@ export interface CodingPipelineDeps {
     resolve: ContentResolver,
     parse: ParseCall
   ) => Promise<CandidateStageResult>
+  report: (stage: CodingPipelineStage) => void
 }
 
 const defaultDeps = {
@@ -124,15 +137,24 @@ export const runCodingPipeline = async (
     candidates = gated.candidates
     errors.push(...gated.errors)
   }
+  deps.report?.({ stage: "candidates", chunks: chunks.length, candidates: candidates.length })
 
   const coderResult = await runCoders(
     candidates,
     input.config.coders,
     input.sources,
     input.resolve,
-    deps.parse ?? defaultDeps.parse
+    deps.parse ?? defaultDeps.parse,
+    input.config.maxCodesPerCall ?? MAX_CODES_PER_CALL
   )
   errors.push(...coderResult.errors)
+  deps.report?.({
+    stage: "voters",
+    selections: Object.fromEntries(
+      [...coderResult.selections.entries()].map(([coder, selections]) => [coder, selections.length])
+    ),
+    errors: coderResult.errors.length,
+  })
 
   let decisions: CodingDecision[]
   if (input.config.coders.length === 1) {
@@ -142,6 +164,11 @@ export const runCodingPipeline = async (
       coderResult.selections.get("voter-one") ?? [],
       coderResult.selections.get("voter-two") ?? []
     )
+    deps.report?.({
+      stage: "consensus",
+      accepted: reconciled.accepted.length,
+      contested: reconciled.contested.length,
+    })
     const adjudicated = await adjudicateContestedSelections(
       reconciled.contested,
       input.sources,
@@ -149,8 +176,15 @@ export const runCodingPipeline = async (
       deps.parse ?? defaultDeps.parse
     )
     errors.push(...adjudicated.errors)
+    deps.report?.({
+      stage: "adjudication",
+      contested: reconciled.contested.length,
+      accepted: adjudicated.accepted.length,
+      errors: adjudicated.errors.length,
+    })
     decisions = dedupCodingDecisions([...reconciled.accepted, ...adjudicated.accepted])
   }
+  deps.report?.({ stage: "decisions", decisions: decisions.length })
 
   return {
     envelopes: sortEnvelopes(decisions.flatMap((decision) => decisionToEnvelope(decision) ?? [])),

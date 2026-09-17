@@ -122,6 +122,36 @@ describe("canonical coding pipeline", () => {
     expect(calls[0].messages.map(textOf).join("\n")).toContain("[1.4] Fourth sentence.")
   })
 
+  it("can show four competing code definitions to one direct coder request", async () => {
+    const codes = ["themes", "other", "third", "fourth"]
+    const dimensionPaths = codes.map((code) => `${code}.generated.hidden.md`)
+    const { parse, calls } = respondingWith(() => ({ results: [] }))
+
+    await runCodingPipeline(
+      {
+        ...input,
+        dimensionPaths,
+        sources: { framework: [], dimension: dimensionPaths },
+        resolve: (path) =>
+          path === "doc.md"
+            ? document
+            : callout(path.replace(".generated.hidden.md", ""), `${path} definition`),
+        config: {
+          passthrough: new Set(["retrieval", "semantic-filter"]),
+          coders: ["voter-one"],
+          adjudicate: false,
+          maxCodesPerCall: 4,
+        },
+      },
+      { parse }
+    )
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].messages.map(textOf).join("\n")).toContain(
+      "fourth.generated.hidden.md definition"
+    )
+  })
+
   it("drops a whole coder batch when a configured coder fails", async () => {
     const { parse } = respondingWith((endpoint) =>
       endpoint.endsWith("voter-two")
